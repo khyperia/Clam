@@ -1,0 +1,8 @@
+﻿<Raytracer>
+  <Controls>RaytracerExtended</Controls>
+  <Files>
+    <File>mandelboxDe.cl</File>
+    <File>rayDirection.cl</File>
+    <File>fancyRaytracer.cl</File>
+  </Files>
+</Raytracer>

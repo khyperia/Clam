@@ -1,0 +1,7 @@
+﻿<Renderer>
+  <Controls>2D</Controls>
+  <Files>
+    <File>mandelbrot.cl</File>
+    <File>2dRendererAlt.cl</File>
+  </Files>
+</Renderer>
