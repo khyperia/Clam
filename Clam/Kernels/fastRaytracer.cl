@@ -1,4 +1,6 @@
+#ifndef Fov
 #define Fov 1.0f
+#endif
 
 __kernel void Main(__global float4* screen, int width, int height, float4 position, float4 lookat, float4 updir)
 {

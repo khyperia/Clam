@@ -2,64 +2,27 @@
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Xml.Linq;
 using JetBrains.Annotations;
 using OpenTK;
 
 namespace Clam
 {
-    static class StaticSettings
-    {
-        private static int _screenshotHeight = 2048;
-        public static int ScreenshotHeight { get { return _screenshotHeight; } }
-        private static int _screenshotPartialRender = 10;
-        public static int ScreenshotPartialRender { get { return _screenshotPartialRender; } }
-
-        public static void Edit()
-        {
-            while (true)
-            {
-                switch (ConsoleHelper.Menu("Select option", new[]
-                {
-                    "Screenshot height",
-                    "Screenshot partial render",
-                    "What is screenshot partial render? (help text)",
-                    "Done"
-                }))
-                {
-                    case 0:
-                        _screenshotHeight = ConsoleHelper.PromptParseValue("screenshot height", _screenshotHeight, int.TryParse);
-                        break;
-                    case 1:
-                        _screenshotPartialRender = ConsoleHelper.PromptParseValue("screenshot partial render", _screenshotPartialRender, int.TryParse);
-                        break;
-                    case 2:
-                        Console.WriteLine("Screenshot partial render help:");
-                        Console.WriteLine("The render engine, by default, subdivides the screen into N^2 rectangles");
-                        Console.WriteLine("where N is the parameter controlled by \"screenshot partial render\"");
-                        Console.WriteLine("Each rectangle is rendered in a seperate kernel call");
-                        Console.WriteLine("This cuts down on time spent in any one kernel call");
-                        Console.WriteLine("If the screen flashes, GPU hangs, and Clam crashes,");
-                        Console.WriteLine("this is Windows hitting it's two-second limit on kernel calls");
-                        Console.WriteLine("Increase this parameter in such a case");
-                        Console.ReadKey(true);
-                        break;
-                    case 3:
-                        return;
-                }
-            }
-        }
-    }
-
     static class Program
     {
-        static void Main(string[] args)
+        static void Main()
         {
-            Environment.CurrentDirectory = Path.Combine(Environment.CurrentDirectory, "Kernels");
+            var newPath = Path.Combine(Environment.CurrentDirectory, "Kernels");
+            if (Directory.Exists(newPath))
+                Environment.CurrentDirectory = newPath;
+            else
+                Console.WriteLine("Kernels directory didn't exist");
 
             Console.WriteLine("Creating OpenGL context");
             var window = new RenderWindow { WindowState = WindowState.Minimized };
             new Thread(Menu).Start(window);
             window.Run();
+            window.Dispose();
         }
 
         static void Menu(object windowObject)
@@ -90,8 +53,11 @@ namespace Clam
                         window.WindowState = WindowState.Normal;
                         break;
                     case 4:
-                        window.Close();
-                        window.Dispose();
+                        window.Invoke(() =>
+                        {
+                            window.CancelClosing = false;
+                            window.Exit();
+                        });
                         return;
                 }
             }
@@ -129,12 +95,28 @@ namespace Clam
         static void ConfigureKernel(RenderWindow window)
         {
             var kernel = window.Renderer.Kernel;
+            if (kernel == null)
+            {
+                Console.WriteLine("No kernel selected");
+                Console.ReadKey(true);
+                return;
+            }
             while (true)
             {
                 var options = kernel.Options.ToArray();
                 var index = ConsoleHelper.Menu("Edit parameter", options.Select(
-                    kvp => kvp.Key + (string.IsNullOrWhiteSpace(kvp.Value) ? "" : " = " + kvp.Value)).Concat(new[] { "Done" }).ToArray());
+                    kvp => kvp.Key + (string.IsNullOrWhiteSpace(kvp.Value) ? "" : " = " + kvp.Value)).Concat(new[] { "Save", "Load", "Done" }).ToArray());
                 if (index == options.Length)
+                {
+                    SaveKernel(kernel);
+                    continue;
+                }
+                if (index == options.Length + 1)
+                {
+                    LoadKernel(kernel);
+                    continue;
+                }
+                if (index == options.Length + 2)
                     break;
                 var option = options[index];
                 var value = ConsoleHelper.PromptValue(option.Key, option.Value);
@@ -142,10 +124,62 @@ namespace Clam
             }
             window.Invoke(kernel.Recompile);
         }
+
+        static void SaveKernel(RenderKernel kernel)
+        {
+            var directory = Path.Combine("..", "State");
+            if (Directory.Exists(directory) == false)
+                Directory.CreateDirectory(directory);
+            var list = Directory.GetFiles(directory, "*.kernel.xml");
+            var index = ConsoleHelper.Menu("Save to where", list.Select(f => string.Format("Overwrite {0}", Path.GetFileName(f))).Concat(new[] { "New state" }).ToArray());
+            string filename;
+            if (index == list.Length)
+            {
+                var prompt = ConsoleHelper.Prompt("Enter filename (empty for autogen name)");
+                if (string.IsNullOrWhiteSpace(prompt))
+                    filename = Ext.UniqueFileInDirectory(directory, "state", "kernel.xml");
+                else
+                {
+                    if (prompt.EndsWith(".kernel.xml") == false)
+                        prompt += ".kernel.xml";
+                    filename = Path.Combine(directory, prompt);
+                }
+            }
+            else
+                filename = list[index];
+            var xml = kernel.SerializeOptions();
+            xml.Save(filename);
+        }
+
+        static void LoadKernel(RenderKernel kernel)
+        {
+            var directory = Path.Combine("..", "State");
+            if (Directory.Exists(directory) == false)
+            {
+                Console.WriteLine("State directory does not exist");
+                return;
+            }
+            var list = Directory.GetFiles(directory, "*.kernel.xml");
+            if (list.Length == 0)
+            {
+                Console.WriteLine("No state files found");
+                return;
+            }
+            var index = ConsoleHelper.Menu("Load kernel", list.Select(Path.GetFileName).Concat(new[] { "Cancel" }).ToArray());
+            if (index == list.Length)
+                return;
+            kernel.LoadOptions(XElement.Load(list[index]));
+        }
     }
 
     static class ConsoleHelper
     {
+        public static void Alert(string message)
+        {
+            Console.Clear();
+            Console.WriteLine(message);
+        }
+
         public static T PromptParseValue<T>(string variableName, T oldValue, PromptParseDelegate<T> parser)
         {
             return PromptParse(string.Format("Enter value for {0} (old value {1})", variableName, oldValue), parser);

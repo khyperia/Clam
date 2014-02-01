@@ -24,16 +24,23 @@ namespace Clam
 
         private static string _infoMessage;
         private static DateTime _lastInfoMessageUpdate = DateTime.UtcNow;
+        private bool _cancelClosing = true;
+
+        public bool CancelClosing
+        {
+            get { return _cancelClosing; }
+            set { _cancelClosing = value; }
+        }
 
         public RenderWindow()
             : base(InitialHeight * 16 / 9, InitialHeight, GraphicsMode.Default, "Clam Render Window",
             GameWindowFlags.Default, DisplayDevice.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
         {
-            _threadActions = new ConcurrentQueue<Action>();
             var device = ComputePlatform.Platforms.SelectMany(p => p.Devices).FirstOrDefault();
             if (device == null)
                 throw new Exception("No OpenCL compatible GPU found");
             Console.WriteLine("Using GPU: " + device.Name);
+            _threadActions = new ConcurrentQueue<Action>();
             _interop = new GraphicsInterop(device);
         }
 
@@ -65,14 +72,22 @@ namespace Clam
             base.OnResize(e);
         }
 
+        protected override void OnWindowStateChanged(EventArgs e)
+        {
+            var fdc = _renderer.Parameters as IFrameDependantControl;
+            if (fdc != null)
+                fdc.Frame = 0;
+            base.OnWindowStateChanged(e);
+        }
+
         protected override void OnUpdateFrame(FrameEventArgs e)
         {
+            base.OnUpdateFrame(e);
             if (Keyboard[Key.Escape])
                 WindowState = WindowState.Minimized;
-                Action result;
+            Action result;
             while (_threadActions.TryDequeue(out result))
                 result();
-            base.OnUpdateFrame(e);
         }
 
         public void Invoke(Action action)
@@ -105,17 +120,23 @@ namespace Clam
             base.OnRenderFrame(e);
         }
 
-        protected override void OnDisposed(EventArgs e)
+        protected override void Dispose(bool manual)
         {
-            _interop.Dispose();
-            Renderer.Dispose();
-            base.OnDisposed(e);
+            if (manual)
+            {
+                _interop.Dispose();
+                Renderer.Dispose();
+            }
+            base.Dispose(manual);
         }
 
         protected override void OnClosing(CancelEventArgs e)
         {
-            e.Cancel = true;
-            WindowState = WindowState.Minimized;
+            if (CancelClosing)
+            {
+                e.Cancel = true;
+                WindowState = WindowState.Minimized;
+            }
             base.OnClosing(e);
         }
     }

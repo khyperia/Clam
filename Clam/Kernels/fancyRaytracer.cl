@@ -1,10 +1,31 @@
+#ifndef NormDistCount
 #define NormDistCount 5
+#endif
+
+#ifndef Quality
 #define Quality 8
+#endif
+
+#ifndef AoStepcount
 #define AoStepcount 5
+#endif
+
+#ifndef FogDensity
 #define FogDensity 0.0625f
+#endif
+
+#ifndef MaxRayDist
 #define MaxRayDist 64
+#endif
+
+#ifndef DofPickup
 #define DofPickup 0.005f
-#define BackgroundColor (float3)(0.5f, 0.5f, 0.5f)
+#endif
+
+#ifndef BackgroundColor
+#define BackgroundColor 0.5f,0.5f,0.5f
+#endif
+
 #define IntMax 2147483647
 
 int Rand(int seed) {
@@ -104,13 +125,13 @@ float3 AO(float3 pos, float3 normal) {
 float3 Fog(float3 color, float focalDistance, float totalDistance) {
 	float ratio = totalDistance / focalDistance;
 	float value = 1 / exp(ratio * FogDensity);
-	return mix(BackgroundColor, mix(color, (float3)(0.0f, 0.5f, 1.0f), value * 0.1f), value);
+	return mix((float3)(BackgroundColor), mix(color, (float3)(0.0f, 0.5f, 1.0f), value * 0.1f), value);
 }
 
 float3 Postprocess(float totalDistance, float3 origin, float3 direction, float focalDistance, float widthOverFov)
 {
 	if (totalDistance > MaxRayDist)
-		return BackgroundColor;
+		return (float3)(BackgroundColor);
 	totalDistance = NormDist(origin, direction, totalDistance, widthOverFov);
 	float3 finalPos = origin + direction * totalDistance;
 	float3 normal = Normal(finalPos);
@@ -150,7 +171,11 @@ __kernel void Main(__global float4* screen, int width, int height, float4 positi
 	if (frame > 0)
 	{
 		int frameFixed = frame - 1;
-		color = (color + screen[y * width + x].xyz * frameFixed) / (frameFixed + 1);
+		float3 old = screen[y * width + x].xyz;
+		if (!isnan(old.x) && !isnan(old.y) && !isnan(old.z))
+			color = (color + old * frameFixed) / (frameFixed + 1);
+		else if (isnan(color.x) || isnan(color.y) || isnan(color.z))
+			color = old;
 	}
 	screen[y * width + x] = (float4)(color, totalDistance);
 }

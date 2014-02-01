@@ -59,6 +59,7 @@
     <Compile Include="RenderPackage.cs" />
     <Compile Include="RenderWindow.cs" />
     <Compile Include="ReSharperAnnotations.cs" />
+    <Compile Include="StaticSettings.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -88,6 +89,7 @@
   <ItemGroup>
     <None Include="Kernels\fancyMandelbox.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <SubType>Designer</SubType>
     </None>
     <None Include="Kernels\fastMandelbox.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

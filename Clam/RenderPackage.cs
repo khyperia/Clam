@@ -68,13 +68,15 @@ namespace Clam
         }
 
         private const double ScreenshotAspectRatio = 16.0 / 9.0;
+
         public Bitmap Screenshot(int screenshotHeight, int slowRenderPower)
         {
+            var ccontext = _kernel.ComputeContext;
             _kernelInUse++;
             RenderWindow.DisplayInformation("Rendering screenshot");
             var screenshotWidth = (int)(screenshotHeight * ScreenshotAspectRatio);
-            var computeBuffer = new ComputeBuffer<Vector4>(_kernel.ComputeContext, ComputeMemoryFlags.ReadWrite, screenshotWidth * screenshotHeight);
-            var queue = new ComputeCommandQueue(_kernel.ComputeContext, _kernel.ComputeContext.Devices[0], ComputeCommandQueueFlags.None);
+            var computeBuffer = new ComputeBuffer<Vector4>(ccontext, ComputeMemoryFlags.ReadWrite, screenshotWidth * screenshotHeight);
+            var queue = new ComputeCommandQueue(ccontext, ccontext.Devices[0], ComputeCommandQueueFlags.None);
 
             const int numFrames = 150;
             var frameDependantControls = _parameters as IFrameDependantControl;
@@ -104,7 +106,7 @@ namespace Clam
             RenderWindow.DisplayInformation("Saving screenshot");
             var bmp = new Bitmap(screenshotWidth, screenshotHeight);
             var destBuffer = new int[screenshotWidth * screenshotHeight];
-            int nancount = 0;
+            var nancount = 0;
             for (var y = 0; y < screenshotHeight; y++)
             {
                 for (var x = 0; x < screenshotWidth; x++)
@@ -119,7 +121,7 @@ namespace Clam
                 }
             }
             if (nancount != 0)
-                Console.WriteLine("Warning! Caught {0} NAN pixels while taking screenshot!", nancount);
+                ConsoleHelper.Alert(string.Format("Warning! Caught {0} NAN pixels while taking screenshot!", nancount));
             var bmpData = bmp.LockBits(new Rectangle(0, 0, screenshotWidth, screenshotHeight), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
             Marshal.Copy(destBuffer, 0, bmpData.Scan0, destBuffer.Length);
             bmp.UnlockBits(bmpData);

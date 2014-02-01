@@ -1,16 +1,24 @@
 #ifndef Scale
-#define Scale -1.5f
+#define Scale -2.71828182846f
 #endif
 
+#ifndef FoldingLimit
 #define FoldingLimit 1.0f
+#endif
+
+#ifndef FixedRadius2
 #define FixedRadius2 1.0f
+#endif
+
+#ifndef MinRadius2
 #define MinRadius2 0.125f
+#endif
 
 float De(float3 z)
 {
 	float3 offset = z;
 	float dz = 1.0f;
-	for (int n = 0; n < 2048; n++) {
+	for (int n = 0; n < 1024; n++) {
 		z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0f - z;
 
 		float r2 = dot(z, z);

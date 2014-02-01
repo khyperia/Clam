@@ -41,10 +41,30 @@ namespace Clam
         public static Vector3d LoadVector3D(this XElement element)
         {
             return new Vector3d(
-                double.Parse(element.Element("X").Value),
-                double.Parse(element.Element("Y").Value),
-                double.Parse(element.Element("Z").Value)
+                element.Element("X").LoadDouble(),
+                element.Element("Y").LoadDouble(),
+                element.Element("Z").LoadDouble()
                 );
+        }
+
+        public static XElement Save(this float value, string name)
+        {
+            return new XElement(name, value);
+        }
+
+        public static float LoadFloat(this XElement element)
+        {
+            return float.Parse(element.Value);
+        }
+
+        public static XElement Save(this double value, string name)
+        {
+            return new XElement(name, value);
+        }
+
+        public static double LoadDouble(this XElement element)
+        {
+            return double.Parse(element.Value);
         }
     }
 }

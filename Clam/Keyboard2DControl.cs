@@ -36,16 +36,16 @@ namespace Clam
         protected override XElement Save()
         {
             return new XElement("Keyboard2DControl",
-                new XElement("X", _x),
-                new XElement("Y", _y),
-                new XElement("Zoom", _zoom));
+                _x.Save("X"),
+                _y.Save("Y"),
+                _zoom.Save("Zoom"));
         }
 
         protected override void Load(XElement element)
         {
-            _x = double.Parse(element.Element("X").Value);
-            _y = double.Parse(element.Element("Y").Value);
-            _zoom = double.Parse(element.Element("Zoom").Value);
+            _x = element.Element("X").LoadDouble();
+            _y = element.Element("Y").LoadDouble();
+            _zoom = element.Element("Zoom").LoadDouble();
         }
     }
 }

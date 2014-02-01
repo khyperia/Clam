@@ -75,14 +75,9 @@ namespace Clam
                     }
                     break;
             }
-            OnKeyDown(keyboardKeyEventArgs.Key);
         }
 
         protected virtual void OnUpdate(double time)
-        {
-        }
-
-        protected virtual void OnKeyDown(Key key)
         {
         }
 

@@ -63,17 +63,6 @@ namespace Clam
             });
         }
 
-        protected override void OnKeyDown(Key key)
-        {
-            switch (key)
-            {
-                case Key.O:
-                    RenderWindow.Renderer.Kernel.SetOption("Scale", "-2.5f");
-                    RenderWindow.Renderer.Kernel.Recompile();
-                    break;
-            }
-        }
-
         protected override void OnUpdate(double time)
         {
             _up = Vector3d.Cross(Vector3d.Cross(_lookat, _up), _lookat);
@@ -94,8 +83,8 @@ namespace Clam
                 _position.Save("Position"),
                 _lookat.Save("Lookat"),
                 _up.Save("Up"),
-                new XElement("MoveSpeed", MoveSpeed),
-                new XElement("Fov", Fov)
+                MoveSpeed.Save("MoveSpeed"),
+                Fov.Save("Fov")
                 );
         }
 
@@ -104,8 +93,8 @@ namespace Clam
             _position = element.Element("Position").LoadVector3D();
             _lookat = element.Element("Lookat").LoadVector3D();
             _up = element.Element("Up").LoadVector3D();
-            MoveSpeed = float.Parse(element.Element("MoveSpeed").Value);
-            Fov = float.Parse(element.Element("Fov").Value);
+            MoveSpeed = element.Element("MoveSpeed").LoadFloat();
+            Fov = element.Element("Fov").LoadFloat();
         }
     }
 }
