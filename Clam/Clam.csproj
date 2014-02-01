@@ -43,9 +43,6 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
@@ -53,6 +50,9 @@
     <Compile Include="Keyboard2DControl.cs" />
     <Compile Include="KeyboardControlBase.cs" />
     <Compile Include="KeyboardRaytracerControl.cs" />
+    <Compile Include="NGif\AnimatedGifEncoder.cs" />
+    <Compile Include="NGif\LZWEncoder.cs" />
+    <Compile Include="NGif\NeuQuant.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RenderKernel.cs" />

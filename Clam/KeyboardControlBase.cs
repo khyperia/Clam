@@ -4,12 +4,20 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Xml.Linq;
+using Clam.NGif;
 using Cloo;
 using OpenTK;
 using OpenTK.Input;
 
 namespace Clam
 {
+    interface IGifableControl
+    {
+        // pointInFrame = range(0, 1)
+        // return value = teardown action
+        Action SetupGif(double pointInFrame);
+    }
+
     abstract class KeyboardControlBase : IParameterSet
     {
         protected readonly RenderWindow RenderWindow;
@@ -52,6 +60,11 @@ namespace Clam
                     ThreadPool.QueueUserWorkItem(
                         o => RenderWindow.Renderer.Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender).Save(Ext.UniqueFilename("screenshot", "png")));
                     break;
+                case Key.O:
+                    var gifable = this as IGifableControl;
+                    if (gifable != null)
+                        ThreadPool.QueueUserWorkItem(o => TakeGif(RenderWindow.Renderer, gifable));
+                    break;
                 case Key.L:
                     var filename = Path.Combine("..", "State", GetType().Name + ".state.xml");
                     var directory = Path.GetDirectoryName(filename);
@@ -75,6 +88,26 @@ namespace Clam
                     }
                     break;
             }
+        }
+
+        private static void TakeGif(RenderPackage renderer, IGifableControl control)
+        {
+            // TODO: Add to StaticSettings
+            var encoder = new AnimatedGifEncoder();
+            encoder.Start(Ext.UniqueFilename("sequence", "gif"));
+            const int fps = 20;
+            encoder.SetDelay(1000 / fps);
+            encoder.SetRepeat(0);
+            for (var i = 0; i < 20; i++)
+            {
+                var teardown = control.SetupGif(i / 20.0);
+                var screen = renderer.Screenshot(256, 1);
+                if (encoder.AddFrame(screen) == false)
+                    throw new Exception("Could not add frame to gif");
+                teardown();
+            }
+            encoder.Finish();
+            RenderWindow.DisplayInformation("Done rendering sequence");
         }
 
         protected virtual void OnUpdate(double time)

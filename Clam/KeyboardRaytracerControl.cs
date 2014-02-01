@@ -30,7 +30,7 @@ namespace Clam
         }
     }
 
-    class KeyboardRaytracerControl : KeyboardControlBase
+    class KeyboardRaytracerControl : KeyboardControlBase, IGifableControl
     {
         private const float TurnSpeed = 1f;
         private Vector3d _position = new Vector3d(4, 0, 0);
@@ -95,6 +95,13 @@ namespace Clam
             _up = element.Element("Up").LoadVector3D();
             MoveSpeed = element.Element("MoveSpeed").LoadFloat();
             Fov = element.Element("Fov").LoadFloat();
+        }
+
+        public Action SetupGif(double pointInFrame)
+        {
+            var oldPosition = _position;
+            _position += Vector3d.Cross(_lookat, _up) * Math.Sin(pointInFrame * (Math.PI * 2)) * MoveSpeed / 10;
+            return () => _position = oldPosition;
         }
     }
 }
