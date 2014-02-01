@@ -77,11 +77,11 @@ namespace Clam
             base.OnRenderFrame(e);
         }
 
-        protected override void OnClosed(EventArgs e)
+        protected override void OnDisposed(EventArgs e)
         {
             _interop.Dispose();
             Renderer.Dispose();
-            base.OnClosed(e);
+            base.OnDisposed(e);
         }
     }
 

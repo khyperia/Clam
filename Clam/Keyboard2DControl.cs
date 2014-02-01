@@ -17,10 +17,10 @@ namespace Clam
         {
             SetBindings(new Dictionary<Key, Action<float>>
             {
-                {Key.Left, dt => _x -= _zoom / 100},
-                {Key.Right, dt => _x += _zoom / 100},
-                {Key.Up, dt => _y -= _zoom / 100},
-                {Key.Down, dt => _y += _zoom / 100},
+                {Key.Left, dt => _x -= _zoom / 2 * dt},
+                {Key.Right, dt => _x += _zoom / 2 * dt},
+                {Key.Up, dt => _y -= _zoom / 2 * dt},
+                {Key.Down, dt => _y += _zoom / 2 * dt},
                 {Key.W, dt => _zoom /= dt + 1},
                 {Key.S, dt => _zoom *= dt + 1},
             });

@@ -50,12 +50,13 @@ namespace Clam
             {
                 case Key.P:
                     ThreadPool.QueueUserWorkItem(
-                        o => RenderWindow.Renderer.Screenshot(8192, 12).Save(Ext.UniqueFilename("screenshot", "png")));
+                        o => RenderWindow.Renderer.Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender).Save(Ext.UniqueFilename("screenshot", "png")));
                     break;
                 case Key.L:
                     var filename = Path.Combine("..", "State", GetType().Name + ".state.xml");
-                    if (File.Exists(filename) == false)
-                        Directory.CreateDirectory(Path.GetDirectoryName(filename));
+                    var directory = Path.GetDirectoryName(filename);
+                    if (directory != null && Directory.Exists(directory) == false)
+                        Directory.CreateDirectory(directory);
                     Save().Save(filename);
                     RenderWindow.DisplayInformation("Saved state");
                     break;

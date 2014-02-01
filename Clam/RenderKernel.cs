@@ -70,7 +70,8 @@ namespace Clam
         public static RenderKernel Create(ComputeContext context, string[] sourcecodes)
         {
             var defines = CollectDefines(sourcecodes).ToDictionary(define => define, define => "");
-            return new RenderKernel(Compile(context, sourcecodes, defines), sourcecodes, defines);
+            var compilation = Compile(context, sourcecodes, defines);
+            return compilation == null ? null : new RenderKernel(compilation, sourcecodes, defines);
         }
 
         public IEnumerable<KeyValuePair<string, string>> Options
@@ -150,7 +151,12 @@ namespace Clam
 
         public void Dispose()
         {
-            _kernel.Dispose();
+            if (_kernel != null)
+                lock (_kernel)
+                {
+                    _kernel.Dispose();
+                    _kernel = null;
+                }
         }
     }
 }
