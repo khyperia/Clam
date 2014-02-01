@@ -89,5 +89,11 @@ namespace Clam
         public abstract void ApplyToKernel(ComputeKernel kernel, ref int startIndex);
         protected abstract XElement Save();
         protected abstract void Load(XElement element);
+
+        public void UnRegister()
+        {
+            RenderWindow.Keyboard.KeyDown -= KeyboardOnKeyDown;
+            RenderWindow.UpdateFrame -= RenderWindowOnUpdateFrame;
+        }
     }
 }

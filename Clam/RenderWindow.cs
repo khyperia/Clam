@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Cloo;
 using OpenTK;
@@ -16,21 +19,38 @@ namespace Clam
         private Size _windowSize;
         private double _averageFps;
         private int _lastTitleUpdateSecond;
+        private RenderPackage _renderer;
+        private readonly ConcurrentQueue<Action> _threadActions;
 
         private static string _infoMessage;
         private static DateTime _lastInfoMessageUpdate = DateTime.UtcNow;
-
-        public RenderPackage Renderer { get; set; }
 
         public RenderWindow()
             : base(InitialHeight * 16 / 9, InitialHeight, GraphicsMode.Default, "Clam Render Window",
             GameWindowFlags.Default, DisplayDevice.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
         {
-            var device = ComputePlatform.Platforms[0].Devices[0];
+            _threadActions = new ConcurrentQueue<Action>();
+            var device = ComputePlatform.Platforms.SelectMany(p => p.Devices).FirstOrDefault();
+            if (device == null)
+                throw new Exception("No OpenCL compatible GPU found");
+            Console.WriteLine("Using GPU: " + device.Name);
             _interop = new GraphicsInterop(device);
         }
 
         public ComputeContext ComputeContext { get { return _interop.Context; } }
+
+        public RenderPackage Renderer
+        {
+            get { return _renderer; }
+            set
+            {
+                if (_renderer.Parameters != null && _renderer.Parameters != value.Parameters)
+                    _renderer.Parameters.UnRegister();
+                if (_renderer.Kernel != null && _renderer.Kernel != value.Kernel)
+                    _renderer.Kernel.Dispose();
+                _renderer = value;
+            }
+        }
 
         public static void DisplayInformation(string information)
         {
@@ -48,8 +68,16 @@ namespace Clam
         protected override void OnUpdateFrame(FrameEventArgs e)
         {
             if (Keyboard[Key.Escape])
-                Close();
+                WindowState = WindowState.Minimized;
+                Action result;
+            while (_threadActions.TryDequeue(out result))
+                result();
             base.OnUpdateFrame(e);
+        }
+
+        public void Invoke(Action action)
+        {
+            _threadActions.Enqueue(action);
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -82,6 +110,13 @@ namespace Clam
             _interop.Dispose();
             Renderer.Dispose();
             base.OnDisposed(e);
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            e.Cancel = true;
+            WindowState = WindowState.Minimized;
+            base.OnClosing(e);
         }
     }
 
@@ -161,7 +196,7 @@ namespace Clam
 
         public void Dispose()
         {
-            Context.Dispose();
+            _context.Dispose();
             _queue.Dispose();
             _openCl.Dispose();
             var tmpPub = _pub;

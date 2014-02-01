@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using JetBrains.Annotations;
+using OpenTK;
 
 namespace Clam
 {
@@ -54,7 +56,15 @@ namespace Clam
         {
             Environment.CurrentDirectory = Path.Combine(Environment.CurrentDirectory, "Kernels");
 
-            RenderWindow window = null;
+            Console.WriteLine("Creating OpenGL context");
+            var window = new RenderWindow { WindowState = WindowState.Minimized };
+            new Thread(Menu).Start(window);
+            window.Run();
+        }
+
+        static void Menu(object windowObject)
+        {
+            var window = (RenderWindow)windowObject;
             while (true)
             {
                 switch (ConsoleHelper.Menu("Main Menu",
@@ -68,32 +78,20 @@ namespace Clam
                     }))
                 {
                     case 0:
-                        if (window != null)
-                            window.Dispose();
-                        window = SelectKernelWindow();
+                        SelectKernelWindow(window);
                         break;
                     case 1:
                         StaticSettings.Edit();
                         break;
                     case 2:
-                        if (window == null)
-                        {
-                            Console.WriteLine("No kernel selected");
-                            Console.ReadKey(true);
-                        }
-                        else
-                            window.Renderer.Kernel.Configure();
+                        ConfigureKernel(window);
                         break;
                     case 3:
-                        if (window == null)
-                        {
-                            Console.WriteLine("No kernel selected");
-                            Console.ReadKey(true);
-                        }
-                        else
-                            window.Run();
+                        window.WindowState = WindowState.Normal;
                         break;
                     case 4:
+                        window.Close();
+                        window.Dispose();
                         return;
                 }
             }
@@ -114,25 +112,23 @@ namespace Clam
             return xmlFiles[ConsoleHelper.Menu("Select render kernel", xmlFiles.Select(Path.GetFileName).ToArray())];
         }
 
-        [CanBeNull]
-        static RenderWindow SelectKernelWindow()
+        static void SelectKernelWindow(RenderWindow window)
         {
             var kernel = SelectKernel();
             if (kernel == null)
-                return null;
-            var window = new RenderWindow();
-            var package = RenderPackage.LoadFromXml(window, kernel);
-            if (package == null)
+                return;
+            window.Invoke(() =>
             {
-                window.Dispose();
-                return null;
-            }
-            window.Renderer = package.Value;
-            return window;
+                var package = RenderPackage.LoadFromXml(window, kernel);
+                if (package == null)
+                    return;
+                window.Renderer = package.Value;
+            });
         }
 
-        static void Configure(this RenderKernel kernel)
+        static void ConfigureKernel(RenderWindow window)
         {
+            var kernel = window.Renderer.Kernel;
             while (true)
             {
                 var options = kernel.Options.ToArray();
@@ -144,9 +140,7 @@ namespace Clam
                 var value = ConsoleHelper.PromptValue(option.Key, option.Value);
                 kernel.SetOption(option.Key, value);
             }
-            Console.WriteLine("Recompiling...");
-            kernel.Recompile();
-            Console.WriteLine("Done");
+            window.Invoke(kernel.Recompile);
         }
     }
 

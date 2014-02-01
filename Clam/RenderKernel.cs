@@ -12,6 +12,7 @@ namespace Clam
     interface IParameterSet
     {
         void ApplyToKernel(ComputeKernel kernel, ref int startIndex);
+        void UnRegister();
     }
 
     class RenderKernel : IDisposable
@@ -154,6 +155,7 @@ namespace Clam
             if (_kernel != null)
                 lock (_kernel)
                 {
+                    _kernel.Program.Dispose();
                     _kernel.Dispose();
                     _kernel = null;
                 }
