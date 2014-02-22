@@ -20,12 +20,12 @@ namespace Clam
 
     abstract class KeyboardControlBase : IParameterSet
     {
-        protected readonly RenderWindow RenderWindow;
+        private readonly RenderWindow _renderWindow;
         private Dictionary<Key, Action<float>> _bindings;
 
         protected KeyboardControlBase(RenderWindow renderWindow)
         {
-            RenderWindow = renderWindow;
+            _renderWindow = renderWindow;
             renderWindow.Keyboard.KeyDown += KeyboardOnKeyDown;
             renderWindow.UpdateFrame += RenderWindowOnUpdateFrame;
         }
@@ -33,7 +33,7 @@ namespace Clam
         private void RenderWindowOnUpdateFrame(object sender, FrameEventArgs frameEventArgs)
         {
             var keyPressed = false;
-            foreach (var binding in _bindings.Where(binding => RenderWindow.Keyboard[binding.Key]))
+            foreach (var binding in _bindings.Where(binding => _renderWindow.Keyboard[binding.Key]))
             {
                 binding.Value((float)frameEventArgs.Time);
                 keyPressed = true;
@@ -58,12 +58,12 @@ namespace Clam
             {
                 case Key.P:
                     ThreadPool.QueueUserWorkItem(
-                        o => RenderWindow.Renderer.Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender).Save(Ext.UniqueFilename("screenshot", "png")));
+                        o => _renderWindow.Renderer.Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender).Save(Ext.UniqueFilename("screenshot", "png")));
                     break;
                 case Key.O:
                     var gifable = this as IGifableControl;
                     if (gifable != null)
-                        ThreadPool.QueueUserWorkItem(o => TakeGif(RenderWindow.Renderer, gifable));
+                        ThreadPool.QueueUserWorkItem(o => TakeGif(_renderWindow.Renderer, gifable));
                     break;
                 case Key.L:
                     var filename = Path.Combine("..", "State", GetType().Name + ".state.xml");
@@ -95,13 +95,12 @@ namespace Clam
             // TODO: Add to StaticSettings
             var encoder = new AnimatedGifEncoder();
             encoder.Start(Ext.UniqueFilename("sequence", "gif"));
-            const int fps = 20;
-            encoder.SetDelay(1000 / fps);
+            encoder.SetDelay(1000 / StaticSettings.GifFramerate);
             encoder.SetRepeat(0);
-            for (var i = 0; i < 20; i++)
+            for (var i = 0; i < StaticSettings.GifFramecount; i++)
             {
-                var teardown = control.SetupGif(i / 20.0);
-                var screen = renderer.Screenshot(256, 1);
+                var teardown = control.SetupGif((double)i / StaticSettings.GifFramecount);
+                var screen = renderer.Screenshot(StaticSettings.GifHeight, 1);
                 if (encoder.AddFrame(screen) == false)
                     throw new Exception("Could not add frame to gif");
                 teardown();
@@ -120,8 +119,8 @@ namespace Clam
 
         public void UnRegister()
         {
-            RenderWindow.Keyboard.KeyDown -= KeyboardOnKeyDown;
-            RenderWindow.UpdateFrame -= RenderWindowOnUpdateFrame;
+            _renderWindow.Keyboard.KeyDown -= KeyboardOnKeyDown;
+            _renderWindow.UpdateFrame -= RenderWindowOnUpdateFrame;
         }
     }
 }

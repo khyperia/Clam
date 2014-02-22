@@ -1,5 +1,5 @@
 #ifndef Scale
-#define Scale -2.71828182846f
+#define Scale -1.5f
 #endif
 
 #ifndef FoldingLimit

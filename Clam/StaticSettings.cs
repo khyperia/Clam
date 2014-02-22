@@ -8,6 +8,12 @@ namespace Clam
         public static int ScreenshotHeight { get { return _screenshotHeight; } }
         private static int _screenshotPartialRender = 10;
         public static int ScreenshotPartialRender { get { return _screenshotPartialRender; } }
+        private static int _gifHeight = 256;
+        public static int GifHeight { get { return _gifHeight; } }
+        private static int _gifFramecount = 20;
+        public static int GifFramecount { get { return _gifFramecount; } }
+        private static int _gifFramerate = 20;
+        public static int GifFramerate { get { return _gifFramerate; } }
 
         public static void Edit()
         {
@@ -18,6 +24,9 @@ namespace Clam
                     "Screenshot height",
                     "Screenshot partial render",
                     "What is screenshot partial render? (help text)",
+                    "Gif height",
+                    "Gif framecount",
+                    "Gif framerate",
                     "Done"
                 }))
                 {
@@ -39,6 +48,15 @@ namespace Clam
                         Console.ReadKey(true);
                         break;
                     case 3:
+                        _gifHeight = ConsoleHelper.PromptParseValue("Gif height", _gifHeight, int.TryParse);
+                        break;
+                    case 4:
+                        _gifFramecount = ConsoleHelper.PromptParseValue("Gif framecount", _gifFramecount, int.TryParse);
+                        break;
+                    case 5:
+                        _gifFramerate = ConsoleHelper.PromptParseValue("Gif framerate (in FPS)", _gifFramerate, int.TryParse);
+                        break;
+                    case 6:
                         return;
                 }
             }

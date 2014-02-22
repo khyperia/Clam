@@ -2,6 +2,10 @@
 #define Fov 1.0f
 #endif
 
+#ifndef MaxIters
+#define MaxIters 64
+#endif
+
 __kernel void Main(__global float4* screen, int width, int height, float4 position, float4 lookat, float4 updir)
 {
 	int x = get_global_id(0);
@@ -16,13 +20,13 @@ __kernel void Main(__global float4* screen, int width, int height, float4 positi
 
 	float totalDistance = 0.0f;
 	int i;
-	for (i = 0; i < 128; i++)
+	for (i = 0; i < MaxIters; i++)
 	{
 		float distance = De(pos + direction * totalDistance);
 		if (distance * width / 10 < totalDistance)
 			break;
 		totalDistance += distance;
 	}
-	float value = i / 128.0f;
+	float value = (float)i / MaxIters;
 	screen[y * width + x] = (float4)(value, value, value, 1.0f);
 }

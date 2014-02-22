@@ -6,7 +6,7 @@ using OpenTK.Input;
 
 namespace Clam
 {
-    class Keyboard2DControl : KeyboardControlBase
+    class Keyboard2DControl : KeyboardControlBase, IGifableControl
     {
         private double _x;
         private double _y;
@@ -46,6 +46,13 @@ namespace Clam
             _x = element.Element("X").LoadDouble();
             _y = element.Element("Y").LoadDouble();
             _zoom = element.Element("Zoom").LoadDouble();
+        }
+
+        public Action SetupGif(double pointInFrame)
+        {
+            var oldZoom = _zoom;
+            _zoom *= Math.Pow(0.0001, pointInFrame);
+            return () => _zoom = oldZoom;
         }
     }
 }
