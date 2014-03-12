@@ -16,6 +16,13 @@ namespace Clam
         void UnRegister();
     }
 
+    interface IGifableControl
+    {
+        // pointInFrame = range(0, 1)
+        // return value = teardown action
+        Action SetupGif(double pointInFrame);
+    }
+
     class RenderKernel : IDisposable
     {
         private readonly ComputeContext _context;

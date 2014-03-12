@@ -28,7 +28,6 @@ namespace Clam
 
         public bool CancelClosing
         {
-            get { return _cancelClosing; }
             set { _cancelClosing = value; }
         }
 
@@ -36,9 +35,10 @@ namespace Clam
             : base(InitialHeight * 16 / 9, InitialHeight, GraphicsMode.Default, "Clam Render Window",
             GameWindowFlags.Default, DisplayDevice.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
         {
-            var device = ComputePlatform.Platforms.SelectMany(p => p.Devices).FirstOrDefault();
-            if (device == null)
+            var devices = ComputePlatform.Platforms.SelectMany(p => p.Devices).ToArray();
+            if (devices.Length == 0)
                 throw new Exception("No OpenCL compatible GPU found");
+            var device = devices.Length == 1 ? devices[0] : devices[ConsoleHelper.Menu("Select GPU to use", devices.Select(c => c.Name).ToArray())];
             Console.WriteLine("Using GPU: " + device.Name);
             _threadActions = new ConcurrentQueue<Action>();
             _interop = new GraphicsInterop(device);
@@ -116,6 +116,7 @@ namespace Clam
                 _lastTitleUpdateSecond = now.Second;
                 Title = string.Format("Clam Render Window - {0} fps - {1}", (int)_averageFps, _infoMessage);
             }
+
             SwapBuffers();
             base.OnRenderFrame(e);
         }
@@ -132,7 +133,7 @@ namespace Clam
 
         protected override void OnClosing(CancelEventArgs e)
         {
-            if (CancelClosing)
+            if (_cancelClosing)
             {
                 e.Cancel = true;
                 WindowState = WindowState.Minimized;
@@ -144,7 +145,7 @@ namespace Clam
     class GraphicsInterop : IDisposable
     {
         [DllImport("opengl32.dll")]
-        extern static IntPtr wglGetCurrentDC();
+        public extern static IntPtr wglGetCurrentDC();
 
         private readonly ComputeContext _context;
         private readonly int _pub;

@@ -131,7 +131,7 @@ namespace Clam
             if (Directory.Exists(directory) == false)
                 Directory.CreateDirectory(directory);
             var list = Directory.GetFiles(directory, "*.kernel.xml");
-            var index = ConsoleHelper.Menu("Save to where", list.Select(f => string.Format("Overwrite {0}", Path.GetFileName(f))).Concat(new[] { "New state" }).ToArray());
+            var index = ConsoleHelper.Menu("Save to where", list.Select(f => string.Format("Overwrite {0}", Path.GetFileName(f))).Concat(new[] { "New state", "Cancel" }).ToArray());
             string filename;
             if (index == list.Length)
             {
@@ -145,6 +145,8 @@ namespace Clam
                     filename = Path.Combine(directory, prompt);
                 }
             }
+            else if (index == list.Length + 1)
+                return;
             else
                 filename = list[index];
             var xml = kernel.SerializeOptions();

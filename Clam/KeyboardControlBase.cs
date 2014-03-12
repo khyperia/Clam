@@ -11,13 +11,6 @@ using OpenTK.Input;
 
 namespace Clam
 {
-    interface IGifableControl
-    {
-        // pointInFrame = range(0, 1)
-        // return value = teardown action
-        Action SetupGif(double pointInFrame);
-    }
-
     abstract class KeyboardControlBase : IParameterSet
     {
         private readonly RenderWindow _renderWindow;
@@ -57,8 +50,9 @@ namespace Clam
             switch (keyboardKeyEventArgs.Key)
             {
                 case Key.P:
-                    ThreadPool.QueueUserWorkItem(
-                        o => _renderWindow.Renderer.Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender).Save(Ext.UniqueFilename("screenshot", "png")));
+                    ThreadPool.QueueUserWorkItem(o => _renderWindow.Renderer.
+                        Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender)
+                        .Save(Ext.UniqueFilename("screenshot", "png")));
                     break;
                 case Key.O:
                     var gifable = this as IGifableControl;
@@ -92,7 +86,6 @@ namespace Clam
 
         private static void TakeGif(RenderPackage renderer, IGifableControl control)
         {
-            // TODO: Add to StaticSettings
             var encoder = new AnimatedGifEncoder();
             encoder.Start(Ext.UniqueFilename("sequence", "gif"));
             encoder.SetDelay(1000 / StaticSettings.GifFramerate);

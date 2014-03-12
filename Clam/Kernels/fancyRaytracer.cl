@@ -55,7 +55,6 @@ bool IsGoodBokeh(float2 coords)
 
 int ApplyDof(float3* position, float3* lookat, float focalPlane, int rand)
 {
-	const float dofAmount = DofPickup;
 	float3 focalPosition = *position + *lookat * focalPlane;
 	float3 xShift = cross((float3)(0, 0, 1), *lookat);
 	float3 yShift = cross(*lookat, xShift);
@@ -67,7 +66,7 @@ int ApplyDof(float3* position, float3* lookat, float focalPlane, int rand)
 		rand = randy;
 		offset = (float2)((float)randx / IntMax, (float)randy / IntMax);
 	} while (!IsGoodBokeh(offset));
-	*lookat = normalize(*lookat + offset.x * dofAmount * xShift + offset.y * dofAmount * yShift);
+	*lookat = normalize(*lookat + offset.x * DofPickup * xShift + offset.y * DofPickup * yShift);
 	*position = focalPosition - *lookat * focalPlane;
 	return rand;
 }
