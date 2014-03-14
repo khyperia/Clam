@@ -5,14 +5,16 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows;
 using System.Xml.Linq;
 using Cloo;
 using JetBrains.Annotations;
 using OpenTK;
+using Size = System.Drawing.Size;
 
 namespace Clam
 {
-    struct RenderPackage : IDisposable
+    public struct RenderPackage : IDisposable
     {
         private readonly RenderKernel _kernel;
         private readonly IParameterSet _parameters;
@@ -121,7 +123,7 @@ namespace Clam
                 }
             }
             if (nancount != 0)
-                ConsoleHelper.Alert(string.Format("Warning! Caught {0} NAN pixels while taking screenshot!", nancount));
+                MessageBox.Show(string.Format("Caught {0} NAN pixels while taking screenshot", nancount), "Warning");
             var bmpData = bmp.LockBits(new Rectangle(0, 0, screenshotWidth, screenshotHeight), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
             Marshal.Copy(destBuffer, 0, bmpData.Scan0, destBuffer.Length);
             bmp.UnlockBits(bmpData);

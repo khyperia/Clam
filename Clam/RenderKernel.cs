@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Windows;
 using System.Xml.Linq;
 using Cloo;
 using JetBrains.Annotations;
 using OpenTK;
+using Size = System.Drawing.Size;
 
 namespace Clam
 {
-    interface IParameterSet
+    public interface IParameterSet
     {
         void ApplyToKernel(ComputeKernel kernel, ref int startIndex);
         void UnRegister();
@@ -21,14 +22,17 @@ namespace Clam
         // pointInFrame = range(0, 1)
         // return value = teardown action
         Action SetupGif(double pointInFrame);
+        // return value = EndIgnoreControl
+        Action StartIgnoreControl();
     }
 
-    class RenderKernel : IDisposable
+    public class RenderKernel : IDisposable
     {
         private readonly ComputeContext _context;
         private readonly string[] _sourcecodes;
         private readonly Dictionary<string, string> _defines;
         private ComputeKernel _kernel;
+        private readonly object _kernelLock = new object();
         private long[] _localSize;
 
         private RenderKernel(ComputeContext context, ComputeKernel kernel, string[] sourcecodes, Dictionary<string, string> defines)
@@ -49,24 +53,24 @@ namespace Clam
             {
                 foreach (var define in defines.Where(define => define.Key.Any(char.IsWhiteSpace) || define.Value.Any(char.IsWhiteSpace)))
                 {
-                    ConsoleHelper.Alert("Invalid define \"" + define.Key + "=" + define.Value + "\": define contained whitespace");
+                    MessageBox.Show("Invalid define \"" + define.Key + "=" + define.Value + "\": define contained whitespace", "Error");
                     return null;
                 }
                 var options = string.Join(" ", defines.Where(kvp => !string.IsNullOrEmpty(kvp.Value)).Select(kvp => "-D " + kvp.Key + "=" + kvp.Value));
                 program.Build(new[] { device }, options, null, IntPtr.Zero);
                 var str = program.GetBuildLog(device).Trim();
                 if (string.IsNullOrEmpty(str) == false)
-                    ConsoleHelper.Alert(str);
+                    MessageBox.Show(str, "Build log");
                 return program.CreateKernel("Main");
             }
             catch (InvalidBinaryComputeException)
             {
-                ConsoleHelper.Alert(program.GetBuildLog(device));
+                MessageBox.Show(program.GetBuildLog(device), "Build error (invalid binary)");
                 return null;
             }
             catch (BuildProgramFailureComputeException)
             {
-                ConsoleHelper.Alert(program.GetBuildLog(device));
+                MessageBox.Show(program.GetBuildLog(device), "Build error (build program failure)");
                 return null;
             }
         }
@@ -106,23 +110,15 @@ namespace Clam
 
         public void LoadOptions(XElement element)
         {
-            var bad = false;
             foreach (var xElement in element.Elements())
             {
                 var key = xElement.Name.LocalName;
                 var value = xElement.Value;
                 if (_defines.ContainsKey(key))
-                {
                     _defines[key] = value;
-                }
                 else
-                {
-                    Console.WriteLine("Option {0} was invalid (did you load the wrong XML?)", key);
-                    bad = true;
-                }
+                    MessageBox.Show(string.Format("Option {0} was invalid (did you load the wrong XML?)", key), "Error");
             }
-            if (bad)
-                Console.ReadKey(true);
         }
 
         public void SetOption(string key, string value)
@@ -154,10 +150,10 @@ namespace Clam
 
         public void Render(ComputeBuffer<Vector4> buffer, ComputeCommandQueue queue, IParameterSet parameters, Size windowSize, int partialRender, Size coordinates)
         {
-            if (_kernel == null)
-                return;
-            lock (_kernel)
+            lock (_kernelLock)
             {
+                if (_kernel == null)
+                    return;
                 _kernel.SetMemoryArgument(0, buffer);
                 _kernel.SetValueArgument(1, windowSize.Width);
                 _kernel.SetValueArgument(2, windowSize.Height);
@@ -190,9 +186,9 @@ namespace Clam
 
         public void Dispose()
         {
-            if (_kernel != null)
+            lock (_kernelLock)
             {
-                lock (_kernel)
+                if (_kernel != null)
                 {
                     _kernel.Program.Dispose();
                     _kernel.Dispose();

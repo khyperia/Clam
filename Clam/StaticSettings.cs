@@ -1,65 +1,81 @@
-﻿using System;
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using JetBrains.Annotations;
 
 namespace Clam
 {
-    static class StaticSettings
+    public class StaticSettings : INotifyPropertyChanged
     {
-        private static int _screenshotHeight = 2048;
-        public static int ScreenshotHeight { get { return _screenshotHeight; } }
-        private static int _screenshotPartialRender = 10;
-        public static int ScreenshotPartialRender { get { return _screenshotPartialRender; } }
-        private static int _gifHeight = 256;
-        public static int GifHeight { get { return _gifHeight; } }
-        private static int _gifFramecount = 20;
-        public static int GifFramecount { get { return _gifFramecount; } }
-        private static int _gifFramerate = 20;
-        public static int GifFramerate { get { return _gifFramerate; } }
+        public static StaticSettings Fetch = new StaticSettings();
 
-        public static void Edit()
+        private int _screenshotHeight = 2048;
+        private int _screenshotPartialRender = 10;
+        private int _gifHeight = 256;
+        private int _gifFramecount = 20;
+        private int _gifFramerate = 20;
+
+        public int ScreenshotHeight
         {
-            while (true)
+            get { return _screenshotHeight; }
+            set
             {
-                switch (ConsoleHelper.Menu("Select option", new[]
-                {
-                    "Screenshot height",
-                    "Screenshot partial render",
-                    "What is screenshot partial render? (help text)",
-                    "Gif height",
-                    "Gif framecount",
-                    "Gif framerate",
-                    "Done"
-                }))
-                {
-                    case 0:
-                        _screenshotHeight = ConsoleHelper.PromptParseValue("screenshot height", _screenshotHeight, int.TryParse);
-                        break;
-                    case 1:
-                        _screenshotPartialRender = ConsoleHelper.PromptParseValue("screenshot partial render", _screenshotPartialRender, int.TryParse);
-                        break;
-                    case 2:
-                        Console.WriteLine("Screenshot partial render help:");
-                        Console.WriteLine("The render engine, by default, subdivides the screen into N^2 rectangles");
-                        Console.WriteLine("where N is the parameter controlled by \"screenshot partial render\"");
-                        Console.WriteLine("Each rectangle is rendered in a seperate kernel call");
-                        Console.WriteLine("This cuts down on time spent in any one kernel call");
-                        Console.WriteLine("If the screen flashes, GPU hangs, and Clam crashes,");
-                        Console.WriteLine("this is Windows hitting it's two-second limit on kernel calls");
-                        Console.WriteLine("Increase this parameter in such a case");
-                        Console.ReadKey(true);
-                        break;
-                    case 3:
-                        _gifHeight = ConsoleHelper.PromptParseValue("Gif height", _gifHeight, int.TryParse);
-                        break;
-                    case 4:
-                        _gifFramecount = ConsoleHelper.PromptParseValue("Gif framecount", _gifFramecount, int.TryParse);
-                        break;
-                    case 5:
-                        _gifFramerate = ConsoleHelper.PromptParseValue("Gif framerate (in FPS)", _gifFramerate, int.TryParse);
-                        break;
-                    case 6:
-                        return;
-                }
+                if (value == _screenshotHeight) return;
+                _screenshotHeight = value;
+                OnPropertyChanged();
             }
+        }
+
+        public int ScreenshotPartialRender
+        {
+            get { return _screenshotPartialRender; }
+            set
+            {
+                if (value == _screenshotPartialRender) return;
+                _screenshotPartialRender = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public int GifHeight
+        {
+            get { return _gifHeight; }
+            set
+            {
+                if (value == _gifHeight) return;
+                _gifHeight = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public int GifFramecount
+        {
+            get { return _gifFramecount; }
+            set
+            {
+                if (value == _gifFramecount) return;
+                _gifFramecount = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public int GifFramerate
+        {
+            get { return _gifFramerate; }
+            set
+            {
+                if (value == _gifFramerate) return;
+                _gifFramerate = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        [NotifyPropertyChangedInvocator]
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            var handler = PropertyChanged;
+            if (handler != null) handler(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }

@@ -16,7 +16,11 @@
 
 float De(float3 z)
 {
+#ifndef JuliaCenter
 	float3 offset = z;
+#else
+	float3 offset = (float3)(JuliaCenter);
+#endif
 	float dz = 1.0f;
 	for (int n = 0; n < 1024; n++) {
 		z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0f - z;

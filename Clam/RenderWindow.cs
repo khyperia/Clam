@@ -2,17 +2,15 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Drawing;
-using System.Linq;
 using System.Runtime.InteropServices;
 using Cloo;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
-using OpenTK.Input;
 
 namespace Clam
 {
-    class RenderWindow : GameWindow
+    public class RenderWindow : GameWindow
     {
         private const int InitialHeight = 720;
         private readonly GraphicsInterop _interop;
@@ -31,15 +29,10 @@ namespace Clam
             set { _cancelClosing = value; }
         }
 
-        public RenderWindow()
+        public RenderWindow(ComputeDevice device)
             : base(InitialHeight * 16 / 9, InitialHeight, GraphicsMode.Default, "Clam Render Window",
             GameWindowFlags.Default, DisplayDevice.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
         {
-            var devices = ComputePlatform.Platforms.SelectMany(p => p.Devices).ToArray();
-            if (devices.Length == 0)
-                throw new Exception("No OpenCL compatible GPU found");
-            var device = devices.Length == 1 ? devices[0] : devices[ConsoleHelper.Menu("Select GPU to use", devices.Select(c => c.Name).ToArray())];
-            Console.WriteLine("Using GPU: " + device.Name);
             _threadActions = new ConcurrentQueue<Action>();
             _interop = new GraphicsInterop(device);
         }
@@ -83,8 +76,6 @@ namespace Clam
         protected override void OnUpdateFrame(FrameEventArgs e)
         {
             base.OnUpdateFrame(e);
-            if (Keyboard[Key.Escape])
-                WindowState = WindowState.Minimized;
             Action result;
             while (_threadActions.TryDequeue(out result))
                 result();
@@ -145,7 +136,7 @@ namespace Clam
     class GraphicsInterop : IDisposable
     {
         [DllImport("opengl32.dll")]
-        public extern static IntPtr wglGetCurrentDC();
+        private extern static IntPtr wglGetCurrentDC();
 
         private readonly ComputeContext _context;
         private readonly int _pub;

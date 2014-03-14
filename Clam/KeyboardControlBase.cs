@@ -15,6 +15,7 @@ namespace Clam
     {
         private readonly RenderWindow _renderWindow;
         private Dictionary<Key, Action<float>> _bindings;
+        private bool _ignoreControl;
 
         protected KeyboardControlBase(RenderWindow renderWindow)
         {
@@ -25,6 +26,8 @@ namespace Clam
 
         private void RenderWindowOnUpdateFrame(object sender, FrameEventArgs frameEventArgs)
         {
+            if (_ignoreControl)
+                return;
             var keyPressed = false;
             foreach (var binding in _bindings.Where(binding => _renderWindow.Keyboard[binding.Key]))
             {
@@ -47,11 +50,13 @@ namespace Clam
 
         private void KeyboardOnKeyDown(object sender, KeyboardKeyEventArgs keyboardKeyEventArgs)
         {
+            if (_ignoreControl)
+                return;
             switch (keyboardKeyEventArgs.Key)
             {
                 case Key.P:
                     ThreadPool.QueueUserWorkItem(o => _renderWindow.Renderer.
-                        Screenshot(StaticSettings.ScreenshotHeight, StaticSettings.ScreenshotPartialRender)
+                        Screenshot(StaticSettings.Fetch.ScreenshotHeight, StaticSettings.Fetch.ScreenshotPartialRender)
                         .Save(Ext.UniqueFilename("screenshot", "png")));
                     break;
                 case Key.O:
@@ -84,20 +89,28 @@ namespace Clam
             }
         }
 
+        public Action StartIgnoreControl()
+        {
+            _ignoreControl = true;
+            return () => _ignoreControl = false;
+        }
+
         private static void TakeGif(RenderPackage renderer, IGifableControl control)
         {
             var encoder = new AnimatedGifEncoder();
             encoder.Start(Ext.UniqueFilename("sequence", "gif"));
-            encoder.SetDelay(1000 / StaticSettings.GifFramerate);
+            encoder.SetDelay(1000 / StaticSettings.Fetch.GifFramerate);
             encoder.SetRepeat(0);
-            for (var i = 0; i < StaticSettings.GifFramecount; i++)
+            var endIgnoreControl = control.StartIgnoreControl();
+            for (var i = 0; i < StaticSettings.Fetch.GifFramecount; i++)
             {
-                var teardown = control.SetupGif((double)i / StaticSettings.GifFramecount);
-                var screen = renderer.Screenshot(StaticSettings.GifHeight, 1);
+                var teardown = control.SetupGif((double)i / StaticSettings.Fetch.GifFramecount);
+                var screen = renderer.Screenshot(StaticSettings.Fetch.GifHeight, 1);
                 if (encoder.AddFrame(screen) == false)
                     throw new Exception("Could not add frame to gif");
                 teardown();
             }
+            endIgnoreControl();
             encoder.Finish();
             RenderWindow.DisplayInformation("Done rendering sequence");
         }

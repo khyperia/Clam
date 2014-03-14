@@ -186,7 +186,7 @@ namespace Clam.NGif
          */
         public void SetFrameRate(float fps)
         {
-            if (fps != 0f)
+            if (fps > 0.0001f)
             {
                 _delay = (int)Math.Round(100f / fps);
             }
