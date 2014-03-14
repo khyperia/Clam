@@ -28,6 +28,7 @@ namespace Clam
 
     public class RenderKernel : IDisposable
     {
+        private const string OpenClOptions = "-cl-mad-enable -cl-fast-relaxed-math";
         private readonly ComputeContext _context;
         private readonly string[] _sourcecodes;
         private readonly Dictionary<string, string> _defines;
@@ -57,7 +58,7 @@ namespace Clam
                     return null;
                 }
                 var options = string.Join(" ", defines.Where(kvp => !string.IsNullOrEmpty(kvp.Value)).Select(kvp => "-D " + kvp.Key + "=" + kvp.Value));
-                program.Build(new[] { device }, options, null, IntPtr.Zero);
+                program.Build(new[] { device }, options + " " + OpenClOptions, null, IntPtr.Zero);
                 var str = program.GetBuildLog(device).Trim();
                 if (string.IsNullOrEmpty(str) == false)
                     MessageBox.Show(str, "Build log");
