@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Windows.Input;
 using System.Xml.Linq;
 using Cloo;
-using OpenTK.Input;
 
 namespace Clam
 {
@@ -12,8 +12,7 @@ namespace Clam
         private double _y;
         private double _zoom = 1;
 
-        public Keyboard2DControl(RenderWindow renderWindow)
-            : base(renderWindow)
+        public Keyboard2DControl()
         {
             SetBindings(new Dictionary<Key, Action<float>>
             {
@@ -26,6 +25,11 @@ namespace Clam
             });
         }
 
+        public override string ControlsHelp
+        {
+            get { return "Navigation: Up/Down/Left/Right\nZooming: W/S"; }
+        }
+
         public override void ApplyToKernel(ComputeKernel kernel, ref int startIndex)
         {
             kernel.SetValueArgument(startIndex++, (float)_x);
@@ -33,7 +37,7 @@ namespace Clam
             kernel.SetValueArgument(startIndex++, (float)_zoom);
         }
 
-        protected override XElement Save()
+        public override XElement Save()
         {
             return new XElement("Keyboard2DControl",
                 _x.Save("X"),
@@ -41,7 +45,7 @@ namespace Clam
                 _zoom.Save("Zoom"));
         }
 
-        protected override void Load(XElement element)
+        public override void Load(XElement element)
         {
             _x = element.Element("X").LoadDouble();
             _y = element.Element("Y").LoadDouble();

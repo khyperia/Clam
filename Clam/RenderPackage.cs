@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Xml.Linq;
+using Clam.NGif;
 using Cloo;
 using JetBrains.Annotations;
 using OpenTK;
@@ -41,14 +42,14 @@ namespace Clam
             get { return _kernelInUse != 0; }
         }
 
-        private static readonly Dictionary<string, Func<RenderWindow, IParameterSet>> ControlBindings = new Dictionary<string, Func<RenderWindow, IParameterSet>>
+        private static readonly Dictionary<string, Func<IParameterSet>> ControlBindings = new Dictionary<string, Func<IParameterSet>>
         {
-            {"Raytracer", w => new KeyboardRaytracerControl(w)},
-            {"RaytracerExtended", w => new KeyboardRaytracerControlExtended(w)},
-            {"2D", w => new Keyboard2DControl(w)},
+            {"Raytracer", () => new KeyboardRaytracerControl()},
+            {"RaytracerExtended", () => new KeyboardRaytracerControlExtended()},
+            {"2D", () => new Keyboard2DControl()},
         };
 
-        public static RenderPackage? LoadFromXml(RenderWindow window, string xmlFilename)
+        public static RenderPackage? LoadFromXml(ComputeContext computeContext, string xmlFilename)
         {
             var xml = XDocument.Load(xmlFilename).Root;
             if (xml == null)
@@ -58,12 +59,12 @@ namespace Clam
                 throw new Exception("Invalid XML file " + xmlFilename + ": no Controls element");
             if (!ControlBindings.ContainsKey(controls.Value))
                 throw new Exception("Invalid XML file " + xmlFilename + ": Controls value did not exist, possible values are: " + string.Join(", ", ControlBindings.Keys));
-            var parameters = ControlBindings[controls.Value](window);
+            var parameters = ControlBindings[controls.Value]();
             var files = xml.Element("Files");
             if (files == null)
                 throw new Exception("Invalid XML file " + xmlFilename + ": no Files element");
             var sourceStrings = files.Elements("File").Select(e => File.ReadAllText(e.Value)).ToArray();
-            var kernel = RenderKernel.Create(window.ComputeContext, sourceStrings);
+            var kernel = RenderKernel.Create(computeContext, sourceStrings);
             if (kernel == null)
                 return null;
             return new RenderPackage(kernel, parameters);
@@ -71,11 +72,11 @@ namespace Clam
 
         private const double ScreenshotAspectRatio = 16.0 / 9.0;
 
-        public Bitmap Screenshot(int screenshotHeight, int slowRenderPower)
+        public Bitmap Screenshot(int screenshotHeight, int slowRenderPower, Action<string> displayInformation)
         {
             var ccontext = _kernel.ComputeContext;
             _kernelInUse++;
-            RenderWindow.DisplayInformation("Rendering screenshot");
+            displayInformation("Rendering screenshot");
             var screenshotWidth = (int)(screenshotHeight * ScreenshotAspectRatio);
             var computeBuffer = new ComputeBuffer<Vector4>(ccontext, ComputeMemoryFlags.ReadWrite, screenshotWidth * screenshotHeight);
             var queue = new ComputeCommandQueue(ccontext, ccontext.Devices[0], ComputeCommandQueueFlags.None);
@@ -90,7 +91,7 @@ namespace Clam
                 {
                     for (var x = 0; x < slowRenderPower; x++)
                     {
-                        RenderWindow.DisplayInformation(string.Format("Screenshot {0}% done",
+                        displayInformation(string.Format("Screenshot {0}% done",
                             100 * (x + y * slowRenderPower + frame * slowRenderPower * slowRenderPower) /
                             (slowRenderPower * slowRenderPower * (frameDependantControls == null ? 1 : numFrames))));
                         _kernel.Render(computeBuffer, queue, _parameters, new Size(screenshotWidth, screenshotHeight), slowRenderPower, new Size(x, y));
@@ -105,7 +106,7 @@ namespace Clam
             computeBuffer.Dispose();
             queue.Dispose();
 
-            RenderWindow.DisplayInformation("Saving screenshot");
+            displayInformation("Saving screenshot");
             var bmp = new Bitmap(screenshotWidth, screenshotHeight);
             var destBuffer = new int[screenshotWidth * screenshotHeight];
             var nancount = 0;
@@ -128,9 +129,30 @@ namespace Clam
             Marshal.Copy(destBuffer, 0, bmpData.Scan0, destBuffer.Length);
             bmp.UnlockBits(bmpData);
 
-            RenderWindow.DisplayInformation("Done rendering screenshot");
+            displayInformation("Done rendering screenshot");
             _kernelInUse--;
             return bmp;
+        }
+
+        public void TakeGif(IGifableControl control, Action<string> displayInformation)
+        {
+            var encoder = new AnimatedGifEncoder();
+            encoder.Start(Ext.UniqueFilename("sequence", "gif"));
+            encoder.SetDelay(1000 / StaticSettings.Fetch.GifFramerate);
+            encoder.SetRepeat(0);
+            var endIgnoreControl = control.StartIgnoreControl();
+            for (var i = 0; i < StaticSettings.Fetch.GifFramecount; i++)
+            {
+                displayInformation(string.Format("{0}% done with gif", (int)(100.0 * i / StaticSettings.Fetch.GifFramecount)));
+                var teardown = control.SetupGif((double)i / StaticSettings.Fetch.GifFramecount);
+                var screen = Screenshot(StaticSettings.Fetch.GifHeight, 1, s => { });
+                if (encoder.AddFrame(screen) == false)
+                    throw new Exception("Could not add frame to gif");
+                teardown();
+            }
+            endIgnoreControl();
+            encoder.Finish();
+            displayInformation("Done rendering sequence");
         }
 
         public void Dispose()

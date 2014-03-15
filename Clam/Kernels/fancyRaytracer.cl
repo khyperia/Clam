@@ -83,20 +83,27 @@ int ApplyDof(float3* position, float3* lookat, float focalPlane, int rand)
 	return rand;
 }
 
-float Trace(float3 origin, float3 direction, float quality)
-{
-	float distance = De(origin);
-	float totalDistance = distance;
-	for (int i = 0; i < 512 && totalDistance < MaxRayDist && distance * quality * 4 > totalDistance; i++) {
-		distance = De(origin + direction * totalDistance) - totalDistance / quality;
-		totalDistance += distance;
-	}
-	return totalDistance;
-}
-
 float NormDist(float3 pos, float3 dir, float totalDistance, int width) {
 	for (int i = 0; i < NormDistCount; i++)
 		totalDistance += De(pos + dir * totalDistance) - totalDistance / (sqrt((float)width) * Quality);
+	return totalDistance;
+}
+
+float Trace(float3 origin, float3 direction, float quality, float widthOverFov)
+{
+	float distance = De(origin);
+	float totalDistance = distance;
+	for (int i = 0; i < 4; i++)
+	{
+		for (int i = 0; i < 512 && totalDistance < MaxRayDist && distance * quality * 4 > totalDistance; i++) {
+			distance = De(origin + direction * totalDistance) - totalDistance / quality;
+			totalDistance += distance;
+		}
+		float newTotalDistance = NormDist(origin, direction, totalDistance, widthOverFov);
+		if (newTotalDistance < totalDistance * 1.1)
+			return newTotalDistance;
+		totalDistance = newTotalDistance;
+	}
 	return totalDistance;
 }
 
@@ -143,7 +150,6 @@ float3 Postprocess(float totalDistance, float3 origin, float3 direction, float f
 {
 	if (totalDistance > MaxRayDist)
 		return (float3)(BackgroundColor);
-	totalDistance = NormDist(origin, direction, totalDistance, widthOverFov);
 	float3 finalPos = origin + direction * totalDistance;
 	float3 normal = Normal(finalPos);
 	float3 color = AO(finalPos, normal);
@@ -175,7 +181,7 @@ __kernel void Main(__global float4* screen, int width, int height, float4 positi
 
 	float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-	float totalDistance = Trace(pos, rayDir, sqrt((float)width) * Quality / fov);
+	float totalDistance = Trace(pos, rayDir, sqrt((float)width) * Quality / fov, width / fov);
 
 	float3 color = Postprocess(totalDistance, pos, rayDir, focalDistance, width / fov);
 

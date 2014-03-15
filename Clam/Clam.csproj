@@ -39,18 +39,24 @@
     <Reference Include="Cloo">
       <HintPath>..\packages\Sourceforge.Cloo.0.9.1\lib\net35\Cloo.dll</HintPath>
     </Reference>
-    <Reference Include="OpenTK">
-      <HintPath>..\packages\OpenTK.1.1.1161.61462\lib\NET40\OpenTK.dll</HintPath>
+    <Reference Include="OpenTK, Version=1.1.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\OpenTK.1.1.1508.5724\lib\NET40\OpenTK.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenTK.GLControl">
+      <HintPath>..\packages\OpenTK.GLControl.1.1.1508.5724\lib\NET40\OpenTK.GLControl.dll</HintPath>
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xaml" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
+    <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Ext.cs" />
@@ -63,7 +69,9 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RenderKernel.cs" />
     <Compile Include="RenderPackage.cs" />
-    <Compile Include="RenderWindow.cs" />
+    <Compile Include="RenderWindow.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="ReSharperAnnotations.cs" />
     <Compile Include="StaticSettings.cs" />
     <Compile Include="App.xaml.cs">

@@ -15,8 +15,10 @@ namespace Clam.Xaml
 {
     public partial class MainWindow : INotifyPropertyChanged
     {
+        [CanBeNull]
         private RenderWindow _renderWindow;
         private string _selectedKernelXmlFile;
+        public ObservableCollection<ComputeDevice> Devices { get; set; }
         public ObservableCollection<string> KernelXmlFiles { get; set; }
         public ObservableCollection<DefineViewModel> DefineViewModels { get; set; }
 
@@ -25,20 +27,14 @@ namespace Clam.Xaml
             KernelXmlFiles = new ObservableCollection<string>();
             DefineViewModels = new ObservableCollection<DefineViewModel>();
             RefreshXmlFiles();
+            Devices = new ObservableCollection<ComputeDevice>(ComputePlatform.Platforms.SelectMany(p => p.Devices));
+            if (Devices.Count == 0)
+            {
+                MessageBox.Show(this, "No OpenCL-compatible GPUs found", "Error");
+            }
             InitializeComponent();
-            var autoResetEvent = new AutoResetEvent(false);
-            new Thread(BootWindow).Start(autoResetEvent);
-            autoResetEvent.WaitOne();
-        }
-
-        private void BootWindow(object syncObj)
-        {
-            var device = ComputePlatform.Platforms.SelectMany(p => p.Devices).Single(); // TODO
-            _renderWindow = new RenderWindow(device);
-            ((AutoResetEvent)syncObj).Set();
-            _renderWindow.Run();
-            _renderWindow.Dispose();
-            _renderWindow = null;
+            if (Devices.Count == 1)
+                SelectedDevice = Devices[0];
         }
 
         private void RefreshXmlFiles()
@@ -50,6 +46,8 @@ namespace Clam.Xaml
 
         private void RefreshDefines()
         {
+            if (_renderWindow == null)
+                return;
             DefineViewModels.Clear();
             if (_renderWindow.Renderer.Kernel == null)
                 return;
@@ -57,17 +55,41 @@ namespace Clam.Xaml
                 DefineViewModels.Add(new DefineViewModel(option.Key, option.Value, _renderWindow.Renderer.Kernel));
         }
 
+        public Visibility DeviceSelectedVisibility
+        {
+            get { return _renderWindow != null ? Visibility.Visible : Visibility.Collapsed; }
+        }
+
+        public Visibility DeviceNotSelectedVisibility
+        {
+            get { return _renderWindow == null ? Visibility.Visible : Visibility.Collapsed; }
+        }
+
+        public ComputeDevice SelectedDevice
+        {
+            set
+            {
+                if (_renderWindow != null)
+                    _renderWindow.Dispose();
+                _renderWindow = new RenderWindow(value, s => StatusBarTextBlock.Text = s);
+                WindowsFormsHost.KeyDown += (sender, args) => args.Handled = true;
+                WindowsFormsHost.Child = _renderWindow;
+                OnPropertyChanged("DeviceSelectedVisibility");
+                OnPropertyChanged("DeviceNotSelectedVisibility");
+            }
+        }
+
         public string SelectedKernelXmlFile
         {
             get { return _selectedKernelXmlFile; }
             set
             {
-                if (value == _selectedKernelXmlFile) return;
+                if (value == _selectedKernelXmlFile || _renderWindow == null) return;
                 _selectedKernelXmlFile = value;
                 OnPropertyChanged();
                 _renderWindow.Invoke(() =>
                 {
-                    var package = RenderPackage.LoadFromXml(_renderWindow, value);
+                    var package = RenderPackage.LoadFromXml(_renderWindow.ComputeContext, value);
                     if (package.HasValue == false)
                         return;
                     Dispatcher.BeginInvoke(new Action(() => RenderPackage = package.Value));
@@ -77,13 +99,27 @@ namespace Clam.Xaml
 
         public RenderPackage RenderPackage
         {
-            get { return _renderWindow.Renderer; }
+            get { return _renderWindow == null ? default(RenderPackage) : _renderWindow.Renderer; }
             set
             {
-                if (value.Equals(_renderWindow.Renderer)) return;
+                if (_renderWindow == null || value.Equals(_renderWindow.Renderer)) return;
                 OnPropertyChanged();
                 _renderWindow.Renderer = value;
+                OnPropertyChanged("ControlsHelp");
                 RefreshDefines();
+            }
+        }
+
+        public string ControlsHelp
+        {
+            get
+            {
+                if (_renderWindow == null)
+                    return "";
+                var parameters = _renderWindow.Renderer.Parameters;
+                if (parameters == null)
+                    return "";
+                return parameters.ControlsHelp;
             }
         }
 
@@ -94,6 +130,8 @@ namespace Clam.Xaml
 
         private void ApplyKernelParameters(object sender, RoutedEventArgs e)
         {
+            if (_renderWindow == null)
+                return;
             _renderWindow.Renderer.Kernel.Recompile();
             var framedepcontrols = _renderWindow.Renderer.Parameters as IFrameDependantControl;
             if (framedepcontrols != null)
@@ -102,6 +140,8 @@ namespace Clam.Xaml
 
         private void LoadKernelParameters(object sender, RoutedEventArgs e)
         {
+            if (_renderWindow == null)
+                return;
             var selector = new OpenFileDialog
             {
                 InitialDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "State")),
@@ -113,6 +153,8 @@ namespace Clam.Xaml
 
         private void SaveKernelParameters(object sender, RoutedEventArgs e)
         {
+            if (_renderWindow == null)
+                return;
             var selector = new SaveFileDialog
             {
                 InitialDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "State")),
@@ -121,13 +163,6 @@ namespace Clam.Xaml
             };
             if (selector.ShowDialog(this) == true)
                 _renderWindow.Renderer.Kernel.LoadOptions(XDocument.Load(selector.FileName).Root);
-        }
-
-        protected override void OnClosed(EventArgs e)
-        {
-            _renderWindow.CancelClosing = false;
-            _renderWindow.Invoke(_renderWindow.Exit);
-            base.OnClosed(e);
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -184,6 +219,66 @@ namespace Clam.Xaml
                 var handler = PropertyChanged;
                 if (handler != null) handler(this, new PropertyChangedEventArgs(propertyName));
             }
+        }
+
+        private void TakeScreenshot(object sender, RoutedEventArgs e)
+        {
+            if (_renderWindow == null)
+                return;
+            ThreadPool.QueueUserWorkItem(o => _renderWindow.Renderer.
+                Screenshot(StaticSettings.Fetch.ScreenshotHeight, StaticSettings.Fetch.ScreenshotPartialRender, _renderWindow.DisplayInformation)
+                .Save(Ext.UniqueFilename("screenshot", "png")));
+        }
+
+        private void TakeGif(object sender, RoutedEventArgs e)
+        {
+            if (_renderWindow == null)
+                return;
+            var gifable = _renderWindow.Renderer.Parameters as IGifableControl;
+            if (gifable != null)
+                ThreadPool.QueueUserWorkItem(o => _renderWindow.Renderer.TakeGif(gifable, _renderWindow.DisplayInformation));
+        }
+
+        private void SaveKernelState(object sender, RoutedEventArgs ev)
+        {
+            if (_renderWindow == null)
+                return;
+            var serializable = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
+            if (serializable == null)
+            {
+                MessageBox.Show(this, "Saving is not supported with this kernel", "Error");
+                return;
+            }
+            try
+            {
+                serializable.Load(XDocument.Load(Path.Combine("..", "State", GetType().Name + ".state.xml")).Root);
+                var fdc = _renderWindow.Renderer.Parameters as IFrameDependantControl;
+                if (fdc != null)
+                    fdc.Frame = 0;
+                _renderWindow.DisplayInformation("Loaded state");
+            }
+            catch (Exception e)
+            {
+                _renderWindow.DisplayInformation("Could not load state: " + e.GetType().Name + ": " + e.Message);
+            }
+        }
+
+        private void LoadKernelState(object sender, RoutedEventArgs e)
+        {
+            if (_renderWindow == null)
+                return;
+            var serializable = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
+            if (serializable == null)
+            {
+                MessageBox.Show(this, "Loading is not supported with this kernel", "Error");
+                return;
+            }
+            var filename = Path.Combine("..", "State", GetType().Name + ".state.xml");
+            var directory = Path.GetDirectoryName(filename);
+            if (directory != null && Directory.Exists(directory) == false)
+                Directory.CreateDirectory(directory);
+            serializable.Save().Save(filename);
+            _renderWindow.DisplayInformation("Saved state");
         }
     }
 }

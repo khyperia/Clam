@@ -2,57 +2,94 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         DataContext="{Binding RelativeSource={RelativeSource Self}}"
-        Title="Clam" Width="600" Height="500">
+        Title="Cloo">
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-            <RowDefinition />
-        </Grid.RowDefinitions>
-        <DockPanel Grid.Column="0" Grid.Row="0" DockPanel.Dock="Right">
-            <TextBlock DockPanel.Dock="Top">Select kernel package</TextBlock>
-            <ListBox ItemsSource="{Binding KernelXmlFiles}" SelectedItem="{Binding SelectedKernelXmlFile}" />
-        </DockPanel>
-        <DockPanel Grid.Column="1" Grid.Row="0" DockPanel.Dock="Right">
-            <TextBlock DockPanel.Dock="Top">Kernel-specific parameters</TextBlock>
-            <Button DockPanel.Dock="Bottom" Click="ApplyKernelParameters">Apply parameters</Button>
-            <Button DockPanel.Dock="Bottom" Click="LoadKernelParameters">Load</Button>
-            <Button DockPanel.Dock="Bottom" Click="SaveKernelParameters">Save</Button>
-            <DataGrid ItemsSource="{Binding DefineViewModels}" AutoGenerateColumns="False">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Parameter" IsReadOnly="true" Binding="{Binding Name}" />
-                    <DataGridTextColumn Header="Value" IsReadOnly="False" Binding="{Binding Value}" />
-                </DataGrid.Columns>
-            </DataGrid>
-        </DockPanel>
-        <DockPanel Grid.Column="2" Grid.Row="0" DockPanel.Dock="Right" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Top">Global parameters</TextBlock>
-            <Grid DockPanel.Dock="Top">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition />
-                    <ColumnDefinition />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Grid.Column="0">Screenshot height</TextBlock>
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding StaticSettings.ScreenshotHeight}" />
-                <TextBlock Grid.Row="1" Grid.Column="0">Screenshot partial render</TextBlock>
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding StaticSettings.ScreenshotPartialRender}" />
-                <TextBlock Grid.Row="2" Grid.Column="0">Gif height</TextBlock>
-                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding StaticSettings.GifHeight}" />
-                <TextBlock Grid.Row="3" Grid.Column="0">Gif framerate</TextBlock>
-                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding StaticSettings.GifFramerate}" />
-                <TextBlock Grid.Row="4" Grid.Column="0">Gif framecount</TextBlock>
-                <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding StaticSettings.GifFramecount}" />
+        <Grid Visibility="{Binding DeviceNotSelectedVisibility}">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top">Select GPU</TextBlock>
+                <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}"></TextBlock>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+        <Grid Visibility="{Binding DeviceSelectedVisibility}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <DockPanel Grid.Row="0" Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top">Select kernel package</TextBlock>
+                <ListBox ItemsSource="{Binding KernelXmlFiles}" SelectedItem="{Binding SelectedKernelXmlFile}" />
+            </DockPanel>
+            <DockPanel Grid.Row="1" Grid.Column="0" LastChildFill="False">
+                <TextBlock DockPanel.Dock="Top">Global parameters</TextBlock>
+                <Grid DockPanel.Dock="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0">Screenshot height</TextBlock>
+                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding StaticSettings.ScreenshotHeight}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0">Screenshot partial render</TextBlock>
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding StaticSettings.ScreenshotPartialRender}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0">Gif height</TextBlock>
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding StaticSettings.GifHeight}" />
+                    <TextBlock Grid.Row="3" Grid.Column="0">Gif framerate</TextBlock>
+                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding StaticSettings.GifFramerate}" />
+                    <TextBlock Grid.Row="4" Grid.Column="0">Gif framecount</TextBlock>
+                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding StaticSettings.GifFramecount}" />
+                    <TextBlock Grid.Row="5" Grid.Column="0">OpenCL Options</TextBlock>
+                    <TextBox Grid.Row="5" Grid.Column="1" TextWrapping="Wrap" MaxWidth="100" Text="{Binding StaticSettings.OpenClOptions}" />
+                    <Button Grid.Row="6" Grid.Column="0" Click="TakeScreenshot">Take Screenshot</Button>
+                    <Button Grid.Row="7" Grid.Column="0" Click="TakeGif">Take GIF</Button>
+                    <Button Grid.Row="8" Grid.Column="0" Click="SaveKernelState">Save kernel state</Button>
+                    <Button Grid.Row="9" Grid.Column="0" Click="LoadKernelState">Load kernel state</Button>
+                </Grid>
+            </DockPanel>
+            <DockPanel Grid.Row="2" Grid.Column="0" MinHeight="200">
+                <TextBlock DockPanel.Dock="Top">Kernel-specific parameters</TextBlock>
+                <Button DockPanel.Dock="Bottom" Click="ApplyKernelParameters">Apply parameters</Button>
+                <Button DockPanel.Dock="Bottom" Click="LoadKernelParameters">Load</Button>
+                <Button DockPanel.Dock="Bottom" Click="SaveKernelParameters">Save</Button>
+                <DataGrid ItemsSource="{Binding DefineViewModels}" AutoGenerateColumns="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Parameter" IsReadOnly="true" Binding="{Binding Name}" />
+                        <DataGridTextColumn Header="Value" IsReadOnly="False" Binding="{Binding Value}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding ControlsHelp}" />
+            <StatusBar Grid.Row="4" Grid.Column="0">
+                <StatusBarItem>
+                    <TextBlock Name="StatusBarTextBlock" x:FieldModifier="private"></TextBlock>
+                </StatusBarItem>
+            </StatusBar>
+            <Grid Grid.Column="1" Grid.Row="0" Grid.RowSpan="4">
+                <WindowsFormsHost Name="WindowsFormsHost" x:FieldModifier="private" />
             </Grid>
-        </DockPanel>
+        </Grid>
     </Grid>
 </Window>

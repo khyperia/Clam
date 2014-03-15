@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Windows.Input;
 using System.Xml.Linq;
 using Cloo;
 using OpenTK;
-using OpenTK.Input;
 
 namespace Clam
 {
@@ -16,8 +16,7 @@ namespace Clam
     {
         public int Frame { get; set; }
 
-        public KeyboardRaytracerControlExtended(RenderWindow renderWindow)
-            : base(renderWindow)
+        public KeyboardRaytracerControlExtended()
         {
         }
 
@@ -39,8 +38,7 @@ namespace Clam
         protected float MoveSpeed = 1;
         protected float Fov = 1;
 
-        public KeyboardRaytracerControl(RenderWindow renderWindow)
-            : base(renderWindow)
+        public KeyboardRaytracerControl()
         {
             SetBindings(new Dictionary<Key, Action<float>>
             {
@@ -48,7 +46,7 @@ namespace Clam
                 {Key.S, dt => _position -= _lookat * dt * MoveSpeed},
                 {Key.A, dt => _position += Vector3d.Cross(_up, _lookat) * dt * MoveSpeed},
                 {Key.D, dt => _position -= Vector3d.Cross(_up, _lookat) * dt * MoveSpeed},
-                {Key.ShiftLeft, dt => _position += _up * dt * MoveSpeed},
+                {Key.LeftShift, dt => _position += _up * dt * MoveSpeed},
                 {Key.Space, dt => _position -= _up * dt * MoveSpeed},
                 {Key.Q, dt => _up = Vector3d.Transform(_up, Matrix4d.CreateFromAxisAngle(_lookat, TurnSpeed * dt))},
                 {Key.E, dt => _up = Vector3d.Transform(_up, Matrix4d.CreateFromAxisAngle(_lookat, -TurnSpeed * dt))},
@@ -70,6 +68,14 @@ namespace Clam
             _up = Vector3d.Normalize(_up);
         }
 
+        public override string ControlsHelp
+        {
+            get { return @"6 axis movement: WASD/Shift/Space
+Pitch: Up/Down, Yaw: Left/Right, Roll: Q/E
+Move speed and focal plane: R/F
+Field of view: N/M"; }
+        }
+
         public override void ApplyToKernel(ComputeKernel kernel, ref int startIndex)
         {
             kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_position));
@@ -77,7 +83,7 @@ namespace Clam
             kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_up));
         }
 
-        protected override XElement Save()
+        public override XElement Save()
         {
             return new XElement("KeyboardRaytracerControl",
                 _position.Save("Position"),
@@ -88,7 +94,7 @@ namespace Clam
                 );
         }
 
-        protected override void Load(XElement element)
+        public override void Load(XElement element)
         {
             _position = element.Element("Position").LoadVector3D();
             _lookat = element.Element("Lookat").LoadVector3D();

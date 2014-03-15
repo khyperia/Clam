@@ -1,8 +1,7 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.ComponentModel;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Cloo;
 using OpenTK;
 using OpenTK.Graphics;
@@ -10,31 +9,26 @@ using OpenTK.Graphics.OpenGL;
 
 namespace Clam
 {
-    public class RenderWindow : GameWindow
+    public class RenderWindow : GLControl
     {
-        private const int InitialHeight = 720;
+        private readonly Action<string> _setStatusBar;
         private readonly GraphicsInterop _interop;
         private Size _windowSize;
         private double _averageFps;
         private int _lastTitleUpdateSecond;
         private RenderPackage _renderer;
-        private readonly ConcurrentQueue<Action> _threadActions;
+        private DateTime _lastUpdate;
 
         private static string _infoMessage;
         private static DateTime _lastInfoMessageUpdate = DateTime.UtcNow;
-        private bool _cancelClosing = true;
 
-        public bool CancelClosing
+        public RenderWindow(ComputeDevice device, Action<string> setStatusBar)
+            : base(GraphicsMode.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
         {
-            set { _cancelClosing = value; }
-        }
-
-        public RenderWindow(ComputeDevice device)
-            : base(InitialHeight * 16 / 9, InitialHeight, GraphicsMode.Default, "Clam Render Window",
-            GameWindowFlags.Default, DisplayDevice.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
-        {
-            _threadActions = new ConcurrentQueue<Action>();
-            _interop = new GraphicsInterop(device);
+            _setStatusBar = setStatusBar;
+            _interop = new GraphicsInterop(Context, device);
+            _lastUpdate = DateTime.UtcNow;
+            ThreadPool.QueueUserWorkItem(DoTimerTick);
         }
 
         public ComputeContext ComputeContext { get { return _interop.Context; } }
@@ -44,58 +38,47 @@ namespace Clam
             get { return _renderer; }
             set
             {
-                if (_renderer.Parameters != null && _renderer.Parameters != value.Parameters)
-                    _renderer.Parameters.UnRegister();
                 if (_renderer.Kernel != null && _renderer.Kernel != value.Kernel)
                     _renderer.Kernel.Dispose();
                 _renderer = value;
             }
         }
 
-        public static void DisplayInformation(string information)
-        {
-            _infoMessage = information;
-            _lastInfoMessageUpdate = DateTime.UtcNow;
-        }
-
         protected override void OnResize(EventArgs e)
         {
             _windowSize = ClientSize;
             _interop.OnResize(_windowSize.Width, _windowSize.Height);
-            base.OnResize(e);
-        }
-
-        protected override void OnWindowStateChanged(EventArgs e)
-        {
             var fdc = _renderer.Parameters as IFrameDependantControl;
             if (fdc != null)
                 fdc.Frame = 0;
-            base.OnWindowStateChanged(e);
-        }
-
-        protected override void OnUpdateFrame(FrameEventArgs e)
-        {
-            base.OnUpdateFrame(e);
-            Action result;
-            while (_threadActions.TryDequeue(out result))
-                result();
+            base.OnResize(e);
         }
 
         public void Invoke(Action action)
         {
-            _threadActions.Enqueue(action);
+            base.Invoke(action);
         }
 
-        protected override void OnRenderFrame(FrameEventArgs e)
+        public void DisplayInformation(string information)
         {
-            if (!RenderPackage.KernelInUse && Renderer.Kernel != null)
-            {
-                _interop.Draw(Renderer.Kernel.Render, Renderer.Parameters, _windowSize);
-                var frameDependantControls = Renderer.Parameters as IFrameDependantControl;
-                if (frameDependantControls != null)
-                    frameDependantControls.Frame++;
-            }
-            _averageFps = (1 / e.Time + _averageFps * 10) / 11;
+            _infoMessage = information;
+        }
+
+        private void DoTimerTick(object state)
+        {
+            var timeToSleep = _lastUpdate + TimeSpan.FromMilliseconds(1000 / 60) - DateTime.UtcNow;
+            if (timeToSleep.TotalSeconds > 0)
+                Thread.Sleep(timeToSleep);
+            Invoke(OnTimerTick);
+        }
+
+        private void OnTimerTick()
+        {
+            var paramSet = Renderer.Parameters as IUpdateableParameterSet;
+            if (paramSet != null)
+                paramSet.Update((DateTime.UtcNow - _lastUpdate).TotalSeconds, Focused);
+            _averageFps = (1 / (DateTime.UtcNow - _lastUpdate).TotalSeconds + _averageFps * 10) / 11;
+            _lastUpdate = DateTime.UtcNow;
             var now = DateTime.UtcNow;
             if (now > _lastInfoMessageUpdate + TimeSpan.FromSeconds(5))
             {
@@ -105,11 +88,20 @@ namespace Clam
             if (now.Second != _lastTitleUpdateSecond)
             {
                 _lastTitleUpdateSecond = now.Second;
-                Title = string.Format("Clam Render Window - {0} fps - {1}", (int)_averageFps, _infoMessage);
+                _setStatusBar(string.Format("{0} fps - {1}", (int)_averageFps, _infoMessage));
+            }
+
+            if (!RenderPackage.KernelInUse && Renderer.Kernel != null)
+            {
+                _interop.Draw(Renderer.Kernel.Render, Renderer.Parameters, _windowSize);
+                var frameDependantControls = Renderer.Parameters as IFrameDependantControl;
+                if (frameDependantControls != null)
+                    frameDependantControls.Frame++;
             }
 
             SwapBuffers();
-            base.OnRenderFrame(e);
+
+            ThreadPool.QueueUserWorkItem(DoTimerTick);
         }
 
         protected override void Dispose(bool manual)
@@ -120,16 +112,6 @@ namespace Clam
                 Renderer.Dispose();
             }
             base.Dispose(manual);
-        }
-
-        protected override void OnClosing(CancelEventArgs e)
-        {
-            if (_cancelClosing)
-            {
-                e.Cancel = true;
-                WindowState = WindowState.Minimized;
-            }
-            base.OnClosing(e);
         }
     }
 
@@ -145,10 +127,12 @@ namespace Clam
         private ComputeBuffer<Vector4> _openCl;
         private int _width;
         private int _height;
+        private volatile bool _disposed;
 
-        public GraphicsInterop(ComputeDevice device)
+        public GraphicsInterop(IGraphicsContext context, ComputeDevice device)
         {
-            var glHandle = ((IGraphicsContextInternal)GraphicsContext.CurrentContext).Context.Handle;
+            var currentContext = (IGraphicsContextInternal)context;
+            var glHandle = currentContext.Context.Handle;
             var wglHandle = wglGetCurrentDC();
             var p1 = new ComputeContextProperty(ComputeContextPropertyName.Platform, device.Platform.Handle.Value);
             var p2 = new ComputeContextProperty(ComputeContextPropertyName.CL_GL_CONTEXT_KHR, glHandle);
@@ -169,6 +153,8 @@ namespace Clam
 
         public void OnResize(int width, int height)
         {
+            if (_disposed)
+                throw new ObjectDisposedException(ToString());
             _width = width;
             _height = height;
             GL.Viewport(0, 0, width, height);
@@ -186,6 +172,8 @@ namespace Clam
 
         public void Draw(Action<ComputeBuffer<Vector4>, ComputeCommandQueue, IParameterSet, Size> renderer, IParameterSet parameters, Size windowSize)
         {
+            if (_disposed)
+                throw new ObjectDisposedException(ToString());
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
             GL.Finish();
             _queue.AcquireGLObjects(new[] { _openCl }, null);
@@ -195,7 +183,7 @@ namespace Clam
             GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pub);
             GL.BindTexture(TextureTarget.Texture2D, _texture);
             GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, _width, _height, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
-            GL.Begin(BeginMode.Quads);
+            GL.Begin(PrimitiveType.Quads);
             GL.TexCoord2(0f, 1f);
             GL.Vertex3(0f, 0f, 0f);
             GL.TexCoord2(0f, 0f);
@@ -209,6 +197,9 @@ namespace Clam
 
         public void Dispose()
         {
+            if (_disposed)
+                return;
+            _disposed = true;
             _context.Dispose();
             _queue.Dispose();
             _openCl.Dispose();

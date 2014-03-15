@@ -13,6 +13,7 @@ namespace Clam
         private int _gifHeight = 256;
         private int _gifFramecount = 20;
         private int _gifFramerate = 20;
+        private string _openClOptions = "-cl-mad-enable -cl-fast-relaxed-math";
 
         public int ScreenshotHeight
         {
@@ -65,6 +66,17 @@ namespace Clam
             {
                 if (value == _gifFramerate) return;
                 _gifFramerate = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string OpenClOptions
+        {
+            get { return _openClOptions; }
+            set
+            {
+                if (value == _openClOptions) return;
+                _openClOptions = value;
                 OnPropertyChanged();
             }
         }
