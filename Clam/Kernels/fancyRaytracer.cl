@@ -11,7 +11,7 @@
 #endif
 
 #ifndef FogDensity
-#define FogDensity 0.0625f
+#define FogDensity 0.0625
 #endif
 
 #ifndef MaxRayDist
@@ -19,11 +19,11 @@
 #endif
 
 #ifndef DofPickup
-#define DofPickup 0.005f
+#define DofPickup 0.005
 #endif
 
 #ifndef BackgroundColor
-#define BackgroundColor 0.5f,0.5f,0.5f
+#define BackgroundColor 0.5,0.5,0.5
 #endif
 
 #ifndef LambertCosineColor
@@ -55,7 +55,7 @@ bool IsGoodBokeh(float2 coords)
 //bool IsGoodBokeh(float2 coords)
 //{
 //	float len2 = dot(coords, coords);
-//	return 0.5f < len2 && len2 < 1;
+//	return 0.5 < len2 && len2 < 1;
 //}
 
 // hearts! <3
@@ -83,27 +83,26 @@ int ApplyDof(float3* position, float3* lookat, float focalPlane, int rand)
 	return rand;
 }
 
-float NormDist(float3 pos, float3 dir, float totalDistance, int width) {
+float NormDist(float3 pos, float3 dir, float totalDistance, float quality) {
 	for (int i = 0; i < NormDistCount; i++)
-		totalDistance += De(pos + dir * totalDistance) - totalDistance / (sqrt((float)width) * Quality);
+	{
+		float distance = De(pos + dir * totalDistance);
+		distance -= (totalDistance + distance) / quality;
+		totalDistance += distance;
+	}
 	return totalDistance;
 }
 
-float Trace(float3 origin, float3 direction, float quality, float widthOverFov)
+float Trace(float3 origin, float3 direction, float quality)
 {
 	float distance = De(origin);
 	float totalDistance = distance;
-	for (int i = 0; i < 4; i++)
-	{
-		for (int i = 0; i < 512 && totalDistance < MaxRayDist && distance * quality * 4 > totalDistance; i++) {
-			distance = De(origin + direction * totalDistance) - totalDistance / quality;
-			totalDistance += distance;
-		}
-		float newTotalDistance = NormDist(origin, direction, totalDistance, widthOverFov);
-		if (newTotalDistance < totalDistance * 1.1)
-			return newTotalDistance;
-		totalDistance = newTotalDistance;
+	for (int i = 0; i < 512 && totalDistance < MaxRayDist && distance * quality > totalDistance; i++) {
+		distance = De(origin + direction * totalDistance);
+		distance -= (totalDistance + distance) / quality;
+		totalDistance += distance;
 	}
+	totalDistance = NormDist(origin, direction, totalDistance, quality);
 	return totalDistance;
 }
 
@@ -122,7 +121,7 @@ float3 Normal(float3 pos) {
 }
 
 float3 LambertCosine(float3 lightDir, float3 normal, float3 color) {
-	float value = dot(-lightDir, normal) * 0.5f + 0.5f;
+	float value = dot(-lightDir, normal) * 0.5 + 0.5;
 	const float3 light = (float3)(1, 1, 1);
 	const float3 dark = (float3)(color);
 	return mix(dark, light, value);
@@ -134,7 +133,7 @@ float3 AO(float3 pos, float3 normal) {
 	for (int i = 0; i < AoStepcount; i++)
 		totalDistance += De(pos + normal * totalDistance);
 
-	float value = totalDistance / (delta * pown(2.0f, AoStepcount));
+	float value = totalDistance / (delta * pown(2.0, AoStepcount));
 	const float3 light = (float3)(1, 1, 1);
 	const float3 dark = (float3)(AOColor);
 	return mix(dark, light, value);
@@ -146,7 +145,7 @@ float3 Fog(float3 color, float focalDistance, float totalDistance) {
 	return mix((float3)(BackgroundColor), color, value);
 }
 
-float3 Postprocess(float totalDistance, float3 origin, float3 direction, float focalDistance, float widthOverFov)
+float3 Postprocess(float totalDistance, float3 origin, float3 direction, float focalDistance)
 {
 	if (totalDistance > MaxRayDist)
 		return (float3)(BackgroundColor);
@@ -154,12 +153,12 @@ float3 Postprocess(float totalDistance, float3 origin, float3 direction, float f
 	float3 normal = Normal(finalPos);
 	float3 color = AO(finalPos, normal);
 	color *= LambertCosine(direction, normal, (float3)(CameraLightColor));
-	color *= LambertCosine((float3)(0.57735026919f, 0.57735026919f, 0.57735026919f), normal, (float3)(LambertCosineColor));
+	color *= LambertCosine((float3)(0.57735026919, 0.57735026919, 0.57735026919), normal, (float3)(LambertCosineColor));
 	color = Fog(color, focalDistance, totalDistance);
-	return clamp(color, 0.0f, 1.0f);
+	return clamp(color, 0.0, 1.0);
 }
 
-__kernel void Main(__global float4* screen, int width, int height, float4 position, float4 lookat, float4 updir, float fov, float focalDistance, int frame)
+__kernel void Main(__global float4* screen, int screenWidth, int width, int height, float4 position, float4 lookat, float4 updir, float fov, float focalDistance, int frame)
 {
 	int x = get_global_id(0);
 	int y = get_global_id(1);
@@ -181,18 +180,19 @@ __kernel void Main(__global float4* screen, int width, int height, float4 positi
 
 	float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-	float totalDistance = Trace(pos, rayDir, sqrt((float)width) * Quality / fov, width / fov);
+	float totalDistance = Trace(pos, rayDir, sqrt((float)width) * Quality / fov);
 
-	float3 color = Postprocess(totalDistance, pos, rayDir, focalDistance, width / fov);
-
+	float3 color = Postprocess(totalDistance, pos, rayDir, focalDistance);
+	
+	int screenIndex = screenWidth ? (y - get_global_offset(1)) * screenWidth + (x - get_global_offset(0)) : y * width + x;
 	if (frame > 0)
 	{
 		int frameFixed = frame - 1;
-		float3 old = screen[y * width + x].xyz;
+		float3 old = screen[screenIndex].xyz;
 		if (!isnan(old.x) && !isnan(old.y) && !isnan(old.z))
 			color = (color + old * frameFixed) / (frameFixed + 1);
 		else if (isnan(color.x) || isnan(color.y) || isnan(color.z))
 			color = old;
 	}
-	screen[y * width + x] = (float4)(color, totalDistance);
+	screen[screenIndex] = (float4)(color, totalDistance);
 }

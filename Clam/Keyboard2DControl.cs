@@ -30,16 +30,25 @@ namespace Clam
             get { return "Navigation: Up/Down/Left/Right\nZooming: W/S"; }
         }
 
-        public override void ApplyToKernel(ComputeKernel kernel, ref int startIndex)
+        public override void ApplyToKernel(ComputeKernel kernel, bool isDouble, ref int startIndex)
         {
-            kernel.SetValueArgument(startIndex++, (float)_x);
-            kernel.SetValueArgument(startIndex++, (float)_y);
-            kernel.SetValueArgument(startIndex++, (float)_zoom);
+            if (isDouble)
+            {
+                kernel.SetValueArgument(startIndex++, _x);
+                kernel.SetValueArgument(startIndex++, _y);
+                kernel.SetValueArgument(startIndex++, _zoom);
+            }
+            else
+            {
+                kernel.SetValueArgument(startIndex++, (float)_x);
+                kernel.SetValueArgument(startIndex++, (float)_y);
+                kernel.SetValueArgument(startIndex++, (float)_zoom);
+            }
         }
 
-        public override XElement Save()
+        public override XElement Save(string elementName)
         {
-            return new XElement("Keyboard2DControl",
+            return new XElement(elementName,
                 _x.Save("X"),
                 _y.Save("Y"),
                 _zoom.Save("Zoom"));

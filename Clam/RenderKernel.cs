@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows;
 using System.Xml.Linq;
 using Cloo;
@@ -14,7 +15,8 @@ namespace Clam
     public interface IParameterSet
     {
         string ControlsHelp { get; }
-        void ApplyToKernel(ComputeKernel kernel, ref int startIndex);
+        void ApplyToKernel(ComputeKernel kernel, bool useDouble, ref int startIndex);
+        Action StartIgnoreControl();
     }
 
     public interface IGifableControl
@@ -34,6 +36,7 @@ namespace Clam
         private ComputeKernel _kernel;
         private readonly object _kernelLock = new object();
         private long[] _localSize;
+        private bool _useDouble;
 
         private RenderKernel(ComputeContext context, ComputeKernel kernel, string[] sourcecodes, Dictionary<string, string> defines)
         {
@@ -103,9 +106,9 @@ namespace Clam
             get { return _defines; }
         }
 
-        public XElement SerializeOptions()
+        public XElement SerializeOptions(string elementName)
         {
-            return new XElement("RenderKernelOptions", _defines.Select(kvp => (object)new XElement(kvp.Key, kvp.Value)).ToArray());
+            return new XElement(elementName, _defines.Select(kvp => (object)new XElement(kvp.Key, kvp.Value)).ToArray());
         }
 
         public void LoadOptions(XElement element)
@@ -119,6 +122,7 @@ namespace Clam
                 else
                     MessageBox.Show(string.Format("Option {0} was invalid (did you load the wrong XML?)", key), "Error");
             }
+            Recompile();
         }
 
         public void SetOption(string key, string value)
@@ -130,57 +134,75 @@ namespace Clam
 
         public void Recompile()
         {
-            var newKernel = Compile(_context, _sourcecodes, _defines);
-            Dispose();
-            _kernel = newKernel;
+            lock (_kernelLock)
+            {
+                var newKernel = Compile(_context, _sourcecodes, _defines);
+                Dispose();
+                int useDoubleDefine;
+                _useDouble = _defines.ContainsKey("UseDouble") && int.TryParse(_defines["UseDouble"], out useDoubleDefine) && useDoubleDefine != 0;
+                _kernel = newKernel;
+            }
         }
 
-        private long[] GlobalLaunchsizeFor(long[] size)
+        private long[] GlobalLaunchsizeFor(long[] localSize, long[] size)
         {
             var retval = new long[size.Length];
             for (var i = 0; i < size.Length; i++)
-                retval[i] = (size[i] + _localSize[i] - 1) / _localSize[i] * _localSize[i];
+                retval[i] = (size[i] + localSize[i] - 1) / localSize[i] * localSize[i];
             return retval;
+        }
+
+        public long[] Threadsize(ComputeCommandQueue queue)
+        {
+            if (_localSize == null)
+            {
+                var localSizeSingle = (long)Math.Sqrt(queue.Device.MaxWorkGroupSize);
+                _localSize = new long[2];
+                for (var i = 0; i < 2; i++)
+                    _localSize[i] = localSizeSingle;
+            }
+            var returnValue = new long[_localSize.Length];
+            Array.Copy(_localSize, returnValue, _localSize.Length);
+            return returnValue;
         }
 
         public void Render(ComputeBuffer<Vector4> buffer, ComputeCommandQueue queue, IParameterSet parameters, Size windowSize)
         {
-            Render(buffer, queue, parameters, windowSize, 1, new Size(0, 0));
+            Render(buffer, queue, parameters, windowSize, 0, new Size(0, 0));
         }
 
-        public void Render(ComputeBuffer<Vector4> buffer, ComputeCommandQueue queue, IParameterSet parameters, Size windowSize, int partialRender, Size coordinates)
+        public void Render(ComputeBuffer<Vector4> buffer, ComputeCommandQueue queue, IParameterSet parameters,
+            Size windowSize, int numBlocks, Size coordinates, int bufferWidth = 0)
         {
             lock (_kernelLock)
             {
                 if (_kernel == null)
                     return;
-                _kernel.SetMemoryArgument(0, buffer);
-                _kernel.SetValueArgument(1, windowSize.Width);
-                _kernel.SetValueArgument(2, windowSize.Height);
-                var kernelNumArgs = 3;
-                parameters.ApplyToKernel(_kernel, ref kernelNumArgs);
 
                 var size = new long[] { windowSize.Width, windowSize.Height };
-                if (_localSize == null)
-                {
-                    var localSizeSingle = (long)Math.Pow(queue.Device.MaxWorkGroupSize, 1.0 / size.Length);
-                    _localSize = new long[size.Length];
-                    for (var i = 0; i < size.Length; i++)
-                        _localSize[i] = localSizeSingle;
-                }
+                var localSize = Threadsize(queue);
+
                 var offset = new long[size.Length];
                 var offsetCoords = new long[] { coordinates.Width, coordinates.Height };
 
-                if (partialRender > 1)
+                if (numBlocks > 0)
                 {
                     for (var i = 0; i < size.Length; i++)
-                        size[i] = (size[i] + partialRender - 1) / partialRender;
+                        size[i] = numBlocks * localSize[i];
                     for (var i = 0; i < size.Length; i++)
                         offset[i] = size[i] * offsetCoords[i];
                 }
 
-                var globalSize = GlobalLaunchsizeFor(size);
-                queue.Execute(_kernel, offset, globalSize, _localSize, null);
+                var globalSize = GlobalLaunchsizeFor(localSize, size);
+
+                var kernelNumArgs = 0;
+                _kernel.SetMemoryArgument(kernelNumArgs++, buffer);
+                _kernel.SetValueArgument(kernelNumArgs++, bufferWidth);
+                _kernel.SetValueArgument(kernelNumArgs++, windowSize.Width);
+                _kernel.SetValueArgument(kernelNumArgs++, windowSize.Height);
+                parameters.ApplyToKernel(_kernel, _useDouble, ref kernelNumArgs);
+
+                queue.Execute(_kernel, offset, globalSize, localSize, null);
             }
         }
 

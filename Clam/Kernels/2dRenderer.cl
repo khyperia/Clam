@@ -2,7 +2,7 @@
 #define SupersampleSize 1
 #endif
 
-__kernel void Main(__global float4* screen, int width, int height, float xCenter, float yCenter, float zoom)
+__kernel void Main(__global float4* screen, int screenWidth, int width, int height, flt xCenter, flt yCenter, flt zoom)
 {
 	int x = get_global_id(0);
 	int y = get_global_id(1);
@@ -14,11 +14,11 @@ __kernel void Main(__global float4* screen, int width, int height, float xCenter
 	{
 		for (int dy = 0; dy < SupersampleSize; dy++)
 		{
-			float2 screenCoords = (float2)((float)(x * SupersampleSize + dx) / (width * SupersampleSize) * 2 - 1, ((float)(y * SupersampleSize + dy) / (height * SupersampleSize) * 2 - 1) * height / width);
-			float2 coordinates = screenCoords * zoom + (float2)(xCenter, yCenter);
-			int i = Iterate(coordinates);
-			accum += (float3)(sin(i / 17.0f) * 0.5f + 0.5f, sin(i / 19.0f) * 0.5f + 0.5f, sin(i / 23.0f) * 0.5f + 0.5f);
+			flt2 screenCoords = (flt2)((float)(x * SupersampleSize + dx) / (width * SupersampleSize) * 2 - 1, ((float)(y * SupersampleSize + dy) / (height * SupersampleSize) * 2 - 1) * height / width);
+			flt2 coordinates = screenCoords * zoom + (flt2)(xCenter, yCenter);
+			accum += Iterate(coordinates);
 		}
 	}
-	screen[y * width + x] = (float4)(accum / (SupersampleSize * SupersampleSize), 1);
+	int screenIndex = screenWidth ? (y - get_global_offset(1)) * screenWidth + (x - get_global_offset(0)) : y * width + x;
+	screen[screenIndex] = (float4)(accum / (SupersampleSize * SupersampleSize), 1);
 }

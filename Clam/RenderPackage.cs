@@ -72,62 +72,84 @@ namespace Clam
 
         private const double ScreenshotAspectRatio = 16.0 / 9.0;
 
+        [CanBeNull]
         public Bitmap Screenshot(int screenshotHeight, int slowRenderPower, Action<string> displayInformation)
         {
+            displayInformation("Rendering screenshot");
             var ccontext = _kernel.ComputeContext;
             _kernelInUse++;
-            displayInformation("Rendering screenshot");
+
             var screenshotWidth = (int)(screenshotHeight * ScreenshotAspectRatio);
-            var computeBuffer = new ComputeBuffer<Vector4>(ccontext, ComputeMemoryFlags.ReadWrite, screenshotWidth * screenshotHeight);
+            Bitmap bmp;
+            try
+            {
+                bmp = new Bitmap(screenshotWidth, screenshotHeight);
+            }
+            catch (ArgumentException)
+            {
+                MessageBox.Show("Image size too big", "Error");
+                return null;
+            }
+            var nancount = 0;
+            var bmpData = bmp.LockBits(new Rectangle(0, 0, screenshotWidth, screenshotHeight), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
+            var scan0 = bmpData.Scan0.ToInt64();
             var queue = new ComputeCommandQueue(ccontext, ccontext.Devices[0], ComputeCommandQueueFlags.None);
+            var localSize = _kernel.Threadsize(queue);
+            for (var i = 0; i < localSize.Length; i++)
+                localSize[i] *= slowRenderPower;
+            var computeBuffer = new ComputeBuffer<Vector4>(ccontext, ComputeMemoryFlags.ReadWrite, localSize[0] * localSize[1]);
 
             const int numFrames = 150;
             var frameDependantControls = _parameters as IFrameDependantControl;
-            for (var frame = 0; frame < (frameDependantControls == null ? 1 : numFrames); frame++)
+            var framesToRender = frameDependantControls == null ? 1 : numFrames;
+
+            var totalYs = (screenshotHeight + localSize[1] - 1) / localSize[1];
+            var totalXs = (screenshotWidth + localSize[0] - 1) / localSize[0];
+            for (var y = 0; y < totalYs; y++)
             {
-                if (frameDependantControls != null)
-                    frameDependantControls.Frame = frame;
-                for (var y = 0; y < slowRenderPower; y++)
+                for (var x = 0; x < totalXs; x++)
                 {
-                    for (var x = 0; x < slowRenderPower; x++)
+                    for (var frame = 0; frame < framesToRender; frame++)
                     {
-                        displayInformation(string.Format("Screenshot {0}% done",
-                            100 * (x + y * slowRenderPower + frame * slowRenderPower * slowRenderPower) /
-                            (slowRenderPower * slowRenderPower * (frameDependantControls == null ? 1 : numFrames))));
-                        _kernel.Render(computeBuffer, queue, _parameters, new Size(screenshotWidth, screenshotHeight), slowRenderPower, new Size(x, y));
+                        if (frameDependantControls != null)
+                            frameDependantControls.Frame = frame;
+                        displayInformation(string.Format("Screenshot {0}% done", 100 * (y * totalXs * framesToRender + x * framesToRender + frame) / (totalXs * totalYs * framesToRender)));
+
+                        _kernel.Render(computeBuffer, queue, _parameters, new Size(screenshotWidth, screenshotHeight), slowRenderPower, new Size(x, y), (int)localSize[0]);
                     }
+
+                    var pixels = new Vector4[localSize[0] * localSize[1]];
+                    queue.ReadFromBuffer(computeBuffer, ref pixels, true, 0, 0, localSize[0] * localSize[1], null);
+                    queue.Finish();
+
+                    var blockWidth = Math.Min(localSize[0], screenshotWidth - x * localSize[0]);
+                    var blockHeight = Math.Min(localSize[1], screenshotHeight - y * localSize[1]);
+                    var intPixels = new int[blockWidth * blockHeight];
+                    for (var py = 0; py < blockHeight; py++)
+                    {
+                        for (var px = 0; px < blockWidth; px++)
+                        {
+                            var pixel = pixels[py * localSize[1] + px];
+                            int result;
+                            if (float.IsNaN(pixel.X) || float.IsNaN(pixel.Y) || float.IsNaN(pixel.Z))
+                            {
+                                nancount++;
+                                result = 0;
+                            }
+                            else
+                                result = (byte)(pixel.X * 255) << 16 | (byte)(pixel.Y * 255) << 8 | (byte)(pixel.Z * 255);
+                            intPixels[py * blockWidth + px] = result;
+                        }
+                    }
+                    for (var line = 0; line < blockHeight; line++)
+                        Marshal.Copy(intPixels, line * (int)blockWidth,
+                            new IntPtr(scan0 + ((y * localSize[1] + line) * screenshotWidth + x * localSize[0]) * sizeof(int)), (int)blockWidth);
                 }
             }
 
-            var pixels = new Vector4[screenshotWidth * screenshotHeight];
-            queue.ReadFromBuffer(computeBuffer, ref pixels, true, null);
-            queue.Finish();
-
-            computeBuffer.Dispose();
-            queue.Dispose();
-
-            displayInformation("Saving screenshot");
-            var bmp = new Bitmap(screenshotWidth, screenshotHeight);
-            var destBuffer = new int[screenshotWidth * screenshotHeight];
-            var nancount = 0;
-            for (var y = 0; y < screenshotHeight; y++)
-            {
-                for (var x = 0; x < screenshotWidth; x++)
-                {
-                    var pixel = pixels[x + y * screenshotWidth];
-                    if (float.IsNaN(pixel.X) || float.IsNaN(pixel.Y) || float.IsNaN(pixel.Z))
-                    {
-                        nancount++;
-                        continue;
-                    }
-                    destBuffer[y * screenshotWidth + x] = (byte)(pixel.X * 255) << 16 | (byte)(pixel.Y * 255) << 8 | (byte)(pixel.Z * 255);
-                }
-            }
+            bmp.UnlockBits(bmpData);
             if (nancount != 0)
                 MessageBox.Show(string.Format("Caught {0} NAN pixels while taking screenshot", nancount), "Warning");
-            var bmpData = bmp.LockBits(new Rectangle(0, 0, screenshotWidth, screenshotHeight), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
-            Marshal.Copy(destBuffer, 0, bmpData.Scan0, destBuffer.Length);
-            bmp.UnlockBits(bmpData);
 
             displayInformation("Done rendering screenshot");
             _kernelInUse--;
@@ -146,7 +168,7 @@ namespace Clam
                 displayInformation(string.Format("{0}% done with gif", (int)(100.0 * i / StaticSettings.Fetch.GifFramecount)));
                 var teardown = control.SetupGif((double)i / StaticSettings.Fetch.GifFramecount);
                 var screen = Screenshot(StaticSettings.Fetch.GifHeight, 1, s => { });
-                if (encoder.AddFrame(screen) == false)
+                if (screen != null && encoder.AddFrame(screen) == false)
                     throw new Exception("Could not add frame to gif");
                 teardown();
             }

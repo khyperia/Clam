@@ -1,17 +1,25 @@
+#ifndef MaxIters
+#define MaxIters 64
+#endif
+
+#ifndef Bailout
+#define Bailout 128
+#endif
+
 #ifndef Scale
-#define Scale -1.5f
+#define Scale -1.5
 #endif
 
 #ifndef FoldingLimit
-#define FoldingLimit 1.0f
+#define FoldingLimit 1.0
 #endif
 
 #ifndef FixedRadius2
-#define FixedRadius2 1.0f
+#define FixedRadius2 1.0
 #endif
 
 #ifndef MinRadius2
-#define MinRadius2 0.125f
+#define MinRadius2 0.125
 #endif
 
 float De(float3 z)
@@ -21,13 +29,19 @@ float De(float3 z)
 #else
 	float3 offset = (float3)(JuliaCenter);
 #endif
-	float dz = 1.0f;
-	for (int n = 0; n < 1024; n++) {
-		z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0f - z;
+	float dz = 1.0;
+	for (int n = 0; n < MaxIters; n++) {
+		//if (fabs(z.x) > FoldingLimit)
+		//	dz += 2.0;
+		//if (fabs(z.y) > FoldingLimit)
+		//	dz += 2.0;
+		//if (fabs(z.z) > FoldingLimit)
+		//	dz += 2.0;
+		z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0 - z;
 
 		float r2 = dot(z, z);
 
-		if (r2 > 65536)
+		if (r2 > Bailout)
 			break;
 
 		if (r2 < MinRadius2) { 
@@ -41,7 +55,7 @@ float De(float3 z)
 		}
 
 		z = Scale * z + offset;
-		dz = dz * fabs(Scale) + 1.0f;
+		dz = dz * fabs(Scale) + 1.0;
 	}
 	return length(z) / dz;
 }

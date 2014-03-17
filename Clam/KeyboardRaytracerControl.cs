@@ -16,16 +16,21 @@ namespace Clam
     {
         public int Frame { get; set; }
 
-        public KeyboardRaytracerControlExtended()
+        public override void ApplyToKernel(ComputeKernel kernel, bool isDouble, ref int param)
         {
-        }
-
-        public override void ApplyToKernel(ComputeKernel kernel, ref int param)
-        {
-            base.ApplyToKernel(kernel, ref param);
-            kernel.SetValueArgument(param++, Fov);
-            kernel.SetValueArgument(param++, MoveSpeed * 3);
-            kernel.SetValueArgument(param++, Frame);
+            base.ApplyToKernel(kernel, isDouble, ref param);
+            if (isDouble)
+            {
+                kernel.SetValueArgument(param++, Fov);
+                kernel.SetValueArgument(param++, MoveSpeed * 3);
+                kernel.SetValueArgument(param++, Frame);
+            }
+            else
+            {
+                kernel.SetValueArgument(param++, (float)Fov);
+                kernel.SetValueArgument(param++, (float)MoveSpeed * 3);
+                kernel.SetValueArgument(param++, Frame);
+            }
         }
     }
 
@@ -35,8 +40,8 @@ namespace Clam
         private Vector3d _position = new Vector3d(4, 0, 0);
         private Vector3d _lookat = new Vector3d(-1, 0, 0);
         private Vector3d _up = new Vector3d(0, 1, 0);
-        protected float MoveSpeed = 1;
-        protected float Fov = 1;
+        protected double MoveSpeed = 1;
+        protected double Fov = 1;
 
         public KeyboardRaytracerControl()
         {
@@ -61,7 +66,7 @@ namespace Clam
             });
         }
 
-        protected override void OnUpdate(double time)
+        protected override void OnUpdate()
         {
             _up = Vector3d.Cross(Vector3d.Cross(_lookat, _up), _lookat);
             _lookat = Vector3d.Normalize(_lookat);
@@ -70,22 +75,34 @@ namespace Clam
 
         public override string ControlsHelp
         {
-            get { return @"6 axis movement: WASD/Shift/Space
+            get
+            {
+                return @"6 axis movement: WASD/Shift/Space
 Pitch: Up/Down, Yaw: Left/Right, Roll: Q/E
 Move speed and focal plane: R/F
-Field of view: N/M"; }
+Field of view: N/M";
+            }
         }
 
-        public override void ApplyToKernel(ComputeKernel kernel, ref int startIndex)
+        public override void ApplyToKernel(ComputeKernel kernel, bool useDouble, ref int startIndex)
         {
-            kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_position));
-            kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_lookat));
-            kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_up));
+            if (useDouble)
+            {
+                kernel.SetValueArgument(startIndex++, new Vector4d(_position));
+                kernel.SetValueArgument(startIndex++, new Vector4d(_lookat));
+                kernel.SetValueArgument(startIndex++, new Vector4d(_up));
+            }
+            else
+            {
+                kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_position));
+                kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_lookat));
+                kernel.SetValueArgument(startIndex++, new Vector4((Vector3)_up));
+            }
         }
 
-        public override XElement Save()
+        public override XElement Save(string elementName)
         {
-            return new XElement("KeyboardRaytracerControl",
+            return new XElement(elementName,
                 _position.Save("Position"),
                 _lookat.Save("Lookat"),
                 _up.Save("Up"),
@@ -106,8 +123,15 @@ Field of view: N/M"; }
         public Action SetupGif(double pointInFrame)
         {
             var oldPosition = _position;
-            _position += Vector3d.Cross(_lookat, _up) * Math.Sin(pointInFrame * (Math.PI * 2)) * MoveSpeed / 10;
-            return () => _position = oldPosition;
+            var oldLookat = _lookat;
+            var rotation = Matrix4d.CreateFromAxisAngle(_up, pointInFrame * Math.PI * 2);
+            _lookat = Vector3d.Transform(_lookat, rotation);
+            //_position -= _lookat * MoveSpeed * 10;
+            return () =>
+            {
+                _position = oldPosition;
+                _lookat = oldLookat;
+            };
         }
     }
 }

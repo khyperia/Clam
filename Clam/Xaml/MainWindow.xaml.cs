@@ -85,29 +85,30 @@ namespace Clam.Xaml
             set
             {
                 if (value == _selectedKernelXmlFile || _renderWindow == null) return;
-                _selectedKernelXmlFile = value;
-                OnPropertyChanged();
-                _renderWindow.Invoke(() =>
-                {
-                    var package = RenderPackage.LoadFromXml(_renderWindow.ComputeContext, value);
-                    if (package.HasValue == false)
-                        return;
-                    Dispatcher.BeginInvoke(new Action(() => RenderPackage = package.Value));
-                });
+                SetSelectedKernelXmlFile(value, null);
             }
         }
 
-        public RenderPackage RenderPackage
+        private void SetSelectedKernelXmlFile(string filename, Action callback)
         {
-            get { return _renderWindow == null ? default(RenderPackage) : _renderWindow.Renderer; }
-            set
+            _selectedKernelXmlFile = filename;
+            OnPropertyChanged("SelectedKernelXmlFile");
+            if (_renderWindow == null)
+                return;
+            _renderWindow.BeginInvoke((Action)(() =>
             {
-                if (_renderWindow == null || value.Equals(_renderWindow.Renderer)) return;
-                OnPropertyChanged();
-                _renderWindow.Renderer = value;
-                OnPropertyChanged("ControlsHelp");
-                RefreshDefines();
-            }
+                var package = RenderPackage.LoadFromXml(_renderWindow.ComputeContext, filename);
+                if (package.HasValue == false)
+                    return;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _renderWindow.Renderer = package.Value;
+                    OnPropertyChanged("ControlsHelp");
+                    RefreshDefines();
+                    if (callback != null)
+                        callback();
+                }));
+            }));
         }
 
         public string ControlsHelp
@@ -148,7 +149,7 @@ namespace Clam.Xaml
                 Filter = "Xml kernel files|*.kernel.xml"
             };
             if (selector.ShowDialog(this) == true)
-                _renderWindow.Renderer.Kernel.SerializeOptions().Save(selector.FileName);
+                _renderWindow.Renderer.Kernel.LoadOptions(XDocument.Load(selector.FileName).Root);
         }
 
         private void SaveKernelParameters(object sender, RoutedEventArgs e)
@@ -162,7 +163,7 @@ namespace Clam.Xaml
                 Filter = "Xml kernel files|*.kernel.xml"
             };
             if (selector.ShowDialog(this) == true)
-                _renderWindow.Renderer.Kernel.LoadOptions(XDocument.Load(selector.FileName).Root);
+                _renderWindow.Renderer.Kernel.SerializeOptions("KernelOptions").Save(selector.FileName);
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -225,9 +226,16 @@ namespace Clam.Xaml
         {
             if (_renderWindow == null)
                 return;
-            ThreadPool.QueueUserWorkItem(o => _renderWindow.Renderer.
-                Screenshot(StaticSettings.Fetch.ScreenshotHeight, StaticSettings.Fetch.ScreenshotPartialRender, _renderWindow.DisplayInformation)
-                .Save(Ext.UniqueFilename("screenshot", "png")));
+            ThreadPool.QueueUserWorkItem(o =>
+            {
+                var endIgnoreControl = _renderWindow.Renderer.Parameters.StartIgnoreControl();
+                var screenshot = _renderWindow.Renderer.
+                    Screenshot(StaticSettings.Fetch.ScreenshotHeight, StaticSettings.Fetch.ScreenshotPartialRender,
+                        _renderWindow.DisplayInformation);
+                if (screenshot != null)
+                    screenshot.Save(Ext.UniqueFilename("screenshot", "png"));
+                endIgnoreControl();
+            });
         }
 
         private void TakeGif(object sender, RoutedEventArgs e)
@@ -236,10 +244,33 @@ namespace Clam.Xaml
                 return;
             var gifable = _renderWindow.Renderer.Parameters as IGifableControl;
             if (gifable != null)
-                ThreadPool.QueueUserWorkItem(o => _renderWindow.Renderer.TakeGif(gifable, _renderWindow.DisplayInformation));
+                ThreadPool.QueueUserWorkItem(o =>
+                {
+                    var endIgnoreControl = _renderWindow.Renderer.Parameters.StartIgnoreControl();
+                    _renderWindow.Renderer.TakeGif(gifable, _renderWindow.DisplayInformation);
+                    endIgnoreControl();
+                });
         }
 
-        private void SaveKernelState(object sender, RoutedEventArgs ev)
+        private void SaveControlState(object sender, RoutedEventArgs ev)
+        {
+            if (_renderWindow == null)
+                return;
+            var serializable = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
+            if (serializable == null)
+            {
+                MessageBox.Show(this, "Loading is not supported with this kernel", "Error");
+                return;
+            }
+            var filename = Path.Combine("..", "State", GetType().Name + ".state.xml");
+            var directory = Path.GetDirectoryName(filename);
+            if (directory != null && Directory.Exists(directory) == false)
+                Directory.CreateDirectory(directory);
+            serializable.Save("ControlState").Save(filename);
+            _renderWindow.DisplayInformation("Saved state");
+        }
+
+        private void LoadControlState(object sender, RoutedEventArgs ev)
         {
             if (_renderWindow == null)
                 return;
@@ -263,22 +294,76 @@ namespace Clam.Xaml
             }
         }
 
-        private void LoadKernelState(object sender, RoutedEventArgs e)
+        private void ExportConfig(object sender, RoutedEventArgs e)
+        {
+            var selector = new SaveFileDialog
+            {
+                InitialDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "State")),
+                DefaultExt = ".clam.xml",
+                Filter = "Xml Clam files|*.clam.xml"
+            };
+            if (selector.ShowDialog(this) == true)
+                SaveProgram(selector.FileName);
+        }
+
+        private void ImportConfig(object sender, RoutedEventArgs e)
         {
             if (_renderWindow == null)
                 return;
-            var serializable = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
-            if (serializable == null)
+            var selector = new OpenFileDialog
             {
-                MessageBox.Show(this, "Loading is not supported with this kernel", "Error");
+                InitialDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "State")),
+                Filter = "Xml Clam files|*.clam.xml"
+            };
+            if (selector.ShowDialog(this) == true)
+                LoadProgram(selector.FileName);
+        }
+
+        private void SaveProgram(string filename)
+        {
+            if (_renderWindow == null)
+                return;
+            var kernel = SelectedKernelXmlFile;
+            var kernelOptions = _renderWindow.Renderer.Kernel.SerializeOptions("KernelOptions");
+            var serializableParams = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
+            var controlOptions = serializableParams == null ? null : serializableParams.Save("ControlOptions");
+            var element = new XElement("ClamConfig", new XElement("Kernel", kernel), kernelOptions);
+            if (controlOptions != null)
+                element.Add(controlOptions);
+            element.Save(filename);
+        }
+
+        private void LoadProgram(string filename)
+        {
+            if (_renderWindow == null)
+                return;
+            var doc = XElement.Load(filename);
+            if (doc.Name.LocalName != "ClamConfig")
+            {
+                MessageBox.Show(this, "XML was not a ClamConfig file", "Error");
                 return;
             }
-            var filename = Path.Combine("..", "State", GetType().Name + ".state.xml");
-            var directory = Path.GetDirectoryName(filename);
-            if (directory != null && Directory.Exists(directory) == false)
-                Directory.CreateDirectory(directory);
-            serializable.Save().Save(filename);
-            _renderWindow.DisplayInformation("Saved state");
+            var kernelElement = doc.Element("Kernel");
+            var kernelOptionsElement = doc.Element("KernelOptions");
+            if (kernelElement == null || kernelOptionsElement == null)
+            {
+                MessageBox.Show(this, "XML settings are incomplete", "Error");
+                return;
+            }
+            SetSelectedKernelXmlFile(kernelElement.Value, () =>
+            {
+                _renderWindow.Renderer.Kernel.LoadOptions(kernelOptionsElement);
+                RefreshDefines();
+                var serializable = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
+                if (serializable != null)
+                {
+                    var element = doc.Element("ControlOptions");
+                    if (element == null)
+                        MessageBox.Show(this, "XML settings are incomplete: missing ControlOptions", "Warning");
+                    else
+                        serializable.Load(element);
+                }
+            });
         }
     }
 }

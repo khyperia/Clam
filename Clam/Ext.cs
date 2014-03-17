@@ -1,7 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Windows;
-using System.Windows.Input;
 using System.Xml.Linq;
 using OpenTK;
 
@@ -23,14 +21,14 @@ namespace Clam
             return file;
         }
 
-        public static string UniqueDirectory(string dirname)
-        {
-            var screenshotNumber = 0;
-            string file;
-            while (Directory.Exists(file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), string.Format("{0}{1}", dirname, screenshotNumber))))
-                screenshotNumber++;
-            return file;
-        }
+        //public static string UniqueDirectory(string dirname)
+        //{
+        //    var screenshotNumber = 0;
+        //    string file;
+        //    while (Directory.Exists(file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), string.Format("{0}{1}", dirname, screenshotNumber))))
+        //        screenshotNumber++;
+        //    return file;
+        //}
 
         public static XElement Save(this Vector3d vector, string name)
         {

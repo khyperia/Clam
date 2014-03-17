@@ -2,29 +2,34 @@
 #define MaxIters 2048
 #endif
 
-int Iterate(float2 z)
+#ifndef Bailout
+#define Bailout 2
+#endif
+
+float3 GetColor(flt i)
 {
-	float2 c = z;
-	for (int it = 0; it < MaxIters; it++)
-    {
-		float x2 = z.x * z.x;
-		float y2 = z.y * z.y;
-		if (x2 + y2 > 4)
-			return it;
-		z = (float2)(x2 - y2, 2 * z.x * z.y) + c;
-    }
-	return 0;
+	return (float3)(sin(i / 17.0) * 0.5 + 0.5, sin(i / 19.0) * 0.5 + 0.5, sin(i / 23.0) * 0.5 + 0.5);
 }
 
-int IterateAlt(float2 z, float2 c)
+flt ComputeSmooth(flt2 last)
+{
+	return 1 + log2(log((flt)Bailout) / log(length(last)));
+}
+
+float3 IterateAlt(flt2 z, flt2 c)
 {
 	for (int it = 0; it < MaxIters; it++)
     {
-		float x2 = z.x * z.x;
-		float y2 = z.y * z.y;
-		if (x2 + y2 > 4)
-			return it;
-		z = (float2)(x2 - y2, 2 * z.x * z.y) + c;
+		flt x2 = z.x * z.x;
+		flt y2 = z.y * z.y;
+		if (x2 + y2 > Bailout * Bailout)
+			return GetColor(ComputeSmooth(z) + it);
+		z = (flt2)(x2 - y2, 2 * z.x * z.y) + c;
     }
-	return 0;
+	return (float3)(0,0,0);
+}
+
+float3 Iterate(flt2 z)
+{
+	return IterateAlt(z, z);
 }

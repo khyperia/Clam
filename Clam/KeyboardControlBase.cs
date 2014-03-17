@@ -14,7 +14,7 @@ namespace Clam
 
     interface ISerializableParameterSet
     {
-        XElement Save();
+        XElement Save(string elementName);
         void Load(XElement element);
     }
 
@@ -47,7 +47,7 @@ namespace Clam
                         fdc.Frame = 0;
                 }
             }
-            OnUpdate(elapsedTime);
+            OnUpdate();
         }
 
         public Action StartIgnoreControl()
@@ -56,13 +56,13 @@ namespace Clam
             return () => _ignoreControl = false;
         }
 
-        protected virtual void OnUpdate(double time)
+        protected virtual void OnUpdate()
         {
         }
 
         public abstract string ControlsHelp { get; }
-        public abstract void ApplyToKernel(ComputeKernel kernel, ref int startIndex);
-        public abstract XElement Save();
+        public abstract void ApplyToKernel(ComputeKernel kernel, bool useDouble, ref int startIndex);
+        public abstract XElement Save(string controloptions);
         public abstract void Load(XElement element);
     }
 }

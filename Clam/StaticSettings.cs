@@ -6,7 +6,7 @@ namespace Clam
 {
     public class StaticSettings : INotifyPropertyChanged
     {
-        public static StaticSettings Fetch = new StaticSettings();
+        public static readonly StaticSettings Fetch = new StaticSettings();
 
         private int _screenshotHeight = 2048;
         private int _screenshotPartialRender = 10;

@@ -54,11 +54,6 @@ namespace Clam
             base.OnResize(e);
         }
 
-        public void Invoke(Action action)
-        {
-            base.Invoke(action);
-        }
-
         public void DisplayInformation(string information)
         {
             _infoMessage = information;
@@ -67,9 +62,11 @@ namespace Clam
         private void DoTimerTick(object state)
         {
             var timeToSleep = _lastUpdate + TimeSpan.FromMilliseconds(1000 / 60) - DateTime.UtcNow;
-            if (timeToSleep.TotalSeconds > 0)
+            if (timeToSleep.TotalSeconds > 2)
                 Thread.Sleep(timeToSleep);
-            Invoke(OnTimerTick);
+            else
+                Thread.Sleep(2);
+            BeginInvoke(new Action(OnTimerTick));
         }
 
         private void OnTimerTick()

@@ -1,29 +1,40 @@
-﻿__kernel void Main(__global float4* screen, int width, int height, float xCenter, float yCenter, float zoom)
+﻿#ifndef SupersampleSize
+#define SupersampleSize 1
+#endif
+
+__kernel void Main(__global float4* screen, int screenWidth, int width, int height, flt xCenter, flt yCenter, flt zoom)
 {
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x >= width || y >= height)
 		return;
-
+		
+	int screenIndex = screenWidth ? (y - get_global_offset(1)) * screenWidth + (x - get_global_offset(0)) : y * width + x;
 	if (x == width / 4 || y == height / 2 && x < width / 2)
 	{
-		screen[y * width + x] = (float4)(1, 0, 0, 1);
+		screen[screenIndex] = (float4)(1, 0, 0, 1);
 		return;
 	}
 
-	float2 screenCoords = (float2)((float)x / width * 2 - 1, ((float)y / height * 2 - 1) * height / width);
-	int i;
-	if (screenCoords.x < 0)
+	float3 color = (float3)(0,0,0);
+	for (int dx = 0; dx < SupersampleSize; dx++)
 	{
-		screenCoords.x += 0.5f;
-		float2 coordinates = screenCoords * zoom + (float2)(xCenter, yCenter);
-		i = Iterate(coordinates);
+		for (int dy = 0; dy < SupersampleSize; dy++)
+		{
+			flt2 screenCoords = (flt2)((flt)(x * SupersampleSize + dx) / (width * SupersampleSize) * 2 - 1, ((flt)(y * SupersampleSize + dy) / (height * SupersampleSize) * 2 - 1) * height / width);
+			if (screenCoords.x < 0)
+			{
+				screenCoords.x += 0.5;
+				flt2 coordinates = screenCoords * zoom + (flt2)(xCenter, yCenter);
+				color += Iterate(coordinates);
+			}
+			else
+			{
+				screenCoords.x -= 0.5;
+				flt2 coordinates = screenCoords * 3; // * zoom + (flt2)(xCenter, yCenter);
+				color += IterateAlt(coordinates, (flt2)(xCenter, yCenter));
+			}
+		}
 	}
-	else
-	{
-		screenCoords.x -= 0.5f;
-		float2 coordinates = screenCoords * 3; // * zoom + (float2)(xCenter, yCenter);
-		i = IterateAlt(coordinates, (float2)(xCenter, yCenter));
-	}
-	screen[y * width + x] = (float4)(sin(i / 17.0f) * 0.5f + 0.5f, sin(i / 19.0f) * 0.5f + 0.5f, sin(i / 23.0f) * 0.5f + 0.5f, 1);
+	screen[screenIndex] = (float4)(color, 1);
 }
