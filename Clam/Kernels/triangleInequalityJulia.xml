@@ -1,8 +1,0 @@
-﻿<Renderer>
-  <Controls>2D</Controls>
-  <Files>
-    <File>precisionChooser.cl</File>
-    <File>triangleInequality.cl</File>
-    <File>2dRendererAlt.cl</File>
-  </Files>
-</Renderer>

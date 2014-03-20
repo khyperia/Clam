@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -18,9 +19,9 @@ namespace Clam
         private int _lastTitleUpdateSecond;
         private RenderPackage _renderer;
         private DateTime _lastUpdate;
+        private readonly Stopwatch _kernelStopwatch = new Stopwatch();
 
-        private static string _infoMessage;
-        private static DateTime _lastInfoMessageUpdate = DateTime.UtcNow;
+        private static string _infoMessage = "Initialized";
 
         public RenderWindow(ComputeDevice device, Action<string> setStatusBar)
             : base(GraphicsMode.Default, 0, 0, GraphicsContextFlags.ForwardCompatible)
@@ -77,20 +78,19 @@ namespace Clam
             _averageFps = (1 / (DateTime.UtcNow - _lastUpdate).TotalSeconds + _averageFps * 10) / 11;
             _lastUpdate = DateTime.UtcNow;
             var now = DateTime.UtcNow;
-            if (now > _lastInfoMessageUpdate + TimeSpan.FromSeconds(5))
-            {
-                _lastInfoMessageUpdate = now;
-                _infoMessage = null;
-            }
             if (now.Second != _lastTitleUpdateSecond)
             {
                 _lastTitleUpdateSecond = now.Second;
-                _setStatusBar(string.Format("{0} fps - {1}", (int)_averageFps, _infoMessage));
+                var kernel = Renderer.Kernel;
+                _setStatusBar(string.Format("{0} fps - avg. render time {1} ms - {2}", (int)_averageFps, kernel == null ? 0 : (int)kernel.AverageKernelTime, _infoMessage));
             }
 
             if (!RenderPackage.KernelInUse && Renderer.Kernel != null)
             {
+                _kernelStopwatch.Restart();
                 _interop.Draw(Renderer.Kernel.Render, Renderer.Parameters, _windowSize);
+                _kernelStopwatch.Stop();
+                Renderer.Kernel.AverageKernelTime = (_kernelStopwatch.Elapsed.TotalMilliseconds + Renderer.Kernel.AverageKernelTime * 19) / 20;
                 var frameDependantControls = Renderer.Parameters as IFrameDependantControl;
                 if (frameDependantControls != null)
                     frameDependantControls.Frame++;

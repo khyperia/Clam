@@ -1,8 +1,14 @@
-﻿<Renderer>
+﻿<Mandelbrot>
   <Controls>2D</Controls>
   <Files>
     <File>precisionChooser.cl</File>
-    <File>mandelbrot.cl</File>
-    <File>2dRenderer.cl</File>
+    <FileChoice>
+      <File>mandelbrot.cl</File>
+      <File>triangleInequality.cl</File>
+    </FileChoice>
+    <FileChoice>
+      <File>2dRenderer.cl</File>
+      <File>2dRendererAlt.cl</File>
+    </FileChoice>
   </Files>
-</Renderer>
+</Mandelbrot>

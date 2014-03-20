@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows;
 using System.Xml.Linq;
 using Cloo;
@@ -37,6 +36,8 @@ namespace Clam
         private readonly object _kernelLock = new object();
         private long[] _localSize;
         private bool _useDouble;
+
+        public double AverageKernelTime { get; set; }
 
         private RenderKernel(ComputeContext context, ComputeKernel kernel, string[] sourcecodes, Dictionary<string, string> defines)
         {

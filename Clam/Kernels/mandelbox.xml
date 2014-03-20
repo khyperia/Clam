@@ -1,0 +1,14 @@
+﻿<Mandelbox>
+  <Controls>RaytracerExtended</Controls>
+  <Files>
+    <FileChoice>
+      <File>mandelboxDe.cl</File>
+      <File>mandelboxDualDe.cl</File>
+    </FileChoice>
+    <File>rayDirection.cl</File>
+    <FileChoice>
+      <File>fancyRaytracer.cl</File>
+      <File>fastRaytracer.cl</File>
+    </FileChoice>
+  </Files>
+</Mandelbox>

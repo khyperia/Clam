@@ -31,12 +31,6 @@ float De(float3 z)
 #endif
 	float dz = 1.0;
 	for (int n = 0; n < MaxIters; n++) {
-		//if (fabs(z.x) > FoldingLimit)
-		//	dz += 2.0;
-		//if (fabs(z.y) > FoldingLimit)
-		//	dz += 2.0;
-		//if (fabs(z.z) > FoldingLimit)
-		//	dz += 2.0;
 		z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0 - z;
 
 		float r2 = dot(z, z);

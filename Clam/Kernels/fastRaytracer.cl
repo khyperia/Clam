@@ -1,12 +1,8 @@
-#ifndef Fov
-#define Fov 1.0
-#endif
-
 #ifndef MaxRayIters
 #define MaxRayIters 64
 #endif
 
-__kernel void Main(__global float4* screen, int screenWidth, int width, int height, float4 position, float4 lookat, float4 updir)
+__kernel void Main(__global float4* screen, int screenWidth, int width, int height, float4 position, float4 lookat, float4 updir, float fov, float focalDistance, int frame)
 {
 	int x = get_global_id(0);
 	int y = get_global_id(1);
@@ -16,7 +12,7 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 	float2 screenCoords = (float2)((float)x / width * 2 - 1, ((float)y / height * 2 - 1) * height / width);
 
 	float3 pos = position.xyz;
-	float3 direction = RayDir(lookat.xyz, updir.xyz, screenCoords, Fov);
+	float3 direction = RayDir(lookat.xyz, updir.xyz, screenCoords, fov);
 
 	float totalDistance = 0.0;
 	int i;

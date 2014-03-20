@@ -126,7 +126,6 @@ Field of view: N/M";
             var oldLookat = _lookat;
             var rotation = Matrix4d.CreateFromAxisAngle(_up, pointInFrame * Math.PI * 2);
             _lookat = Vector3d.Transform(_lookat, rotation);
-            //_position -= _lookat * MoveSpeed * 10;
             return () =>
             {
                 _position = oldPosition;

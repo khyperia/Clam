@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -13,18 +14,93 @@ using Microsoft.Win32;
 
 namespace Clam.Xaml
 {
+    public class KernelXmlFile
+    {
+        private readonly string _controlsName;
+        private readonly string _name;
+        private readonly Func<IParameterSet> _controlsFunc;
+        private readonly string[] _files;
+
+        private KernelXmlFile(string name, string controlsName, Func<IParameterSet> controlsFunc, string[] files)
+        {
+            _name = name;
+            _controlsName = controlsName;
+            _controlsFunc = controlsFunc;
+            _files = files;
+        }
+
+        public string Name
+        {
+            get { return _name; }
+        }
+
+        public Func<IParameterSet> ControlsFunc
+        {
+            get { return _controlsFunc; }
+        }
+
+        public string[] Files
+        {
+            get { return _files; }
+        }
+
+        public static IEnumerable<KernelXmlFile> Load(XElement xml)
+        {
+            if (xml == null)
+                throw new Exception("Invalid XML file: no root element");
+            var controls = xml.Element("Controls");
+            if (controls == null)
+                throw new Exception("Invalid XML file: no Controls element");
+            if (!RenderPackage.ControlBindingNames.ContainsKey(controls.Value))
+                throw new Exception("Invalid XML file: Controls value did not exist, possible values are: " + string.Join(", ", RenderPackage.ControlBindingNames));
+            var controlsFunc = RenderPackage.ControlBindingNames[controls.Value];
+            var files = xml.Element("Files");
+            if (files == null)
+                throw new Exception("Invalid XML file: no Files element");
+            var sourceFiles = files.Elements("File").Select(f => f.Value).ToArray();
+            var optionFiles = CartesianProduct(files.Elements("FileChoice").Select(e => e.Elements("File").Select(el => el.Value)));
+            return optionFiles.Select(optionFile =>
+            {
+                var realSources = sourceFiles.Concat(optionFile).ToArray();
+                var name = xml.Name.LocalName;
+                for (var i = sourceFiles.Length; i < realSources.Length; i++)
+                    name += string.Format("[{0}]", realSources[i].EndsWith(".cl") ? realSources[i].Substring(0, realSources[i].Length - 3) : realSources[i]);
+                return new KernelXmlFile(name, controls.Value, controlsFunc, realSources);
+            });
+        }
+
+        public XElement Save(string name)
+        {
+            return new XElement(name,
+                new XElement("Controls", _controlsName),
+                new XElement("Files", _files.Select(s => new XElement("File", s))));
+        }
+
+        private static IEnumerable<IEnumerable<T>> CartesianProduct<T>(IEnumerable<IEnumerable<T>> sequences)
+        {
+            IEnumerable<IEnumerable<T>> emptyProduct =
+                new[] { Enumerable.Empty<T>() };
+            return sequences.Aggregate(
+                emptyProduct,
+                (accumulator, sequence) =>
+                    from accseq in accumulator
+                    from item in sequence
+                    select accseq.Concat(new[] { item }));
+        }
+    }
+
     public partial class MainWindow : INotifyPropertyChanged
     {
         [CanBeNull]
         private RenderWindow _renderWindow;
-        private string _selectedKernelXmlFile;
+        private KernelXmlFile _selectedKernelXmlFile;
         public ObservableCollection<ComputeDevice> Devices { get; set; }
-        public ObservableCollection<string> KernelXmlFiles { get; set; }
+        public ObservableCollection<KernelXmlFile> KernelXmlFiles { get; set; }
         public ObservableCollection<DefineViewModel> DefineViewModels { get; set; }
 
         public MainWindow()
         {
-            KernelXmlFiles = new ObservableCollection<string>();
+            KernelXmlFiles = new ObservableCollection<KernelXmlFile>();
             DefineViewModels = new ObservableCollection<DefineViewModel>();
             RefreshXmlFiles();
             Devices = new ObservableCollection<ComputeDevice>(ComputePlatform.Platforms.SelectMany(p => p.Devices));
@@ -40,8 +116,9 @@ namespace Clam.Xaml
         private void RefreshXmlFiles()
         {
             KernelXmlFiles.Clear();
-            foreach (var xmlFile in Directory.EnumerateFiles(Environment.CurrentDirectory, "*.xml"))
-                KernelXmlFiles.Add(Path.GetFileName(xmlFile));
+            foreach (var xmlFile in Directory.EnumerateFiles(Environment.CurrentDirectory, "*.xml")
+                .SelectMany(xmlFile => KernelXmlFile.Load(XElement.Load(xmlFile))))
+                KernelXmlFiles.Add(xmlFile);
         }
 
         private void RefreshDefines()
@@ -79,7 +156,7 @@ namespace Clam.Xaml
             }
         }
 
-        public string SelectedKernelXmlFile
+        public KernelXmlFile SelectedKernelXmlFile
         {
             get { return _selectedKernelXmlFile; }
             set
@@ -89,7 +166,7 @@ namespace Clam.Xaml
             }
         }
 
-        private void SetSelectedKernelXmlFile(string filename, Action callback)
+        private void SetSelectedKernelXmlFile(KernelXmlFile filename, Action callback)
         {
             _selectedKernelXmlFile = filename;
             OnPropertyChanged("SelectedKernelXmlFile");
@@ -131,7 +208,7 @@ namespace Clam.Xaml
 
         private void ApplyKernelParameters(object sender, RoutedEventArgs e)
         {
-            if (_renderWindow == null)
+            if (_renderWindow == null || _renderWindow.Renderer.Kernel == null)
                 return;
             _renderWindow.Renderer.Kernel.Recompile();
             var framedepcontrols = _renderWindow.Renderer.Parameters as IFrameDependantControl;
@@ -141,7 +218,7 @@ namespace Clam.Xaml
 
         private void LoadKernelParameters(object sender, RoutedEventArgs e)
         {
-            if (_renderWindow == null)
+            if (_renderWindow == null || _renderWindow.Renderer.Kernel == null)
                 return;
             var selector = new OpenFileDialog
             {
@@ -154,7 +231,7 @@ namespace Clam.Xaml
 
         private void SaveKernelParameters(object sender, RoutedEventArgs e)
         {
-            if (_renderWindow == null)
+            if (_renderWindow == null || _renderWindow.Renderer.Kernel == null)
                 return;
             var selector = new SaveFileDialog
             {
@@ -224,16 +301,17 @@ namespace Clam.Xaml
 
         private void TakeScreenshot(object sender, RoutedEventArgs e)
         {
-            if (_renderWindow == null)
+            if (_renderWindow == null || _renderWindow.Renderer.Parameters == null)
                 return;
             ThreadPool.QueueUserWorkItem(o =>
             {
                 var endIgnoreControl = _renderWindow.Renderer.Parameters.StartIgnoreControl();
-                var screenshot = _renderWindow.Renderer.
-                    Screenshot(StaticSettings.Fetch.ScreenshotHeight, StaticSettings.Fetch.ScreenshotPartialRender,
-                        _renderWindow.DisplayInformation);
+                var screenshot = _renderWindow.Renderer.Screenshot(StaticSettings.Fetch.ScreenshotHeight,
+                    StaticSettings.Fetch.ScreenshotPartialRender, _renderWindow.DisplayInformation);
+                _renderWindow.DisplayInformation("Saving screenshot");
                 if (screenshot != null)
                     screenshot.Save(Ext.UniqueFilename("screenshot", "png"));
+                _renderWindow.DisplayInformation("Done rendering screenshot");
                 endIgnoreControl();
             });
         }
@@ -321,13 +399,13 @@ namespace Clam.Xaml
 
         private void SaveProgram(string filename)
         {
-            if (_renderWindow == null)
+            if (_renderWindow == null || _renderWindow.Renderer.Kernel == null)
                 return;
             var kernel = SelectedKernelXmlFile;
             var kernelOptions = _renderWindow.Renderer.Kernel.SerializeOptions("KernelOptions");
             var serializableParams = _renderWindow.Renderer.Parameters as ISerializableParameterSet;
             var controlOptions = serializableParams == null ? null : serializableParams.Save("ControlOptions");
-            var element = new XElement("ClamConfig", new XElement("Kernel", kernel), kernelOptions);
+            var element = new XElement("ClamConfig", kernel.Save("Kernel"), kernelOptions);
             if (controlOptions != null)
                 element.Add(controlOptions);
             element.Save(filename);
@@ -350,8 +428,13 @@ namespace Clam.Xaml
                 MessageBox.Show(this, "XML settings are incomplete", "Error");
                 return;
             }
-            SetSelectedKernelXmlFile(kernelElement.Value, () =>
+            SetSelectedKernelXmlFile(KernelXmlFile.Load(kernelElement).Single(), () =>
             {
+                if (_renderWindow.Renderer.Kernel == null)
+                {
+                    MessageBox.Show("Internal error; renderer not set when loading program", "Error");
+                    return;
+                }
                 _renderWindow.Renderer.Kernel.LoadOptions(kernelOptionsElement);
                 RefreshDefines();
                 var serializable = _renderWindow.Renderer.Parameters as ISerializableParameterSet;

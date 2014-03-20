@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Xml.Linq;
 using Clam.NGif;
+using Clam.Xaml;
 using Cloo;
 using JetBrains.Annotations;
 using OpenTK;
@@ -27,11 +28,13 @@ namespace Clam
             _parameters = parameters;
         }
 
+        [CanBeNull]
         public RenderKernel Kernel
         {
             get { return _kernel; }
         }
 
+        [CanBeNull]
         public IParameterSet Parameters
         {
             get { return _parameters; }
@@ -49,25 +52,17 @@ namespace Clam
             {"2D", () => new Keyboard2DControl()},
         };
 
-        public static RenderPackage? LoadFromXml(ComputeContext computeContext, string xmlFilename)
+        public static Dictionary<string, Func<IParameterSet>> ControlBindingNames
         {
-            var xml = XDocument.Load(xmlFilename).Root;
-            if (xml == null)
-                throw new Exception("Invalid XML file " + xmlFilename + ": no root element");
-            var controls = xml.Element("Controls");
-            if (controls == null)
-                throw new Exception("Invalid XML file " + xmlFilename + ": no Controls element");
-            if (!ControlBindings.ContainsKey(controls.Value))
-                throw new Exception("Invalid XML file " + xmlFilename + ": Controls value did not exist, possible values are: " + string.Join(", ", ControlBindings.Keys));
-            var parameters = ControlBindings[controls.Value]();
-            var files = xml.Element("Files");
-            if (files == null)
-                throw new Exception("Invalid XML file " + xmlFilename + ": no Files element");
-            var sourceStrings = files.Elements("File").Select(e => File.ReadAllText(e.Value)).ToArray();
-            var kernel = RenderKernel.Create(computeContext, sourceStrings);
+            get { return ControlBindings; }
+        }
+
+        public static RenderPackage? LoadFromXml(ComputeContext computeContext, KernelXmlFile kernelXml)
+        {
+            var kernel = RenderKernel.Create(computeContext, kernelXml.Files.Select(File.ReadAllText).ToArray());
             if (kernel == null)
                 return null;
-            return new RenderPackage(kernel, parameters);
+            return new RenderPackage(kernel, kernelXml.ControlsFunc());
         }
 
         private const double ScreenshotAspectRatio = 16.0 / 9.0;
@@ -83,7 +78,7 @@ namespace Clam
             Bitmap bmp;
             try
             {
-                bmp = new Bitmap(screenshotWidth, screenshotHeight);
+                bmp = new Bitmap(screenshotWidth, screenshotHeight, PixelFormat.Format24bppRgb);
             }
             catch (ArgumentException)
             {
@@ -91,7 +86,7 @@ namespace Clam
                 return null;
             }
             var nancount = 0;
-            var bmpData = bmp.LockBits(new Rectangle(0, 0, screenshotWidth, screenshotHeight), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
+            var bmpData = bmp.LockBits(new Rectangle(0, 0, screenshotWidth, screenshotHeight), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
             var scan0 = bmpData.Scan0.ToInt64();
             var queue = new ComputeCommandQueue(ccontext, ccontext.Devices[0], ComputeCommandQueueFlags.None);
             var localSize = _kernel.Threadsize(queue);
@@ -105,10 +100,12 @@ namespace Clam
 
             var totalYs = (screenshotHeight + localSize[1] - 1) / localSize[1];
             var totalXs = (screenshotWidth + localSize[0] - 1) / localSize[0];
+            var stopwatch = new Stopwatch();
             for (var y = 0; y < totalYs; y++)
             {
                 for (var x = 0; x < totalXs; x++)
                 {
+                    stopwatch.Restart();
                     for (var frame = 0; frame < framesToRender; frame++)
                     {
                         if (frameDependantControls != null)
@@ -122,28 +119,31 @@ namespace Clam
                     queue.ReadFromBuffer(computeBuffer, ref pixels, true, 0, 0, localSize[0] * localSize[1], null);
                     queue.Finish();
 
+                    stopwatch.Stop();
+                    var elapsed = stopwatch.Elapsed.TotalMilliseconds / framesToRender;
+                    _kernel.AverageKernelTime = (elapsed + (_kernel.AverageKernelTime) * 19) / 20;
+
                     var blockWidth = Math.Min(localSize[0], screenshotWidth - x * localSize[0]);
                     var blockHeight = Math.Min(localSize[1], screenshotHeight - y * localSize[1]);
-                    var intPixels = new int[blockWidth * blockHeight];
+                    var intPixels = new byte[blockWidth * blockHeight * 3];
                     for (var py = 0; py < blockHeight; py++)
                     {
                         for (var px = 0; px < blockWidth; px++)
                         {
                             var pixel = pixels[py * localSize[1] + px];
-                            int result;
                             if (float.IsNaN(pixel.X) || float.IsNaN(pixel.Y) || float.IsNaN(pixel.Z))
-                            {
                                 nancount++;
-                                result = 0;
-                            }
-                            else
-                                result = (byte)(pixel.X * 255) << 16 | (byte)(pixel.Y * 255) << 8 | (byte)(pixel.Z * 255);
-                            intPixels[py * blockWidth + px] = result;
+                            // BGR
+                            if (float.IsNaN(pixel.X) == false)
+                                intPixels[(py * blockWidth + px) * 3 + 0] = (byte)(pixel.Z * 255);
+                            if (float.IsNaN(pixel.Y) == false)
+                                intPixels[(py * blockWidth + px) * 3 + 1] = (byte)(pixel.Y * 255);
+                            if (float.IsNaN(pixel.Z) == false)
+                                intPixels[(py * blockWidth + px) * 3 + 2] = (byte)(pixel.X * 255);
                         }
                     }
                     for (var line = 0; line < blockHeight; line++)
-                        Marshal.Copy(intPixels, line * (int)blockWidth,
-                            new IntPtr(scan0 + ((y * localSize[1] + line) * screenshotWidth + x * localSize[0]) * sizeof(int)), (int)blockWidth);
+                        Marshal.Copy(intPixels, line * (int)blockWidth * 3, new IntPtr(scan0 + ((y * localSize[1] + line) * bmpData.Stride) + x * localSize[0] * 3), (int)blockWidth * 3);
                 }
             }
 
@@ -151,7 +151,6 @@ namespace Clam
             if (nancount != 0)
                 MessageBox.Show(string.Format("Caught {0} NAN pixels while taking screenshot", nancount), "Warning");
 
-            displayInformation("Done rendering screenshot");
             _kernelInUse--;
             return bmp;
         }

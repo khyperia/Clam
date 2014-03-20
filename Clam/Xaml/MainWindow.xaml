@@ -31,7 +31,13 @@
             </Grid.ColumnDefinitions>
             <DockPanel Grid.Row="0" Grid.Column="0">
                 <TextBlock DockPanel.Dock="Top">Select kernel package</TextBlock>
-                <ListBox ItemsSource="{Binding KernelXmlFiles}" SelectedItem="{Binding SelectedKernelXmlFile}" MaxHeight="200" />
+                <ListBox ItemsSource="{Binding KernelXmlFiles}" SelectedItem="{Binding SelectedKernelXmlFile}" MaxHeight="200">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </DockPanel>
             <DockPanel Grid.Row="1" Grid.Column="0" LastChildFill="False">
                 <TextBlock DockPanel.Dock="Top">Global parameters</TextBlock>

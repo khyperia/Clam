@@ -1,8 +1,0 @@
-﻿<Raytracer>
-  <Controls>Raytracer</Controls>
-  <Files>
-    <File>mandelboxDe.cl</File>
-    <File>rayDirection.cl</File>
-    <File>fastRaytracer.cl</File>
-  </Files>
-</Raytracer>

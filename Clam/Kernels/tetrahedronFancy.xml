@@ -1,8 +1,0 @@
-﻿<Raytracer>
-  <Controls>RaytracerExtended</Controls>
-  <Files>
-    <File>tetrahedronDe.cl</File>
-    <File>rayDirection.cl</File>
-    <File>fancyRaytracer.cl</File>
-  </Files>
-</Raytracer>

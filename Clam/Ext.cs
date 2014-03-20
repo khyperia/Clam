@@ -12,7 +12,7 @@ namespace Clam
             return UniqueFileInDirectory(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), filename, ext);
         }
 
-        public static string UniqueFileInDirectory(string directory, string filename, string ext)
+        private static string UniqueFileInDirectory(string directory, string filename, string ext)
         {
             var screenshotNumber = 0;
             string file;
@@ -33,9 +33,9 @@ namespace Clam
         public static XElement Save(this Vector3d vector, string name)
         {
             return new XElement(name,
-                new XElement("X", vector.X),
-                new XElement("Y", vector.Y),
-                new XElement("Z", vector.Z));
+                vector.X.Save("X"),
+                vector.Y.Save("Y"),
+                vector.Z.Save("Z"));
         }
 
         public static Vector3d LoadVector3D(this XElement element)
