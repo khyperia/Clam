@@ -1,5 +1,5 @@
-#ifndef NormDistCount
-#define NormDistCount 5
+#ifndef DeMultiplier
+#define DeMultiplier 0.95
 #endif
 
 #ifndef Quality
@@ -38,9 +38,9 @@
 #define AOColor 0.25,0.0,0.25
 #endif
 
-#define IntMax 2147483647
+#define UINT_MAX 4294967295
 
-int Rand(int seed) {
+unsigned int Rand(unsigned int seed) {
 	return seed * 1664525 + 1013904223;
 }
 
@@ -65,7 +65,7 @@ bool IsGoodBokeh(float2 coords)
 //	return (coords.x < 0 || coords.y < 0);
 //}
 
-int ApplyDof(float3* position, float3* lookat, float focalPlane, int rand)
+unsigned int ApplyDof(float3* position, float3* lookat, float focalPlane, unsigned int rand)
 {
 	float3 focalPosition = *position + *lookat * focalPlane;
 	float3 xShift = cross((float3)(0, 0, 1), *lookat);
@@ -73,36 +73,24 @@ int ApplyDof(float3* position, float3* lookat, float focalPlane, int rand)
 	float2 offset;
 	do
 	{
-		int randx = Rand(rand);
-		int randy = Rand(randx);
+		unsigned int randx = Rand(rand);
+		unsigned int randy = Rand(randx);
 		rand = randy;
-		offset = (float2)((float)randx / IntMax, (float)randy / IntMax);
+		offset = (float2)((float)randx / UINT_MAX * 2 - 1, (float)randy / UINT_MAX * 2 - 1);
 	} while (!IsGoodBokeh(offset));
 	*lookat = normalize(*lookat + offset.x * DofPickup * xShift + offset.y * DofPickup * yShift);
 	*position = focalPosition - *lookat * focalPlane;
 	return rand;
 }
 
-float NormDist(float3 pos, float3 dir, float totalDistance, float quality) {
-	for (int i = 0; i < NormDistCount; i++)
-	{
-		float distance = De(pos + dir * totalDistance);
-		distance -= (totalDistance + distance) / quality;
-		totalDistance += distance;
-	}
-	return totalDistance;
-}
-
-float Trace(float3 origin, float3 direction, float quality)
+float Trace(float3 origin, float3 direction, float quality, float rand)
 {
-	float distance = De(origin);
+	float distance = De(origin) * rand * DeMultiplier;
 	float totalDistance = distance;
 	for (int i = 0; i < 512 && totalDistance < MaxRayDist && distance * quality > totalDistance; i++) {
-		distance = De(origin + direction * totalDistance);
-		distance -= (totalDistance + distance) / quality;
+		distance = De(origin + direction * totalDistance) * DeMultiplier;
 		totalDistance += distance;
 	}
-	totalDistance = NormDist(origin, direction, totalDistance, quality);
 	return totalDistance;
 }
 
@@ -171,7 +159,7 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 	float3 look = lookat.xyz;
 	float3 up = updir.xyz;
 
-	int rand = Rand(x * width * height + y * width + frame * 10);
+	unsigned int rand = Rand(x * width * height + y * width + frame * 10);
 	for (int i = 0; i < 4; i++)
 		rand = Rand(rand);
 
@@ -180,7 +168,7 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 
 	float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-	float totalDistance = Trace(pos, rayDir, sqrt((float)width) * Quality / fov);
+	float totalDistance = Trace(pos, rayDir, sqrt((float)width) * Quality / fov, (float)(rand = Rand(rand)) / UINT_MAX * 0.5 + 0.5);
 
 	float3 color = Postprocess(totalDistance, pos, rayDir, focalDistance);
 	
