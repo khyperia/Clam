@@ -183,7 +183,8 @@ namespace Clam.Xaml
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     _renderWindow.Renderer = keepControl ? new RenderPackage(package.Value.Kernel, _renderWindow.Renderer.Parameters) : package.Value;
-                    if (keepControl && (var ifdp = _renderWindow.Renderer.Parameters as IFrameDependantControl) != null)
+                    var ifdp = _renderWindow.Renderer.Parameters as IFrameDependantControl;
+                    if (keepControl && ifdp != null)
                     {
                         ifdp.Frame = 0;
                     }

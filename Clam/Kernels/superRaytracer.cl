@@ -60,17 +60,8 @@
 
 float Rand(unsigned int* seed)
 {
-	return (float)(*seed = *seed * 1664525 + 1013904223) / UINT_MAX;
-}
-
-float3 RandVec(unsigned int* seed)
-{
-	float3 result;
-	do
-	{
-		result = (float3)(Rand(seed) * 2 - 1, Rand(seed) * 2 - 1, Rand(seed) * 2 - 1);
-	} while (dot(result, result) > 1);
-	return result;
+	const unsigned int scale = UINT_MAX / 4;
+	return (float)((*seed = *seed * 1664525 + 1013904223) & scale) / scale;
 }
 
 // circular
