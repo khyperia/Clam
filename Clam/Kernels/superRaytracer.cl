@@ -34,6 +34,14 @@
 #define QualityRestRay 128
 #endif
 
+#ifndef SpecularSize
+#define SpecularSize 0.1
+#endif
+
+#ifndef SpecularDiffuseRatio
+#define SpecularDiffuseRatio 0.5
+#endif
+
 #ifndef LightSize
 #define LightSize 1.0
 #endif
@@ -127,25 +135,14 @@ int Reaches(float3 position, float3 destination)
 	return 0;
 }
 
-float3 Diffuse(float3 normal, float3 rayDir, unsigned int* rand)
+float3 Cone(float3 normal, float fov, unsigned int* rand)
 {
-	do { rayDir = normalize(RandVec(rand));
-	} while (dot(rayDir, normal) < 0);
-	return rayDir;
-}
-
-float3 Specular(float3 normal, float3 rayDir, unsigned int* rand)
-{
-	float3 target = -2 * dot(normal, rayDir) * normal + rayDir;
-	float3 up = cross(cross(target, (float3)(0,1,0)), target);
-	for (int i = 0; i < 8 && dot(rayDir, normal) < 0; i++)
-		rayDir = RayDir(target, up, (float2)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1), 0.1);
-	return rayDir;
-}
-
-float3 Mirror(float3 normal, float3 rayDir, unsigned int* rand)
-{
-	return -2 * dot(normal, rayDir) * normal + rayDir;
+	float2 coords;
+	do {
+		coords = (float2)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1);
+	} while (dot(coords, coords) > 1);
+	float3 up = cross(cross(normal, (float3)(0,1,0)), normal);
+	return RayDir(normal, up, coords, fov);
 }
 
 float3 TracePath(float3 rayPos, float3 rayDir, unsigned int* rand)
@@ -153,7 +150,6 @@ float3 TracePath(float3 rayPos, float3 rayDir, unsigned int* rand)
 	float3 accum = (float3)(1);
 	for (int i = 0; i < NumRayBounces; i++)
 	{
-		Rand(rand);
 		float distanceToNearest = Trace(rayPos, rayDir, i == 0 ? QualityFirstRay : QualityRestRay, rand);
 
 		rayPos = rayPos + rayDir * distanceToNearest;
@@ -164,9 +160,12 @@ float3 TracePath(float3 rayPos, float3 rayDir, unsigned int* rand)
 				return accum * (float3)(LightBrightness);
 			return accum * (float3)(AmbientBrightness);
 		}
-
+		
 		float3 normal = Normal(rayPos);
-		rayDir = Specular(normal, rayDir, rand);
+		int isSpecular = Rand(rand) > SpecularDiffuseRatio;
+		rayDir = Cone(isSpecular ? -2 * dot(normal, rayDir) * normal + rayDir : normal,
+			isSpecular ? SpecularSize : 1.5,
+			rand);
 
 		accum *= (float3)(LightReflectance) * dot(rayDir, normal);
 	}
@@ -185,7 +184,7 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 	float3 up = updir.xyz;
 
 	unsigned int rand = get_global_id(0) + get_global_id(1) * width + frame * width * height;
-	for (int i = 0; i < 5; i++)
+	for (int i = 0; i < 8; i++)
 		Rand(&rand);
 
 	ApplyDof(&pos, &look, focalDistance, &rand);

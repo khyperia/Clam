@@ -123,14 +123,9 @@ Field of view: N/M";
         public Action SetupGif(double pointInFrame)
         {
             var oldPosition = _position;
-            var oldLookat = _lookat;
-            var rotation = Matrix4d.CreateFromAxisAngle(_up, pointInFrame * Math.PI * 2);
-            _lookat = Vector3d.Transform(_lookat, rotation);
-            return () =>
-            {
-                _position = oldPosition;
-                _lookat = oldLookat;
-            };
+            var right = Vector3d.Cross(_up, _lookat);
+            _position += right * Math.Sin(pointInFrame * 2 * Math.PI) * MoveSpeed;
+            return () => _position = oldPosition;
         }
     }
 }
