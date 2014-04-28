@@ -22,7 +22,7 @@ namespace Clam
         private readonly IParameterSet _parameters;
         private static volatile int _kernelInUse;
 
-        public RenderPackage([NotNull] RenderKernel kernel, [NotNull] IParameterSet parameters)
+        public RenderPackage(RenderKernel kernel, IParameterSet parameters)
         {
             _kernel = kernel;
             _parameters = parameters;
@@ -94,7 +94,7 @@ namespace Clam
                 localSize[i] *= slowRenderPower;
             var computeBuffer = new ComputeBuffer<Vector4>(ccontext, ComputeMemoryFlags.ReadWrite, localSize[0] * localSize[1]);
 
-            const int numFrames = 150;
+            const int numFrames = 200;
             var frameDependantControls = _parameters as IFrameDependantControl;
             var framesToRender = frameDependantControls == null ? 1 : numFrames;
 
@@ -134,11 +134,11 @@ namespace Clam
                             if (float.IsNaN(pixel.X) || float.IsNaN(pixel.Y) || float.IsNaN(pixel.Z))
                                 nancount++;
                             // BGR
-                            if (float.IsNaN(pixel.X) == false)
+                            if (float.IsNaN(pixel.Z) == false)
                                 intPixels[(py * blockWidth + px) * 3 + 0] = (byte)(pixel.Z * 255);
                             if (float.IsNaN(pixel.Y) == false)
                                 intPixels[(py * blockWidth + px) * 3 + 1] = (byte)(pixel.Y * 255);
-                            if (float.IsNaN(pixel.Z) == false)
+                            if (float.IsNaN(pixel.X) == false)
                                 intPixels[(py * blockWidth + px) * 3 + 2] = (byte)(pixel.X * 255);
                         }
                     }

@@ -11,6 +11,8 @@ using System.Xml.Linq;
 using Cloo;
 using JetBrains.Annotations;
 using Microsoft.Win32;
+using OpenTK.Graphics.OpenGL;
+using OpenTK.Input;
 
 namespace Clam.Xaml
 {
@@ -162,11 +164,12 @@ namespace Clam.Xaml
             set
             {
                 if (value == _selectedKernelXmlFile || _renderWindow == null) return;
-                SetSelectedKernelXmlFile(value, null);
+                var rightclick = System.Windows.Input.Mouse.RightButton == System.Windows.Input.MouseButtonState.Pressed;
+                SetSelectedKernelXmlFile(value, rightclick, null);
             }
         }
 
-        private void SetSelectedKernelXmlFile(KernelXmlFile filename, Action callback)
+        private void SetSelectedKernelXmlFile(KernelXmlFile filename, bool keepControl, Action callback)
         {
             _selectedKernelXmlFile = filename;
             OnPropertyChanged("SelectedKernelXmlFile");
@@ -179,7 +182,11 @@ namespace Clam.Xaml
                     return;
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    _renderWindow.Renderer = package.Value;
+                    _renderWindow.Renderer = keepControl ? new RenderPackage(package.Value.Kernel, _renderWindow.Renderer.Parameters) : package.Value;
+                    if (keepControl && (var ifdp = _renderWindow.Renderer.Parameters as IFrameDependantControl) != null)
+                    {
+                        ifdp.Frame = 0;
+                    }
                     OnPropertyChanged("ControlsHelp");
                     RefreshDefines();
                     if (callback != null)
@@ -428,7 +435,7 @@ namespace Clam.Xaml
                 MessageBox.Show(this, "XML settings are incomplete", "Error");
                 return;
             }
-            SetSelectedKernelXmlFile(KernelXmlFile.Load(kernelElement).Single(), () =>
+            SetSelectedKernelXmlFile(KernelXmlFile.Load(kernelElement).Single(), false, () =>
             {
                 if (_renderWindow.Renderer.Kernel == null)
                 {

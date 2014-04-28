@@ -26,6 +26,30 @@
 #define BdrfColor 0.5,1,0.75
 #endif
 
+#ifndef QualityFirstRay
+#define QualityFirstRay 512
+#endif
+
+#ifndef QualityRestRay
+#define QualityRestRay 128
+#endif
+
+#ifndef LightSize
+#define LightSize 1.0
+#endif
+
+#ifndef LightBrightness
+#define LightBrightness 2.0,1.0,1.5
+#endif
+
+#ifndef AmbientBrightness
+#define AmbientBrightness 0.25,0.25,0.3
+#endif
+
+#ifndef LightReflectance
+#define LightReflectance 1.0,2.0,1.5
+#endif
+
 float Rand(unsigned int* seed)
 {
 	return (float)(*seed = *seed * 1664525 + 1013904223) / UINT_MAX;
@@ -39,6 +63,27 @@ float3 RandVec(unsigned int* seed)
 		result = (float3)(Rand(seed) * 2 - 1, Rand(seed) * 2 - 1, Rand(seed) * 2 - 1);
 	} while (dot(result, result) > 1);
 	return result;
+}
+
+// circular
+bool IsGoodBokeh(float2 coords)
+{
+	float len2 = dot(coords, coords);
+	return len2 < 1;
+}
+
+void ApplyDof(float3* position, float3* lookat, float focalPlane, unsigned int* rand)
+{
+	float3 focalPosition = *position + *lookat * focalPlane;
+	float3 xShift = cross((float3)(0, 0, 1), *lookat);
+	float3 yShift = cross(*lookat, xShift);
+	float2 offset;
+	do
+	{
+		offset = (float2)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1);
+	} while (!IsGoodBokeh(offset));
+	*lookat = normalize(*lookat + offset.x * DofPickup * xShift + offset.y * DofPickup * yShift);
+	*position = focalPosition - *lookat * focalPlane;
 }
 
 float3 Normal(float3 pos) {
@@ -82,66 +127,50 @@ int Reaches(float3 position, float3 destination)
 	return 0;
 }
 
-void AddPixel(__global float4* screen, int width, int height, float3 color, int screenX, int screenY, int frame)
+float3 Diffuse(float3 normal, float3 rayDir, unsigned int* rand)
 {
-	if (screenX < 0 || screenY < 0 || screenX >= width || screenY >= height)
-		return;
-
-	float3 old = screen[screenY * width + screenX].xyz;
-	if (isnan(old.x))
-		old.x = 0.0f;
-	if (isnan(old.y))
-		old.y = 0.0f;
-	if (isnan(old.z))
-		old.z = 0.0f;
-	screen[screenY * width + screenX].xyz = old + color;
+	do { rayDir = normalize(RandVec(rand));
+	} while (dot(rayDir, normal) < 0);
+	return rayDir;
 }
 
-void DivPixel(__global float4* screen, int width, int height, int screenX, int screenY, int frame)
+float3 Specular(float3 normal, float3 rayDir, unsigned int* rand)
 {
-	if (screenX < 0 || screenY < 0 || screenX >= width || screenY >= height)
-		return;
-
-	screen[screenY * width + screenX].xyz = (float3)(0,0,0);
+	float3 target = -2 * dot(normal, rayDir) * normal + rayDir;
+	float3 up = cross(cross(target, (float3)(0,1,0)), target);
+	for (int i = 0; i < 8 && dot(rayDir, normal) < 0; i++)
+		rayDir = RayDir(target, up, (float2)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1), 0.1);
+	return rayDir;
 }
 
-float3 TracePath(float3 rayPos, float3 rayDir, float3 lightPos, unsigned int* rand)
+float3 Mirror(float3 normal, float3 rayDir, unsigned int* rand)
 {
-	float3 emittanceResults[NumRayBounces];
-	float3 bdrfResults[NumRayBounces];
-	int i;
-	for (i = 0; i < NumRayBounces; i++)
+	return -2 * dot(normal, rayDir) * normal + rayDir;
+}
+
+float3 TracePath(float3 rayPos, float3 rayDir, unsigned int* rand)
+{
+	float3 accum = (float3)(1);
+	for (int i = 0; i < NumRayBounces; i++)
 	{
-		float distanceToNearest = Trace(rayPos, rayDir, 256, rand);
-		if (distanceToNearest > MaxRayDist)
-		{
-			break;
-		}
+		Rand(rand);
+		float distanceToNearest = Trace(rayPos, rayDir, i == 0 ? QualityFirstRay : QualityRestRay, rand);
 
 		rayPos = rayPos + rayDir * distanceToNearest;
+
+		if (distanceToNearest > MaxRayDist)
+		{
+			if (dot(normalize(rayPos), normalize((float3)(1,1,1))) > cos((float)LightSize))
+				return accum * (float3)(LightBrightness);
+			return accum * (float3)(AmbientBrightness);
+		}
+
 		float3 normal = Normal(rayPos);
-		do { rayDir = RandVec(rand);
-		} while (dot(rayDir, normal) < 0);
+		rayDir = Specular(normal, rayDir, rand);
 
-		float reflectance = 3;
-		
-		float3 emittance;
-		float rayPosDotLightPos = dot(normalize(rayPos), normalize(lightPos));
-		if (rayPosDotLightPos > 0 && Reaches(rayPos, lightPos))
-			emittance = rayPosDotLightPos * 0.5 * (float3)(EmittanceColor);
-		else
-			emittance = 0;
-
-		emittanceResults[i] = emittance;
-
-		float3 BDRF = 2 * reflectance * dot(rayDir, normal) * (float3)(BdrfColor);
-
-		bdrfResults[i] = BDRF;
+		accum *= (float3)(LightReflectance) * dot(rayDir, normal);
 	}
-	float3 final = (float3)(0);
-	for (int reverseI = i - 1; reverseI >= 0; reverseI--)
-		final = emittanceResults[reverseI] + bdrfResults[reverseI] * final;
-	return final;
+	return (float3)(0.0f);
 }
 
 __kernel void Main(__global float4* screen, int screenWidth, int width, int height, float4 position, float4 lookat, float4 updir, float fov, float focalDistance, int frame)
@@ -155,16 +184,18 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 	float3 look = lookat.xyz;
 	float3 up = updir.xyz;
 
-	unsigned int rand = get_global_id(0) * width * height + get_global_id(1) * width + frame * 10;
-	for (int i = 0; i < 4; i++)
+	unsigned int rand = get_global_id(0) + get_global_id(1) * width + frame * width * height;
+	for (int i = 0; i < 5; i++)
 		Rand(&rand);
+
+	ApplyDof(&pos, &look, focalDistance, &rand);
 
 	float2 screenCoords = (float2)((float)x / width * 2 - 1, ((float)y / height * 2 - 1) * height / width);
 	float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-	float3 lightPosition = pos + (look + cross(look, up)) * (focalDistance / 4);
+	//float3 lightPosition = pos + (look + cross(look, up)) * (focalDistance / 4);
 
-	float3 color = TracePath(pos, rayDir, lightPosition, &rand);
+	float3 color = TracePath(pos, rayDir, &rand);
 	
 	int screenIndex = screenWidth ? (y - get_global_offset(1)) * screenWidth + (x - get_global_offset(0)) : y * width + x;
 	if (frame > 0)
@@ -176,5 +207,5 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 		else if (isnan(color.x) || isnan(color.y) || isnan(color.z))
 			color = old;
 	}
-	screen[screenIndex] = (float4)(color, 1.0);
+	screen[screenIndex] = (float4)(clamp(color, 0.0, 1.0), 1.0);
 }
