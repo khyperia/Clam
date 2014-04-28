@@ -36,5 +36,5 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 			}
 		}
 	}
-	screen[screenIndex] = (float4)(color, 1);
+	screen[screenIndex] = (float4)(color / (SupersampleSize * SupersampleSize), 1);
 }

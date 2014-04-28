@@ -4,6 +4,7 @@
     <File>tetrahedronDe.cl</File>
     <File>rayDirection.cl</File>
     <FileChoice>
+      <File>superRaytracer.cl</File>
       <File>fancyRaytracer.cl</File>
       <File>fastRaytracer.cl</File>
     </FileChoice>

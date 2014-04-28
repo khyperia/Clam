@@ -4,6 +4,7 @@
     <File>precisionChooser.cl</File>
     <FileChoice>
       <File>mandelbrot.cl</File>
+      <File>mandelbrotDiffZ.cl</File>
       <File>triangleInequality.cl</File>
     </FileChoice>
     <FileChoice>
