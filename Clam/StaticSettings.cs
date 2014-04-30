@@ -13,7 +13,7 @@ namespace Clam
         private int _gifHeight = 256;
         private int _gifFramecount = 20;
         private int _gifFramerate = 20;
-        private string _openClOptions = "-cl-mad-enable -cl-fast-relaxed-math";
+        private string _openClOptions = "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror";
 
         public int ScreenshotHeight
         {

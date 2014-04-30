@@ -59,8 +59,8 @@ namespace Clam
                 {Key.Right, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(_up, -TurnSpeed * dt * Fov))},
                 {Key.Up, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(Vector3d.Cross(_up, _lookat), TurnSpeed * dt * Fov))},
                 {Key.Down, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(Vector3d.Cross(_up, _lookat), -TurnSpeed * dt * Fov))},
-                {Key.R, dt => MoveSpeed *= 1 + dt},
-                {Key.F, dt =>  MoveSpeed *= 1 - dt},
+                {Key.R, dt => MoveSpeed *= 1 + dt * Math.Sqrt(Fov)},
+                {Key.F, dt =>  MoveSpeed *= 1 - dt * Math.Sqrt(Fov)},
                 {Key.N, dt => Fov *= 1 + dt},
                 {Key.M, dt => Fov *= 1 - dt}
             });

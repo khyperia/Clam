@@ -18,24 +18,16 @@
 #define NumRayBounces 3
 #endif
 
-#ifndef EmittanceColor
-#define EmittanceColor 1,0.5,0.75
-#endif
-
-#ifndef BdrfColor
-#define BdrfColor 0.5,1,0.75
-#endif
-
 #ifndef QualityFirstRay
-#define QualityFirstRay 512
+#define QualityFirstRay 1024
 #endif
 
 #ifndef QualityRestRay
-#define QualityRestRay 128
+#define QualityRestRay 64
 #endif
 
 #ifndef SpecularSize
-#define SpecularSize 0.1
+#define SpecularSize 0.4
 #endif
 
 #ifndef SpecularDiffuseRatio
@@ -47,20 +39,20 @@
 #endif
 
 #ifndef LightBrightness
-#define LightBrightness 2.0,1.0,1.5
+#define LightBrightness 2.0,1.5,1.0
 #endif
 
 #ifndef AmbientBrightness
-#define AmbientBrightness 0.25,0.25,0.3
+#define AmbientBrightness 0.3,0.275,0.25
 #endif
 
 #ifndef LightReflectance
-#define LightReflectance 1.0,2.0,1.5
+#define LightReflectance 1.0,1.5,2.0
 #endif
 
 float Rand(unsigned int* seed)
 {
-	const unsigned int scale = UINT_MAX / 4;
+	const unsigned int scale = UINT_MAX / 32;
 	return (float)((*seed = *seed * 1664525 + 1013904223) & scale) / scale;
 }
 
@@ -76,17 +68,14 @@ void ApplyDof(float3* position, float3* lookat, float focalPlane, unsigned int* 
 	float3 focalPosition = *position + *lookat * focalPlane;
 	float3 xShift = cross((float3)(0, 0, 1), *lookat);
 	float3 yShift = cross(*lookat, xShift);
-	float2 offset;
-	do
-	{
-		offset = (float2)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1);
-	} while (!IsGoodBokeh(offset));
+	float2 offset = (float2)(Rand(rand) * 6.28318531, Rand(rand));
+	offset = (float2)(cos(offset.x) * offset.y, sin(offset.x) * offset.y);
 	*lookat = normalize(*lookat + offset.x * DofPickup * xShift + offset.y * DofPickup * yShift);
 	*position = focalPosition - *lookat * focalPlane;
 }
 
 float3 Normal(float3 pos) {
-	const float delta = FLT_EPSILON * 16;
+	const float delta = FLT_EPSILON * 2;
 	float dppn = De(pos + (float3)(delta, delta, -delta));
 	float dpnp = De(pos + (float3)(delta, -delta, delta));
 	float dnpp = De(pos + (float3)(-delta, delta, delta));
@@ -110,28 +99,10 @@ float Trace(float3 origin, float3 direction, float quality, unsigned int* rand)
 	return totalDistance;
 }
 
-int Reaches(float3 position, float3 destination)
-{
-	float initialDistance = De(position);
-	for (int i = 0; i < MaxRaySteps * 2; i++) {
-		float distance = De(position);
-		float3 direction = destination - position;
-		float directionLength = length(direction);
-		if (distance > directionLength)
-			return 1;
-		if (distance < initialDistance * 0.5)
-			break;
-		position += direction / directionLength * distance;
-	}
-	return 0;
-}
-
 float3 Cone(float3 normal, float fov, unsigned int* rand)
 {
-	float2 coords;
-	do {
-		coords = (float2)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1);
-	} while (dot(coords, coords) > 1);
+	float2 coords = (float2)(Rand(rand) * 6.28318531, Rand(rand));
+	coords = (float2)(cos(coords.x) * coords.y, sin(coords.x) * coords.y);
 	float3 up = cross(cross(normal, (float3)(0,1,0)), normal);
 	return RayDir(normal, up, coords, fov);
 }
@@ -174,7 +145,7 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 	float3 look = lookat.xyz;
 	float3 up = updir.xyz;
 
-	unsigned int rand = get_global_id(0) + get_global_id(1) * width + frame * width * height;
+	unsigned int rand = get_global_id(0) * 13 + get_global_id(1) * get_global_size(0) * 11 + frame * get_global_size(0) * get_global_size(1) * 7;
 	for (int i = 0; i < 8; i++)
 		Rand(&rand);
 

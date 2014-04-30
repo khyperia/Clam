@@ -38,8 +38,6 @@
 #define AOColor 0.25,0.0,0.25
 #endif
 
-#define UINT_MAX 4294967295
-
 unsigned int Rand(unsigned int seed) {
 	return seed * 1664525 + 1013904223;
 }
