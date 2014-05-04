@@ -121,7 +121,7 @@ namespace Clam
 
                     stopwatch.Stop();
                     var elapsed = stopwatch.Elapsed.TotalMilliseconds / framesToRender;
-                    _kernel.AverageKernelTime = (elapsed + (_kernel.AverageKernelTime) * 19) / 20;
+                    _kernel.AverageKernelTime = (elapsed + _kernel.AverageKernelTime * 4) / 5;
 
                     var blockWidth = Math.Min(localSize[0], screenshotWidth - x * localSize[0]);
                     var blockHeight = Math.Min(localSize[1], screenshotHeight - y * localSize[1]);

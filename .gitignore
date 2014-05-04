@@ -36,6 +36,8 @@ _ReSharper*/
 [Tt]est[Rr]esult*
 packages/
 
+Clam.sln.ide/
+
 #Project files
 [Bb]uild/
 
