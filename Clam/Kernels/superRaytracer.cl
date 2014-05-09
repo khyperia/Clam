@@ -1,3 +1,7 @@
+#ifndef RandSeedInitSteps
+#define RandSeedInitSteps 256
+#endif
+
 #ifndef DeMultiplier
 #define DeMultiplier 0.95
 #endif
@@ -39,15 +43,11 @@
 #endif
 
 #ifndef LightBrightness
-#define LightBrightness 2.0,1.0,0.7
+#define LightBrightness 1.5,1.4,1.0
 #endif
 
 #ifndef AmbientBrightness
-#define AmbientBrightness 0.3,0.3,0.6
-#endif
-
-#ifndef SurfaceColor
-#define SurfaceColor 0.7,0.9,0.8
+#define AmbientBrightness 0.3,0.3,0.4
 #endif
 
 #ifndef LightPos
@@ -58,19 +58,25 @@
 #define LightSize 1
 #endif
 
-float Rand(unsigned int* seed)
+uint MWC64X(ulong *state)
 {
-	const unsigned int scale = UINT_MAX / 32;
-	return (float)((*seed = *seed * 1664525 + 1013904223) & scale) / scale;
+    uint c=(*state)>>32, x=(*state)&0xFFFFFFFF;
+    *state = x*((ulong)4294883355U) + c;
+    return x^c;
 }
 
-float2 RandCircle(unsigned int* rand)
+float Rand(ulong* seed)
+{
+	return (float)MWC64X(seed) / UINT_MAX;
+}
+
+float2 RandCircle(ulong* rand)
 {
 	float2 polar = (float2)(Rand(rand) * 6.28318531, sqrt(Rand(rand)));
 	return (float2)(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
 }
 
-void ApplyDof(float3* position, float3* lookat, float focalPlane, unsigned int* rand)
+void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
 {
 	float3 focalPosition = *position + *lookat * focalPlane;
 	float3 xShift = cross((float3)(0, 0, 1), *lookat);
@@ -80,7 +86,7 @@ void ApplyDof(float3* position, float3* lookat, float focalPlane, unsigned int* 
 	*position = focalPosition - *lookat * focalPlane;
 }
 
-void ApplyMotionBlur(float3* position, float3 lookat, float3 up, float focalDistance, unsigned int* rand)
+void ApplyMotionBlur(float3* position, float3 lookat, float3 up, float focalDistance, ulong* rand)
 {
 	float amount = Rand(rand) * 2 - 1;
 	float3 right = cross(lookat, up);
@@ -102,7 +108,7 @@ float3 Normal(float3 pos) {
 	));
 }
 
-float Trace(float3 origin, float3 direction, float quality, unsigned int* rand)
+float Trace(float3 origin, float3 direction, float quality, ulong* rand)
 {
 	float distance = 1.0;
 	float totalDistance = 0.0;
@@ -132,7 +138,7 @@ int Reaches(float3 source, float3 dest)
 	return 0;
 }
 
-float3 Cone(float3 normal, float fov, unsigned int* rand)
+float3 Cone(float3 normal, float fov, ulong* rand)
 {
 	float3 up = cross(cross(normal, (float3)(0,1,0)), normal);
 	return RayDir(normal, up, RandCircle(rand), fov);
@@ -140,11 +146,13 @@ float3 Cone(float3 normal, float fov, unsigned int* rand)
 
 float3 DirectLighting(float3 position, float3 lightPos)
 {
-	float thing = dot(normalize(lightPos - position), normalize(lightPos));
-	return thing > cos(0.1) && Reaches(position, lightPos) ? (float3)(LightBrightness) : (float3)(0.0);
+	//float thing = dot(normalize(lightPos - position), normalize(lightPos));
+	return
+		//thing > cos(0.1) &&
+		Reaches(position, lightPos) ? (float3)(LightBrightness) : (float3)(0.0);
 }
 
-float3 TracePath(float3 rayPos, float3 rayDir, unsigned int* rand)
+float3 TracePath(float3 rayPos, float3 rayDir, ulong* rand)
 {
 	float3 color = (float3)(1);
 	float3 accum = (float3)(0);
@@ -182,7 +190,7 @@ float3 TracePath(float3 rayPos, float3 rayDir, unsigned int* rand)
 			directLighting *= dot(normal, normalize(lightPos - rayPos));
 		}
 
-		color *= (float3)(SurfaceColor);
+		color *= DeColor(rayPos);
 		accum += color * directLighting;
 	}
 	return accum;
@@ -195,13 +203,15 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 	if (x >= width || y >= height)
 		return;
 
+	long fzoo = 0;
+
 	float3 pos = position.xyz;
 	float3 look = lookat.xyz;
 	float3 up = updir.xyz;
 
-	unsigned int rand = get_global_id(0) * 13 + get_global_id(1) * get_global_size(0) * 11 + frame * get_global_size(0) * get_global_size(1) * 7;
-	for (int i = 0; i < 7; i++)
-		Rand(&rand);
+	ulong rand = (ulong)get_global_id(0) + (ulong)get_global_id(1) * get_global_size(0) + (ulong)frame * get_global_size(0) * get_global_size(1);
+	for (int i = 0; i < RandSeedInitSteps; i++)
+		MWC64X(&rand);
 
 	ApplyDof(&pos, &look, focalDistance, &rand);
 	ApplyMotionBlur(&pos, look, up, focalDistance, &rand);
