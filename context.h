@@ -3,7 +3,7 @@
 #define __CL_ENABLE_EXCEPTIONS
 
 #include <CL/cl.hpp>
-#include "helper.h"
+#include <memory>
 
 class ClamContext
 {

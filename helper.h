@@ -1,5 +1,3 @@
-#include <memory>
-
 template<typename T>
 struct is_pointer { static const bool value = false; };
 

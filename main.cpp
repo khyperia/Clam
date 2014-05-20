@@ -48,28 +48,28 @@ void updateState()
         zoom *= 1 + frameSeconds;
 }
 
-void keyboardDownFunc(unsigned char key, int x, int y)
+void keyboardDownFunc(unsigned char key, int, int)
 {
     if (pressedKeys.find(key) != pressedKeys.end())
         return;
     pressedKeys.insert(key);
 }
 
-void keyboardUpFunc(unsigned char key, int x, int y)
+void keyboardUpFunc(unsigned char key, int, int)
 {
     if (pressedKeys.find(key) == pressedKeys.end())
         return;
     pressedKeys.erase(pressedKeys.find(key));
 }
 
-void specialDownFunc(int key, int x, int y)
+void specialDownFunc(int key, int, int)
 {
     if (pressedSpecialKeys.find(key) != pressedSpecialKeys.end())
         return;
     pressedSpecialKeys.insert(key);
 }
 
-void specialUpFunc(int key, int x, int y)
+void specialUpFunc(int key, int, int)
 {
     if (pressedSpecialKeys.find(key) == pressedSpecialKeys.end())
         return;
@@ -87,7 +87,6 @@ int main(int argc, char** argv)
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2");
-    glewInit();
     ClamContext context;
     kernel = ClamKernel(context.GetContext(), context.GetDevice(), "kernel.cl");
     interop = ClamInterop(context.GetContext());

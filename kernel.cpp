@@ -1,4 +1,5 @@
 #include "kernel.h"
+#include "helper.h"
 #include <stdexcept>
 #include <fstream>
 #include <string>
