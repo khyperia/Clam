@@ -1,19 +1,29 @@
 #include "context.h"
 #include <stdexcept>
-#include <GL/glx.h>
-
-using namespace cl;
+#include <GL/gl.h>
+#include <CL/cl_gl.h>
+#include <vector>
 
 ClamContext::ClamContext()
 {
-    std::vector<Platform> platforms;
-    Platform::get(&platforms);
-    if (platforms.size() == 0)
-    {
-        throw std::runtime_error("No OpenCL platforms found");
-    }
+	cl_uint openclPlatformCount = 0;
+	clGetPlatformIDs(0, 0, &openclPlatformCount);
+	if (openclPlatformCount == 0)
+		throw std::runtime_error("No OpenCL platforms found");
 
-    cl_context_properties properties[] = {
+	std::vector<cl_platform_id> openclPlatforms(openclPlatformCount);
+	clGetPlatformIDs(openclPlatformCount, openclPlatforms.data(), 0);
+	cl_platform_id openclPlatform = openclPlatforms[0];
+
+	cl_uint openclDeviceCount = 0;
+	clGetDeviceIDs(openclPlatform, CL_DEVICE_TYPE_GPU, 0, 0, &openclDeviceCount);
+	if (openclDeviceCount == 0)
+		throw std::runtime_error("No OpenCL devices found");
+
+	std::vector<cl_device_id> openclDevices(openclDeviceCount);
+	clGetDeviceIDs(openclPlatform, CL_DEVICE_TYPE_GPU, openclDeviceCount, openclDevices.data(), 0);
+
+    cl_context_properties contextProperties[] = {
 #if defined (WIN32)
         CL_GL_CONTEXT_KHR , (cl_context_properties) wglGetCurrentContext() ,
         CL_WGL_HDC_KHR , (cl_context_properties) wglGetCurrentDC() ,
@@ -25,16 +35,37 @@ ClamContext::ClamContext()
 #else
 #error where the heck are we?
 #endif
-        CL_CONTEXT_PLATFORM , (cl_context_properties) platforms[0]() ,
+		CL_CONTEXT_PLATFORM, (cl_context_properties)openclPlatform,
         0 , 0 ,
     };
-    context = std::make_shared<Context>(CL_DEVICE_TYPE_GPU, properties);
 
-    std::vector<Device> devices = context->getInfo<CL_CONTEXT_DEVICES>();
-    if (devices.size() == 0)
-    {
-        throw std::runtime_error("No OpenCL devices found");
-    }
+	cl_device_id openclDevice = 0;
+	cl_context openclContext = 0;
+	cl_int lError = 0;
+	for (size_t i = 0; i < openclDevices.size(); ++i)
+	{
+		cl_device_id deviceIdToTry = openclDevices[i];
+		cl_context contextToTry = 0;
 
-    device = std::make_shared<cl::Device>(devices[0]);
+		contextToTry = clCreateContext(
+			contextProperties,
+			1, &deviceIdToTry,
+			0, 0,
+			&lError
+			);
+		if (lError == CL_SUCCESS)
+		{
+			// We found the context.
+			openclDevice = deviceIdToTry;
+			openclContext = contextToTry;
+			break;
+		}
+	}
+	if (openclDevice == 0)
+	{
+		throw std::runtime_error("No compatible OpenCL devices found");
+	}
+
+	device = std::make_shared<cl_device_id>(openclDevice); // TODO: Dispose properly
+	context = std::make_shared<cl_context>(openclContext); // TODO: Dispose properly
 }

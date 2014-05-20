@@ -1,7 +1,7 @@
 #include "interop.h"
-#include <GL/glut.h>
 #include <thread>
 #include <set>
+#include <GL/glut.h>
 
 int oldWidth = -1, oldHeight = -1;
 ClamKernel kernel;

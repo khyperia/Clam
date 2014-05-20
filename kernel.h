@@ -4,32 +4,39 @@
 
 class ClamKernel
 {
-    std::shared_ptr<cl::CommandQueue> queue;
-    std::shared_ptr<cl::Kernel> kernel;
-    cl::NDRange launchSize;
+	std::shared_ptr<cl_command_queue> queue;
+	std::shared_ptr<cl_kernel> kernel;
+	size_t launchSize[2];
 
-    void RunImpl(int index);
+	void Invoke();
 
-    template<typename ArgFirst, typename... ArgRest>
-        void RunImpl(int index, ArgFirst first, ArgRest... rest)
-        {
-            kernel->setArg(index++, first);
-            RunImpl(index, rest...);
-        }
+	template<int index>
+	void RunImpl()
+	{
+		Invoke();
+	}
 
-    public:
-    ClamKernel();
-    ClamKernel(std::shared_ptr<cl::Context> context, std::shared_ptr<cl::Device> device, const char* filename);
-    void SetLaunchSize(cl::NDRange range);
+	template<int index, typename ArgFirst, typename... ArgRest>
+	void RunImpl(ArgFirst first, ArgRest... rest)
+	{
+		if (clSetKernelArg(*kernel, index, sizeof(ArgFirst), &first))
+			throw std::runtime_error("Could not set kernel argument");
+		RunImpl<index + 1, ArgRest...>(rest...);
+	}
 
-    std::shared_ptr<cl::CommandQueue> GetQueue()
-    {
-        return queue;
-    }
+public:
+	ClamKernel();
+	ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_device_id> device, const char* filename);
+	void SetLaunchSize(size_t width, size_t height);
 
-    template<typename... Args>
-        void Run(Args... args)
-        {
-            RunImpl(0, args...);
-        }
+	std::shared_ptr<cl_command_queue> GetQueue()
+	{
+		return queue;
+	}
+
+	template<typename... Args>
+	void Run(Args... args)
+	{
+		RunImpl<0>(args...);
+	}
 };

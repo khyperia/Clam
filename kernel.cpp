@@ -4,65 +4,70 @@
 #include <fstream>
 #include <string>
 
-using namespace cl;
-
 ClamKernel::ClamKernel()
 {
 }
 
-ClamKernel::ClamKernel(std::shared_ptr<cl::Context> context, std::shared_ptr<cl::Device> device, const char* filename)
+ClamKernel::ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_device_id> device, const char* filename)
 {
-    std::ifstream file(filename);
-    std::string filecontents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    Program::Sources source;
-    source.push_back(std::make_pair(filecontents.c_str(), filecontents.length()));
+	std::ifstream file(filename);
+	std::string filecontents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    Program program(*context, source);
+	cl_int openclError = 0;
+	const char* filecontentsCStr = filecontents.c_str();
+	cl_program openclProgram = clCreateProgramWithSource(*context, 1, &filecontentsCStr, 0, &openclError);
+	if (openclError)
+		throw std::runtime_error("Failed to create program");
 
-    std::vector<Device> devices;
-    devices.push_back(*device);
-    try
-    {
-        program.build(devices, "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror");
-    }
-    catch (const cl::Error& err)
-    {
-        printf("%s\n", program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]).c_str());
-        throw;
-    }
-    
-    puts("Kernel build log:");
-    puts(program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]).c_str());
+	openclError = clBuildProgram(openclProgram, 1, device.get(), "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror", 0, 0);
+	if (openclError == CL_BUILD_PROGRAM_FAILURE)
+	{
+		// Determine the size of the log
+		size_t lLogSize;
+		clGetProgramBuildInfo(
+			openclProgram, *device, CL_PROGRAM_BUILD_LOG, 0, 0, &lLogSize
+			);
 
-    cl_int err = CL_SUCCESS;
+		// Get the log
+		std::string lLog;
+		lLog.resize(lLogSize);
+		clGetProgramBuildInfo(openclProgram, *device, CL_PROGRAM_BUILD_LOG, lLogSize, const_cast<char*>(lLog.data()), 0);
 
-    kernel = std::make_shared<Kernel>(program, "main", &err);
+		puts("Kernel failed to compile.");
+		puts(lLog.c_str());
+	}
+	if (openclError)
+		throw std::runtime_error("Failed to build program");
 
-    if (err != CL_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create kernel");
-    }
+	cl_kernel openclKernel = clCreateKernel(openclProgram, "Main", &openclError);
+	if (openclError)
+		throw std::runtime_error("Failed to create kernel");
 
-    queue = std::make_shared<CommandQueue>(*context, *device, 0, &err);
+	kernel = std::make_shared<cl_kernel>(openclKernel);
 
-    if (err != CL_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create CommandQueue");
-    }
+	cl_command_queue openclCommandQueue = clCreateCommandQueue(*context, *device, 0, &openclError);
+	if (openclError)
+		throw std::runtime_error("Failed to create command queue");
 
-    launchSize = NullRange;
+	queue = std::make_shared<cl_command_queue>(openclCommandQueue);
+
+	SetLaunchSize(0, 0);
 }
 
-void ClamKernel::RunImpl(int numArgs)
+void ClamKernel::Invoke()
 {
-    cl::NDRange local(4, 4);
-    cl::NDRange global(
-            (launchSize[0] + local[0] - 1) / local[0] * local[0],
-            (launchSize[1] + local[1] - 1) / local[1] * local[1]);
-    HandleErr(queue->enqueueNDRangeKernel(*kernel, NullRange, global, local, nullptr, nullptr));
+	size_t local[] = { 4, 4 };
+	size_t global[] = {
+		(launchSize[0] + local[0] - 1) / local[0] * local[0],
+		(launchSize[1] + local[1] - 1) / local[1] * local[1]
+	};
+	cl_int err = clEnqueueNDRangeKernel(*queue, *kernel, 2, nullptr, global, local, 0, nullptr, nullptr);
+	if (err)
+		throw std::runtime_error("Failed to launch kernel");
 }
 
-void ClamKernel::SetLaunchSize(NDRange range)
+void ClamKernel::SetLaunchSize(size_t width, size_t height)
 {
-    launchSize = range;
+	launchSize[0] = width;
+	launchSize[1] = height;
 }

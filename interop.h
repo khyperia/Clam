@@ -1,6 +1,13 @@
 #pragma once
 
 #define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+
+#ifdef WIN32
+#include <GL/glext.h>
+//void(__stdcall *glGenBuffers)(GLsizei, GLuint*) = wglGetProcAddress("glGenBuffers");
+#endif
+
 #include "kernel.h"
 #include <memory>
 
@@ -13,21 +20,21 @@ class ClamInterop
         GLuint glBuffer;
     };
 
-    std::shared_ptr<cl::Context> clContext;
+    std::shared_ptr<cl_context> clContext;
     std::shared_ptr<Destructor> destructor;
-    std::shared_ptr<cl::BufferGL> clBuffer;
+    std::shared_ptr<cl_mem> clBuffer;
     int width, height;
-    const std::vector<cl::Memory> RenderPre(ClamKernel& kernel);
-    void RenderPost(ClamKernel& kernel, const std::vector<cl::Memory>& pre);
+    void RenderPre(ClamKernel& kernel);
+	void RenderPost(ClamKernel& kernel);
     public:
     ClamInterop();
-    ClamInterop(std::shared_ptr<cl::Context> context);
+    ClamInterop(std::shared_ptr<cl_context> context);
     void Resize(int width, int height);
     template<typename... Args>
         void Render(ClamKernel kernel, Args... args)
         {
-            const std::vector<cl::Memory> vec = RenderPre(kernel);
-            kernel.Run(vec[0], width, height, args...);
-            RenderPost(kernel, vec);
+			RenderPre(kernel);
+            kernel.Run(*clBuffer, width, height, args...);
+            RenderPost(kernel);
         }
 };
