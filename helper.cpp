@@ -2,7 +2,7 @@
 #include <stdexcept>
 #include <sstream>
 
-void HandleErrImpl(int errcode, const char* filename, int line)
+void HandleErrImpl(int errcode, const char* message, const char* filename, int line)
 {
     if (errcode != 0)
 	{
@@ -12,6 +12,8 @@ void HandleErrImpl(int errcode, const char* filename, int line)
 		output << line;
 		output << "): errcode ";
 		output << errcode;
+                output << " -- ";
+                output << message;
 		throw std::runtime_error(output.str());
     }
 }
