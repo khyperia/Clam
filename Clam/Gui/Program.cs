@@ -1,13 +1,13 @@
 ﻿using System;
 using System.IO;
-using System.Windows;
-using Clam.Xaml;
+using System.Windows.Forms;
 
-namespace Clam
+namespace Clam.Gui
 {
-    public partial class App
+    static class Program
     {
-        public App()
+        [STAThread]
+        public static void Main()
         {
             var newPath = Path.Combine(Environment.CurrentDirectory, "Kernels");
             if (Directory.Exists(newPath))
@@ -17,7 +17,7 @@ namespace Clam
                 MessageBox.Show("Error", "Kernels directory did not exist");
                 return;
             }
-            new MainWindow().Show();
+            Application.Run(new MainWindow());
         }
     }
 }

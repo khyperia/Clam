@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Windows.Forms;
 using Cloo;
 using OpenTK;
 using OpenTK.Graphics;
@@ -20,6 +22,7 @@ namespace Clam
         private RenderPackage _renderer;
         private DateTime _lastUpdate;
         private readonly Stopwatch _kernelStopwatch = new Stopwatch();
+        private readonly HashSet<Keys> _pressedKeys = new HashSet<Keys>();
 
         private static string _infoMessage = "Initialized";
 
@@ -43,6 +46,18 @@ namespace Clam
                     _renderer.Kernel.Dispose();
                 _renderer = value;
             }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            _pressedKeys.Add(e.KeyCode);
+            base.OnKeyDown(e);
+        }
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            _pressedKeys.Remove(e.KeyCode);
+            base.OnKeyUp(e);
         }
 
         protected override void OnResize(EventArgs e)
@@ -74,7 +89,7 @@ namespace Clam
         {
             var paramSet = Renderer.Parameters as IUpdateableParameterSet;
             if (paramSet != null)
-                paramSet.Update((DateTime.UtcNow - _lastUpdate).TotalSeconds, Focused);
+                paramSet.Update((DateTime.UtcNow - _lastUpdate).TotalSeconds, Focused, _pressedKeys);
             _averageFps = (1 / (DateTime.UtcNow - _lastUpdate).TotalSeconds + _averageFps * 10) / 11;
             _lastUpdate = DateTime.UtcNow;
             var now = DateTime.UtcNow;

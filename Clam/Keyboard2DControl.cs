@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Windows.Input;
+using System.Windows.Forms;
 using System.Xml.Linq;
 using Cloo;
 
@@ -14,20 +14,20 @@ namespace Clam
 
         public Keyboard2DControl()
         {
-            SetBindings(new Dictionary<Key, Action<float>>
+            SetBindings(new Dictionary<Keys, Action<float>>
             {
-                {Key.Left, dt => _x -= _zoom / 2 * dt},
-                {Key.Right, dt => _x += _zoom / 2 * dt},
-                {Key.Up, dt => _y -= _zoom / 2 * dt},
-                {Key.Down, dt => _y += _zoom / 2 * dt},
-                {Key.W, dt => _zoom /= dt + 1},
-                {Key.S, dt => _zoom *= dt + 1},
+                {Keys.J, dt => _x -= _zoom / 2 * dt},
+                {Keys.L, dt => _x += _zoom / 2 * dt},
+                {Keys.I, dt => _y -= _zoom / 2 * dt},
+                {Keys.K, dt => _y += _zoom / 2 * dt},
+                {Keys.W, dt => _zoom /= dt + 1},
+                {Keys.S, dt => _zoom *= dt + 1},
             });
         }
 
         public override string ControlsHelp
         {
-            get { return "Navigation: Up/Down/Left/Right\nZooming: W/S"; }
+            get { return "Navigation: I/J/K/L\nZooming: W/S"; }
         }
 
         public override void ApplyToKernel(ComputeKernel kernel, bool isDouble, ref int startIndex)

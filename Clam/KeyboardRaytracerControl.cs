@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Windows.Input;
+using System.Windows.Forms;
 using System.Xml.Linq;
 using Cloo;
 using OpenTK;
@@ -45,24 +45,24 @@ namespace Clam
 
         public KeyboardRaytracerControl()
         {
-            SetBindings(new Dictionary<Key, Action<float>>
+            SetBindings(new Dictionary<Keys, Action<float>>
             {
-                {Key.W, dt => _position += _lookat * dt * MoveSpeed},
-                {Key.S, dt => _position -= _lookat * dt * MoveSpeed},
-                {Key.A, dt => _position += Vector3d.Cross(_up, _lookat) * dt * MoveSpeed},
-                {Key.D, dt => _position -= Vector3d.Cross(_up, _lookat) * dt * MoveSpeed},
-                {Key.LeftShift, dt => _position += _up * dt * MoveSpeed},
-                {Key.Space, dt => _position -= _up * dt * MoveSpeed},
-                {Key.Q, dt => _up = Vector3d.Transform(_up, Matrix4d.CreateFromAxisAngle(_lookat, TurnSpeed * dt))},
-                {Key.E, dt => _up = Vector3d.Transform(_up, Matrix4d.CreateFromAxisAngle(_lookat, -TurnSpeed * dt))},
-                {Key.Left, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(_up, TurnSpeed * dt * Fov))},
-                {Key.Right, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(_up, -TurnSpeed * dt * Fov))},
-                {Key.Up, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(Vector3d.Cross(_up, _lookat), TurnSpeed * dt * Fov))},
-                {Key.Down, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(Vector3d.Cross(_up, _lookat), -TurnSpeed * dt * Fov))},
-                {Key.R, dt => MoveSpeed *= 1 + dt * Math.Sqrt(Fov)},
-                {Key.F, dt =>  MoveSpeed *= 1 - dt * Math.Sqrt(Fov)},
-                {Key.N, dt => Fov *= 1 + dt},
-                {Key.M, dt => Fov *= 1 - dt}
+                {Keys.W, dt => _position += _lookat * dt * MoveSpeed},
+                {Keys.S, dt => _position -= _lookat * dt * MoveSpeed},
+                {Keys.A, dt => _position += Vector3d.Cross(_up, _lookat) * dt * MoveSpeed},
+                {Keys.D, dt => _position -= Vector3d.Cross(_up, _lookat) * dt * MoveSpeed},
+                {Keys.Z, dt => _position += _up * dt * MoveSpeed},
+                {Keys.Space, dt => _position -= _up * dt * MoveSpeed},
+                {Keys.U, dt => _up = Vector3d.Transform(_up, Matrix4d.CreateFromAxisAngle(_lookat, TurnSpeed * dt))},
+                {Keys.O, dt => _up = Vector3d.Transform(_up, Matrix4d.CreateFromAxisAngle(_lookat, -TurnSpeed * dt))},
+                {Keys.J, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(_up, TurnSpeed * dt * Fov))},
+                {Keys.L, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(_up, -TurnSpeed * dt * Fov))},
+                {Keys.I, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(Vector3d.Cross(_up, _lookat), TurnSpeed * dt * Fov))},
+                {Keys.K, dt => _lookat = Vector3d.Transform(_lookat, Matrix4d.CreateFromAxisAngle(Vector3d.Cross(_up, _lookat), -TurnSpeed * dt * Fov))},
+                {Keys.R, dt => MoveSpeed *= 1 + dt * Math.Sqrt(Fov)},
+                {Keys.F, dt =>  MoveSpeed *= 1 - dt * Math.Sqrt(Fov)},
+                {Keys.N, dt => Fov *= 1 + dt},
+                {Keys.M, dt => Fov *= 1 - dt}
             });
         }
 
@@ -77,8 +77,8 @@ namespace Clam
         {
             get
             {
-                return @"6 axis movement: WASD/Shift/Space
-Pitch: Up/Down, Yaw: Left/Right, Roll: Q/E
+                return @"6 axis movement: WASD/Z/Space
+Pitch: I/K, Yaw: J/L, Roll: U/O
 Move speed and focal plane: R/F
 Field of view: N/M";
             }

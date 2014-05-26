@@ -1,15 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Input;
+using System.Windows.Forms;
 using System.Xml.Linq;
 using Cloo;
+using OpenTK.Input;
 
 namespace Clam
 {
     interface IUpdateableParameterSet
     {
-        void Update(double elapsedTime, bool isFocused);
+        void Update(double elapsedTime, bool isFocused, HashSet<Keys> pressedKeys);
     }
 
     interface ISerializableParameterSet
@@ -20,22 +21,22 @@ namespace Clam
 
     abstract class KeyboardControlBase : IParameterSet, IUpdateableParameterSet, ISerializableParameterSet
     {
-        private Dictionary<Key, Action<float>> _bindings;
+        private Dictionary<Keys, Action<float>> _bindings;
         private bool _ignoreControl;
 
-        protected void SetBindings(Dictionary<Key, Action<float>> bindings)
+        protected void SetBindings(Dictionary<Keys, Action<float>> bindings)
         {
             _bindings = bindings;
         }
 
-        public void Update(double elapsedTime, bool isFocused)
+        public void Update(double elapsedTime, bool isFocused, HashSet<Keys> pressedKeys)
         {
             if (_ignoreControl)
                 return;
             if (isFocused)
             {
                 var keyPressed = false;
-                foreach (var binding in _bindings.Where(binding => Keyboard.IsKeyDown(binding.Key)))
+                foreach (var binding in _bindings.Where(binding => pressedKeys.Contains(binding.Key)))
                 {
                     binding.Value((float)elapsedTime);
                     keyPressed = true;
