@@ -22,6 +22,10 @@
 #define MaxRaySteps 256
 #endif
 
+#ifndef DirectLightingMaxSteps
+#define DirectLightingMaxSteps 64
+#endif
+
 #ifndef NumRayBounces
 #define NumRayBounces 2
 #endif
@@ -125,7 +129,7 @@ int Reaches(float3 source, float3 dest)
 	float len = length(direction);
 	direction /= len;
 	float totalDistance = 0.0;
-	for (int i = 0; i < 64; i++)
+	for (int i = 0; i < DirectLightingMaxSteps; i++)
 	{
 		float distance = De(source + direction * totalDistance);
 		totalDistance += distance;
@@ -152,7 +156,7 @@ float3 DirectLighting(float3 position, float3 lightPos)
 		Reaches(position, lightPos) ? (float3)(LightBrightness) : (float3)(0.0);
 }
 
-float3 TracePath(float3 rayPos, float3 rayDir, ulong* rand)
+float3 TracePath(float3 rayPos, float3 rayDir, float focalDistance, ulong* rand)
 {
 	float3 color = (float3)(1);
 	float3 accum = (float3)(0);
@@ -167,7 +171,7 @@ float3 TracePath(float3 rayPos, float3 rayDir, ulong* rand)
 			accum += (float3)(AmbientBrightness) * color;
 			break;
 		}
-		
+
 		float3 lightPos = (float3)(LightPos) + (float3)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1, Rand(rand) * 2 - 1) * (float)LightSize;
 		float3 directLighting = DirectLighting(rayPos, lightPos);
 		
@@ -221,7 +225,7 @@ __kernel void Main(__global float4* screen, int screenWidth, int width, int heig
 
 	//float3 lightPosition = pos + (look + cross(look, up)) * (focalDistance / 4);
 
-	float3 color = TracePath(pos, rayDir, &rand);
+	float3 color = TracePath(pos, rayDir, focalDistance, &rand);
 	
 	int screenIndex = screenWidth ? (y - get_global_offset(1)) * screenWidth + (x - get_global_offset(0)) : y * width + x;
 	if (frame > 0)

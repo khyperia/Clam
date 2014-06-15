@@ -6,6 +6,17 @@ using Cloo;
 
 namespace Clam
 {
+    class Keyboard2DFrame : Keyboard2DControl, IFrameDependantControl
+    {
+        public int Frame { get; set; }
+
+        public override void ApplyToKernel(ComputeKernel kernel, bool isDouble, ref int startIndex)
+        {
+            base.ApplyToKernel(kernel, isDouble, ref startIndex);
+            kernel.SetValueArgument(startIndex++, Frame);
+        }
+    }
+
     class Keyboard2DControl : KeyboardControlBase, IGifableControl
     {
         private double _x;
@@ -63,9 +74,10 @@ namespace Clam
 
         public Action SetupGif(double pointInFrame)
         {
-            var oldZoom = _zoom;
-            _zoom *= Math.Pow(0.0001, pointInFrame);
-            return () => _zoom = oldZoom;
+            //var oldZoom = _zoom;
+            //_zoom *= Math.Pow(0.0001, pointInFrame);
+            //return () => _zoom = oldZoom;
+            return () => { };
         }
     }
 }

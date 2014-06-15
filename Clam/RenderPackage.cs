@@ -6,7 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Windows;
+using System.Threading;
 using System.Windows.Forms;
 using Clam.NGif;
 using Cloo;
@@ -50,6 +50,7 @@ namespace Clam
             {"Raytracer", () => new KeyboardRaytracerControl()},
             {"RaytracerExtended", () => new KeyboardRaytracerControlExtended()},
             {"2D", () => new Keyboard2DControl()},
+            {"2DFrame", () => new Keyboard2DFrame()},
         };
 
         public static Dictionary<string, Func<IParameterSet>> ControlBindingNames
@@ -160,24 +161,86 @@ namespace Clam
 
         public void TakeGif(IGifableControl control, Action<string> displayInformation)
         {
+            _kernelInUse++;
             var encoder = new AnimatedGifEncoder();
             encoder.Start(Ext.UniqueFilename("sequence", "gif"));
             encoder.SetDelay(1000 / StaticSettings.Fetch.GifFramerate);
             encoder.SetRepeat(0);
             var endIgnoreControl = control.StartIgnoreControl();
-            for (var i = 0; i < StaticSettings.Fetch.GifFramecount; i++)
+
+            var ccontext = _kernel.ComputeContext;
+            var queue = new ComputeCommandQueue(ccontext, ccontext.Devices[0], ComputeCommandQueueFlags.None);
+            var screenshotHeight = StaticSettings.Fetch.GifHeight;
+            var screenshotWidth = (int)(screenshotHeight * ScreenshotAspectRatio);
+            var computeBuffer = new ComputeBuffer<Vector4>(ccontext, ComputeMemoryFlags.ReadWrite, screenshotWidth * screenshotHeight);
+
+            var fdc = control as IFrameDependantControl;
+            for (var i = 0; i < StaticSettings.Fetch.GifFramecount + 1; i++)
             {
-                displayInformation(string.Format("{0}% done with gif", (int)(100.0 * i / StaticSettings.Fetch.GifFramecount)));
+                if (fdc != null)
+                    fdc.Frame = i;
                 var teardown = control.SetupGif((double)i / StaticSettings.Fetch.GifFramecount);
-                var screen = Screenshot(StaticSettings.Fetch.GifHeight, 1, s => { });
-                if (screen != null && encoder.AddFrame(screen) == false)
+                _kernel.Render(computeBuffer, queue, _parameters, new Size(screenshotWidth, screenshotHeight));
+                queue.Finish();
+                teardown();
+            }
+            for (var i = 1; i < StaticSettings.Fetch.GifFramecount + 1; i++)
+            {
+                if (fdc != null)
+                    fdc.Frame = i;
+                displayInformation(string.Format("{0}% done with gif", (int)(100.0 * (i - 1) / StaticSettings.Fetch.GifFramecount)));
+                var teardown = control.SetupGif((double)(i - 1) / StaticSettings.Fetch.GifFramecount);
+                _kernel.Render(computeBuffer, queue, _parameters, new Size(screenshotWidth, screenshotHeight));
+                if (encoder.AddFrame(Download(queue, computeBuffer, screenshotWidth, screenshotHeight)) == false)
                     throw new Exception("Could not add frame to gif");
                 teardown();
             }
             endIgnoreControl();
             encoder.Finish();
-            displayInformation("Done rendering sequence");
+            computeBuffer.Dispose();
+            queue.Dispose();
+            displayInformation("Done with gif");
+            _kernelInUse--;
         }
+
+        private Bitmap Download(ComputeCommandQueue queue, ComputeBuffer<Vector4> buffer, int width, int height)
+        {
+            var pixels = new Vector4[width * height];
+            queue.ReadFromBuffer(buffer, ref pixels, true, 0, 0, width * height, null);
+            queue.Finish();
+
+            var intPixels = Array.ConvertAll(pixels, pixel =>
+            {
+                pixel = Vector4.Clamp(pixel, new Vector4(0), new Vector4(1));
+                return (byte)(pixel.X * 255) << 16 | (byte)(pixel.Y * 255) << 8 | (byte)(pixel.Z * 255);
+            });
+            var bmp = new Bitmap(width, height, PixelFormat.Format32bppRgb);
+            var bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
+            Marshal.Copy(intPixels, 0, bmpData.Scan0, intPixels.Length);
+            bmp.UnlockBits(bmpData);
+            return bmp;
+        }
+
+        //public void TakeGif(IGifableControl control, Action<string> displayInformation)
+        //{
+        //    var encoder = new AnimatedGifEncoder();
+        //    encoder.Start(Ext.UniqueFilename("sequence", "gif"));
+        //    encoder.SetDelay(1000 / StaticSettings.Fetch.GifFramerate);
+        //    encoder.SetRepeat(0);
+        //    var endIgnoreControl = control.StartIgnoreControl();
+        //    for (var i = 0; i < StaticSettings.Fetch.GifFramecount; i++)
+        //    {
+        //        displayInformation(string.Format("{0}% done with gif", (int)(100.0 * i / StaticSettings.Fetch.GifFramecount)));
+        //        var teardown = control.SetupGif((double)i / StaticSettings.Fetch.GifFramecount);
+        //        var screen = Screenshot(StaticSettings.Fetch.GifHeight, 1, s => { });
+        //        if (screen != null && encoder.AddFrame(screen) == false)
+        //            throw new Exception("Could not add frame to gif");
+        //        teardown();
+        //    }
+        //    endIgnoreControl();
+        //    encoder.Finish();
+        //    displayInformation("Done rendering sequence");
+        //}
 
         public void Dispose()
         {

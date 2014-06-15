@@ -1,0 +1,7 @@
+﻿<Buddahbrot>
+  <Controls>2DFrame</Controls>
+  <Files>
+    <File>precisionChooser.cl</File>
+    <File>buddahbrot.cl</File>
+  </Files>
+</Buddahbrot>

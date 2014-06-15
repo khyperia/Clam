@@ -19,6 +19,7 @@ namespace Clam.Gui
         private Button loadButton;
         private Button screenshotButton;
         private Button applyButton;
+        private Button gifButton;
         [CanBeNull]
         private RenderWindow renderWindow;
 
@@ -59,7 +60,7 @@ namespace Clam.Gui
             if (renderWindow.Renderer.Kernel == null)
                 return;
 
-            var y = 300;
+            var y = 325;
 
             if (renderWindow.Renderer.Parameters != null)
             {
@@ -133,6 +134,7 @@ namespace Clam.Gui
             this.loadButton = new System.Windows.Forms.Button();
             this.screenshotButton = new System.Windows.Forms.Button();
             this.applyButton = new System.Windows.Forms.Button();
+            this.gifButton = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // kernelListBox
@@ -189,10 +191,20 @@ namespace Clam.Gui
             this.applyButton.Location = new System.Drawing.Point(100, 275);
             this.applyButton.Name = "applyButton";
             this.applyButton.Size = new System.Drawing.Size(100, 25);
-            this.applyButton.TabIndex = 6;
+            this.applyButton.TabIndex = 5;
             this.applyButton.Text = "Apply";
             this.applyButton.UseVisualStyleBackColor = true;
             this.applyButton.Click += new System.EventHandler(this.applyButton_Click);
+            // 
+            // gifButton
+            // 
+            this.gifButton.Location = new System.Drawing.Point(0, 300);
+            this.gifButton.Name = "gifButton";
+            this.gifButton.Size = new System.Drawing.Size(100, 25);
+            this.gifButton.TabIndex = 6;
+            this.gifButton.Text = "Take GIF";
+            this.gifButton.UseVisualStyleBackColor = true;
+            this.gifButton.Click += new System.EventHandler(this.gifButton_Click);
             // 
             // MainWindow
             // 
@@ -203,6 +215,7 @@ namespace Clam.Gui
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.gpuListBox);
             this.Controls.Add(this.kernelListBox);
+            this.Controls.Add(this.gifButton);
             this.Name = "MainWindow";
             this.ResumeLayout(false);
         }
@@ -300,6 +313,16 @@ namespace Clam.Gui
             var framedepcontrols = renderWindow.Renderer.Parameters as IFrameDependantControl;
             if (framedepcontrols != null)
                 framedepcontrols.Frame = 0;
+        }
+
+        private void gifButton_Click(object sender, EventArgs e)
+        {
+            if (renderWindow == null || renderWindow.Renderer.Kernel == null)
+                return;
+            var control = renderWindow.Renderer.Parameters as IGifableControl;
+            if (control == null)
+                return;
+            ThreadPool.QueueUserWorkItem(o => renderWindow.Renderer.TakeGif(control, renderWindow.DisplayInformation));
         }
     }
 }
