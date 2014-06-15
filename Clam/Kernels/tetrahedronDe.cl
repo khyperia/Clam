@@ -26,3 +26,8 @@ float De(float3 z)
 	}
 	return length(z) * pow(Scale, (float)-n);
 }
+
+float3 DeColor(float3 z)
+{
+	return (float3)(1); // TODO
+}

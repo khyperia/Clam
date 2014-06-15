@@ -59,7 +59,21 @@ namespace Clam.Gui
             if (renderWindow.Renderer.Kernel == null)
                 return;
 
-            var y = 320;
+            var y = 300;
+
+            if (renderWindow.Renderer.Parameters != null)
+            {
+                var help = new TextBox();
+                help.Multiline = true;
+                help.Text = renderWindow.Renderer.Parameters.ControlsHelp;
+                help.Name = "temp_h" + y;
+                help.Enabled = false;
+                help.Location = new Point(0, y);
+                help.Size = help.GetPreferredSize(new Size(200, 23));
+                Controls.Add(help);
+                y += help.Height;
+            }
+
             AddConfigOption(ref y, "OpenClOptions", StaticSettings.Fetch.OpenClOptions,
                 s => StaticSettings.Fetch.OpenClOptions = s);
             AddConfigOption(ref y, "ScreenshotHeight", StaticSettings.Fetch.ScreenshotHeight.ToString(CultureInfo.InvariantCulture),
@@ -124,7 +138,7 @@ namespace Clam.Gui
             // kernelListBox
             // 
             this.kernelListBox.FormattingEnabled = true;
-            this.kernelListBox.Location = new System.Drawing.Point(0, 62);
+            this.kernelListBox.Location = new System.Drawing.Point(0, 50);
             this.kernelListBox.Name = "kernelListBox";
             this.kernelListBox.Size = new System.Drawing.Size(200, 199);
             this.kernelListBox.TabIndex = 0;
@@ -135,15 +149,16 @@ namespace Clam.Gui
             this.gpuListBox.FormattingEnabled = true;
             this.gpuListBox.Location = new System.Drawing.Point(0, 0);
             this.gpuListBox.Name = "gpuListBox";
-            this.gpuListBox.Size = new System.Drawing.Size(200, 56);
+            this.gpuListBox.DisplayMember = "Name";
+            this.gpuListBox.Size = new System.Drawing.Size(200, 50);
             this.gpuListBox.TabIndex = 1;
             this.gpuListBox.SelectedIndexChanged += new System.EventHandler(this.gpuListBox_SelectedIndexChanged);
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(0, 262);
+            this.saveButton.Location = new System.Drawing.Point(0, 250);
             this.saveButton.Name = "saveButton";
-            this.saveButton.Size = new System.Drawing.Size(100, 23);
+            this.saveButton.Size = new System.Drawing.Size(100, 25);
             this.saveButton.TabIndex = 2;
             this.saveButton.Text = "Save";
             this.saveButton.UseVisualStyleBackColor = true;
@@ -151,9 +166,9 @@ namespace Clam.Gui
             // 
             // loadButton
             // 
-            this.loadButton.Location = new System.Drawing.Point(100, 262);
+            this.loadButton.Location = new System.Drawing.Point(100, 250);
             this.loadButton.Name = "loadButton";
-            this.loadButton.Size = new System.Drawing.Size(100, 23);
+            this.loadButton.Size = new System.Drawing.Size(100, 25);
             this.loadButton.TabIndex = 3;
             this.loadButton.Text = "Load";
             this.loadButton.UseVisualStyleBackColor = true;
@@ -161,9 +176,9 @@ namespace Clam.Gui
             // 
             // screenshotButton
             // 
-            this.screenshotButton.Location = new System.Drawing.Point(0, 287);
+            this.screenshotButton.Location = new System.Drawing.Point(0, 275);
             this.screenshotButton.Name = "screenshotButton";
-            this.screenshotButton.Size = new System.Drawing.Size(100, 23);
+            this.screenshotButton.Size = new System.Drawing.Size(100, 25);
             this.screenshotButton.TabIndex = 4;
             this.screenshotButton.Text = "Screenshot";
             this.screenshotButton.UseVisualStyleBackColor = true;
@@ -171,9 +186,9 @@ namespace Clam.Gui
             // 
             // applyButton
             // 
-            this.applyButton.Location = new System.Drawing.Point(100, 287);
+            this.applyButton.Location = new System.Drawing.Point(100, 275);
             this.applyButton.Name = "applyButton";
-            this.applyButton.Size = new System.Drawing.Size(100, 23);
+            this.applyButton.Size = new System.Drawing.Size(100, 25);
             this.applyButton.TabIndex = 6;
             this.applyButton.Text = "Apply";
             this.applyButton.UseVisualStyleBackColor = true;
@@ -190,7 +205,16 @@ namespace Clam.Gui
             this.Controls.Add(this.kernelListBox);
             this.Name = "MainWindow";
             this.ResumeLayout(false);
+        }
 
+        protected override void OnResize(EventArgs e)
+        {
+            if (renderWindow != null)
+            {
+                var clientsize = ClientSize;
+                renderWindow.Size = new Size(clientsize.Width - 200, clientsize.Height);
+            }
+            base.OnResize(e);
         }
 
         private void gpuListBox_SelectedIndexChanged(object sender, EventArgs e)
@@ -212,7 +236,7 @@ namespace Clam.Gui
             if (renderWindow == null)
                 return;
             var kernel = (KernelXmlFile)kernelListBox.SelectedItem;
-            var package = RenderPackage.LoadFromXml(renderWindow.ComputeContext, kernel);
+            var package = RenderPackage.LoadFromXml(renderWindow.ComputeContext, kernel, renderWindow.Renderer.Parameters);
             if (package.HasValue == false)
                 return;
             renderWindow.Renderer = package.Value;
@@ -222,6 +246,8 @@ namespace Clam.Gui
 
         private void saveButton_Click(object sender, EventArgs e)
         {
+            if (renderWindow == null)
+                return;
             var selector = new SaveFileDialog
             {
                 InitialDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "State")),
@@ -229,18 +255,26 @@ namespace Clam.Gui
                 Filter = "Xml kernel files|*.kernel.xml"
             };
             if (selector.ShowDialog(this) == DialogResult.OK)
+            {
                 renderWindow.SaveProgram((KernelXmlFile)kernelListBox.SelectedItem, selector.FileName);
+                RefreshDefines();
+            }
         }
 
         private void loadButton_Click(object sender, EventArgs e)
         {
+            if (renderWindow == null)
+                return;
             var selector = new OpenFileDialog
             {
                 InitialDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "State")),
                 Filter = "Xml kernel files|*.kernel.xml"
             };
             if (selector.ShowDialog(this) == DialogResult.OK)
+            {
                 renderWindow.LoadProgram(selector.FileName);
+                RefreshDefines();
+            }
         }
 
         private void screenshotButton_Click(object sender, EventArgs e)

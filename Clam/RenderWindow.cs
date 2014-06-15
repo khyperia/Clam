@@ -132,6 +132,12 @@ namespace Clam
         [DllImport("opengl32.dll")]
         private extern static IntPtr wglGetCurrentDC();
 
+        [DllImport("libGL.so")]
+        private extern static IntPtr glXGetCurrentDC();
+
+        [DllImport("opengl32.dll")]
+        private extern static IntPtr CGLGetShareGroup(IntPtr context);
+
         private readonly ComputeContext _context;
         private readonly int _pub;
         private readonly int _texture;
@@ -141,15 +147,42 @@ namespace Clam
         private int _height;
         private volatile bool _disposed;
 
+        private static ComputeContextProperty GetWindowsCcp()
+        {
+            return new ComputeContextProperty(ComputeContextPropertyName.CL_WGL_HDC_KHR, wglGetCurrentDC());
+        }
+
+        private static ComputeContextProperty GetUnixCcp()
+        {
+            return new ComputeContextProperty(ComputeContextPropertyName.CL_GLX_DISPLAY_KHR, glXGetCurrentDC());
+        }
+
+        private static ComputeContextProperty GetMacCcp(IGraphicsContext context)
+        {
+            return new ComputeContextProperty(ComputeContextPropertyName.CL_CGL_SHAREGROUP_KHR,
+                CGLGetShareGroup(((IGraphicsContextInternal)context).Context.Handle));
+        }
+
         public GraphicsInterop(IGraphicsContext context, ComputeDevice device)
         {
-            var currentContext = (IGraphicsContextInternal)context;
-            var glHandle = currentContext.Context.Handle;
-            var wglHandle = wglGetCurrentDC();
+            var os = Environment.OSVersion.Platform;
+            ComputeContextProperty platformDependantCcp;
+            switch (os)
+            {
+                case PlatformID.Unix:
+                    platformDependantCcp = GetUnixCcp();
+                    break;
+                case PlatformID.MacOSX:
+                    platformDependantCcp = GetMacCcp(context);
+                    break;
+                default:
+                    platformDependantCcp = GetWindowsCcp();
+                    break;
+            }
+            var glHandle = ((IGraphicsContextInternal)context).Context.Handle;
             var p1 = new ComputeContextProperty(ComputeContextPropertyName.Platform, device.Platform.Handle.Value);
             var p2 = new ComputeContextProperty(ComputeContextPropertyName.CL_GL_CONTEXT_KHR, glHandle);
-            var p3 = new ComputeContextProperty(ComputeContextPropertyName.CL_WGL_HDC_KHR, wglHandle);
-            var cpl = new ComputeContextPropertyList(new[] { p1, p2, p3 });
+            var cpl = new ComputeContextPropertyList(new[] { p1, p2, platformDependantCcp });
             _context = new ComputeContext(ComputeDeviceTypes.Gpu, cpl, null, IntPtr.Zero);
             _queue = new ComputeCommandQueue(Context, device, ComputeCommandQueueFlags.None);
             GL.ClearColor(0f, 0f, 1f, 1f);

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using Cloo;
-using OpenTK.Input;
 
 namespace Clam
 {

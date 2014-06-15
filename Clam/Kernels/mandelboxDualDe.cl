@@ -81,3 +81,8 @@ float De(float3 z)
 	float dotzz = dot(z, z);
 	return dotzz / sqrt(dotzz * dzX * dzX + dotzz * dzY * dzY + dotzz * dzZ * dzZ);
 }
+
+float3 DeColor(float3 z)
+{
+	return (float3)(1); // TODO
+}

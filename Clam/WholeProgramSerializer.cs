@@ -36,7 +36,7 @@ namespace Clam
             }
             var kxf = KernelXmlFile.Load(kernelElement).Single();
 
-            var package = RenderPackage.LoadFromXml(renderWindow.ComputeContext, kxf);
+            var package = RenderPackage.LoadFromXml(renderWindow.ComputeContext, kxf, renderWindow.Renderer.Parameters);
             if (package.HasValue == false)
                 return;
 

@@ -17,6 +17,7 @@ namespace Clam.Gui
                 MessageBox.Show("Error", "Kernels directory did not exist");
                 return;
             }
+            Application.EnableVisualStyles();
             Application.Run(new MainWindow());
         }
     }

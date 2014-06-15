@@ -57,12 +57,15 @@ namespace Clam
             get { return ControlBindings; }
         }
 
-        public static RenderPackage? LoadFromXml(ComputeContext computeContext, KernelXmlFile kernelXml)
+        public static RenderPackage? LoadFromXml(ComputeContext computeContext, KernelXmlFile kernelXml, IParameterSet oldParameterSetCache)
         {
             var kernel = RenderKernel.Create(computeContext, kernelXml.Files.Select(File.ReadAllText).ToArray());
             if (kernel == null)
                 return null;
-            return new RenderPackage(kernel, kernelXml.ControlsFunc());
+            var controls = kernelXml.ControlsFunc();
+            if (oldParameterSetCache != null && controls.GetType() == oldParameterSetCache.GetType())
+                controls = oldParameterSetCache;
+            return new RenderPackage(kernel, controls);
         }
 
         private const double ScreenshotAspectRatio = 16.0 / 9.0;
