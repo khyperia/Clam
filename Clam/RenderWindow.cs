@@ -63,7 +63,8 @@ namespace Clam
         protected override void OnResize(EventArgs e)
         {
             _windowSize = ClientSize;
-            _interop.OnResize(_windowSize.Width, _windowSize.Height);
+            if (_interop != null)
+                _interop.OnResize(_windowSize.Width, _windowSize.Height);
             var fdc = _renderer.Parameters as IFrameDependantControl;
             if (fdc != null)
                 fdc.Frame = 0;
@@ -133,7 +134,7 @@ namespace Clam
         private extern static IntPtr wglGetCurrentDC();
 
         [DllImport("libGL.so")]
-        private extern static IntPtr glXGetCurrentDC();
+        private extern static IntPtr glXGetCurrentContext();
 
         [DllImport("opengl32.dll")]
         private extern static IntPtr CGLGetShareGroup(IntPtr context);
@@ -154,7 +155,7 @@ namespace Clam
 
         private static ComputeContextProperty GetUnixCcp()
         {
-            return new ComputeContextProperty(ComputeContextPropertyName.CL_GLX_DISPLAY_KHR, glXGetCurrentDC());
+            return new ComputeContextProperty(ComputeContextPropertyName.CL_GLX_DISPLAY_KHR, glXGetCurrentContext());
         }
 
         private static ComputeContextProperty GetMacCcp(IGraphicsContext context)
