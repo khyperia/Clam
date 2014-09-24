@@ -31,7 +31,7 @@ class ClamInterop
     int width, height;
     ClamInterop();
     ClamInterop(std::shared_ptr<cl_context> context);
-    void Resize(cl_command_queue const& queue, int width, int height);
+    void Resize(std::shared_ptr<ClamKernel> queue, int width, int height);
     void MkBuffer(std::string buffername);
     std::shared_ptr<cl_mem> GetBuffer(std::string buffername);
     void Blit(cl_command_queue const& queue);

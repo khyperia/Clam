@@ -3,8 +3,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <string>
-
-std::map<std::string, std::shared_ptr<ClamKernel>> ClamKernel::namedKernels;
+#include <vector>
 
 ClamKernel::ClamKernel()
 {
@@ -38,11 +37,19 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
 	if (openclError)
 		throw std::runtime_error("Failed to build program");
 
-	cl_kernel openclKernel = clCreateKernel(openclProgram, "main", &openclError);
-	if (openclError)
-		throw std::runtime_error("Failed to create kernel");
-
-	kernel = std::make_shared<cl_kernel>(openclKernel);
+    std::vector<cl_kernel> ckernels(16);
+    unsigned int numKernels;
+    clCreateKernelsInProgram(openclProgram, ckernels.size(), ckernels.data(), &numKernels);
+    
+    for (unsigned int i = 0; i < numKernels; i++)
+    {
+        std::vector<char> kernelNameVec(100);
+        size_t kernelNameVecSize;
+        clGetKernelInfo(ckernels[i], CL_KERNEL_FUNCTION_NAME,
+                kernelNameVec.size(), kernelNameVec.data(), &kernelNameVecSize);
+        std::string name(kernelNameVec.data(), kernelNameVecSize - 1);
+        kernels[name] = std::make_shared<cl_kernel>(ckernels[i]);
+    }
 
 	cl_command_queue openclCommandQueue = clCreateCommandQueue(*context, *device, 0, &openclError);
 	if (openclError)
@@ -53,14 +60,17 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
 	SetLaunchSize(0, 0);
 }
 
-void ClamKernel::Invoke()
+void ClamKernel::Invoke(std::string kernName)
 {
+    if (kernels.find(kernName) == kernels.end())
+        throw std::runtime_error("Kernel did not exist: " + kernName);
 	size_t local[] = { 8, 8 };
 	size_t global[] = {
 		(launchSize[0] + local[0] - 1) / local[0] * local[0],
 		(launchSize[1] + local[1] - 1) / local[1] * local[1]
 	};
-	cl_int err = clEnqueueNDRangeKernel(*queue, *kernel, 2, nullptr, global, local, 0, nullptr, nullptr);
+	cl_int err = clEnqueueNDRangeKernel(*queue, *kernels[kernName],
+            2, nullptr, global, local, 0, nullptr, nullptr);
 	if (err)
 		throw std::runtime_error("Failed to launch kernel");
 }

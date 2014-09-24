@@ -35,7 +35,7 @@ void DeleteReleaseMemObject(cl_mem* ptr)
     delete ptr;
 }
 
-void ClamInterop::Resize(cl_command_queue const& queue, int _width, int _height)
+void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _height)
 {
     if (_width == 0 || _height == 0)
         return;
@@ -70,12 +70,9 @@ void ClamInterop::Resize(cl_command_queue const& queue, int _width, int _height)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    for (auto const& thing : ClamKernel::namedKernels)
-    {
-        thing.second->SetLaunchSize(width, height);
-    }
+    kernel->SetLaunchSize(width, height);
 
-    if (clEnqueueAcquireGLObjects(queue, 1, clBuffers[""].get(), 0, nullptr, nullptr))
+    if (clEnqueueAcquireGLObjects(*kernel->GetQueue(), 1, clBuffers[""].get(), 0, nullptr, nullptr))
 		throw std::runtime_error("Could not acquire GL objects");
 
 	HandleErr(glGetError());
@@ -127,42 +124,3 @@ void ClamInterop::Blit(cl_command_queue const& queue)
 	if (clEnqueueAcquireGLObjects(queue, 1, clBuffers[""].get(), 0, nullptr, nullptr))
 		throw std::runtime_error("Could not acquire GL objects");
 }
-
-/*
-void ClamInterop::RenderPre(ClamKernel& kernel)
-{
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glFinish();
-
-	if (clEnqueueAcquireGLObjects(*kernel.GetQueue(), 1, clBuffers[""].get(), 0, nullptr, nullptr))
-		throw std::runtime_error("Could not acquire GL objects");
-
-	kernel.SetLaunchSize(width, height);
-}
-
-void ClamInterop::RenderPost(ClamKernel& kernel)
-{
-	if (clEnqueueReleaseGLObjects(*kernel.GetQueue(), 1, clBuffers[""].get(), 0, nullptr, nullptr))
-		throw std::runtime_error("Could not release GL objects");
-
-	if (clFinish(*kernel.GetQueue()))
-		throw std::runtime_error("Could not finish OpenCL kernel (did kernel crash?)");
-
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, destructor->glBuffer);
-	glBindTexture(GL_TEXTURE_2D, destructor->glTexture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_FLOAT, nullptr);
-
-	glBegin(GL_QUADS);
-	glTexCoord2f(0.f, 1.f);
-	glVertex3f(0.f, 0.f, 0.f);
-	glTexCoord2f(0.f, 0.f);
-	glVertex3f(0.f, 1.f, 0.f);
-	glTexCoord2f(1.f, 0.f);
-	glVertex3f(1.f, 1.f, 0.f);
-	glTexCoord2f(1.f, 1.f);
-	glVertex3f(1.f, 0.f, 0.f);
-	glEnd();
-
-	HandleErr(glGetError());
-}
-*/

@@ -35,29 +35,57 @@ void idleFuncServer()
 
     for (auto const& sock : socks)
     {
-        send<unsigned int>(*sock, {1});
-        writeStr(*sock, ""); // kernel name
+        try
+        {
+            send<unsigned int>(*sock, {1});
+            writeStr(*sock, "main"); // kernel name
 
-        send<int>(*sock, {-1});
-        writeStr(*sock, "");
+            send<int>(*sock, {-1});
+            writeStr(*sock, "");
 
-        send<int>(*sock, {-2});
+            send<int>(*sock, {-2});
 
-        send<int>(*sock, { sizeof(float) });
-        send<float>(*sock, { offsetX });
+            send<int>(*sock, { sizeof(float) });
+            send<float>(*sock, { offsetX });
 
-        send<int>(*sock, { sizeof(float) });
-        send<float>(*sock, { offsetY });
+            send<int>(*sock, { sizeof(float) });
+            send<float>(*sock, { offsetY });
 
-        send<int>(*sock, { sizeof(float) });
-        send<float>(*sock, { zoom });
+            send<int>(*sock, { sizeof(float) });
+            send<float>(*sock, { zoom });
 
-        send<unsigned int>(*sock, {0});
+            send<unsigned int>(*sock, {0});
+        }
+        catch (std::exception const& ex)
+        {
+            puts("Disconnected from client");
+            puts(ex.what());
+            sock->close();
+        }
     }
 
     for (auto const& sock : socks)
     {
-        read<unsigned int>(*sock, 1);
+        try
+        {
+            if (sock->is_open())
+                read<unsigned int>(*sock, 1);
+        }
+        catch (std::exception const& ex)
+        {
+            puts("Disconnected from client");
+            puts(ex.what());
+            sock->close();
+        }
+    }
+
+    for (size_t i = 0; i < socks.size(); i++)
+    {
+        if (socks[i]->is_open() == false)
+        {
+            socks.erase(socks.begin() + i);
+            i--;
+        }
     }
 }
 
@@ -95,15 +123,25 @@ void displayFuncServer()
     glutSwapBuffers();
 }
 
+void closeSocks()
+{
+    for (auto const& sock : socks)
+    {
+        send<unsigned int>(*sock, {UINT_MAX});
+        sock->close();
+    }
+}
+
 void server(int argc, char** argv)
 {
+    glutInit(&argc, argv);
+
     boost::asio::io_service service;
-    auto args = argv;
-    args++;
-    while (*args)
+    argv++;
+    while (*argv)
     {
         auto sock = std::make_shared<tcp::socket>(service);
-        std::string arg = *args;
+        std::string arg = *argv;
         int port = 23456;
         auto colon = arg.find(":");
         if (colon != std::string::npos)
@@ -124,10 +162,11 @@ void server(int argc, char** argv)
         read<unsigned int>(*sock, 1);
 
         socks.push_back(sock);
-        args++;
+        argv++;
     }
 
-    glutInit(&argc, argv);
+    atexit(closeSocks);
+
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2 Server");
 

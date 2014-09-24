@@ -10,11 +10,12 @@ using boost::asio::ip::tcp;
 int oldWidth = -1, oldHeight = -1;
 std::shared_ptr<ClamContext> context;
 std::shared_ptr<ClamInterop> interop;
+std::shared_ptr<ClamKernel> kernel;
 std::shared_ptr<tcp::socket> connection;
 
 void displayFunc()
 {
-    if (ClamKernel::namedKernels.find("") != ClamKernel::namedKernels.end())
+    if (kernel)
     {
         int width = glutGet(GLUT_WINDOW_WIDTH);
         int height = glutGet(GLUT_WINDOW_HEIGHT);
@@ -22,12 +23,13 @@ void displayFunc()
         {
             oldWidth = width;
             oldHeight = height;
-            interop->Resize(*ClamKernel::namedKernels[""]->GetQueue(), width, height);
+            interop->Resize(kernel, width, height);
         }
-        interop->Blit(*ClamKernel::namedKernels[""]->GetQueue());
+        interop->Blit(*kernel->GetQueue());
         glutSwapBuffers();
     }
 }
+
 void idleFunc()
 {
     if (connection->is_open() == false)
@@ -45,7 +47,6 @@ void idleFunc()
             case 1:
                 {
                     auto kernName = readStr(*connection);
-                    auto kernel = ClamKernel::namedKernels[kernName];
                     for (int index = 0;; index++)
                     {
                         int arglen = read<int>(*connection, 1)[0];
@@ -54,20 +55,20 @@ void idleFunc()
                         else if (arglen == -1) // buffer name
                         {
                             auto arg = interop->GetBuffer(readStr(*connection));
-                            kernel->SetArg(index, sizeof(*arg), arg.get());
+                            kernel->SetArg(kernName, index, sizeof(*arg), arg.get());
                         }
                         else if (arglen == -2) // *TWO* parameters, int width, int height
                         {
-                            kernel->SetArg(index++, sizeof(int), &interop->width);
-                            kernel->SetArg(index, sizeof(int), &interop->height);
+                            kernel->SetArg(kernName, index++, sizeof(int), &interop->width);
+                            kernel->SetArg(kernName, index, sizeof(int), &interop->height);
                         }
                         else
                         {
                             auto arg = read<uint8_t>(*connection, arglen);
-                            kernel->SetArg(index, arglen, arg.data());
+                            kernel->SetArg(kernName, index, arglen, arg.data());
                         }
                     }
-                    kernel->Invoke();
+                    kernel->Invoke(kernName);
                     send<uint8_t>(*connection, {0});
                 }
                 break;
@@ -75,10 +76,14 @@ void idleFunc()
                 {
                     auto name = readStr(*connection);
                     auto sourcecode = readStr(*connection);
-                    ClamKernel::namedKernels[name] = std::make_shared<ClamKernel>(context->GetContext(),
+                    kernel = std::make_shared<ClamKernel>(context->GetContext(),
                             context->GetDevice(), sourcecode.c_str());
                     send<uint8_t>(*connection, {0});
                 }
+                break;
+            case UINT_MAX:
+                puts("Caught shutdown signal, closing");
+                exit(0);
                 break;
             default:
                 throw std::runtime_error("Unknown packet id " + std::to_string(messageType));
