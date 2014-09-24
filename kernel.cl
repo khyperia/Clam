@@ -34,15 +34,16 @@ float3 Iterate(float2 z)
     return IterateAlt(z, z);
 }
 
-__kernel void main(__global float4* screen, int width, int height, float offsetX, float offsetY, float zoom)
+__kernel void main(__global float4* screen,
+    int sx, int sy, int width, int height,
+    float offsetX, float offsetY, float zoom)
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
     if (x >= width || y >= height)
         return;
     
-    float2 coords = (float2)((float)x / width, (float)y / height) * 2.0f - (float2)(1.0f);
-    coords.y *= (float)height / width;
+    float2 coords = (float2)((float)(x + sx), (float)(y + sy)) * 2.0f - (float2)(1.0f);
     coords = coords * zoom + (float2)(offsetX, offsetY);
 
     float3 color = Iterate(coords);

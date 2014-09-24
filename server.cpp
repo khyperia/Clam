@@ -37,13 +37,13 @@ void idleFuncServer()
     {
         try
         {
-            send<unsigned int>(*sock, {1});
+            send<unsigned int>(*sock, {MessageKernelInvoke});
             writeStr(*sock, "main"); // kernel name
 
-            send<int>(*sock, {-1});
-            writeStr(*sock, "");
+            send<int>(*sock, {-1}); // buffer
+            writeStr(*sock, ""); // empty = screen
 
-            send<int>(*sock, {-2});
+            send<int>(*sock, {-2}); // width, height
 
             send<int>(*sock, { sizeof(float) });
             send<float>(*sock, { offsetX });
@@ -52,9 +52,9 @@ void idleFuncServer()
             send<float>(*sock, { offsetY });
 
             send<int>(*sock, { sizeof(float) });
-            send<float>(*sock, { zoom });
+            send<float>(*sock, { zoom / 2000 });
 
-            send<unsigned int>(*sock, {0});
+            send<int>(*sock, {0}); // end arglist
         }
         catch (std::exception const& ex)
         {
@@ -69,7 +69,15 @@ void idleFuncServer()
         try
         {
             if (sock->is_open())
-                read<unsigned int>(*sock, 1);
+            {
+                unsigned int errcode = read<uint8_t>(*sock, 1)[0];
+                if (errcode != MessageOkay)
+                {
+                    puts(("Client was not okay: " + std::to_string(errcode)).c_str());
+                    send<unsigned int>(*sock, {MessageKill});
+                    sock->close();
+                }
+            }
         }
         catch (std::exception const& ex)
         {
@@ -127,7 +135,7 @@ void closeSocks()
 {
     for (auto const& sock : socks)
     {
-        send<unsigned int>(*sock, {UINT_MAX});
+        send<unsigned int>(*sock, {MessageKill});
         sock->close();
     }
 }
@@ -150,8 +158,7 @@ void server(int argc, char** argv)
             arg = arg.substr(0, colon);
         }
         sock->connect(tcp::endpoint(boost::asio::ip::address::from_string(arg), port));
-        send<unsigned int>(*sock, {2});
-        writeStr(*sock, "");
+        send<unsigned int>(*sock, {MessageKernelSource});
 
         std::ifstream inputFile("kernel.cl");
         std::string sourcecode((std::istreambuf_iterator<char>(inputFile)),
@@ -159,7 +166,7 @@ void server(int argc, char** argv)
 
         writeStr(*sock, sourcecode);
 
-        read<unsigned int>(*sock, 1);
+        read<uint8_t>(*sock, 1);
 
         socks.push_back(sock);
         argv++;

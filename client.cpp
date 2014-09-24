@@ -7,7 +7,8 @@
 
 using boost::asio::ip::tcp;
 
-int oldWidth = -1, oldHeight = -1;
+int oldWidth = -1, oldHeight = -1, oldX = -1, oldY = -1;
+bool resized = false;
 std::shared_ptr<ClamContext> context;
 std::shared_ptr<ClamInterop> interop;
 std::shared_ptr<ClamKernel> kernel;
@@ -19,6 +20,8 @@ void displayFunc()
     {
         int width = glutGet(GLUT_WINDOW_WIDTH);
         int height = glutGet(GLUT_WINDOW_HEIGHT);
+        oldX = glutGet(GLUT_WINDOW_X);
+        oldY = glutGet(GLUT_WINDOW_Y);
         if (width != oldWidth || height != oldHeight)
         {
             oldWidth = width;
@@ -42,9 +45,9 @@ void idleFunc()
         unsigned int messageType = read<unsigned int>(*connection, 1)[0];
         switch (messageType)
         {
-            case 0:
+            case MessageNull:
                 break;
-            case 1:
+            case MessageKernelInvoke:
                 {
                     auto kernName = readStr(*connection);
                     for (int index = 0;; index++)
@@ -57,8 +60,10 @@ void idleFunc()
                             auto arg = interop->GetBuffer(readStr(*connection));
                             kernel->SetArg(kernName, index, sizeof(*arg), arg.get());
                         }
-                        else if (arglen == -2) // *TWO* parameters, int width, int height
+                        else if (arglen == -2) // *FOUR* parameters, x, y, width, height
                         {
+                            kernel->SetArg(kernName, index++, sizeof(int), &oldX);
+                            kernel->SetArg(kernName, index++, sizeof(int), &oldY);
                             kernel->SetArg(kernName, index++, sizeof(int), &interop->width);
                             kernel->SetArg(kernName, index, sizeof(int), &interop->height);
                         }
@@ -72,16 +77,15 @@ void idleFunc()
                     send<uint8_t>(*connection, {0});
                 }
                 break;
-            case 2:
+            case MessageKernelSource:
                 {
-                    auto name = readStr(*connection);
                     auto sourcecode = readStr(*connection);
                     kernel = std::make_shared<ClamKernel>(context->GetContext(),
                             context->GetDevice(), sourcecode.c_str());
                     send<uint8_t>(*connection, {0});
                 }
                 break;
-            case UINT_MAX:
+            case MessageKill:
                 puts("Caught shutdown signal, closing");
                 exit(0);
                 break;
@@ -110,6 +114,8 @@ void client(int argc, char** argv)
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2");
+    // TODO: Figure out what screen to put ourselves on
+    glutFullScreen();
     context = std::make_shared<ClamContext>();
     interop = std::make_shared<ClamInterop>(context->GetContext());
 
