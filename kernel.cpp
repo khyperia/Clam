@@ -4,18 +4,17 @@
 #include <fstream>
 #include <string>
 
+std::map<std::string, std::shared_ptr<ClamKernel>> ClamKernel::namedKernels;
+
 ClamKernel::ClamKernel()
 {
 }
 
-ClamKernel::ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_device_id> device, const char* filename)
+ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
+        std::shared_ptr<cl_device_id> device, const char* sourcecode)
 {
-	std::ifstream file(filename);
-	std::string filecontents((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
 	cl_int openclError = 0;
-	const char* filecontentsCStr = filecontents.c_str();
-	cl_program openclProgram = clCreateProgramWithSource(*context, 1, &filecontentsCStr, 0, &openclError);
+	cl_program openclProgram = clCreateProgramWithSource(*context, 1, &sourcecode, 0, &openclError);
 	if (openclError)
 		throw std::runtime_error("Failed to create program");
 
@@ -39,7 +38,7 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_d
 	if (openclError)
 		throw std::runtime_error("Failed to build program");
 
-	cl_kernel openclKernel = clCreateKernel(openclProgram, "Main", &openclError);
+	cl_kernel openclKernel = clCreateKernel(openclProgram, "main", &openclError);
 	if (openclError)
 		throw std::runtime_error("Failed to create kernel");
 
@@ -56,7 +55,7 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_d
 
 void ClamKernel::Invoke()
 {
-	size_t local[] = { 4, 4 };
+	size_t local[] = { 8, 8 };
 	size_t global[] = {
 		(launchSize[0] + local[0] - 1) / local[0] * local[0],
 		(launchSize[1] + local[1] - 1) / local[1] * local[1]

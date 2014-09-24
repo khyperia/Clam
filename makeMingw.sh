@@ -1,1 +1,0 @@
-make EXTRACFLAGS="-I \"$CUDA_PATH\\include\" -I \"/mingw64/include\"" EXTRALDFLAGS="-L \"/mingw64/lib\" -L \"$CUDA_PATH\lib\x64\"" WIN32="true"
