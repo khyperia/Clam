@@ -1,1 +1,1 @@
-void client(int argc, char** argv);
+void client(int clientPort);

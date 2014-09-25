@@ -1,3 +1,25 @@
+/*
+
+CLAMSCRIPTSTART
+
+posx = 0.0
+posy = 0.0
+zoom = 1.0
+function update(time)
+    if iskeydown("w") then posy = posy - zoom * time end
+    if iskeydown("s") then posy = posy + zoom * time end
+    if iskeydown("a") then posx = posx - zoom * time end
+    if iskeydown("d") then posx = posx + zoom * time end
+    if iskeydown("r") then zoom = zoom / (1 + time) end
+    if iskeydown("f") then zoom = zoom * (1 + time) end
+    
+    kernel("main", "", nil, posx, posy, zoom / 1000)
+end
+
+CLAMSCRIPTEND
+
+*/
+
 #ifndef MaxIters
 #define MaxIters 2048
 #endif

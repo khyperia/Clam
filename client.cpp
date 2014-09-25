@@ -96,14 +96,8 @@ void idleFunc()
     glutPostRedisplay();
 }
 
-void client(int argc, char** argv)
+void client(int port)
 {
-    int port = 23456;
-    if (argv[1])
-    {
-        std::string arg(argv[1]);
-        port = std::stoi(arg.substr(1, arg.length() - 1));
-    }
     boost::asio::io_service service;
     tcp::acceptor acceptor(service, tcp::endpoint(tcp::v4(), port));
     connection = std::make_shared<tcp::socket>(service);
@@ -111,11 +105,10 @@ void client(int argc, char** argv)
     acceptor.accept(*connection);
     puts("Connected, starting render client");
 
-    glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2");
     // TODO: Figure out what screen to put ourselves on
-    glutFullScreen();
+    //glutFullScreen();
     context = std::make_shared<ClamContext>();
     interop = std::make_shared<ClamInterop>(context->GetContext());
 
