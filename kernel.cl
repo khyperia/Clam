@@ -5,6 +5,10 @@ CLAMSCRIPTSTART
 posx = 0.0
 posy = 0.0
 zoom = 1.0
+
+function derp()
+end
+
 function update(time)
     if iskeydown("w") then posy = posy - zoom * time end
     if iskeydown("s") then posy = posy + zoom * time end
@@ -13,7 +17,7 @@ function update(time)
     if iskeydown("r") then zoom = zoom / (1 + time) end
     if iskeydown("f") then zoom = zoom * (1 + time) end
     
-    kernel("main", "", nil, posx, posy, zoom / 1000)
+    kernel("main", "", derp, posx, posy, zoom / 1000)
 end
 
 CLAMSCRIPTEND
@@ -30,7 +34,9 @@ CLAMSCRIPTEND
 
 float3 GetColor(float i)
 {
-	return (float3)(sin(i / 17.0) * 0.5 + 0.5, sin(i / 19.0) * 0.5 + 0.5, sin(i / 23.0) * 0.5 + 0.5);
+	return (float3)(sin(i / 17.0) * 0.5 + 0.5,
+                    sin(i / 19.0) * 0.5 + 0.5,
+                    sin(i / 23.0) * 0.5 + 0.5);
 }
 
 float ComputeSmooth(float2 last)
@@ -42,11 +48,11 @@ float3 IterateAlt(float2 z, float2 c)
 {
     for (int it = 0; it < MaxIters; it++)
     {
-	float x2 = z.x * z.x;
-	float y2 = z.y * z.y;
-	if (x2 + y2 > Bailout * Bailout)
-		return GetColor(ComputeSmooth(z) + it);
-	z = (float2)(x2 - y2, 2 * z.x * z.y) + c;
+        float x2 = z.x * z.x;
+        float y2 = z.y * z.y;
+        if (x2 + y2 > Bailout * Bailout)
+            return GetColor(ComputeSmooth(z) + it);
+        z = (float2)(x2 - y2, 2 * z.x * z.y) + c;
     }
     return (float3)(0,0,0);
 }

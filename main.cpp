@@ -11,10 +11,12 @@ int main(int argc, char** argv)
 
     int clientPort = 23456;
     std::vector<std::string> clients;
+    std::string kernel;
     po::options_description desc("Allowed options");
     desc.add_options()
         ("port", po::value<int>(&clientPort), "Port to run client on")
-        ("client", po::value(&clients), "Clients to connect to");
+        ("client", po::value(&clients), "Clients to connect to")
+        ("kernel", po::value(&kernel), "Kernel file to use");
 
     po::positional_options_description positional;
     positional.add("client", -1);
@@ -28,9 +30,24 @@ int main(int argc, char** argv)
             vm);
     po::notify(vm);
 
-    if (clients.size() == 0)
-        client(clientPort);
-    else
-        server(clients);
+    try
+    {
+        if (clients.size() == 0)
+            client(clientPort);
+        else
+        {
+            if (kernel.empty())
+            {
+                puts("\"--kernel filename.cl\" not provided");
+            }
+            server(kernel, clients);
+        }
+    }
+    catch (std::exception const& ex)
+    {
+        puts("Unhandled exception:");
+        puts(ex.what());
+        return -1;
+    }
     return 0;
 }

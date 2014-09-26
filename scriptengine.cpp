@@ -8,18 +8,64 @@ int run_iskeydown(lua_State* luaState)
     int argc = lua_gettop(luaState);
     if (argc != 1)
     {
-        lua_pushstring(luaState, "kernel must be called as iskeydown(char)");
+        lua_pushstring(luaState, "Must be called as iskeydown(char)");
         lua_error(luaState);
     }
     std::string s = lua_tostring(luaState, 1);
     if (s.length() != 1)
     {
-        lua_pushstring(luaState, "kernel must be called as iskeydown(char)");
+        lua_pushstring(luaState, "Must be called as iskeydown(char)");
         lua_error(luaState);
     }
     bool result = iskeydown(s[0]);
     lua_pushboolean(luaState, result);
     return 1;
+}
+
+int run_mkbuffer(lua_State* luaState)
+{
+    int argc = lua_gettop(luaState);
+    if (argc != 1)
+    {
+        lua_pushstring(luaState, "Must be called as mkbuffer(string), one arg");
+        lua_error(luaState);
+    }
+    std::string bufferName = lua_tostring(luaState, 1);
+    if (bufferName.empty())
+    {
+        lua_pushstring(luaState, "Must be called as mkbuffer(string)");
+        lua_error(luaState);
+    }
+    auto socks = getSocks();
+    for (auto const& sock : *socks)
+    {
+        try
+        {
+            send<unsigned int>(*sock, {MessageMkBuffer});
+            writeStr(*sock, bufferName);
+        }
+        catch (std::exception const& ex)
+        {
+            puts("Disconnected from client");
+            puts(ex.what());
+            sock->close();
+        }
+    }
+    for (auto const& sock : *socks)
+    {
+        try
+        {
+            if (read<uint8_t>(*sock, 1)[0] != 0)
+                throw std::runtime_error("Client failed to make buffer");
+        }
+        catch (std::exception const& ex)
+        {
+            puts("Disconnected from client");
+            puts(ex.what());
+            sock->close();
+        }
+    }
+    return 0;
 }
 
 int run_kernel(lua_State* luaState)
@@ -48,7 +94,7 @@ int run_kernel(lua_State* luaState)
             {
                 switch (lua_type(luaState, arg))
                 {
-                    case LUA_TNIL:
+                    case LUA_TFUNCTION:
                         send<int>(*sock, {-2}); // x, y, width, height
                         break;
                     case LUA_TSTRING:
@@ -60,7 +106,8 @@ int run_kernel(lua_State* luaState)
                         send<float>(*sock, { (float)lua_tonumber(luaState, arg) });
                         break;
                     default:
-                        throw std::runtime_error("Unknown argument type in kernel()");
+                        throw std::runtime_error("Unknown argument type in kernel() arg index "
+                                + std::to_string(arg));
                 }
             }
 
@@ -103,13 +150,10 @@ int run_kernel(lua_State* luaState)
 ScriptEngine::ScriptEngine(std::string sourcecode)
 {
     luaState = luaL_newstate();
-    luaopen_io(luaState); // provides io.*
-    luaopen_base(luaState);
-    luaopen_table(luaState);
-    luaopen_string(luaState);
-    luaopen_math(luaState);
+    luaL_openlibs(luaState);
 
     lua_register(luaState, "iskeydown", run_iskeydown);
+    lua_register(luaState, "mkbuffer", run_mkbuffer);
     lua_register(luaState, "kernel", run_kernel);
 
     int err = luaL_dostring(luaState, sourcecode.c_str());

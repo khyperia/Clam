@@ -36,74 +36,6 @@ void idleFuncServer()
         scriptengine->Update(frameSeconds);
     }
 
-    /*
-       if (pressedSpecialKeys.find(GLUT_KEY_UP) != pressedSpecialKeys.end())
-       offsetY -= zoom * frameSeconds;
-       if (pressedSpecialKeys.find(GLUT_KEY_DOWN) != pressedSpecialKeys.end())
-       offsetY += zoom * frameSeconds;
-       if (pressedSpecialKeys.find(GLUT_KEY_LEFT) != pressedSpecialKeys.end())
-       offsetX -= zoom * frameSeconds;
-       if (pressedSpecialKeys.find(GLUT_KEY_RIGHT) != pressedSpecialKeys.end())
-       offsetX += zoom * frameSeconds;
-       if (pressedKeys.find('w') != pressedKeys.end())
-       zoom /= 1 + frameSeconds;
-       if (pressedKeys.find('s') != pressedKeys.end())
-       zoom *= 1 + frameSeconds;
-
-       for (auto const& sock : *socks)
-       {
-       try
-       {
-       send<unsigned int>(*sock, {MessageKernelInvoke});
-       writeStr(*sock, "main"); // kernel name
-
-       send<int>(*sock, {-1}); // buffer
-       writeStr(*sock, ""); // empty = screen
-
-       send<int>(*sock, {-2}); // width, height
-
-       send<int>(*sock, { sizeof(float) });
-       send<float>(*sock, { offsetX });
-
-       send<int>(*sock, { sizeof(float) });
-       send<float>(*sock, { offsetY });
-
-       send<int>(*sock, { sizeof(float) });
-       send<float>(*sock, { zoom / 2000 });
-
-       send<int>(*sock, {0}); // end arglist
-       }
-       catch (std::exception const& ex)
-       {
-       puts("Disconnected from client");
-       puts(ex.what());
-       sock->close();
-       }
-       }
-
-       for (auto const& sock : *socks)
-       {
-       try
-       {
-       if (sock->is_open())
-       {
-       unsigned int errcode = read<uint8_t>(*sock, 1)[0];
-       if (errcode != MessageOkay)
-       {
-       puts(("Client was not okay: " + std::to_string(errcode)).c_str());
-       send<unsigned int>(*sock, {MessageKill});
-       sock->close();
-       }
-       }
-       }
-       catch (std::exception const& ex)
-       {
-       puts("Disconnected from client");
-       puts(ex.what());
-       sock->close();
-       }
-       }
-       */
     for (size_t i = 0; i < socks->size(); i++)
     {
         if ((*socks)[i]->is_open() == false)
@@ -157,11 +89,13 @@ void closeSocks()
     }
 }
 
-void server(std::vector<std::string> clients)
+void server(std::string kernelFile, std::vector<std::string> clients)
 {
     boost::asio::io_service service;
     socks = std::make_shared<decltype(socks)::element_type>(); // I like C++
-    std::ifstream inputFile("kernel.cl");
+    std::ifstream inputFile(kernelFile);
+    if (inputFile.is_open() == false)
+        throw std::runtime_error("Kernel file \""+kernelFile+"\" didn't exist");
     std::string sourcecode((std::istreambuf_iterator<char>(inputFile)),
             std::istreambuf_iterator<char>());
 
@@ -171,7 +105,6 @@ void server(std::vector<std::string> clients)
         throw std::runtime_error("Kernel file did not have CLAMSCRIPTSTART/CLAMSCRIPTEND tags");
     start += strlen("CLAMSCRIPTSTART");
     std::string scriptcode = sourcecode.substr(start, end - start);
-    puts(scriptcode.c_str());
     scriptengine = std::make_shared<ScriptEngine>(scriptcode);
 
     for (auto arg : clients)
@@ -186,7 +119,6 @@ void server(std::vector<std::string> clients)
         }
         sock->connect(tcp::endpoint(boost::asio::ip::address::from_string(arg), port));
         send<unsigned int>(*sock, {MessageKernelSource});
-
 
         writeStr(*sock, sourcecode);
 

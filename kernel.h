@@ -25,7 +25,7 @@ public:
     {
         if (kernels.find(kernName) == kernels.end())
             throw std::runtime_error("Kernel did not exist: " + kernName);
-		if (clSetKernelArg(*kernels[kernName], index, size, data))
-			throw std::runtime_error("Could not set kernel argument " + std::to_string(index));
+		if (int openclError = clSetKernelArg(*kernels[kernName], index, size, data))
+			throw std::runtime_error("Could not set kernel argument " + std::to_string(index) + ": " + std::to_string(openclError));
     }
 };

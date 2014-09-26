@@ -89,6 +89,8 @@ void ClamInterop::MkBuffer(std::string buffername)
 
 std::shared_ptr<cl_mem> ClamInterop::GetBuffer(std::string buffername)
 {
+    if (clBuffers.find(buffername) == clBuffers.end())
+        throw std::runtime_error("Buffer " + buffername + " did not exist");
     return clBuffers[buffername];
 }
 

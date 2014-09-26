@@ -6,6 +6,7 @@ enum MessageType : unsigned int
     MessageOkay = 0,
     MessageKernelInvoke = 1,
     MessageKernelSource = 2,
+    MessageMkBuffer = 3,
     MessageKill = UINT_MAX
 };
 
