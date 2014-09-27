@@ -1,7 +1,7 @@
 CC=clang++
 OBJDIR=obj
-CFLAGS=-c --std=c++11 -Wall -Wextra -I$(OBJDIR) $(EXTRACFLAGS)
-LDFLAGS=-lOpenCL -lGL -lglut -llua -lboost_system -lboost_program_options $(EXTRALDFLAGS)
+CFLAGS=-c -O2 --std=c++11 -Wall -Wextra -I$(OBJDIR) $(EXTRACFLAGS)
+LDFLAGS=-lOpenCL -lGL -lglut -lpng -llua $(EXTRALDFLAGS)
 SOURCES=$(wildcard *.cpp)
 OBJECTS=$(patsubst %.cpp,$(OBJDIR)/%.o,$(SOURCES))
 DEPENDS=$(patsubst %.cpp,$(OBJDIR)/%.d,$(SOURCES))

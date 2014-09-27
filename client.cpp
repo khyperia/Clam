@@ -7,25 +7,29 @@
 #include <GL/glut.h>
 #include "socket.h"
 
-using boost::asio::ip::tcp;
-
 int oldWidth = -1, oldHeight = -1, oldX = -1, oldY = -1;
 int screensaverFrame = 0;
-int hostPort;
+std::string hostPort;
 bool resized = false;
 std::shared_ptr<ClamContext> context;
 std::shared_ptr<ClamInterop> interop;
 std::shared_ptr<ClamKernel> kernel;
-std::shared_ptr<tcp::socket> connection;
-std::shared_ptr<boost::asio::io_service> ioService;
+std::shared_ptr<CSocket> sock;
 
 void connectThreaded()
 {
-    tcp::acceptor acceptor(*ioService, tcp::endpoint(tcp::v4(), hostPort));
-    auto tempconnection = std::make_shared<tcp::socket>(*ioService);
-    puts("Waiting for connection");
-    acceptor.accept(*tempconnection);
-    connection = tempconnection;
+    try
+    {
+        CSocket acceptor(hostPort.c_str());
+        puts("Waiting for connection");
+        sock = acceptor.Accept();
+        sock->SetNonblock();
+    }
+    catch (std::exception const& ex)
+    {
+        puts("Failed to host server:");
+        puts(ex.what());
+    }
 }
 
 void rebootDisplay()
@@ -33,31 +37,28 @@ void rebootDisplay()
     context = nullptr;
     interop = nullptr;
     kernel = nullptr;
-    connection = nullptr;
-    if (!ioService)
-        ioService = std::make_shared<boost::asio::io_service>();
-
+    sock = nullptr;
     std::thread(connectThreaded).detach();
 }
 
 void displayFunc()
 {
+    int width = glutGet(GLUT_WINDOW_WIDTH);
+    int height = glutGet(GLUT_WINDOW_HEIGHT);
+    oldX = glutGet(GLUT_WINDOW_X);
+    oldY = glutGet(GLUT_WINDOW_Y);
     if (kernel)
     {
-        int width = glutGet(GLUT_WINDOW_WIDTH);
-        int height = glutGet(GLUT_WINDOW_HEIGHT);
-        oldX = glutGet(GLUT_WINDOW_X);
-        oldY = glutGet(GLUT_WINDOW_Y);
         if (width != oldWidth || height != oldHeight)
         {
-            oldWidth = width;
-            oldHeight = height;
             interop->Resize(kernel, width, height);
         }
         interop->Blit(*kernel->GetQueue());
         glutSwapBuffers();
     }
-    if (!connection)
+    oldWidth = width;
+    oldHeight = height;
+    if (!sock)
     {
         const int totalScreensaverFrames = 1000;
         screensaverFrame = (screensaverFrame + 1) % totalScreensaverFrames;
@@ -73,9 +74,7 @@ void displayFunc()
 }
 void idleFunc()
 {
-    if (!ioService)
-        rebootDisplay(); // bootstrap lifecycle
-    if (connection && !context)
+    if (sock && !context)
     {
         puts("Connected, starting render client");
         context = std::make_shared<ClamContext>();
@@ -83,24 +82,25 @@ void idleFunc()
     }
     try
     {
-        while (connection && connection->available())
+        std::vector<unsigned int> messageType;
+        while (sock && (messageType = sock->RecvMaybe<unsigned int>(1)).size() != 0)
         {
-            unsigned int messageType = read<unsigned int>(*connection, 1)[0];
-            switch (messageType)
+            switch (messageType[0])
             {
                 case MessageNull:
                     break;
                 case MessageKernelInvoke:
                     {
-                        auto kernName = readStr(*connection);
+                        auto kernName = sock->RecvStr();
+                        auto launchSize = sock->Recv<int>(2);
                         for (int index = 0;; index++)
                         {
-                            int arglen = read<int>(*connection, 1)[0];
+                            int arglen = sock->Recv<int>(1)[0];
                             if (arglen == 0)
                                 break;
                             else if (arglen == -1) // buffer name
                             {
-                                auto arg = interop->GetBuffer(readStr(*connection));
+                                auto arg = interop->GetBuffer(sock->RecvStr());
                                 kernel->SetArg(kernName, index, sizeof(*arg), arg.get());
                             }
                             else if (arglen == -2) // *FOUR* parameters, x, y, width, height
@@ -114,29 +114,49 @@ void idleFunc()
                             }
                             else
                             {
-                                auto arg = read<uint8_t>(*connection, arglen);
+                                auto arg = sock->Recv<uint8_t>(arglen); // recieve bytes of arg
                                 kernel->SetArg(kernName, index, arglen, arg.data());
                             }
                         }
-                        kernel->Invoke(kernName);
-                        send<uint8_t>(*connection, {0});
+                        if (launchSize[0] == -1)
+                            launchSize[0] = oldWidth;
+                        if (launchSize[1] == -1)
+                            launchSize[1] = oldHeight;
+                        kernel->Invoke(kernName, launchSize[0], launchSize[1]);
+                        sock->Send<uint8_t>({0});
                     }
                     break;
                 case MessageKernelSource:
                     {
-                        auto sourcecode = readStr(*connection);
+                        auto sourcecode = sock->RecvStr();
                         kernel = std::make_shared<ClamKernel>(context->GetContext(),
                                 context->GetDevice(), sourcecode.c_str());
                         if (oldWidth > 0 && oldHeight > 0)
                             interop->Resize(kernel, oldWidth, oldHeight);
-                        send<uint8_t>(*connection, {0});
+                        sock->Send<uint8_t>({0});
                     }
                     break;
                 case MessageMkBuffer:
                     {
-                        auto buffername = readStr(*connection);
-                        interop->MkBuffer(buffername);
-                        send<uint8_t>(*connection, {0});
+                        auto buffername = sock->RecvStr();
+                        auto size = sock->Recv<long>(1)[0];
+                        interop->MkBuffer(buffername, size);
+                        sock->Send<uint8_t>({0});
+                    }
+                    break;
+                case MessageDlBuffer:
+                    {
+                        auto buffername = sock->RecvStr();
+                        auto size = sock->Recv<long>(1)[0];
+                        interop->DlBuffer(kernel->GetQueue(), buffername, size);
+                        sock->Send<uint8_t>({0});
+                    }
+                    break;
+                case MessageRmBuffer:
+                    {
+                        auto buffername = sock->RecvStr();
+                        interop->RmBuffer(buffername);
+                        sock->Send<uint8_t>({0});
                     }
                     break;
                 case MessageKill:
@@ -144,28 +164,32 @@ void idleFunc()
                     rebootDisplay();
                     break;
                 default:
-                    throw std::runtime_error("Unknown packet id " + std::to_string(messageType));
+                    throw std::runtime_error("Unknown packet id "
+                            + std::to_string(messageType[0]));
             }
         }
     }
     catch (std::exception const& ex)
     {
+        puts("Exception in client idleFunc:");
         puts(ex.what());
-        if (connection->is_open())
-            connection->close();
+        sock = nullptr;
         rebootDisplay();
     }
     glutPostRedisplay();
 }
 
-void client(int port)
+void client(const char* clientPort, int xpos, int ypos, int width, int height, bool fullscreen)
 {
-    hostPort = port;
+    hostPort = clientPort;
     glutInitDisplayMode(GLUT_DOUBLE);
+    glutInitWindowPosition(xpos, ypos);
+    glutInitWindowSize(width, height);
     glutCreateWindow("Clam2");
-    // TODO: Figure out what screen to put ourselves on
-    //glutFullScreen();
+    if (fullscreen)
+        glutFullScreen();
 
+    rebootDisplay();
     glutDisplayFunc(displayFunc);
     glutIdleFunc(idleFunc);
     glutMainLoop();

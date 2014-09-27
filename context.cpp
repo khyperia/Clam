@@ -55,7 +55,6 @@ ClamContext::ClamContext()
                 );
         if (lError == CL_SUCCESS)
         {
-            // We found the context.
             openclDevice = deviceIdToTry;
             openclContext = contextToTry;
             break;
@@ -66,6 +65,8 @@ ClamContext::ClamContext()
         throw std::runtime_error("No compatible OpenCL devices found");
     }
 
-    device = std::make_shared<cl_device_id>(openclDevice); // TODO: Dispose properly
-    context = std::make_shared<cl_context>(openclContext); // TODO: Dispose properly
+    device = std::make_shared<cl_device_id>(openclDevice);
+    context = make_custom_shared<cl_context>([](cl_context& dying){
+            clReleaseContext(dying);
+            }, openclContext);
 }

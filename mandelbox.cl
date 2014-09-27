@@ -1,10 +1,4 @@
 /*
-__kernel void Main(__global float4* screen,
-    int screenX, int screenY, int width, int height,
-    float posX, float posY, float posZ,
-    float lookX, float lookY, float lookZ,
-    float upX, float upY, float upZ,
-    float fov, float focalDistance, float frame)
 
 CLAMSCRIPTSTART
 
@@ -12,7 +6,7 @@ CLAMSCRIPTSTART
 pos = {0, 0, 5}
 look = {0, 0, -1}
 up = {0, 1, 0}
-fov = 1.0 / 1000
+fov = 1.0
 focalDistance = 1.0
 frame = 0.0
 
@@ -70,11 +64,11 @@ function update(time)
         frame = 0
     end
     if iskeydown("r") then
-        focalDistance = focalDistance * (1 + time)
+        focalDistance = focalDistance * (1 + time * fov)
         frame = 0
     end
     if iskeydown("f") then
-        focalDistance = focalDistance / (1 + time)
+        focalDistance = focalDistance / (1 + time * fov)
         frame = 0
     end
     if iskeydown("u") then
@@ -86,31 +80,57 @@ function update(time)
         frame = 0
     end
     if iskeydown("j") then
-        look = rotate(look, up, time)
+        look = rotate(look, up, time * fov)
         frame = 0
     end
     if iskeydown("l") then
-        look = rotate(look, up, -time)
+        look = rotate(look, up, -time * fov)
         frame = 0
     end
     if iskeydown("i") then
-        look = rotate(look, cross(up, look), time)
+        look = rotate(look, cross(up, look), time * fov)
         frame = 0
     end
     if iskeydown("k") then
-        look = rotate(look, cross(look, up), time)
+        look = rotate(look, cross(look, up), time * fov)
         frame = 0
+    end
+    if iskeydown("n") then
+        fov = fov * (1 + time)
+        frame = 0
+    end
+    if iskeydown("m") then
+        fov = fov / (1 + time)
+        frame = 0
+    end
+    if iskeydown("p") then
+        unsetkey("p")
+        width = 5000
+        height = 5000
+        mkbuffer("screenshot", width * height * 4 * 4)
+        numframes = 100
+        for i=0,numframes do
+            kernel("Main", width, height, "screenshot",
+                    {math.floor(-width / 2)}, {math.floor(-height / 2)}, {width}, {height},
+                    pos[1], pos[2], pos[3],
+                    look[1], look[2], look[3],
+                    up[1], up[2], up[3],
+                    fov / width, focalDistance, i)
+            print((i / numframes * 100), "% done");
+        end
+        dlbuffer("screenshot", width)
+        rmbuffer("screenshot")
     end
 
     look = normalize(look)
     up = normalize(cross(cross(look, up), look))
     
-    kernel("Main", "",
+    kernel("Main", -1, -1, "",
            special,
            pos[1], pos[2], pos[3],
            look[1], look[2], look[3],
            up[1], up[2], up[3],
-           fov, focalDistance, frame)
+           fov / 1000, focalDistance, frame)
 
     frame = frame + 1
 end
@@ -497,7 +517,9 @@ __kernel void Main(__global float4* screen,
 	float3 look = (float3)(lookX, lookY, lookZ);
 	float3 up = (float3)(upX, upY, upZ);
 
-	ulong rand = (ulong)get_global_id(0) + (ulong)get_global_id(1) * get_global_size(0) + (ulong)frame * get_global_size(0) * get_global_size(1);
+	ulong rand = (ulong)get_global_id(0) +
+        (ulong)get_global_id(1) * get_global_size(0) +
+        (ulong)frame * get_global_size(0) * get_global_size(1);
 	for (int i = 0; i < RandSeedInitSteps; i++)
 		MWC64X(&rand);
 
@@ -506,8 +528,6 @@ __kernel void Main(__global float4* screen,
 
 	float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
 	float3 rayDir = RayDir(look, up, screenCoords, fov);
-
-	//float3 lightPosition = pos + (look + cross(look, up)) * (focalDistance / 4);
 
 	float3 color = TracePath(pos, rayDir, focalDistance, &rand);
 	

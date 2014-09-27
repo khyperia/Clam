@@ -1,6 +1,7 @@
 #include "helper.h"
 #include <stdexcept>
 #include <sstream>
+#include <cmath>
 
 void HandleErrImpl(int errcode, const char* message, const char* filename, int line)
 {

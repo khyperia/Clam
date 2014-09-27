@@ -7,12 +7,10 @@ class ClamKernel
 {
 	std::shared_ptr<cl_command_queue> queue;
     std::map<std::string, std::shared_ptr<cl_kernel>> kernels;
-	size_t launchSize[2];
 public:
 	ClamKernel();
 	ClamKernel(std::shared_ptr<cl_context> context,
             std::shared_ptr<cl_device_id> device, const char* sourcecode);
-	void SetLaunchSize(size_t width, size_t height);
 
 	std::shared_ptr<cl_command_queue> GetQueue()
 	{
@@ -20,7 +18,7 @@ public:
 	}
 
     // Invoke does NOT set arguments
-	void Invoke(std::string kernName);
+	void Invoke(std::string kernName, long launchWidth, long launchHeight);
     void SetArg(std::string kernName, int index, int size, const void* data)
     {
         if (kernels.find(kernName) == kernels.end())

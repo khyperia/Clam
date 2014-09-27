@@ -7,8 +7,7 @@
 #include <GL/glut.h>
 #include "scriptengine.h"
 
-using boost::asio::ip::tcp;
-std::shared_ptr<std::vector<std::shared_ptr<tcp::socket>>> socks;
+std::shared_ptr<std::vector<std::shared_ptr<CSocket>>> socks;
 std::shared_ptr<ScriptEngine> scriptengine;
 float offsetX = 0.f, offsetY = 0.f, zoom = 1.f;
 std::set<unsigned char> pressedKeys;
@@ -20,7 +19,14 @@ bool iskeydown(unsigned char key)
     return pressedKeys.find(key) != pressedKeys.end();
 }
 
-std::shared_ptr<std::vector<std::shared_ptr<tcp::socket>>> getSocks()
+void unsetkey(unsigned char key)
+{
+    auto loc = pressedKeys.find(key);
+    if (loc != pressedKeys.end())
+        pressedKeys.erase(loc);
+}
+
+std::shared_ptr<std::vector<std::shared_ptr<CSocket>>> getSocks()
 {
     return socks;
 }
@@ -31,19 +37,9 @@ void idleFuncServer()
     auto frameSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(thisUpdate - lastUpdate).count() / 1000.f;
     lastUpdate = thisUpdate;
 
-    if (scriptengine && socks)
-    {
-        scriptengine->Update(frameSeconds);
-    }
+    scriptengine->Update(frameSeconds);
 
-    for (size_t i = 0; i < socks->size(); i++)
-    {
-        if ((*socks)[i]->is_open() == false)
-        {
-            socks->erase(socks->begin() + i);
-            i--;
-        }
-    }
+    glutPostRedisplay();
 }
 
 void keyboardDownFunc(unsigned char key, int, int)
@@ -84,18 +80,17 @@ void closeSocks()
 {
     for (auto const& sock : *socks)
     {
-        send<unsigned int>(*sock, {MessageKill});
-        sock->close();
+        sock->Send<unsigned int>({MessageKill});
     }
+    socks = nullptr;
 }
 
 void server(std::string kernelFile, std::vector<std::string> clients)
 {
-    boost::asio::io_service service;
-    socks = std::make_shared<decltype(socks)::element_type>(); // I like C++
+    socks = std::make_shared<std::vector<std::shared_ptr<CSocket>>>();
     std::ifstream inputFile(kernelFile);
     if (inputFile.is_open() == false)
-        throw std::runtime_error("Kernel file \""+kernelFile+"\" didn't exist");
+        throw std::runtime_error("Kernel file \"" + kernelFile + "\" didn't exist");
     std::string sourcecode((std::istreambuf_iterator<char>(inputFile)),
             std::istreambuf_iterator<char>());
 
@@ -106,24 +101,20 @@ void server(std::string kernelFile, std::vector<std::string> clients)
     start += strlen("CLAMSCRIPTSTART");
     std::string scriptcode = sourcecode.substr(start, end - start);
     scriptengine = std::make_shared<ScriptEngine>(scriptcode);
-
+    
     for (auto arg : clients)
     {
-        auto sock = std::make_shared<tcp::socket>(service);
-        int port = 23456;
+        std::string port = "23456";
         auto colon = arg.find(":");
         if (colon != std::string::npos)
         {
-            port = std::stoi(arg.substr(colon + 1, arg.length() - colon - 1));
+            port = arg.substr(colon + 1, arg.length() - colon - 1);
             arg = arg.substr(0, colon);
         }
-        sock->connect(tcp::endpoint(boost::asio::ip::address::from_string(arg), port));
-        send<unsigned int>(*sock, {MessageKernelSource});
-
-        writeStr(*sock, sourcecode);
-
-        read<uint8_t>(*sock, 1);
-
+        auto sock = std::make_shared<CSocket>(arg.c_str(), port.c_str());
+        sock->Send<unsigned int>({MessageKernelSource});
+        sock->SendStr(sourcecode);
+        sock->Recv<uint8_t>(1);
         socks->push_back(sock);
     }
 
