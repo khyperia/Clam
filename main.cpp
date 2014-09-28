@@ -1,5 +1,6 @@
 #include "client.h"
 #include "server.h"
+#include "echo.h"
 #include <GL/glut.h>
 
 std::vector<std::string> split(std::string str, char sep)
@@ -14,57 +15,56 @@ std::vector<std::string> split(std::string str, char sep)
     return result;
 }
 
+std::string sgetenv(const char* name)
+{
+    const char* result = getenv(name);
+    if (!result)
+        throw std::runtime_error("Environment variable " + std::string(name) + " not set");
+    return result;
+}
+
 int unsafemain(int argc, char** argv)
 {
     glutInit(&argc, argv);
 
-    const char* programType = getenv("PROGRAMTYPE");
-    if (!programType)
+    auto programType = sgetenv("PROGRAMTYPE");
+    if (programType == "slave")
     {
-        puts("Envrionment variable PROGRAMTYPE not set, exiting");
-        return -1;
-    }
-    else if (strcmp(programType, "slave") == 0)
-    {
-        const char* slavePort = getenv("SLAVE_PORT");
-        if (!slavePort)
-        {
-            puts("Envrionment variable SLAVE_PORT not set, exiting");
-            return -1;
-        }
-        const char* slaveWindow = getenv("SLAVE_WINDOW");
-        if (!slaveWindow)
-        {
-            puts("Envrionment variable SLAVE_WINDOW not set, exiting");
-            return -1;
-        }
+        auto slavePort = sgetenv("SLAVE_PORT");
+        auto slaveWindow = sgetenv("SLAVE_WINDOW");
         int width, height, xpos, ypos;
-        if (sscanf(slaveWindow, "%dx%d+%d+%d", &width, &height, &xpos, &ypos) != 4)
+        if (sscanf(slaveWindow.c_str(), "%dx%d%d%d", &width, &height, &xpos, &ypos) != 4)
         {
-            puts("$SLAVE_WINDOW was not in format %dx%d+%d+%d, exiting");
+            puts("$SLAVE_WINDOW was not in format [width]x[height][-+][posX][-+][posY], exiting");
+            return -1;
+        }
+        auto slaveRendercoords = sgetenv("SLAVE_RENDERCOORDS");
+        int renderX, renderY;
+        if (sscanf(slaveRendercoords.c_str(), "%d%d", &renderX, &renderY) != 2)
+        {
+            puts("$SLAVE_RENDERCOORDS was not in format [-+][num][-+][num], exiting");
             return -1;
         }
         const char* slaveFullscreen = getenv("SLAVE_FULLSCREEN");
         bool slaveFullscreenVal = slaveFullscreen && strcmp(slaveFullscreen, "true") == 0;
-        client(slavePort, xpos, ypos, width, height, slaveFullscreenVal);
+        client(slavePort.c_str(),
+                xpos, ypos, width, height,
+                renderX, renderY,
+                slaveFullscreenVal);
         return 0;
     }
-    else if (strcmp(programType, "master") == 0)
+    else if (programType == "master")
     {
-        const char* masterKernel = getenv("MASTER_KERNEL");
-        if (!masterKernel)
-        {
-            puts("Envrionment variable MASTER_KERNEL not set, exiting");
-            return -1;
-        }
-        const char* clients = getenv("MASTER_CONNECTIONS");
-        if (!clients)
-        {
-            puts("Environment variable MASTER_CONNECTIONS not set, exiting");
-            return -1;
-        }
-        auto clientVec = split(clients, ';');
+        auto masterKernel = sgetenv("MASTER_KERNEL");
+        auto clientVec = split(sgetenv("MASTER_CONNECTIONS"), '~');
         server(masterKernel, clientVec);
+        return 0;
+    }
+    else if (programType == "echo")
+    {
+        auto incomingPort = sgetenv("ECHO_PORT");
+        auto outgoingIps = split(sgetenv("ECHO_CONNECTIONS"), '~');
+        echo(incomingPort.c_str(), outgoingIps);
         return 0;
     }
     else
@@ -78,11 +78,13 @@ int main(int argc, char** argv)
 {
     try
     {
-        unsafemain(argc, argv);
+        return unsafemain(argc, argv);
     }
     catch (std::exception const& ex)
     {
-        puts("Unhandled exception:");
+        puts(("Unhandled exception (PROGRAMTYPE = " +
+                    std::string(getenv("PROGRAMTYPE")) + "):").c_str());
         puts(ex.what());
+        return -1;
     }
 }

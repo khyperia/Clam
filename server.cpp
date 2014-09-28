@@ -78,11 +78,13 @@ void displayFuncServer()
 
 void closeSocks()
 {
-    for (auto const& sock : *socks)
+    for (auto& sock : *socks)
     {
         sock->Send<unsigned int>({MessageKill});
+        sock = nullptr;
     }
     socks = nullptr;
+    puts("Closed socks");
 }
 
 void server(std::string kernelFile, std::vector<std::string> clients)
@@ -104,14 +106,7 @@ void server(std::string kernelFile, std::vector<std::string> clients)
     
     for (auto arg : clients)
     {
-        std::string port = "23456";
-        auto colon = arg.find(":");
-        if (colon != std::string::npos)
-        {
-            port = arg.substr(colon + 1, arg.length() - colon - 1);
-            arg = arg.substr(0, colon);
-        }
-        auto sock = std::make_shared<CSocket>(arg.c_str(), port.c_str());
+        auto sock = std::make_shared<CSocket>(arg);
         sock->Send<unsigned int>({MessageKernelSource});
         sock->SendStr(sourcecode);
         sock->Recv<uint8_t>(1);

@@ -28,10 +28,24 @@ struct CSocket
 
     ~CSocket()
     {
-        close(sockfd);
+        if (close(sockfd))
+            puts("WARNING: close(socket) returned nonzero, things may fail");
     }
 
     CSocket(CSocket const&) = delete;
+
+    // connect constructor (parse host:port syntax)
+    CSocket(std::string ip)
+    {
+        std::string port = "23456";
+        auto colon = ip.find(":");
+        if (colon != std::string::npos)
+        {
+            port = ip.substr(colon + 1, ip.length() - colon - 1);
+            ip = ip.substr(0, colon);
+        }
+        sockfd = mksock(ip.c_str(), port.c_str());
+    }
 
     // connect constructor
     CSocket(const char* host, const char* port)
@@ -48,6 +62,11 @@ struct CSocket
     CSocket(int socketfd)
     {
         sockfd = socketfd;
+    }
+
+    int GetFd()
+    {
+        return sockfd;
     }
 
     private:
@@ -72,7 +91,7 @@ struct CSocket
         addrinfo* addressInformation = nullptr;
         for (auto p = servinfo; p != nullptr; p = p->ai_next)
         {
-            if ((tmpsockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+            if ((tmpsockfd = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC, p->ai_protocol)) == -1)
             {
                 puts(("socket() failed: " + std::string(gai_strerror(errno))).c_str());
             }
@@ -80,7 +99,7 @@ struct CSocket
             {
                 if (bind(tmpsockfd, p->ai_addr, p->ai_addrlen) == -1)
                 {
-                    puts(("bind() failed: " + std::string(gai_strerror(errno))).c_str());
+                    puts(("bind() failed: " + std::string(strerror(errno))).c_str());
                 }
                 else if (listen(tmpsockfd, 16) == -1)
                 {
@@ -127,47 +146,7 @@ struct CSocket
         }
     }
 
-    static void runEcho(int myfd, std::vector<int> echoTo)
-    {
-        std::vector<uint8_t> buffer(64);
-        std::vector<int> dead;
-        while (true)
-        {
-            auto size = recv(myfd, buffer.data(), buffer.size(), 0);
-            if (size == -1)
-            {
-                puts(("Echo thread crashed on recv(): " +
-                            std::string(gai_strerror(errno))).c_str());
-                close(myfd);
-                break;
-            }
-
-            for (auto echo : echoTo)
-            {
-                auto result = send(echo, buffer.data(), size, 0);
-                if (result != size)
-                {
-                    puts(("Echo thread failed to send(): " +
-                                std::string(gai_strerror(errno))).c_str());
-                    close(echo);
-                    dead.push_back(echo);
-                }
-            }
-            for (auto deadSock : dead)
-                echoTo.erase(std::find(echoTo.begin(), echoTo.end(), deadSock));
-            dead.clear();
-        }
-    }
-
     public:
-    void SetNonblock()
-    {
-        if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL) | O_NONBLOCK) < 0)
-        {
-            throw std::runtime_error("SetNonblock() failed");
-        }
-    }
-
     std::shared_ptr<CSocket> Accept()
     {
         int clientfd = accept(sockfd, nullptr, nullptr);
@@ -179,7 +158,7 @@ struct CSocket
     template<typename T>
         void Send(std::vector<T> vector)
         {
-            auto result = send(sockfd, vector.data(), vector.size() * sizeof(T), 0);
+            auto result = send(sockfd, vector.data(), vector.size() * sizeof(T), MSG_NOSIGNAL);
             if (result == -1 || (size_t)result != vector.size() * sizeof(T))
                 throw std::runtime_error("send() failed: " +
                         std::string(gai_strerror(errno)));
@@ -190,38 +169,74 @@ struct CSocket
         {
             if (length == 0)
                 return std::vector<T>();
-            while (true)
+            std::vector<T> buf(length);
+            int lengthbytes = buf.size() * sizeof(T);
+            auto size = recv(sockfd, (uint8_t*)buf.data(), lengthbytes, MSG_WAITALL);
+            if (size != lengthbytes)
             {
-                auto result = RecvMaybe<T>(length);
-                if (result.size() != 0)
-                    return result;
+                if (size == -1)
+                    throw std::runtime_error("recv() failed: " +
+                            std::string(gai_strerror(errno)));
+                throw std::runtime_error("recv() failed: Not enough bytes read (" +
+                        std::to_string(size) + " of " +
+                        std::to_string(lengthbytes) + ")");
             }
+            return buf;
+        }
+
+    template<typename T>
+        std::vector<T> RecvNoFull(int maxlength)
+        {
+            std::vector<T> buf(maxlength);
+            auto size = recv(sockfd, (uint8_t*)buf.data(), buf.size() * sizeof(T), MSG_DONTWAIT);
+            if ((size == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || size == 0)
+                return std::vector<T>();
+            else if (size == -1)
+                throw std::runtime_error("recvMaybe() failed: " +
+                        std::string(gai_strerror(errno)));
+            buf.resize(size);
+            return buf;
         }
 
     template<typename T>
         std::vector<T> RecvMaybe(int length)
         {
             std::vector<T> buf(length);
-            int totalRead = 0;
-            while (totalRead < length * (int)sizeof(T))
-            {
-                auto size = recv(sockfd, (uint8_t*)buf.data() + totalRead,
-                        buf.size() * sizeof(T) - totalRead, 0);
-                if ((size == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || size == 0)
-                {
-                    if (totalRead == 0)
-                        return std::vector<T>();
-                }
-                else if (size == -1)
-                {
-                    throw std::runtime_error("recvMaybe() failed: " +
-                            std::string(gai_strerror(errno)));
-                }
-                if (size > 0)
-                    totalRead += size;
-            }
+            auto size = recv(sockfd, (uint8_t*)buf.data(), buf.size() * sizeof(T), MSG_DONTWAIT);
+            if ((size == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || size == 0)
+                return std::vector<T>();
+            if (size == -1)
+                throw std::runtime_error("recvMaybe() failed: " +
+                        std::string(gai_strerror(errno)));
+            auto newsize = recv(sockfd, (uint8_t*)buf.data() + size,
+                    buf.size() * sizeof(T) - size, MSG_WAITALL);
+            if (newsize == -1)
+                throw std::runtime_error("recvMaybe() failed: " +
+                        std::string(gai_strerror(errno)));
+            if (size + newsize != (int)(buf.size() * sizeof(T)))
+                throw std::runtime_error("recvMaybe() failed: Not enough bytes read (" +
+                        std::to_string(size + newsize) + " of " +
+                        std::to_string(buf.size() * sizeof(T)) + ")");
             return buf;
         }
+
+    bool RecvByte(uint8_t* byte)
+    {
+        auto result = recv(sockfd, byte, 1, MSG_DONTWAIT);
+        if ((result == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || result == 0)
+            return false;
+        if (result == -1)
+            throw std::runtime_error("recvByte() failed: " +
+                    std::string(gai_strerror(errno)));
+        return true;
+    }
+
+    void SendByte(uint8_t byte)
+    {
+        if (send(sockfd, &byte, 1, MSG_NOSIGNAL) != 1)
+            throw std::runtime_error("SendByte() failed: " +
+                    std::string(gai_strerror(errno)));
+    }
 
     void SendStr(std::string str)
     {

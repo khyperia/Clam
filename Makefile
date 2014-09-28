@@ -1,6 +1,6 @@
 CC=clang++
 OBJDIR=obj
-CFLAGS=-c -O2 --std=c++11 -Wall -Wextra -I$(OBJDIR) $(EXTRACFLAGS)
+CFLAGS=-c -g --std=c++11 -Wall -Wextra -I$(OBJDIR) $(EXTRACFLAGS)
 LDFLAGS=-lOpenCL -lGL -lglut -lpng -llua $(EXTRALDFLAGS)
 SOURCES=$(wildcard *.cpp)
 OBJECTS=$(patsubst %.cpp,$(OBJDIR)/%.o,$(SOURCES))

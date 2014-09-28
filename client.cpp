@@ -14,16 +14,17 @@ bool resized = false;
 std::shared_ptr<ClamContext> context;
 std::shared_ptr<ClamInterop> interop;
 std::shared_ptr<ClamKernel> kernel;
+std::shared_ptr<CSocket> acceptor;
 std::shared_ptr<CSocket> sock;
 
 void connectThreaded()
 {
     try
     {
-        CSocket acceptor(hostPort.c_str());
+        if (acceptor == nullptr)
+            acceptor = std::make_shared<CSocket>(hostPort.c_str());
         puts("Waiting for connection");
-        sock = acceptor.Accept();
-        sock->SetNonblock();
+        sock = acceptor->Accept();
     }
     catch (std::exception const& ex)
     {
@@ -45,8 +46,6 @@ void displayFunc()
 {
     int width = glutGet(GLUT_WINDOW_WIDTH);
     int height = glutGet(GLUT_WINDOW_HEIGHT);
-    oldX = glutGet(GLUT_WINDOW_X);
-    oldY = glutGet(GLUT_WINDOW_Y);
     if (kernel)
     {
         if (width != oldWidth || height != oldHeight)
@@ -105,10 +104,8 @@ void idleFunc()
                             }
                             else if (arglen == -2) // *FOUR* parameters, x, y, width, height
                             {
-                                int realX = oldX - glutGet(GLUT_SCREEN_WIDTH) / 2;
-                                int realY = oldY - glutGet(GLUT_SCREEN_HEIGHT) / 2;
-                                kernel->SetArg(kernName, index++, sizeof(int), &realX);
-                                kernel->SetArg(kernName, index++, sizeof(int), &realY);
+                                kernel->SetArg(kernName, index++, sizeof(int), &oldX);
+                                kernel->SetArg(kernName, index++, sizeof(int), &oldY);
                                 kernel->SetArg(kernName, index++, sizeof(int), &interop->width);
                                 kernel->SetArg(kernName, index, sizeof(int), &interop->height);
                             }
@@ -179,9 +176,14 @@ void idleFunc()
     glutPostRedisplay();
 }
 
-void client(const char* clientPort, int xpos, int ypos, int width, int height, bool fullscreen)
+void client(const char* clientPort,
+        int xpos, int ypos, int width, int height,
+        int renderX, int renderY,
+        bool fullscreen)
 {
     hostPort = clientPort;
+    oldX = renderX;
+    oldY = renderY;
     glutInitDisplayMode(GLUT_DOUBLE);
     glutInitWindowPosition(xpos, ypos);
     glutInitWindowSize(width, height);
