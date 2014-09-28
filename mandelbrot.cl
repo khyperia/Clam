@@ -46,14 +46,14 @@ CLAMSCRIPTEND
 
 float3 GetColor(float i)
 {
-	return (float3)(sin(i / 17.0) * 0.5 + 0.5,
+    return (float3)(sin(i / 17.0) * 0.5 + 0.5,
                     sin(i / 19.0) * 0.5 + 0.5,
                     sin(i / 23.0) * 0.5 + 0.5);
 }
 
 float ComputeSmooth(float2 last)
 {
-	return 1 + log2(log((float)Bailout) / log(length(last)));
+    return 1 + log2(log((float)Bailout) / log(length(last)));
 }
 
 float3 IterateAlt(float2 z, float2 c)

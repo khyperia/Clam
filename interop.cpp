@@ -8,19 +8,19 @@ ClamInterop::ClamInterop()
 }
 
 ClamInterop::ClamInterop(std::shared_ptr<cl_context> context)
-	: clContext(context)
+    : clContext(context)
 {
-	glClearColor(1.f, 0.f, 0.f, 1.f);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0.f, 1.f, 0.f, 1.f, -1.f, 1.f);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+    glClearColor(1.f, 0.f, 0.f, 1.f);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0.f, 1.f, 0.f, 1.f, -1.f, 1.f);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
     
     GLuint aglTexture, aglBuffer;
 
-	glGenTextures(1, &aglTexture);
-	glGenBuffers(1, &aglBuffer);
+    glGenTextures(1, &aglTexture);
+    glGenBuffers(1, &aglBuffer);
 
     glTexture = make_custom_shared<GLuint>([](GLuint const& dying)
             {
@@ -31,29 +31,29 @@ ClamInterop::ClamInterop(std::shared_ptr<cl_context> context)
                 glDeleteBuffers(1, &dying);
             }, aglBuffer);
 
-	glEnable(GL_TEXTURE_2D);
+    glEnable(GL_TEXTURE_2D);
 }
 
 void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _height)
 {
     if (_width == 0 || _height == 0)
         return;
-	width = _width;
-	height = _height;
-	glViewport(0, 0, width, height);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
-	glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4 * sizeof(float), nullptr, GL_DYNAMIC_COPY);
+    width = _width;
+    height = _height;
+    glViewport(0, 0, width, height);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4 * sizeof(float), nullptr, GL_DYNAMIC_COPY);
     
-	cl_int openclError = 0;
-	cl_mem openclBuffer = clCreateFromGLBuffer(*clContext,
+    cl_int openclError = 0;
+    cl_mem openclBuffer = clCreateFromGLBuffer(*clContext,
             CL_MEM_WRITE_ONLY, *glBuffer, &openclError);
-	clBuffers[""] = std::make_pair(make_custom_shared<cl_mem>([](cl_mem const& dying)
+    clBuffers[""] = std::make_pair(make_custom_shared<cl_mem>([](cl_mem const& dying)
             {
                 clReleaseMemObject(dying);
             }, openclBuffer), -1);
-	
-	if (openclError)
-		throw std::runtime_error("Could not create OpenGL/OpenCL combo buffer "
+    
+    if (openclError)
+        throw std::runtime_error("Could not create OpenGL/OpenCL combo buffer "
                 + std::to_string(openclError));
 
     for (auto& buffer : clBuffers)
@@ -63,7 +63,7 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
         auto temp = clCreateBuffer(*clContext, CL_MEM_READ_WRITE,
                 width * height * 4 * sizeof(float), nullptr, &openclError);
         if (openclError)
-		    throw std::runtime_error("Could not create OpenCL buffer "
+            throw std::runtime_error("Could not create OpenCL buffer "
                     + std::to_string(openclError));
         buffer.second.first = make_custom_shared<cl_mem>([](cl_mem const& dying)
                 {
@@ -71,16 +71,16 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
                 }, temp);
     }
 
-	glBindTexture(GL_TEXTURE_2D, *glTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, 4, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, *glTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     if (clEnqueueAcquireGLObjects(*kernel->GetQueue(), 1,
                 clBuffers[""].first.get(), 0, nullptr, nullptr))
-		throw std::runtime_error("Could not acquire GL objects");
+        throw std::runtime_error("Could not acquire GL objects");
 
-	HandleErr(glGetError());
+    HandleErr(glGetError());
 }
 
 void ClamInterop::MkBuffer(std::string buffername, long size)
@@ -89,7 +89,7 @@ void ClamInterop::MkBuffer(std::string buffername, long size)
     long actualsize = size == -1 ? width * height * 4 * sizeof(float) : size;
     auto temp = clCreateBuffer(*clContext, CL_MEM_READ_WRITE, actualsize, nullptr, &openclError);
     if (openclError)
-	    throw std::runtime_error("Could not create OpenCL buffer "
+        throw std::runtime_error("Could not create OpenCL buffer "
                 + std::to_string(openclError));
     clBuffers[buffername] = std::make_pair(make_custom_shared<cl_mem>([](cl_mem const& dying)
             {
@@ -127,34 +127,34 @@ std::shared_ptr<cl_mem> ClamInterop::GetBuffer(std::string buffername)
 void ClamInterop::Blit(cl_command_queue const& queue)
 {
     if (clEnqueueReleaseGLObjects(queue, 1, clBuffers[""].first.get(), 0, nullptr, nullptr))
-		throw std::runtime_error("Could not release GL objects from OpenCL");
+        throw std::runtime_error("Could not release GL objects from OpenCL");
 
     int error;
-	if ((error = clFinish(queue)))
-		throw std::runtime_error("Could not finish OpenCL (did kernel crash?) Error = "
+    if ((error = clFinish(queue)))
+        throw std::runtime_error("Could not finish OpenCL (did kernel crash?) Error = "
                 + std::to_string(error));
 
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
-	glBindTexture(GL_TEXTURE_2D, *glTexture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_FLOAT, nullptr);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
+    glBindTexture(GL_TEXTURE_2D, *glTexture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_FLOAT, nullptr);
 
-	glBegin(GL_QUADS);
-	glTexCoord2f(0.f, 1.f);
-	glVertex3f(0.f, 0.f, 0.f);
-	glTexCoord2f(0.f, 0.f);
-	glVertex3f(0.f, 1.f, 0.f);
-	glTexCoord2f(1.f, 0.f);
-	glVertex3f(1.f, 1.f, 0.f);
-	glTexCoord2f(1.f, 1.f);
-	glVertex3f(1.f, 0.f, 0.f);
-	glEnd();
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.f, 1.f);
+    glVertex3f(0.f, 0.f, 0.f);
+    glTexCoord2f(0.f, 0.f);
+    glVertex3f(0.f, 1.f, 0.f);
+    glTexCoord2f(1.f, 0.f);
+    glVertex3f(1.f, 1.f, 0.f);
+    glTexCoord2f(1.f, 1.f);
+    glVertex3f(1.f, 0.f, 0.f);
+    glEnd();
 
-	HandleErr(glGetError());
+    HandleErr(glGetError());
 
     // -- //
 
     glFinish();
 
-	if (clEnqueueAcquireGLObjects(queue, 1, clBuffers[""].first.get(), 0, nullptr, nullptr))
-		throw std::runtime_error("Could not acquire GL objects");
+    if (clEnqueueAcquireGLObjects(queue, 1, clBuffers[""].first.get(), 0, nullptr, nullptr))
+        throw std::runtime_error("Could not acquire GL objects");
 }
