@@ -10,16 +10,16 @@
 std::shared_ptr<std::vector<std::shared_ptr<CSocket>>> socks;
 std::shared_ptr<ScriptEngine> scriptengine;
 float offsetX = 0.f, offsetY = 0.f, zoom = 1.f;
-std::set<unsigned char> pressedKeys;
+std::set<char> pressedKeys;
 std::set<int> pressedSpecialKeys;
 auto lastUpdate = std::chrono::steady_clock::now();
 
-bool iskeydown(unsigned char key)
+bool iskeydown(char key)
 {
     return pressedKeys.find(key) != pressedKeys.end();
 }
 
-void unsetkey(unsigned char key)
+void unsetkey(char key)
 {
     auto loc = pressedKeys.find(key);
     if (loc != pressedKeys.end())
@@ -42,15 +42,17 @@ void idleFuncServer()
     glutPostRedisplay();
 }
 
-void keyboardDownFunc(unsigned char key, int, int)
+void keyboardDownFunc(unsigned char ukey, int, int)
 {
+    char key = static_cast<char>(ukey);
     if (pressedKeys.find(key) != pressedKeys.end())
         return;
     pressedKeys.insert(key);
 }
 
-void keyboardUpFunc(unsigned char key, int, int)
+void keyboardUpFunc(unsigned char ukey, int, int)
 {
+    char key = static_cast<char>(ukey);
     if (pressedKeys.find(key) == pressedKeys.end())
         return;
     pressedKeys.erase(pressedKeys.find(key));

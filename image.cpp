@@ -11,10 +11,11 @@ extern "C"
 inline uint8_t convByte(float value)
 {
     const uint8_t maxval = std::numeric_limits<uint8_t>::max();
-    return static_cast<uint8_t>(std::max(std::min(value * maxval, (float)maxval), 0.0f));
+    return static_cast<uint8_t>(std::max(std::min(value * maxval,
+                    static_cast<float>(maxval)), 0.0f));
 }
 
-void WriteImage(std::vector<float> const& float4Pixels, long width)
+void WriteImage(std::vector<float> const& float4Pixels, unsigned long width)
 {
     auto homePtr = getenv("HOME");
     if (!homePtr)
@@ -44,8 +45,9 @@ void WriteImage(std::vector<float> const& float4Pixels, long width)
     if (setjmp(png_jmpbuf(png_ptr)))
         throw std::runtime_error("Error during writing of header");
     
-    long height = float4Pixels.size() / (4 * width);
-    png_set_IHDR(png_ptr, info_ptr, width, height,
+    unsigned long height = float4Pixels.size() / (4 * width);
+    png_set_IHDR(png_ptr, info_ptr,
+            static_cast<unsigned int>(width), static_cast<unsigned int>(height),
             8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
             PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
@@ -55,9 +57,9 @@ void WriteImage(std::vector<float> const& float4Pixels, long width)
         throw std::runtime_error("Error during writing bytes");
 
     std::vector<uint8_t> row_ptr(width * 3);
-    for (int row = 0; row < height; row++)
+    for (size_t row = 0; row < height; row++)
     {
-        for (int col = 0; col < width; col++)
+        for (size_t col = 0; col < width; col++)
         {
             row_ptr[col * 3 + 0] = convByte(float4Pixels[(row * width + col) * 4 + 0]);
             row_ptr[col * 3 + 1] = convByte(float4Pixels[(row * width + col) * 4 + 1]);

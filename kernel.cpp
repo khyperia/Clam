@@ -43,7 +43,8 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
 
     std::vector<cl_kernel> ckernels(16);
     unsigned int numKernels;
-    clCreateKernelsInProgram(openclProgram, ckernels.size(), ckernels.data(), &numKernels);
+    clCreateKernelsInProgram(openclProgram, static_cast<cl_uint>(ckernels.size()),
+            ckernels.data(), &numKernels);
     
     for (unsigned int i = 0; i < numKernels; i++)
     {
@@ -71,7 +72,8 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
             }, openclCommandQueue);
 }
 
-void ClamKernel::Invoke(std::string kernName, long launchWidth, long launchHeight)
+void ClamKernel::Invoke(std::string kernName,
+        unsigned long launchWidth, unsigned long launchHeight)
 {
     if (kernels.find(kernName) == kernels.end())
         throw std::runtime_error("Kernel did not exist: " + kernName);

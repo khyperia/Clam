@@ -62,7 +62,7 @@ void displayFunc()
         const int totalScreensaverFrames = 1000;
         screensaverFrame = (screensaverFrame + 1) % totalScreensaverFrames;
         float r, g, b;
-        hsvToRgb((float)screensaverFrame / totalScreensaverFrames, 0.5, 0.5, r, g, b);
+        hsvToRgb(static_cast<float>(screensaverFrame) / totalScreensaverFrames, 0.5, 0.5, r, g, b);
         glViewport(0, 0, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
         glClearColor(r, g, b, 0);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -100,26 +100,34 @@ void idleFunc()
                             else if (arglen == -1) // buffer name
                             {
                                 auto arg = interop->GetBuffer(sock->RecvStr());
-                                kernel->SetArg(kernName, index, sizeof(*arg), arg.get());
+                                kernel->SetArg(kernName, static_cast<cl_uint>(index),
+                                        sizeof(*arg), arg.get());
                             }
                             else if (arglen == -2) // *FOUR* parameters, x, y, width, height
                             {
-                                kernel->SetArg(kernName, index++, sizeof(int), &oldX);
-                                kernel->SetArg(kernName, index++, sizeof(int), &oldY);
-                                kernel->SetArg(kernName, index++, sizeof(int), &interop->width);
-                                kernel->SetArg(kernName, index, sizeof(int), &interop->height);
+                                kernel->SetArg(kernName, static_cast<cl_uint>(index++),
+                                        sizeof(int), &oldX);
+                                kernel->SetArg(kernName, static_cast<cl_uint>(index++),
+                                        sizeof(int), &oldY);
+                                kernel->SetArg(kernName, static_cast<cl_uint>(index++),
+                                        sizeof(int), &interop->width);
+                                kernel->SetArg(kernName, static_cast<cl_uint>(index),
+                                        sizeof(int), &interop->height);
                             }
                             else
                             {
                                 auto arg = sock->Recv<uint8_t>(arglen); // recieve bytes of arg
-                                kernel->SetArg(kernName, index, arglen, arg.data());
+                                kernel->SetArg(kernName, static_cast<cl_uint>(index),
+                                        static_cast<size_t>(arglen), arg.data());
                             }
                         }
                         if (launchSize[0] == -1)
                             launchSize[0] = oldWidth;
                         if (launchSize[1] == -1)
                             launchSize[1] = oldHeight;
-                        kernel->Invoke(kernName, launchSize[0], launchSize[1]);
+                        kernel->Invoke(kernName,
+                                static_cast<unsigned long>(launchSize[0]),
+                                static_cast<unsigned long>(launchSize[1]));
                         sock->Send<uint8_t>({0});
                     }
                     break;

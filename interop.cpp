@@ -42,7 +42,10 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
     height = _height;
     glViewport(0, 0, width, height);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4 * sizeof(float), nullptr, GL_DYNAMIC_COPY);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER,
+            static_cast<GLsizeiptr>(width) * static_cast<GLsizeiptr>(height) *
+                4 * static_cast<GLsizeiptr>(sizeof(float)),
+            nullptr, GL_DYNAMIC_COPY);
     
     cl_int openclError = 0;
     cl_mem openclBuffer = clCreateFromGLBuffer(*clContext,
@@ -61,7 +64,9 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
         if (buffer.first.empty() || buffer.second.second != -1)
             continue;
         auto temp = clCreateBuffer(*clContext, CL_MEM_READ_WRITE,
-                width * height * 4 * sizeof(float), nullptr, &openclError);
+                static_cast<size_t>(width) * static_cast<size_t>(height) *
+                    4 * static_cast<size_t>(sizeof(float)),
+                nullptr, &openclError);
         if (openclError)
             throw std::runtime_error("Could not create OpenCL buffer "
                     + std::to_string(openclError));
@@ -86,7 +91,8 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
 void ClamInterop::MkBuffer(std::string buffername, long size)
 {
     cl_int openclError;
-    long actualsize = size == -1 ? width * height * 4 * sizeof(float) : size;
+    size_t actualsize = size == -1 ? static_cast<size_t>(width) * static_cast<size_t>(height) *
+        4 * static_cast<size_t>(sizeof(float)) : static_cast<size_t>(size);
     auto temp = clCreateBuffer(*clContext, CL_MEM_READ_WRITE, actualsize, nullptr, &openclError);
     if (openclError)
         throw std::runtime_error("Could not create OpenCL buffer "
@@ -107,14 +113,14 @@ void ClamInterop::RmBuffer(std::string buffername)
 }
 
 void ClamInterop::DlBuffer(std::shared_ptr<cl_command_queue> queue,
-        std::string buffername, long width)
+        std::string buffername, long imagewidth)
 {
     auto buffer = clBuffers[buffername];
-    std::vector<float> cpuData(buffer.second / sizeof(float));
-    clEnqueueReadBuffer(*queue, *buffer.first, true, 0, buffer.second,
+    std::vector<float> cpuData(static_cast<size_t>(buffer.second) / sizeof(float));
+    clEnqueueReadBuffer(*queue, *buffer.first, true, 0, static_cast<size_t>(buffer.second),
             cpuData.data(), 0, nullptr, nullptr);
     clFinish(*queue);
-    WriteImage(cpuData, width);
+    WriteImage(cpuData, static_cast<unsigned long>(imagewidth));
 }
 
 std::shared_ptr<cl_mem> ClamInterop::GetBuffer(std::string buffername)

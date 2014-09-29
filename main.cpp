@@ -65,7 +65,7 @@ int unsafemain(int argc, char** argv)
         auto incomingPort = sgetenv("ECHO_PORT");
         auto outgoingIps = split(sgetenv("ECHO_CONNECTIONS"), '~');
         echo(incomingPort.c_str(), outgoingIps);
-        return 0;
+        //return 0;
     }
     else
     {

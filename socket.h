@@ -91,7 +91,8 @@ struct CSocket
         addrinfo* addressInformation = nullptr;
         for (auto p = servinfo; p != nullptr; p = p->ai_next)
         {
-            if ((tmpsockfd = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC, p->ai_protocol)) == -1)
+            if ((tmpsockfd = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC,
+                            p->ai_protocol)) == -1)
             {
                 puts(("socket() failed: " + std::string(gai_strerror(errno))).c_str());
             }
@@ -159,7 +160,7 @@ struct CSocket
         void Send(std::vector<T> vector)
         {
             auto result = send(sockfd, vector.data(), vector.size() * sizeof(T), MSG_NOSIGNAL);
-            if (result == -1 || (size_t)result != vector.size() * sizeof(T))
+            if (result == -1 || static_cast<uint8_t>(result) != vector.size() * sizeof(T))
                 throw std::runtime_error("send() failed: " +
                         std::string(gai_strerror(errno)));
         }
@@ -169,9 +170,10 @@ struct CSocket
         {
             if (length == 0)
                 return std::vector<T>();
-            std::vector<T> buf(length);
-            int lengthbytes = buf.size() * sizeof(T);
-            auto size = recv(sockfd, (uint8_t*)buf.data(), lengthbytes, MSG_WAITALL);
+            std::vector<T> buf(static_cast<size_t>(length));
+            int lengthbytes = static_cast<int>(buf.size() * sizeof(T));
+            auto size = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()),
+                    static_cast<size_t>(lengthbytes), MSG_WAITALL);
             if (size != lengthbytes)
             {
                 if (size == -1)
@@ -188,7 +190,8 @@ struct CSocket
         std::vector<T> RecvNoFull(int maxlength)
         {
             std::vector<T> buf(maxlength);
-            auto size = recv(sockfd, (uint8_t*)buf.data(), buf.size() * sizeof(T), MSG_DONTWAIT);
+            auto size = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()),
+                    buf.size() * sizeof(T), MSG_DONTWAIT);
             if ((size == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || size == 0)
                 return std::vector<T>();
             else if (size == -1)
@@ -201,19 +204,20 @@ struct CSocket
     template<typename T>
         std::vector<T> RecvMaybe(int length)
         {
-            std::vector<T> buf(length);
-            auto size = recv(sockfd, (uint8_t*)buf.data(), buf.size() * sizeof(T), MSG_DONTWAIT);
+            std::vector<T> buf(static_cast<size_t>(length));
+            auto size = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()),
+                    buf.size() * sizeof(T), MSG_DONTWAIT);
             if ((size == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || size == 0)
                 return std::vector<T>();
             if (size == -1)
                 throw std::runtime_error("recvMaybe() failed: " +
                         std::string(gai_strerror(errno)));
-            auto newsize = recv(sockfd, (uint8_t*)buf.data() + size,
-                    buf.size() * sizeof(T) - size, MSG_WAITALL);
+            auto newsize = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()) + size,
+                    buf.size() * sizeof(T) - static_cast<size_t>(size), MSG_WAITALL);
             if (newsize == -1)
                 throw std::runtime_error("recvMaybe() failed: " +
                         std::string(gai_strerror(errno)));
-            if (size + newsize != (int)(buf.size() * sizeof(T)))
+            if (size + newsize != static_cast<int>(buf.size() * sizeof(T)))
                 throw std::runtime_error("recvMaybe() failed: Not enough bytes read (" +
                         std::to_string(size + newsize) + " of " +
                         std::to_string(buf.size() * sizeof(T)) + ")");
@@ -240,14 +244,14 @@ struct CSocket
 
     void SendStr(std::string str)
     {
-        Send<unsigned int>({(unsigned int)str.length()});
+        Send<unsigned int>({static_cast<unsigned int>(str.length())});
         Send<char>(std::vector<char>(str.begin(), str.end()));
     }
 
     std::string RecvStr()
     {
         auto size = Recv<unsigned int>(1)[0];
-        auto vec = Recv<char>(size);
+        auto vec = Recv<char>(static_cast<int>(size));
         return std::string(vec.begin(), vec.end());
     }
 };

@@ -18,8 +18,8 @@ public:
     }
 
     // Invoke does NOT set arguments
-    void Invoke(std::string kernName, long launchWidth, long launchHeight);
-    void SetArg(std::string kernName, int index, int size, const void* data)
+    void Invoke(std::string kernName, unsigned long launchWidth, unsigned long launchHeight);
+    void SetArg(std::string kernName, cl_uint index, size_t size, const void* data)
     {
         if (kernels.find(kernName) == kernels.end())
             throw std::runtime_error("Kernel did not exist: " + kernName);

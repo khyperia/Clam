@@ -218,8 +218,8 @@ int run_kernel(lua_State* luaState)
         lua_error(luaState);
     }
     std::string kernelName = lua_tostring(luaState, 1);
-    int launchWidth = lua_tointeger(luaState, 2);
-    int launchHeight = lua_tointeger(luaState, 3);
+    int launchWidth = static_cast<int>(lua_tointeger(luaState, 2));
+    int launchHeight = static_cast<int>(lua_tointeger(luaState, 3));
     auto socks = getSocks();
 
     if (!socks)
@@ -246,13 +246,13 @@ int run_kernel(lua_State* luaState)
                         break;
                     case LUA_TNUMBER:
                         sock->Send<int>({ sizeof(float) });
-                        sock->Send<float>({ (float)lua_tonumber(luaState, arg) });
+                        sock->Send<float>({ static_cast<float>(lua_tonumber(luaState, arg)) });
                         break;
                     case LUA_TTABLE:
                         {
                             lua_pushinteger(luaState, 1);
                             lua_gettable(luaState, arg);
-                            int value = lua_tointeger(luaState, -1);
+                            int value = static_cast<int>(lua_tointeger(luaState, -1));
                             lua_pop(luaState, 1);
                             sock->Send<int>({ sizeof(int) });
                             sock->Send<int>({ value });

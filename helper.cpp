@@ -3,7 +3,7 @@
 #include <sstream>
 #include <cmath>
 
-void HandleErrImpl(int errcode, const char* message, const char* filename, int line)
+void HandleErrImpl(unsigned int errcode, const char* message, const char* filename, int line)
 {
     if (errcode != 0)
     {
@@ -21,7 +21,7 @@ void HandleErrImpl(int errcode, const char* message, const char* filename, int l
 
 void hsvToRgb(float h, float s, float v, float& r, float& g, float& b)
 {
-    int i = floor(h * 6);
+    int i = static_cast<int>(floorf(h * 6));
     float f = h * 6 - i;
     float p = v * (1 - s);
     float q = v * (1 - f * s);

@@ -37,13 +37,15 @@ void runEcho(std::shared_ptr<CSocket> copyFrom,
     (*numThreads)--;
 }
 
+// TODO: Find a good clean way to stop this without pkill
 void echo(const char* incomingPort, std::vector<std::string> outgoingIps)
 {
     auto host = std::make_shared<CSocket>(incomingPort);
     std::map<std::string, std::pair<std::thread, std::shared_ptr<int>>> connections;
     while (true)
     {
-        auto newSocket = host->Accept();
+        std::shared_ptr<CSocket> newSocket = nullptr;
+        newSocket = host->Accept();
 
         try
         {

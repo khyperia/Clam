@@ -5,6 +5,6 @@
 #include "socket.h"
 
 void server(std::string kernelFile, std::vector<std::string> clients);
-bool iskeydown(unsigned char key);
-void unsetkey(unsigned char key);
+bool iskeydown(char key);
+void unsetkey(char key);
 std::shared_ptr<std::vector<std::shared_ptr<CSocket>>> getSocks();
