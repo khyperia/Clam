@@ -160,8 +160,11 @@ struct CSocket
         void Send(std::vector<T> vector)
         {
             auto result = send(sockfd, vector.data(), vector.size() * sizeof(T), MSG_NOSIGNAL);
-            if (result == -1 || static_cast<uint8_t>(result) != vector.size() * sizeof(T))
+            if (result == -1)
                 throw std::runtime_error("send() failed: " +
+                        std::string(gai_strerror(errno)));
+            if (static_cast<size_t>(result) != vector.size() * sizeof(T))
+                throw std::runtime_error("send() didn't send all bytes: " +
                         std::string(gai_strerror(errno)));
         }
 

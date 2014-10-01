@@ -44,8 +44,7 @@ void echo(const char* incomingPort, std::vector<std::string> outgoingIps)
     std::map<std::string, std::pair<std::thread, std::shared_ptr<int>>> connections;
     while (true)
     {
-        std::shared_ptr<CSocket> newSocket = nullptr;
-        newSocket = host->Accept();
+        auto newSocket = host->Accept();
 
         try
         {
