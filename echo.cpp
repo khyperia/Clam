@@ -24,7 +24,7 @@ void runEcho(std::shared_ptr<CSocket> copyFrom,
                 copyFrom->SendByte(byte);
                 lastUpdate = std::chrono::steady_clock::now();
             }
-            if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - lastUpdate).count() > 3)
+            if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - lastUpdate).count() > 10)
                 break;
         }
         puts("Echo thread timeout: killing");

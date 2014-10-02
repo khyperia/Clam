@@ -50,7 +50,10 @@ void displayFunc()
     {
         if (width != oldWidth || height != oldHeight)
         {
-            interop->Resize(kernel, width, height);
+            if (width > 0 && height > 0)
+                interop->Resize(kernel, width, height);
+            else
+                puts("width/height was zero, things may fail");
         }
         interop->Blit(*kernel->GetQueue());
         glutSwapBuffers();
@@ -62,7 +65,8 @@ void displayFunc()
         const int totalScreensaverFrames = 1000;
         screensaverFrame = (screensaverFrame + 1) % totalScreensaverFrames;
         float r, g, b;
-        hsvToRgb(static_cast<float>(screensaverFrame) / totalScreensaverFrames, 0.5, 0.5, r, g, b);
+        hsvToRgb(static_cast<float>(screensaverFrame) / totalScreensaverFrames,
+                0.5, 0.5, r, g, b);
         glViewport(0, 0, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
         glClearColor(r, g, b, 0);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -90,6 +94,9 @@ void idleFunc()
                     break;
                 case MessageKernelInvoke:
                     {
+                        if (!kernel)
+                            throw std::runtime_error("Kernel was not compiled before"
+                                    "a MessageKernelInvoke happened");
                         auto kernName = sock->RecvStr();
                         auto launchSize = sock->Recv<int>(2);
                         for (int index = 0;; index++)
@@ -133,11 +140,20 @@ void idleFunc()
                     break;
                 case MessageKernelSource:
                     {
-                        auto sourcecode = sock->RecvStr();
+                        std::vector<std::string> sourcecode;
+                        while (true)
+                        {
+                            std::string temp = sock->RecvStr();
+                            if (temp.empty())
+                                break;
+                            sourcecode.push_back(temp);
+                        }
                         kernel = std::make_shared<ClamKernel>(context->GetContext(),
-                                context->GetDevice(), sourcecode.c_str());
+                                context->GetDevice(), sourcecode);
                         if (oldWidth > 0 && oldHeight > 0)
                             interop->Resize(kernel, oldWidth, oldHeight);
+                        else
+                            puts("width/height have not been initialized, things may fail");
                         sock->Send<uint8_t>({0});
                     }
                     break;

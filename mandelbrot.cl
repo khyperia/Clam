@@ -9,6 +9,8 @@ zoom = 1.0
 function derp()
 end
 
+compile("mandelbrot.cl")
+
 function update(time)
     if iskeydown("w") then posy = posy - zoom * time end
     if iskeydown("s") then posy = posy + zoom * time end

@@ -2,6 +2,7 @@
 
 #include "context.h"
 #include <map>
+#include <vector>
 
 class ClamKernel
 {
@@ -10,7 +11,7 @@ class ClamKernel
 public:
     ClamKernel();
     ClamKernel(std::shared_ptr<cl_context> context,
-            std::shared_ptr<cl_device_id> device, const char* sourcecode);
+            std::shared_ptr<cl_device_id> device, std::vector<std::string> const& sourcecode);
 
     std::shared_ptr<cl_command_queue> GetQueue()
     {

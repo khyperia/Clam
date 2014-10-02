@@ -7,8 +7,8 @@
 #include <GL/glut.h>
 #include "scriptengine.h"
 
-std::shared_ptr<std::vector<std::shared_ptr<CSocket>>> socks;
-std::shared_ptr<ScriptEngine> scriptengine;
+std::shared_ptr<std::vector<std::shared_ptr<CSocket>>> socks = nullptr;
+std::shared_ptr<ScriptEngine> scriptengine = nullptr;
 float offsetX = 0.f, offsetY = 0.f, zoom = 1.f;
 std::set<char> pressedKeys;
 std::set<int> pressedSpecialKeys;
@@ -92,6 +92,12 @@ void closeSocks()
 void server(std::string kernelFile, std::vector<std::string> clients)
 {
     socks = std::make_shared<std::vector<std::shared_ptr<CSocket>>>();
+    for (auto arg : clients)
+    {
+        auto sock = std::make_shared<CSocket>(arg);
+        socks->push_back(sock);
+    }
+
     std::ifstream inputFile(kernelFile);
     if (inputFile.is_open() == false)
         throw std::runtime_error("Kernel file \"" + kernelFile + "\" didn't exist");
@@ -105,15 +111,6 @@ void server(std::string kernelFile, std::vector<std::string> clients)
     start += strlen("CLAMSCRIPTSTART");
     std::string scriptcode = sourcecode.substr(start, end - start);
     scriptengine = std::make_shared<ScriptEngine>(scriptcode);
-    
-    for (auto arg : clients)
-    {
-        auto sock = std::make_shared<CSocket>(arg);
-        sock->Send<unsigned int>({MessageKernelSource});
-        sock->SendStr(sourcecode);
-        sock->Recv<uint8_t>(1);
-        socks->push_back(sock);
-    }
 
     atexit(closeSocks);
 

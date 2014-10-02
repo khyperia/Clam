@@ -1,6 +1,7 @@
 #include "scriptengine.h"
 #include "server.h" // for iskeydown
 
+#include <fstream>
 #include <stdexcept>
 
 int run_iskeydown(lua_State* luaState)
@@ -293,7 +294,101 @@ int run_kernel(lua_State* luaState)
         if (found == socks->end())
             break;
         socks->erase(found);
-    }    return 0; // num return values
+    }
+    return 0; // num return values
+}
+
+int run_compile(lua_State* luaState)
+{
+    int argc = lua_gettop(luaState);
+    std::vector<std::string> sourcecode;
+    for (int i = 1; i <= argc; i++)
+    {
+        if (lua_isstring(luaState, i))
+        {
+            std::string kernelFile = lua_tostring(luaState, i);
+            std::ifstream inputFile(kernelFile);
+            if (inputFile.is_open() == false)
+                throw std::runtime_error("Kernel file \"" + kernelFile + "\" didn't exist");
+            std::string newsourcecode((std::istreambuf_iterator<char>(inputFile)),
+                std::istreambuf_iterator<char>());
+            sourcecode.push_back(newsourcecode);
+        }
+        else if (lua_istable(luaState, i))
+        {
+            lua_pushnil(luaState);
+            std::string newsource;
+            while (lua_next(luaState, i) != 0)
+            {
+                if (!lua_isstring(luaState, -2))
+                {
+                    lua_pushstring(luaState, "compile() dicts must only have string keys");
+                    lua_error(luaState);
+                }
+                std::string key = lua_tostring(luaState, -2);
+                std::string value = lua_tostring(luaState, -1);
+                if (key.find_first_of("\t\r\n ") != std::string::npos)
+                {
+                    lua_pushstring(luaState, "compile() keys must not have spaces");
+                    lua_error(luaState);
+                }
+                newsource += "#define " + key + " " + value + "\n";
+                lua_pop(luaState, 1);
+            }
+            sourcecode.push_back(newsource);
+        }
+        else
+        {
+            lua_pushstring(luaState,
+                        ("compile must be called as compile([string|dict], ...) - type was "
+                        + std::string(lua_typename(luaState, lua_type(luaState, i)))).c_str());
+            lua_error(luaState);
+        }
+    }
+    auto socks = getSocks();
+
+    if (!socks)
+        throw std::runtime_error("Socks was null");
+
+    for (auto& sock : *socks)
+    {
+        try
+        {
+            sock->Send<unsigned int>({MessageKernelSource});
+            for (auto const& str : sourcecode)
+                if (str.empty() == false)
+                    sock->SendStr(str);
+            sock->SendStr("");
+        }
+        catch (std::exception const& ex)
+        {
+            puts("Disconnected from client");
+            puts(ex.what());
+            sock = nullptr;
+        }
+    }
+    for (auto& sock : *socks)
+    {
+        try
+        {
+            if (sock->Recv<uint8_t>(1)[0] != 0)
+                throw std::runtime_error("Client failed to build kernel");
+        }
+        catch (std::exception const& ex)
+        {
+            puts("Disconnected from client");
+            puts(ex.what());
+            sock = nullptr;
+        }
+    }
+    while (true)
+    {
+        auto found = std::find(socks->begin(), socks->end(), nullptr);
+        if (found == socks->end())
+            break;
+        socks->erase(found);
+    }
+    return 0; // num return values
 }
 
 ScriptEngine::ScriptEngine(std::string sourcecode)
@@ -306,11 +401,16 @@ ScriptEngine::ScriptEngine(std::string sourcecode)
     lua_register(luaState, "dlbuffer", run_dlbuffer);
     lua_register(luaState, "mkbuffer", run_mkbuffer);
     lua_register(luaState, "rmbuffer", run_rmbuffer);
+    lua_register(luaState, "compile", run_compile);
     lua_register(luaState, "kernel", run_kernel);
 
     int err = luaL_dostring(luaState, sourcecode.c_str());
     if (err)
-        throw std::runtime_error(std::to_string(err) + ": lua failed to parse file");
+    {
+        std::string thing = lua_tostring(luaState, -1);
+        lua_pop(luaState, 1);
+        throw std::runtime_error(std::to_string(err) + ": lua failed to parse file - " + thing);
+    }
 }
 
 ScriptEngine::~ScriptEngine()

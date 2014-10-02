@@ -36,8 +36,6 @@ ClamInterop::ClamInterop(std::shared_ptr<cl_context> context)
 
 void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _height)
 {
-    if (_width == 0 || _height == 0)
-        return;
     width = _width;
     height = _height;
     glViewport(0, 0, width, height);
@@ -82,7 +80,7 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     if (clEnqueueAcquireGLObjects(*kernel->GetQueue(), 1,
-                clBuffers[""].first.get(), 0, nullptr, nullptr))
+                GetBuffer("").get(), 0, nullptr, nullptr))
         throw std::runtime_error("Could not acquire GL objects");
 
     HandleErr(glGetError());
@@ -132,7 +130,7 @@ std::shared_ptr<cl_mem> ClamInterop::GetBuffer(std::string buffername)
 
 void ClamInterop::Blit(cl_command_queue const& queue)
 {
-    if (clEnqueueReleaseGLObjects(queue, 1, clBuffers[""].first.get(), 0, nullptr, nullptr))
+    if (clEnqueueReleaseGLObjects(queue, 1, GetBuffer("").get(), 0, nullptr, nullptr))
         throw std::runtime_error("Could not release GL objects from OpenCL");
 
     int error;
@@ -161,6 +159,6 @@ void ClamInterop::Blit(cl_command_queue const& queue)
 
     glFinish();
 
-    if (clEnqueueAcquireGLObjects(queue, 1, clBuffers[""].first.get(), 0, nullptr, nullptr))
+    if (clEnqueueAcquireGLObjects(queue, 1, GetBuffer("").get(), 0, nullptr, nullptr))
         throw std::runtime_error("Could not acquire GL objects");
 }

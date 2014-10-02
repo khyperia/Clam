@@ -3,17 +3,20 @@
 #include <stdexcept>
 #include <fstream>
 #include <string>
-#include <vector>
 
 ClamKernel::ClamKernel()
 {
 }
 
 ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
-        std::shared_ptr<cl_device_id> device, const char* sourcecode)
+        std::shared_ptr<cl_device_id> device, std::vector<std::string> const& sourcecode)
 {
     cl_int openclError = 0;
-    cl_program openclProgram = clCreateProgramWithSource(*context, 1, &sourcecode, 0, &openclError);
+    std::vector<const char*> sourcecodeCstr;
+    for (auto const& source : sourcecode)
+        sourcecodeCstr.push_back(source.c_str());
+    cl_program openclProgram = clCreateProgramWithSource(*context,
+            static_cast<cl_uint>(sourcecodeCstr.size()), sourcecodeCstr.data(), 0, &openclError);
     if (openclError)
         throw std::runtime_error("Failed to create program");
     std::shared_ptr<cl_program> openclProgramPtr =

@@ -2,7 +2,6 @@
 
 CLAMSCRIPTSTART
 
-
 pos = {0, 0, 5}
 look = {0, 0, -1}
 up = {0, 1, 0}
@@ -37,6 +36,8 @@ end
 
 function special()
 end
+
+compile({Scale="-1.5"}, "mandelbox.cl")
 
 function update(time)
     if iskeydown("w") then
