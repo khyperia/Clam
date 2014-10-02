@@ -89,28 +89,21 @@ void closeSocks()
     puts("Closed socks");
 }
 
-void server(std::string kernelFile, std::vector<std::string> clients)
+void server(std::string luaFile, std::vector<std::string> clients)
 {
     socks = std::make_shared<std::vector<std::shared_ptr<CSocket>>>();
-    for (auto arg : clients)
+    for (auto const& arg : clients)
     {
-        auto sock = std::make_shared<CSocket>(arg);
-        socks->push_back(sock);
+        socks->push_back(std::make_shared<CSocket>(arg));
     }
 
-    std::ifstream inputFile(kernelFile);
+    std::ifstream inputFile(luaFile);
     if (inputFile.is_open() == false)
-        throw std::runtime_error("Kernel file \"" + kernelFile + "\" didn't exist");
+        throw std::runtime_error("Lua file \"" + luaFile + "\" didn't exist");
     std::string sourcecode((std::istreambuf_iterator<char>(inputFile)),
             std::istreambuf_iterator<char>());
 
-    auto start = sourcecode.find("CLAMSCRIPTSTART");
-    auto end = sourcecode.find("CLAMSCRIPTEND");
-    if (start == std::string::npos || end == std::string::npos)
-        throw std::runtime_error("Kernel file did not have CLAMSCRIPTSTART/CLAMSCRIPTEND tags");
-    start += strlen("CLAMSCRIPTSTART");
-    std::string scriptcode = sourcecode.substr(start, end - start);
-    scriptengine = std::make_shared<ScriptEngine>(scriptcode);
+    scriptengine = std::make_shared<ScriptEngine>(sourcecode);
 
     atexit(closeSocks);
 

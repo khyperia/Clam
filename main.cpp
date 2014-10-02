@@ -55,9 +55,9 @@ int unsafemain(int argc, char** argv)
     }
     else if (programType == "master")
     {
-        auto masterKernel = sgetenv("MASTER_KERNEL");
+        auto masterLua = sgetenv("MASTER_LUA");
         auto clientVec = split(sgetenv("MASTER_CONNECTIONS"), '~');
-        server(masterKernel, clientVec);
+        server(masterLua, clientVec);
         return 0;
     }
     else if (programType == "echo")
