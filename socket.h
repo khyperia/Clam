@@ -64,7 +64,7 @@ struct CSocket
         sockfd = socketfd;
     }
 
-    int GetFd()
+    int GetFd() const
     {
         return sockfd;
     }
@@ -148,7 +148,7 @@ struct CSocket
     }
 
     public:
-    std::shared_ptr<CSocket> Accept()
+    std::shared_ptr<CSocket> Accept() const
     {
         int clientfd = accept(sockfd, nullptr, nullptr);
         if (clientfd == -1)
@@ -157,7 +157,7 @@ struct CSocket
     }
 
     template<typename T>
-        void Send(std::vector<T> vector)
+        void Send(std::vector<T> vector) const
         {
             auto result = send(sockfd, vector.data(), vector.size() * sizeof(T), MSG_NOSIGNAL);
             if (result == -1)
@@ -169,7 +169,7 @@ struct CSocket
         }
 
     template<typename T>
-        std::vector<T> Recv(int length)
+        std::vector<T> Recv(int length) const
         {
             if (length == 0)
                 return std::vector<T>();
@@ -190,7 +190,7 @@ struct CSocket
         }
 
     template<typename T>
-        std::vector<T> RecvNoFull(int maxlength)
+        std::vector<T> RecvNoFull(int maxlength) const
         {
             std::vector<T> buf(maxlength);
             auto size = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()),
@@ -205,7 +205,7 @@ struct CSocket
         }
 
     template<typename T>
-        std::vector<T> RecvMaybe(int length)
+        std::vector<T> RecvMaybe(int length) const
         {
             std::vector<T> buf(static_cast<size_t>(length));
             auto size = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()),
@@ -227,7 +227,7 @@ struct CSocket
             return buf;
         }
 
-    bool RecvByte(uint8_t* byte)
+    bool RecvByte(uint8_t* byte) const
     {
         auto result = recv(sockfd, byte, 1, MSG_DONTWAIT);
         if ((result == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || result == 0)
@@ -238,20 +238,20 @@ struct CSocket
         return true;
     }
 
-    void SendByte(uint8_t byte)
+    void SendByte(uint8_t byte) const
     {
         if (send(sockfd, &byte, 1, MSG_NOSIGNAL) != 1)
             throw std::runtime_error("SendByte() failed: " +
                     std::string(gai_strerror(errno)));
     }
 
-    void SendStr(std::string str)
+    void SendStr(std::string str) const
     {
         Send<unsigned int>({static_cast<unsigned int>(str.length())});
         Send<char>(std::vector<char>(str.begin(), str.end()));
     }
 
-    std::string RecvStr()
+    std::string RecvStr() const
     {
         auto size = Recv<unsigned int>(1)[0];
         auto vec = Recv<char>(static_cast<int>(size));

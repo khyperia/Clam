@@ -2,7 +2,7 @@ posx = 0.0
 posy = 0.0
 zoom = 1.0
 
-function derp()
+function special()
 end
 
 compile("script/mandelbrot.cl")
@@ -27,5 +27,5 @@ function update(time)
         rmbuffer("screenshot")
     end
     
-    kernel("main", -1, -1, "", derp, posx, posy, zoom / 1000)
+    kernel("main", -1, -1, "", special, posx, posy, zoom / 500)
 end

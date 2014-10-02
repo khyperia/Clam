@@ -3,7 +3,7 @@
 #endif
 
 #ifndef Bailout
-#define Bailout 2
+#define Bailout 8
 #endif
 
 float3 GetColor(float i)

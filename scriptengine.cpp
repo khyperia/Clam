@@ -41,31 +41,17 @@ int run_unsetkey(lua_State* luaState)
     return 0;
 }
 
-int run_mkbuffer(lua_State* luaState)
+    template<typename InnerFunc>
+void doSocket(InnerFunc const& func)
 {
-    int argc = lua_gettop(luaState);
-    if (argc != 1 && argc != 2)
-    {
-        lua_pushstring(luaState,
-                "Must be called as mkbuffer(string [, sizeInBytes]), one or two args");
-        lua_error(luaState);
-    }
-    std::string bufferName = lua_tostring(luaState, 1);
-    if (bufferName.empty())
-    {
-        lua_pushstring(luaState,
-                "Must be called as mkbuffer(string [, sizeInBytes])");
-        lua_error(luaState);
-    }
-    long bufferSize = argc == 2 ? lua_tointeger(luaState, 2) : -1;
     auto socks = getSocks();
+    if (!socks)
+        throw std::runtime_error("Socks was null");
     for (auto& sock : *socks)
     {
         try
         {
-            sock->Send<unsigned int>({MessageMkBuffer});
-            sock->SendStr(bufferName);
-            sock->Send<long>({bufferSize});
+            func(*sock);
         }
         catch (std::exception const& ex)
         {
@@ -95,6 +81,32 @@ int run_mkbuffer(lua_State* luaState)
             break;
         socks->erase(found);
     }
+}
+
+int run_mkbuffer(lua_State* luaState)
+{
+    int argc = lua_gettop(luaState);
+    if (argc != 1 && argc != 2)
+    {
+        lua_pushstring(luaState,
+                "Must be called as mkbuffer(string [, sizeInBytes]), one or two args");
+        lua_error(luaState);
+    }
+    std::string bufferName = lua_tostring(luaState, 1);
+    if (bufferName.empty())
+    {
+        lua_pushstring(luaState,
+                "Must be called as mkbuffer(string [, sizeInBytes])");
+        lua_error(luaState);
+    }
+    long bufferSize = argc == 2 ? lua_tointeger(luaState, 2) : -1;
+
+    doSocket([&](CSocket const& sock)
+            {
+            sock.Send<unsigned int>({MessageMkBuffer});
+            sock.SendStr(bufferName);
+            sock.Send<long>({bufferSize});
+            });
     return 0;
 }
 
@@ -114,42 +126,11 @@ int run_rmbuffer(lua_State* luaState)
                 "Must be called as rmbuffer(string)");
         lua_error(luaState);
     }
-    auto socks = getSocks();
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            sock->Send<unsigned int>({MessageRmBuffer});
-            sock->SendStr(bufferName);
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            if (sock->Recv<uint8_t>(1)[0] != 0)
-                throw std::runtime_error("Client failed to remove buffer");
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    while (true)
-    {
-        auto found = std::find(socks->begin(), socks->end(), nullptr);
-        if (found == socks->end())
-            break;
-        socks->erase(found);
-    }
+    doSocket([&](CSocket const& sock)
+            {
+            sock.Send<unsigned int>({MessageRmBuffer});
+            sock.SendStr(bufferName);
+            });
     return 0;
 }
 
@@ -168,44 +149,54 @@ int run_dlbuffer(lua_State* luaState)
         lua_error(luaState);
     }
     long imageWidth = lua_tointeger(luaState, 2);
-    auto socks = getSocks();
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            sock->Send<unsigned int>({MessageDlBuffer});
-            sock->SendStr(bufferName);
-            sock->Send<long>({imageWidth});
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            if (sock->Recv<uint8_t>(1)[0] != 0)
-                throw std::runtime_error("Client failed to download buffer");
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    while (true)
-    {
-        auto found = std::find(socks->begin(), socks->end(), nullptr);
-        if (found == socks->end())
-            break;
-        socks->erase(found);
-    }
+    doSocket([&](CSocket const& sock)
+            {
+            sock.Send<unsigned int>({MessageDlBuffer});
+            sock.SendStr(bufferName);
+            sock.Send<long>({imageWidth});
+            });
     return 0;
+}
+
+void invoke_kernel_msg(lua_State* luaState, CSocket const& sock, int argc)
+{
+    sock.Send<unsigned int>({MessageKernelInvoke});
+    sock.SendStr(lua_tostring(luaState, 1)); // kernel name
+    sock.Send<int>({static_cast<int>(lua_tointeger(luaState, 2)),
+                static_cast<int>(lua_tointeger(luaState, 3))});
+
+    for (int arg = 4; arg <= argc; arg++)
+    {
+        switch (lua_type(luaState, arg))
+        {
+            case LUA_TFUNCTION:
+                sock.Send<int>({-2}); // x, y, width, height
+                break;
+            case LUA_TSTRING:
+                sock.Send<int>({-1}); // buffer
+                sock.SendStr(lua_tostring(luaState, arg)); // empty = screen
+                break;
+            case LUA_TNUMBER:
+                sock.Send<int>({ sizeof(float) });
+                sock.Send<float>({ static_cast<float>(lua_tonumber(luaState, arg)) });
+                break;
+            case LUA_TTABLE:
+                {
+                    lua_pushinteger(luaState, 1);
+                    lua_gettable(luaState, arg);
+                    int value = static_cast<int>(lua_tointeger(luaState, -1));
+                    lua_pop(luaState, 1);
+                    sock.Send<int>({ sizeof(int) });
+                    sock.Send<int>({ value });
+                }
+                break;
+            default:
+                throw std::runtime_error("Unknown argument type in kernel() arg index "
+                        + std::to_string(arg));
+        }
+    }
+
+    sock.Send<int>({0}); // end arglist   
 }
 
 int run_kernel(lua_State* luaState)
@@ -214,87 +205,14 @@ int run_kernel(lua_State* luaState)
 
     if (argc < 4)
     {
-        lua_pushstring(luaState,
-        "kernel must be called as kernel(\"functionname\", launchwidth, launchheight, args...)");
+        lua_pushstring(luaState, "kernel must be called as kernel(\"functionname\", "
+                "launchwidth, launchheight, args...)");
         lua_error(luaState);
     }
-    std::string kernelName = lua_tostring(luaState, 1);
-    int launchWidth = static_cast<int>(lua_tointeger(luaState, 2));
-    int launchHeight = static_cast<int>(lua_tointeger(luaState, 3));
-    auto socks = getSocks();
-
-    if (!socks)
-        throw std::runtime_error("Socks was null");
-
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            sock->Send<unsigned int>({MessageKernelInvoke});
-            sock->SendStr(kernelName); // kernel name
-            sock->Send<int>({launchWidth, launchHeight});
-
-            for (int arg = 4; arg <= argc; arg++)
+    doSocket([&](CSocket const& sock)
             {
-                switch (lua_type(luaState, arg))
-                {
-                    case LUA_TFUNCTION:
-                        sock->Send<int>({-2}); // x, y, width, height
-                        break;
-                    case LUA_TSTRING:
-                        sock->Send<int>({-1}); // buffer
-                        sock->SendStr(lua_tostring(luaState, arg)); // empty = screen
-                        break;
-                    case LUA_TNUMBER:
-                        sock->Send<int>({ sizeof(float) });
-                        sock->Send<float>({ static_cast<float>(lua_tonumber(luaState, arg)) });
-                        break;
-                    case LUA_TTABLE:
-                        {
-                            lua_pushinteger(luaState, 1);
-                            lua_gettable(luaState, arg);
-                            int value = static_cast<int>(lua_tointeger(luaState, -1));
-                            lua_pop(luaState, 1);
-                            sock->Send<int>({ sizeof(int) });
-                            sock->Send<int>({ value });
-                        }
-                        break;
-                    default:
-                        throw std::runtime_error("Unknown argument type in kernel() arg index "
-                                + std::to_string(arg));
-                }
-            }
-
-            sock->Send<int>({0}); // end arglist    
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            if (sock->Recv<uint8_t>(1)[0] != 0)
-                throw std::runtime_error("Client failed to launch kernel");
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    while (true)
-    {
-        auto found = std::find(socks->begin(), socks->end(), nullptr);
-        if (found == socks->end())
-            break;
-        socks->erase(found);
-    }
+            invoke_kernel_msg(luaState, sock, argc);
+            });
     return 0; // num return values
 }
 
@@ -311,7 +229,7 @@ int run_compile(lua_State* luaState)
             if (inputFile.is_open() == false)
                 throw std::runtime_error("Kernel file \"" + kernelFile + "\" didn't exist");
             std::string newsourcecode((std::istreambuf_iterator<char>(inputFile)),
-                std::istreambuf_iterator<char>());
+                    std::istreambuf_iterator<char>());
             sourcecode.push_back(newsourcecode);
         }
         else if (lua_istable(luaState, i))
@@ -340,54 +258,20 @@ int run_compile(lua_State* luaState)
         else
         {
             lua_pushstring(luaState,
-                        ("compile must be called as compile([string|dict], ...) - type was "
-                        + std::string(lua_typename(luaState, lua_type(luaState, i)))).c_str());
+                    ("compile must be called as compile([string|dict], ...) - type was "
+                     + std::string(lua_typename(luaState, lua_type(luaState, i)))).c_str());
             lua_error(luaState);
         }
     }
-    auto socks = getSocks();
-
-    if (!socks)
-        throw std::runtime_error("Socks was null");
-
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            sock->Send<unsigned int>({MessageKernelSource});
+    
+    doSocket([&](CSocket const& sock)
+            {
+            sock.Send<unsigned int>({MessageKernelSource});
             for (auto const& str : sourcecode)
                 if (str.empty() == false)
-                    sock->SendStr(str);
-            sock->SendStr("");
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    for (auto& sock : *socks)
-    {
-        try
-        {
-            if (sock->Recv<uint8_t>(1)[0] != 0)
-                throw std::runtime_error("Client failed to build kernel");
-        }
-        catch (std::exception const& ex)
-        {
-            puts("Disconnected from client");
-            puts(ex.what());
-            sock = nullptr;
-        }
-    }
-    while (true)
-    {
-        auto found = std::find(socks->begin(), socks->end(), nullptr);
-        if (found == socks->end())
-            break;
-        socks->erase(found);
-    }
+                    sock.SendStr(str);
+            sock.SendStr("");
+            });
     return 0; // num return values
 }
 

@@ -92,6 +92,7 @@ void closeSocks()
 void server(std::string luaFile, std::vector<std::string> clients)
 {
     socks = std::make_shared<std::vector<std::shared_ptr<CSocket>>>();
+    atexit(closeSocks);
     for (auto const& arg : clients)
     {
         socks->push_back(std::make_shared<CSocket>(arg));
@@ -104,8 +105,6 @@ void server(std::string luaFile, std::vector<std::string> clients)
             std::istreambuf_iterator<char>());
 
     scriptengine = std::make_shared<ScriptEngine>(sourcecode);
-
-    atexit(closeSocks);
 
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2 Server");

@@ -30,6 +30,8 @@ void connectThreaded()
     {
         puts("Failed to host server:");
         puts(ex.what());
+        puts("Retrying in 5 seconds");
+        sleep(5);
     }
 }
 
