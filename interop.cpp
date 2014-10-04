@@ -149,7 +149,7 @@ void ClamInterop::DlBuffer(std::string buffername, long imagewidth)
             static_cast<size_t>(buffer.second),
             cpuData.data(), 0, nullptr, nullptr);
     clFinish(*clCommandQueue);
-    WriteImage(cpuData, static_cast<unsigned long>(imagewidth));
+    WriteImage(buffername + ".png", cpuData, static_cast<unsigned long>(imagewidth));
 }
 
 std::shared_ptr<cl_mem> ClamInterop::GetBuffer(std::string buffername)

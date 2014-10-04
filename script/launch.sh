@@ -33,8 +33,8 @@ if [[ "$slavecount" == "0" ]]
 then
     export PROGRAMTYPE=slave
     export SLAVE_PORT=23455
-    export SLAVE_WINDOW=1000x1000+0+0
-    export SLAVE_RENDERCOORDS=-500-500
+    export SLAVE_WINDOW=800x600+400+300
+    export SLAVE_RENDERCOORDS=-400-300
     export SLAVE_FULLSCREEN=false
     ./bin/clam2 &
 

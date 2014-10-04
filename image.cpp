@@ -15,7 +15,7 @@ inline uint8_t convByte(float value)
                     static_cast<float>(maxval)), 0.0f));
 }
 
-void WriteImage(std::vector<float> const& float4Pixels, unsigned long width)
+void WriteImage(std::string filename, std::vector<float> const& float4Pixels, unsigned long width)
 {
     auto homePtr = getenv("HOME");
     if (!homePtr)
@@ -23,7 +23,7 @@ void WriteImage(std::vector<float> const& float4Pixels, unsigned long width)
         puts("Cannot save image: $HOME not set");
     }
     std::string imageFilename = homePtr;
-    imageFilename += "/fractal.png";
+    imageFilename += "/" + filename;
 
     FILE* fp = fopen(imageFilename.c_str(), "wb");
     if (!fp)
