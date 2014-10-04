@@ -7,8 +7,8 @@ ClamInterop::ClamInterop()
 {
 }
 
-ClamInterop::ClamInterop(std::shared_ptr<cl_context> context)
-    : clContext(context)
+ClamInterop::ClamInterop(std::shared_ptr<ClamContext> context)
+    : clContext(context->GetContext())
 {
     glClearColor(1.f, 0.f, 0.f, 1.f);
     glMatrixMode(GL_PROJECTION);
@@ -32,18 +32,45 @@ ClamInterop::ClamInterop(std::shared_ptr<cl_context> context)
             }, aglBuffer);
 
     glEnable(GL_TEXTURE_2D);
+    
+    glBindTexture(GL_TEXTURE_2D, *glTexture);
+    HandleErr(glGetError());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    HandleErr(glGetError());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    HandleErr(glGetError());
+    
+    cl_int openclError = 0;
+    cl_command_queue openclCommandQueue =
+        clCreateCommandQueue(*context->GetContext(), *context->GetDevice(), 0, &openclError);
+    if (openclError)
+        throw std::runtime_error("Failed to create command queue");
+
+    clCommandQueue = make_custom_shared<cl_command_queue>([](cl_command_queue const& dying)
+            {
+                clReleaseCommandQueue(dying);
+            }, openclCommandQueue);
 }
 
-void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _height)
+void ClamInterop::Resize(int _width, int _height)
 {
+    int error;//TODO: Is flushing required?
+    if ((error = clFinish(*clCommandQueue)))
+        throw std::runtime_error("Could not finish OpenCL: Error = " + std::to_string(error));
+    glFinish();
+    HandleErr(glGetError());
+
     width = _width;
     height = _height;
+    HandleErr(glGetError());
     glViewport(0, 0, width, height);
+    HandleErr(glGetError());
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
     glBufferData(GL_PIXEL_UNPACK_BUFFER,
             static_cast<GLsizeiptr>(width) * static_cast<GLsizeiptr>(height) *
                 4 * static_cast<GLsizeiptr>(sizeof(float)),
             nullptr, GL_DYNAMIC_COPY);
+    HandleErr(glGetError());
     
     cl_int openclError = 0;
     cl_mem openclBuffer = clCreateFromGLBuffer(*clContext,
@@ -73,13 +100,17 @@ void ClamInterop::Resize(std::shared_ptr<ClamKernel> kernel, int _width, int _he
                     clReleaseMemObject(dying);
                 }, temp);
     }
+    HandleErr(glGetError());
 
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // Don't ask why this is needed.
+    HandleErr(glGetError());
+    
     glBindTexture(GL_TEXTURE_2D, *glTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, 4, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    HandleErr(glGetError());
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+    HandleErr(glGetError());
 
-    if (clEnqueueAcquireGLObjects(*kernel->GetQueue(), 1,
+    if (clEnqueueAcquireGLObjects(*clCommandQueue, 1,
                 GetBuffer("").get(), 0, nullptr, nullptr))
         throw std::runtime_error("Could not acquire GL objects");
 
@@ -110,14 +141,14 @@ void ClamInterop::RmBuffer(std::string buffername)
         throw std::runtime_error("Buffer \"" + buffername + "\" not found");
 }
 
-void ClamInterop::DlBuffer(std::shared_ptr<cl_command_queue> queue,
-        std::string buffername, long imagewidth)
+void ClamInterop::DlBuffer(std::string buffername, long imagewidth)
 {
     auto buffer = clBuffers[buffername];
     std::vector<float> cpuData(static_cast<size_t>(buffer.second) / sizeof(float));
-    clEnqueueReadBuffer(*queue, *buffer.first, true, 0, static_cast<size_t>(buffer.second),
+    clEnqueueReadBuffer(*clCommandQueue, *buffer.first, true, 0,
+            static_cast<size_t>(buffer.second),
             cpuData.data(), 0, nullptr, nullptr);
-    clFinish(*queue);
+    clFinish(*clCommandQueue);
     WriteImage(cpuData, static_cast<unsigned long>(imagewidth));
 }
 
@@ -128,19 +159,22 @@ std::shared_ptr<cl_mem> ClamInterop::GetBuffer(std::string buffername)
     return clBuffers[buffername].first;
 }
 
-void ClamInterop::Blit(cl_command_queue const& queue)
+void ClamInterop::Blit()
 {
-    if (clEnqueueReleaseGLObjects(queue, 1, GetBuffer("").get(), 0, nullptr, nullptr))
+    if (clEnqueueReleaseGLObjects(*clCommandQueue, 1, GetBuffer("").get(), 0, nullptr, nullptr))
         throw std::runtime_error("Could not release GL objects from OpenCL");
 
     int error;
-    if ((error = clFinish(queue)))
+    if ((error = clFinish(*clCommandQueue)))
         throw std::runtime_error("Could not finish OpenCL (did kernel crash?) Error = "
                 + std::to_string(error));
+
+    HandleErr(glGetError());
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, *glBuffer);
     glBindTexture(GL_TEXTURE_2D, *glTexture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_FLOAT, nullptr);
+    HandleErr(glGetError());
 
     glBegin(GL_QUADS);
     glTexCoord2f(0.f, 1.f);
@@ -155,10 +189,9 @@ void ClamInterop::Blit(cl_command_queue const& queue)
 
     HandleErr(glGetError());
 
-    // -- //
-
     glFinish();
 
-    if (clEnqueueAcquireGLObjects(queue, 1, GetBuffer("").get(), 0, nullptr, nullptr))
+    if (clEnqueueAcquireGLObjects(*clCommandQueue, 1, GetBuffer("").get(), 0, nullptr, nullptr))
         throw std::runtime_error("Could not acquire GL objects");
+    HandleErr(glGetError());
 }

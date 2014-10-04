@@ -2,19 +2,14 @@
 #include <stdexcept>
 #include <sstream>
 #include <cmath>
+#include <GL/glu.h>
 
 void HandleErrImpl(unsigned int errcode, const char* message, const char* filename, int line)
 {
     if (errcode != 0)
     {
         std::ostringstream output;
-        output << filename;
-        output << "(";
-        output << line;
-        output << "): errcode ";
-        output << errcode;
-                output << " -- ";
-                output << message;
+        output << filename << "(" << line << ") `" << message << "`: errcode " << errcode;
         throw std::runtime_error(output.str());
     }
 }

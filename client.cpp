@@ -53,11 +53,11 @@ void displayFunc()
         if (width != oldWidth || height != oldHeight)
         {
             if (width > 0 && height > 0)
-                interop->Resize(kernel, width, height);
+                interop->Resize(width, height);
             else
                 puts("width/height was zero, things may fail");
         }
-        interop->Blit(*kernel->GetQueue());
+        interop->Blit();
         glutSwapBuffers();
     }
     oldWidth = width;
@@ -83,7 +83,7 @@ void idleFunc()
     {
         puts("Connected, starting render client");
         context = std::make_shared<ClamContext>();
-        interop = std::make_shared<ClamInterop>(context->GetContext());
+        interop = std::make_shared<ClamInterop>(context);
     }
     try
     {
@@ -151,9 +151,9 @@ void idleFunc()
                             sourcecode.push_back(temp);
                         }
                         kernel = std::make_shared<ClamKernel>(context->GetContext(),
-                                context->GetDevice(), sourcecode);
+                                context->GetDevice(), interop->GetQueue(), sourcecode);
                         if (oldWidth > 0 && oldHeight > 0)
-                            interop->Resize(kernel, oldWidth, oldHeight);
+                            interop->Resize(oldWidth, oldHeight);
                         else
                             puts("width/height have not been initialized, things may fail");
                         sock->Send<uint8_t>({0});
@@ -171,7 +171,7 @@ void idleFunc()
                     {
                         auto buffername = sock->RecvStr();
                         auto size = sock->Recv<long>(1)[0];
-                        interop->DlBuffer(kernel->GetQueue(), buffername, size);
+                        interop->DlBuffer(buffername, size);
                         sock->Send<uint8_t>({0});
                     }
                     break;

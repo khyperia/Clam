@@ -8,8 +8,9 @@ ClamKernel::ClamKernel()
 {
 }
 
-ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
-        std::shared_ptr<cl_device_id> device, std::vector<std::string> const& sourcecode)
+ClamKernel::ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_device_id> device,
+        std::shared_ptr<cl_command_queue> queue_, std::vector<std::string> const& sourcecode)
+    : queue(queue_)
 {
     cl_int openclError = 0;
     std::vector<const char*> sourcecodeCstr;
@@ -64,15 +65,6 @@ ClamKernel::ClamKernel(std::shared_ptr<cl_context> context,
                 ,ckernels[i]);
     }
 
-    cl_command_queue openclCommandQueue =
-        clCreateCommandQueue(*context, *device, 0, &openclError);
-    if (openclError)
-        throw std::runtime_error("Failed to create command queue");
-
-    queue = make_custom_shared<cl_command_queue>([](cl_command_queue const& dying)
-            {
-                clReleaseCommandQueue(dying);
-            }, openclCommandQueue);
 }
 
 void ClamKernel::Invoke(std::string kernName,

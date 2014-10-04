@@ -10,13 +10,8 @@ class ClamKernel
     std::map<std::string, std::shared_ptr<cl_kernel>> kernels;
 public:
     ClamKernel();
-    ClamKernel(std::shared_ptr<cl_context> context,
-            std::shared_ptr<cl_device_id> device, std::vector<std::string> const& sourcecode);
-
-    std::shared_ptr<cl_command_queue> GetQueue()
-    {
-        return queue;
-    }
+    ClamKernel(std::shared_ptr<cl_context> context, std::shared_ptr<cl_device_id> device,
+            std::shared_ptr<cl_command_queue> queue, std::vector<std::string> const& sourcecode);
 
     // Invoke does NOT set arguments
     void Invoke(std::string kernName, unsigned long launchWidth, unsigned long launchHeight);

@@ -11,7 +11,7 @@ frame = 0.0
 function special()
 end
 
-compile({Scale="-1.5"}, "script/mandelbox.cl")
+compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
 
 function update(time)
     if iskeydown("w") then
@@ -77,6 +77,12 @@ function update(time)
     if iskeydown("m") then
         fov = fov / (1 + time)
         frame = 0
+    end
+    if iskeydown("b") then
+        unsetkey("b")
+        compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
+        frame = 0
+        print("Recompiled")
     end
     if iskeydown("p") then
         unsetkey("p")
