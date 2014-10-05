@@ -1,12 +1,15 @@
 require("math")
 require("script/vector")
+require("script/table_save")
 
-pos = {0, 0, 5}
-look = {0, 0, -1}
-up = {0, 1, 0}
-fov = 1.0
-focalDistance = 1.0
-frame = 0.0
+frame = {
+    pos = {0, 0, 5},
+    look = {0, 0, -1},
+    up = {0, 1, 0},
+    fov = 1.0,
+    focalDistance = 1.0,
+    frame = 0.0
+}
 frames = {}
 
 function special()
@@ -23,7 +26,7 @@ function screenshot(filename, frame, width, height, numframes)
         frame.look[1], frame.look[2], frame.look[3],
         frame.up[1], frame.up[2], frame.up[3],
         frame.fov / width, frame.focalDistance, i)
-        --print((i / numframes * 100), "% done");
+        print((i / numframes * 100), "% done");
     end
     dlbuffer(filename, width)
     rmbuffer(filename)
@@ -48,7 +51,7 @@ function video(frames)
             up = catmullRom(frame0.up, frame1.up, frame2.up, frame3.up, fractional),
             fov = catmullRomF(frame0.fov, frame1.fov, frame2.fov, frame3.fov, fractional),
             focalDistance = catmullRomF(frame0.focalDistance, frame1.focalDistance,
-                frame2.focalDistance, frame3.focalDistance, fractional)
+            frame2.focalDistance, frame3.focalDistance, fractional)
         }
     end
     local frameIndex = 0
@@ -64,84 +67,105 @@ function video(frames)
     end
 end
 
-function getFrame()
-    return { pos = pos, look = look, up = up, fov = fov, focalDistance = focalDistance }
-end
-
 function update(time)
+    -- gh
     if iskeydown("w") then
-        pos = addvec(pos, mulvec(look, time * focalDistance))
-        frame = 0
+        frame.pos = addvec(frame.pos, mulvec(frame.look, time * frame.focalDistance))
+        frame.frame = 0
     end
     if iskeydown("s") then
-        pos = addvec(pos, mulvec(look, -time * focalDistance))
-        frame = 0
+        frame.pos = addvec(frame.pos, mulvec(frame.look, -time * frame.focalDistance))
+        frame.frame = 0
     end
     if iskeydown("a") then
-        pos = addvec(pos, mulvec(cross(up, look), time * focalDistance))
-        frame = 0
+        frame.pos = addvec(frame.pos, mulvec(cross(frame.up, frame.look),
+            time * frame.focalDistance))
+        frame.frame = 0
     end
     if iskeydown("d") then
-        pos = addvec(pos, mulvec(cross(look, up), time * focalDistance))
-        frame = 0
+        frame.pos = addvec(frame.pos, mulvec(cross(frame.look, frame.up),
+            time * frame.focalDistance))
+        frame.frame = 0
     end
     if iskeydown(" ") then
-        pos = addvec(pos, mulvec(up, -time * focalDistance))
-        frame = 0
+        frame.pos = addvec(frame.pos, mulvec(frame.up, -time * frame.focalDistance))
+        frame.frame = 0
     end
     if iskeydown("z") then
-        pos = addvec(pos, mulvec(up, time * focalDistance))
-        frame = 0
+        frame.pos = addvec(frame.pos, mulvec(frame.up, time * frame.focalDistance))
+        frame.frame = 0
     end
     if iskeydown("r") then
-        focalDistance = focalDistance * (1 + time * fov)
-        frame = 0
+        frame.focalDistance = frame.focalDistance * (1 + time * frame.fov)
+        frame.frame = 0
     end
     if iskeydown("f") then
-        focalDistance = focalDistance / (1 + time * fov)
-        frame = 0
+        frame.focalDistance = frame.focalDistance / (1 + time * frame.fov)
+        frame.frame = 0
     end
     if iskeydown("u") then
-        up = rotate(up, look, time)
-        frame = 0
+        frame.up = rotate(frame.up, frame.look, time)
+        frame.frame = 0
     end
     if iskeydown("o") then
-        up = rotate(up, look, -time)
-        frame = 0
+        frame.up = rotate(frame.up, frame.look, -time)
+        frame.frame = 0
     end
     if iskeydown("j") then
-        look = rotate(look, up, time * fov)
-        frame = 0
+        frame.look = rotate(frame.look, frame.up, time * frame.fov)
+        frame.frame = 0
     end
     if iskeydown("l") then
-        look = rotate(look, up, -time * fov)
-        frame = 0
+        frame.look = rotate(frame.look, frame.up, -time * frame.fov)
+        frame.frame = 0
     end
     if iskeydown("i") then
-        look = rotate(look, cross(up, look), time * fov)
-        frame = 0
+        frame.look = rotate(frame.look, cross(frame.up, frame.look), time * frame.fov)
+        frame.frame = 0
     end
     if iskeydown("k") then
-        look = rotate(look, cross(look, up), time * fov)
-        frame = 0
+        frame.look = rotate(frame.look, cross(frame.look, frame.up), time * frame.fov)
+        frame.frame = 0
     end
     if iskeydown("n") then
-        fov = fov * (1 + time)
-        frame = 0
+        frame.fov = frame.fov * (1 + time)
+        frame.frame = 0
     end
     if iskeydown("m") then
-        fov = fov / (1 + time)
-        frame = 0
+        frame.fov = frame.fov / (1 + time)
+        frame.frame = 0
+    end
+    if iskeydown("t") then
+        unsetkey("t")
+        result = table.save(frame, "frameSave.txt")
+        if result ~= nil then
+            print("Unable to save frameSave.txt")
+            print(result)
+        else
+            print("Saved camera state")
+        end
+    end
+    if iskeydown("y") then
+        unsetkey("y")
+        frameTemp, err = table.load("frameSave.txt")
+        if err == nil then
+            frame = frameTemp
+            frame.frame = 0
+            print("Loaded camera state")
+        else
+            print("Unable to load frameSave.txt")
+            print(err)
+        end
     end
     if iskeydown("b") then
         unsetkey("b")
         compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
-        frame = 0
+        frame.frame = 0
         print("Recompiled")
     end
     if iskeydown("p") then
         unsetkey("p")
-        screenshot("fractal", getFrame(), 5000, 5000, 100)
+        screenshot("fractal", frame, 2000, 2000, 200)
     end
     if iskeydown("x") then
         unsetkey("x")
@@ -154,7 +178,7 @@ function update(time)
         while frames[index] ~= nil do
             index = index + 1
         end
-        frames[index] = getFrame()
+        frames[index] = frame
         print("Added frame", index)
     end
     if iskeydown("v") then
@@ -163,15 +187,15 @@ function update(time)
         print("Done taking video")
     end
 
-    look = normalize(look)
-    up = normalize(cross(cross(look, up), look))
+    frame.look = normalize(frame.look)
+    frame.up = normalize(cross(cross(frame.look, frame.up), frame.look))
 
     kernel("Main", -1, -1, "",
     special,
-    pos[1], pos[2], pos[3],
-    look[1], look[2], look[3],
-    up[1], up[2], up[3],
-    fov / 800, focalDistance, frame)
+    frame.pos[1], frame.pos[2], frame.pos[3],
+    frame.look[1], frame.look[2], frame.look[3],
+    frame.up[1], frame.up[2], frame.up[3],
+    frame.fov / 800, frame.focalDistance, frame.frame)
 
-    frame = frame + 1
+    frame.frame = frame.frame + 1
 end

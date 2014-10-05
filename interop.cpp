@@ -54,12 +54,6 @@ ClamInterop::ClamInterop(std::shared_ptr<ClamContext> context)
 
 void ClamInterop::Resize(int _width, int _height)
 {
-    int error;//TODO: Is flushing required?
-    if ((error = clFinish(*clCommandQueue)))
-        throw std::runtime_error("Could not finish OpenCL: Error = " + std::to_string(error));
-    glFinish();
-    HandleErr(glGetError());
-
     width = _width;
     height = _height;
     HandleErr(glGetError());
@@ -100,13 +94,9 @@ void ClamInterop::Resize(int _width, int _height)
                     clReleaseMemObject(dying);
                 }, temp);
     }
-    HandleErr(glGetError());
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); // Don't ask why this is needed.
-    HandleErr(glGetError());
-    
     glBindTexture(GL_TEXTURE_2D, *glTexture);
-    HandleErr(glGetError());
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
     HandleErr(glGetError());
 

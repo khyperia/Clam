@@ -123,7 +123,7 @@ float3 DeColor(float3 z)
 
         z = Scale * z + offset;
     }
-    return HSVtoRGB(hue * HueVariance, Saturation, 1.0);
+    return HSVtoRGB(hue * HueVariance, Saturation, 1.0) + (float3)(ColorBias);
 }
 
 uint MWC64X(ulong *state)

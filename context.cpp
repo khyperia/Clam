@@ -1,5 +1,6 @@
-#include "stdafx.h"
 #include "context.h"
+#include "helper.h"
+#include <vector>
 #include <stdexcept>
 #include <GL/glx.h>
 #include <CL/cl_gl.h>
