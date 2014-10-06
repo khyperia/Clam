@@ -1,30 +1,26 @@
 #include "echo.h"
-
 #include "socket.h"
+#include "helper.h"
 #include <chrono>
 #include <map>
 
 void runEcho(std::shared_ptr<CSocket> copyFrom,
         std::shared_ptr<CSocket> copyTo,
-        std::shared_ptr<int> numThreads)
+        std::shared_ptr<int> numThreads,
+        std::shared_ptr<int>)
 {
     try
     {
-        uint8_t byte;
         auto lastUpdate = std::chrono::steady_clock::now();
         while (true)
         {
-            while (copyFrom->RecvByte(&byte))
-            {
-                copyTo->SendByte(byte);
+            if (copyFrom->DumpTo(copyTo->GetFd()) | copyTo->DumpTo(copyFrom->GetFd()))
                 lastUpdate = std::chrono::steady_clock::now();
-            }
-            while (copyTo->RecvByte(&byte))
-            {
-                copyFrom->SendByte(byte);
-                lastUpdate = std::chrono::steady_clock::now();
-            }
-            if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - lastUpdate).count() > 10)
+            else
+                usleep(1000);
+            if (std::chrono::duration_cast<std::chrono::seconds>(
+                        std::chrono::steady_clock::now() - lastUpdate)
+                    .count() > 5)
                 break;
         }
         puts("Echo thread timeout: killing");
@@ -38,10 +34,11 @@ void runEcho(std::shared_ptr<CSocket> copyFrom,
 }
 
 // TODO: Find a good clean way to stop this without pkill
-void echo(const char* incomingPort, std::vector<std::string> outgoingIps)
+void echo(const char* incomingPort, std::vector<std::string> outgoingIps, bool keepProcessAlive)
 {
     auto host = std::make_shared<CSocket>(incomingPort);
     std::map<std::string, std::pair<std::thread, std::shared_ptr<int>>> connections;
+    int numConnectionsAlive = 0;
     while (true)
     {
         auto newSocket = host->Accept();
@@ -78,9 +75,20 @@ void echo(const char* incomingPort, std::vector<std::string> outgoingIps)
             auto foundt = connections.find(client);
             if (foundt != connections.end() && foundt->second.first.joinable())
                 foundt->second.first.join();
+            numConnectionsAlive++;
+            auto numConnections = keepProcessAlive ? nullptr :
+                std::shared_ptr<int>(&numConnectionsAlive, [](int* numConnectionsPtr)
+                    {
+                    if (--*numConnectionsPtr <= 0)
+                    {
+                    puts("Exiting echo server due to ECHO_KEEPALIVE=false");
+                    exit(0);
+                    }
+                    // do not free numConnectionsPtr, it's a reference to numConnectionsAlive
+                    });
             connections[client] = std::make_pair(
-                    std::thread([otherSocket, newSocket, numThreads]{
-                        runEcho(otherSocket, newSocket, numThreads);
+                    std::thread([otherSocket, newSocket, numThreads, numConnections]{
+                        runEcho(otherSocket, newSocket, numThreads, numConnections);
                         }),
                     numThreads);
         }

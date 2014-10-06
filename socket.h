@@ -94,7 +94,7 @@ struct CSocket
             if ((tmpsockfd = socket(p->ai_family, p->ai_socktype | SOCK_CLOEXEC,
                             p->ai_protocol)) == -1)
             {
-                puts(("socket() failed: " + std::string(gai_strerror(errno))).c_str());
+                puts(("socket() failed: " + std::string(strerror(errno))).c_str());
             }
             else if (host == nullptr)
             {
@@ -104,7 +104,7 @@ struct CSocket
                 }
                 else if (listen(tmpsockfd, 16) == -1)
                 {
-                    puts(("listen() failed: " + std::string(gai_strerror(errno))).c_str());
+                    puts(("listen() failed: " + std::string(strerror(errno))).c_str());
                 }
                 else
                 {
@@ -116,7 +116,7 @@ struct CSocket
             {
                 if (connect(tmpsockfd, p->ai_addr, p->ai_addrlen) == -1)
                 {
-                    puts(("connect() failed: " + std::string(gai_strerror(errno))).c_str());
+                    puts(("connect() failed: " + std::string(strerror(errno))).c_str());
                     close(tmpsockfd);
                 }
                 else
@@ -140,7 +140,7 @@ struct CSocket
             if (clientfd == -1)
             {
                 puts(("Server thread crashed on accept(): "
-                            + std::string(gai_strerror(errno))).c_str());
+                            + std::string(strerror(errno))).c_str());
                 break;
             }
             sockfds->push_back(clientfd);
@@ -152,7 +152,7 @@ struct CSocket
     {
         int clientfd = accept(sockfd, nullptr, nullptr);
         if (clientfd == -1)
-            throw std::runtime_error("accept() failed: " + std::string(gai_strerror(errno)));
+            throw std::runtime_error("accept() failed: " + std::string(strerror(errno)));
         return std::make_shared<CSocket>(clientfd);
     }
 
@@ -162,10 +162,10 @@ struct CSocket
             auto result = send(sockfd, vector.data(), vector.size() * sizeof(T), MSG_NOSIGNAL);
             if (result == -1)
                 throw std::runtime_error("send() failed: " +
-                        std::string(gai_strerror(errno)));
+                        std::string(strerror(errno)));
             if (static_cast<size_t>(result) != vector.size() * sizeof(T))
                 throw std::runtime_error("send() didn't send all bytes: " +
-                        std::string(gai_strerror(errno)));
+                        std::string(strerror(errno)));
         }
 
     template<typename T>
@@ -181,7 +181,7 @@ struct CSocket
             {
                 if (size == -1)
                     throw std::runtime_error("recv() failed: " +
-                            std::string(gai_strerror(errno)));
+                            std::string(strerror(errno)));
                 throw std::runtime_error("recv() failed: Not enough bytes read (" +
                         std::to_string(size) + " of " +
                         std::to_string(lengthbytes) + ")");
@@ -199,7 +199,7 @@ struct CSocket
                 return std::vector<T>();
             else if (size == -1)
                 throw std::runtime_error("recvMaybe() failed: " +
-                        std::string(gai_strerror(errno)));
+                        std::string(strerror(errno)));
             buf.resize(size);
             return buf;
         }
@@ -214,12 +214,12 @@ struct CSocket
                 return std::vector<T>();
             if (size == -1)
                 throw std::runtime_error("recvMaybe() failed: " +
-                        std::string(gai_strerror(errno)));
+                        std::string(strerror(errno)));
             auto newsize = recv(sockfd, reinterpret_cast<uint8_t*>(buf.data()) + size,
                     buf.size() * sizeof(T) - static_cast<size_t>(size), MSG_WAITALL);
             if (newsize == -1)
                 throw std::runtime_error("recvMaybe() failed: " +
-                        std::string(gai_strerror(errno)));
+                        std::string(strerror(errno)));
             if (size + newsize != static_cast<int>(buf.size() * sizeof(T)))
                 throw std::runtime_error("recvMaybe() failed: Not enough bytes read (" +
                         std::to_string(size + newsize) + " of " +
@@ -227,22 +227,30 @@ struct CSocket
             return buf;
         }
 
-    bool RecvByte(uint8_t* byte) const
+    // returns: if any data was received/sent
+    bool DumpTo(int otherFd)
     {
-        auto result = recv(sockfd, byte, 1, MSG_DONTWAIT);
-        if ((result == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || result == 0)
-            return false;
-        if (result == -1)
-            throw std::runtime_error("recvByte() failed: " +
-                    std::string(gai_strerror(errno)));
-        return true;
-    }
-
-    void SendByte(uint8_t byte) const
-    {
-        if (send(sockfd, &byte, 1, MSG_NOSIGNAL) != 1)
-            throw std::runtime_error("SendByte() failed: " +
-                    std::string(gai_strerror(errno)));
+        std::vector<uint8_t> buffer(64);
+        bool gotData = false;
+        while (true)
+        {
+            auto result = recv(sockfd, buffer.data(), buffer.size(), MSG_DONTWAIT);
+            if ((result == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) || result == 0)
+                break;
+            gotData = true;
+            if (result == -1)
+                throw std::runtime_error("DumpTo() failed receiving: " +
+                        std::string(strerror(errno)));
+            auto sendresult = send(otherFd, buffer.data(),
+                    static_cast<size_t>(result), MSG_NOSIGNAL);
+            if (sendresult == -1)
+                throw std::runtime_error("DumpTo() failed sending: " +
+                        std::string(strerror(errno)));
+            if (sendresult != result)
+                throw std::runtime_error("DumpTo() didn't send all bytes: " +
+                        std::to_string(sendresult) + " of " + std::to_string(result));
+        }
+        return gotData;
     }
 
     void SendStr(std::string str) const

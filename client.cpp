@@ -1,3 +1,6 @@
+// TODO: Refactor this whole file, as well as server.cpp, scriptengine.cpp, and echo.cpp
+// They are MESSES
+
 #include "client.h"
 #include "interop.h"
 #include "helper.h"
@@ -11,6 +14,7 @@ int oldWidth = -1, oldHeight = -1, oldX = -1, oldY = -1;
 int screensaverFrame = 0;
 std::string hostPort;
 bool resized = false;
+bool keepAlive = false;
 std::shared_ptr<ClamContext> context;
 std::shared_ptr<ClamInterop> interop;
 std::shared_ptr<ClamKernel> kernel;
@@ -183,8 +187,16 @@ void idleFunc()
                     }
                     break;
                 case MessageKill:
-                    puts("Caught shutdown signal, rebooting");
-                    rebootDisplay();
+                    if (keepAlive)
+                    {
+                        puts("Caught shutdown signal, rebooting");
+                        rebootDisplay();
+                    }
+                    else
+                    {
+                        puts("Exiting client because SLAVE_KEEPALIVE=false");
+                        exit(0);
+                    }
                     break;
                 default:
                     throw std::runtime_error("Unknown packet id "
@@ -197,7 +209,13 @@ void idleFunc()
         puts("Exception in client idleFunc:");
         puts(ex.what());
         sock = nullptr;
-        rebootDisplay();
+        if (keepAlive)
+            rebootDisplay();
+        else
+        {
+            puts("Exiting client because SLAVE_KEEPALIVE=false");
+            exit(0);
+        }
     }
     glutPostRedisplay();
 }
@@ -205,11 +223,13 @@ void idleFunc()
 void client(const char* clientPort,
         int xpos, int ypos, int width, int height,
         int renderX, int renderY,
-        bool fullscreen)
+        bool fullscreen,
+        bool keepProcessAlive)
 {
     hostPort = clientPort;
     oldX = renderX;
     oldY = renderY;
+    keepAlive = keepProcessAlive;
     glutInitDisplayMode(GLUT_DOUBLE);
     glutInitWindowPosition(xpos, ypos);
     glutInitWindowSize(width, height);

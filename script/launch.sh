@@ -32,6 +32,7 @@ done
 if [[ "$slavecount" == "0" ]]
 then
     export PROGRAMTYPE=slave
+    export SLAVE_KEEPALIVE=false
     export SLAVE_PORT=23455
     export SLAVE_WINDOW=800x600+400+300
     export SLAVE_RENDERCOORDS=-400-300
@@ -49,6 +50,7 @@ fi
 if [[ "$echocount" == "0" ]]
 then
     export PROGRAMTYPE=echo
+    export ECHO_KEEPALIVE=false
     export ECHO_PORT=23456
     export ECHO_CONNECTIONS=127.0.0.1:23455
     #~127.0.0.1:23454

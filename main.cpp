@@ -47,10 +47,13 @@ int unsafemain(int argc, char** argv)
         }
         const char* slaveFullscreen = getenv("SLAVE_FULLSCREEN");
         bool slaveFullscreenVal = slaveFullscreen && strcmp(slaveFullscreen, "true") == 0;
+        const char* keepProcessAliveStr = getenv("SLAVE_KEEPALIVE");
+        bool keepProcessAlive = keepProcessAliveStr && strcmp(keepProcessAliveStr, "true") == 0;
         client(slavePort.c_str(),
                 xpos, ypos, width, height,
                 renderX, renderY,
-                slaveFullscreenVal);
+                slaveFullscreenVal,
+                keepProcessAlive);
         return 0;
     }
     else if (programType == "master")
@@ -64,8 +67,10 @@ int unsafemain(int argc, char** argv)
     {
         auto incomingPort = sgetenv("ECHO_PORT");
         auto outgoingIps = split(sgetenv("ECHO_CONNECTIONS"), '~');
-        echo(incomingPort.c_str(), outgoingIps);
-        //return 0;
+        const char* keepProcessAliveStr = getenv("ECHO_KEEPALIVE");
+        bool keepProcessAlive = keepProcessAliveStr && strcmp(keepProcessAliveStr, "true") == 0;
+        echo(incomingPort.c_str(), outgoingIps, keepProcessAlive);
+        // return 0;
     }
     else
     {

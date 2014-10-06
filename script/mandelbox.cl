@@ -123,7 +123,7 @@ float3 DeColor(float3 z)
 
         z = Scale * z + offset;
     }
-    return HSVtoRGB(hue * HueVariance, Saturation, 1.0) + (float3)(ColorBias);
+    return HSVtoRGB(hue * HueVariance, Saturation, Reflectivity) + (float3)(ColorBias);
 }
 
 uint MWC64X(ulong *state)
@@ -238,10 +238,9 @@ float3 TracePath(float3 rayPos, float3 rayDir, float focalDistance, ulong* rand)
 
         float3 lightPos = (float3)(LightPos) + (float3)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1, Rand(rand) * 2 - 1) * (float)LightSize;
         float3 directLighting = DirectLighting(rayPos, lightPos);
-        
+
         float3 normal = Normal(rayPos);
-        int isSpecular = Rand(rand) > SpecularDiffuseRatio;
-        if (isSpecular)
+        if (Rand(rand) > SpecularDiffuseRatio)
         {
             rayDir = Cone(-2 * dot(normal, rayDir) * normal + rayDir, SpecularSize, rand);
             if (dot(rayDir, normalize(lightPos - rayPos)) < cos(SpecularSize))

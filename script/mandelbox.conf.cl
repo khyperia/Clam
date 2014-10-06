@@ -6,7 +6,8 @@
 #define MinRadius2 0.125
 #define Saturation 0.2
 #define HueVariance 2
-#define ColorBias 0.0,0.2,0.0
+#define Reflectivity 1.0
+#define ColorBias 0.0,0.0,0.0
 #define RandSeedInitSteps 256
 #define DeMultiplier 0.95
 #define DofPickup 0.005
