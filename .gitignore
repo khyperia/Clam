@@ -1,6 +1,9 @@
 .ycm_extra_conf.py
 *.pyc
 clam2
+clam2_master
+clam2_echo
+clam2_slave
 *.o
 *.d
 *.swp
