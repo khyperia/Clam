@@ -2,7 +2,7 @@
 
 enum MessageType
 {
-    MessageNull,
+    MessageTerm,
     MessageKernelInvoke,
     MessageKernelSource,
     MessageMkBuffer,

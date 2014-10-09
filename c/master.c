@@ -4,12 +4,14 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include "luaHelper.h"
 #include "socketHelper.h"
 #include "helper.h"
 
 int* sockets = NULL;
 bool keyboard[UCHAR_MAX + 1] = {false};
 int animationFrame = 0;
+lua_State* luaState = NULL;
 
 void keyboardDownFunc(unsigned char c, int UNUSED x, int UNUSED y)
 {
@@ -23,7 +25,11 @@ void keyboardUpFunc(unsigned char c, int UNUSED x, int UNUSED y)
 
 void masterIdleFunc()
 {
-    // TODO: Sockets!
+    if (PrintErr(runLua(luaState, 0.01))) // TODO: Clock time
+    {
+        puts("Exiting.");
+        exit(-1);
+    }
     glutPostRedisplay();
 }
 
@@ -51,11 +57,18 @@ void doOnExit_master()
         int* sock = sockets;
         while (*sock)
         {
-            close(*sock);
+            if (*sock != -1)
+            {
+                int msgTerm = MessageTerm;
+                send_p(*sock, &msgTerm, sizeof(int));
+                close(*sock);
+            }
             sock++;
         }
         free(sockets);
     }
+    if (luaState)
+        deleteLua(luaState);
 }
 
 int* connectToSlaves(char* slaves)
@@ -110,10 +123,22 @@ int main(int argc, char** argv)
     if (PrintErr(atexit(doOnExit_master)))
         puts("Continuing anyway");
 
+    if (argc != 2)
+    {
+        printf("Usage: %s [lua filename]\n", argv[0]);
+        return -1;
+    }
+
     char* ips = my_strdup(sgetenv("CLAM2_SLAVES", "127.0.0.1:23456"));
     sockets = connectToSlaves(ips);
     free(ips);
     if (!sockets)
+    {
+        puts("Exiting.");
+        return -1;
+    }
+
+    if (PrintErr(newLua(&luaState, argv[1])))
     {
         puts("Exiting.");
         return -1;
@@ -131,4 +156,3 @@ int main(int argc, char** argv)
     puts("glutMainLoop returned, that's odd");
     return -1;
 }
-// yay

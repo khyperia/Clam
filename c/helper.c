@@ -35,3 +35,29 @@ char* my_strdup(const char* str)
         *(ret + i) = *(str + i);
     return ret;
 }
+
+char* readWholeFile(const char* filename)
+{
+    FILE* f = fopen(filename, "rb");
+    if (!f)
+    {
+        perror("readWholeFile()");
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char* string = malloc(fsize + 1);
+    if (!string)
+    {
+        puts("malloc() failed");
+        exit(-1);
+    }
+    fread(string, fsize, 1, f);
+    fclose(f);
+
+    string[fsize] = 0;
+
+    return string;
+}

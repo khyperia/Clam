@@ -75,6 +75,11 @@ int connectSocket(const char* host, const char* port)
 
 int recv_p(int socketFd, void* data, int numBytes)
 {
+    if (socketFd == -1)
+    {
+        puts("recv(): Bad socket file descriptor");
+        return -1;
+    }
     int result = recv(socketFd, data, numBytes, MSG_WAITALL);
     if (result == -1)
     {
