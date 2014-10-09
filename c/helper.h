@@ -7,6 +7,7 @@
 #endif
 
 const char* sgetenv(const char* name, const char* defaultValue);
+char* my_strdup(const char* str);
 int PrintErrImpl(int errcode, const char* message, const char* filename, int line);
 
 #define PrintErr(errcode) PrintErrImpl((errcode), (#errcode), __FILE__, __LINE__)

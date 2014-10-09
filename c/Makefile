@@ -18,7 +18,7 @@ OBJECTS=$(patsubst %.c,$(OBJDIR)/%.o,$(SOURCES))
 DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
 
 MASTERFILES=master socketHelper helper
-SLAVEFILES=slave glclContext socketHelper helper
+SLAVEFILES=slave slaveSocket glclContext socketHelper helper openclHelper
 
 all: $(BINDIR)/clam2_master $(BINDIR)/clam2_slave
 

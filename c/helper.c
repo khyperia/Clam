@@ -1,6 +1,7 @@
 #include "helper.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int PrintErrImpl(int errcode, const char* message, const char* filename, int line)
 {
@@ -18,4 +19,19 @@ const char* sgetenv(const char* name, const char* defaultValue)
         result = defaultValue;
     }
     return result;
+}
+
+// because strdup is apparently not in <string.h>
+char* my_strdup(const char* str)
+{
+    int len = strlen(str) + 1;
+    char* ret = (char*)malloc(len * sizeof(char));
+    if (!ret)
+    {
+        puts("malloc() failed");
+        exit(-1);
+    }
+    for (int i = 0; i < len; i++)
+        *(ret + i) = *(str + i);
+    return ret;
 }

@@ -1,4 +1,5 @@
 #include "socketHelper.h"
+#include "helper.h"
 #define _POSIX_C_SOURCE 200112L
 #include <stdio.h>
 #undef _POSIX_C_SOURCE
@@ -6,6 +7,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 int hostSocket(const char* port)
 {
@@ -69,4 +71,65 @@ int connectSocket(const char* host, const char* port)
         return -1;
     freeaddrinfo(servinfo);
     return sock;
+}
+
+int recv_p(int socketFd, void* data, int numBytes)
+{
+    int result = recv(socketFd, data, numBytes, MSG_WAITALL);
+    if (result == -1)
+    {
+        perror("recv()");
+        return -1;
+    }
+    if (result != numBytes)
+    {
+        printf("recv(): not enough bytes read (%d of %d)\n", result, numBytes);
+        return -1;
+    }
+    return 0;
+}
+
+int send_p(int socketFd, const void* data, int numBytes)
+{
+    int result = send(socketFd, data, numBytes, 0);
+    if (result == -1)
+    {
+        perror("recv()");
+        return -1;
+    }
+    if (result != numBytes)
+    {
+        printf("send(): not enough bytes sent (%d of %d)\n", result, numBytes);
+        return -1;
+    }
+    return 0;
+}
+
+char* recv_str(int socketFd)
+{
+    int stringSize = 0;
+    if (PrintErr(recv_p(socketFd, &stringSize, sizeof(int))))
+        return NULL;
+    char* result = malloc(stringSize * sizeof(char));
+    if (!result)
+    {
+        puts("malloc() failed");
+        exit(-1);
+    }
+    if (PrintErr(recv_p(socketFd, result, stringSize)))
+    {
+        free(result);
+        return NULL;
+    }
+    return result;
+}
+
+int send_str(int socketFd, const char* string)
+{
+    int len = strlen(string) + 1;
+    if (PrintErr(send_p(socketFd, &len, sizeof(int))))
+        return -1;
+    if (PrintErr(send_p(socketFd, string, len)))
+        return -1;
+    return 0;
 }

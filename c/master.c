@@ -58,21 +58,6 @@ void doOnExit_master()
     }
 }
 
-// because strdup is apparently not in <string.h>
-char* my_strdup(const char* str)
-{
-    int len = strlen(str) + 1;
-    char* ret = (char*)malloc(len * sizeof(char));
-    if (!ret)
-    {
-        puts("malloc() failed");
-        exit(-1);
-    }
-    for (int i = 0; i < len; i++)
-        *(ret + i) = *(str + i);
-    return ret;
-}
-
 int* connectToSlaves(char* slaves)
 {
     int numIps;
@@ -146,3 +131,4 @@ int main(int argc, char** argv)
     puts("glutMainLoop returned, that's odd");
     return -1;
 }
+// yay

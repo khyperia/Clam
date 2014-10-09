@@ -1,10 +1,22 @@
 #pragma once
-
 #define GL_GLEXT_PROTOTYPES
 #include <CL/cl_gl.h>
 #include <GL/gl.h>
 
-#define MAX_GPU_MEMS 4
+// Begin should be in openclHelper.h
+struct cl_kernel_list
+{
+    cl_kernel kernel;
+    char* name;
+    struct cl_kernel_list* next;
+};
+
+struct ClContext
+{
+    cl_program program;
+    struct cl_kernel_list* kernels;
+};
+// End should be in openclHelper.h
 
 struct cl_mem_list
 {
@@ -16,6 +28,7 @@ struct cl_mem_list
 
 struct Interop
 {
+    struct ClContext clContext;
     struct cl_mem_list* clMems;
     cl_device_id deviceId;
     cl_context context;

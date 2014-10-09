@@ -5,14 +5,19 @@
 #include "helper.h"
 #include "socketHelper.h"
 #include "glclContext.h"
+#include "slaveSocket.h"
 
 int socketFd;
-int width, height;
+struct ScreenPos screenPos;
 struct Interop interop;
 
 void masterIdleFunc()
 {
-    // TODO: Sockets!
+    if (PrintErr(slaveSocket(&interop, socketFd, screenPos)))
+    {
+        puts("Exiting.");
+        exit(-1);
+    }
     glutPostRedisplay();
 }
 
@@ -20,19 +25,19 @@ void masterDisplayFunc()
 {
     int newWidth = glutGet(GLUT_WINDOW_WIDTH);
     int newHeight = glutGet(GLUT_WINDOW_HEIGHT);
-    if (newWidth != width || newHeight != height)
+    if (newWidth != screenPos.width || newHeight != screenPos.height)
     {
-        width = newWidth;
-        height = newHeight;
-        if (width <= 0 || height <= 0)
+        screenPos.width = newWidth;
+        screenPos.height = newHeight;
+        if (screenPos.width <= 0 || screenPos.height <= 0)
         {
             puts("Window width or height was zero. This causes bad problems. Exiting.");
             exit(-1);
         }
-        if (PrintErr(resizeInterop(&interop, width, height)))
+        if (PrintErr(resizeInterop(&interop, screenPos.width, screenPos.height)))
             exit(-1);
     }
-    if (PrintErr(blitInterop(interop, width, height)))
+    if (PrintErr(blitInterop(interop, screenPos.width, screenPos.height)))
         exit(-1);
     glutSwapBuffers();
     if (PrintErr(glGetError()))
@@ -74,14 +79,21 @@ int main(int argc, char** argv)
 
     const char* winpos = sgetenv("CLAM2_WINPOS", "512x512+0+0");
     int winX, winY;
-    if (sscanf(winpos, "%dx%d%d%d", &width, &height, &winX, &winY) != 4)
+    if (sscanf(winpos, "%dx%d%d%d", &screenPos.width, &screenPos.height, &winX, &winY) != 4)
     {
         puts("CLAM2_WINPOS not in correct format (WIDTHxHEIGHT+OFFX+OFFY). Exiting.");
         return -1;
     }
 
+    const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-256-256");
+    if (sscanf(renderpos, "%d%d", &screenPos.x, &screenPos.y) != 2)
+    {
+        puts("CLAM2_RENDERPOS not in correct format ([+-]OFFX[+-]OFFY). Exiting.");
+        return -1;
+    }
+
     glutInit(&argc, argv);
-    glutInitWindowSize(width, height);
+    glutInitWindowSize(screenPos.width, screenPos.height);
     glutInitWindowPosition(winX, winY);
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2 Slave");
@@ -91,7 +103,7 @@ int main(int argc, char** argv)
         puts("Exiting.");
         return -1;
     }
-    if (PrintErr(resizeInterop(&interop, width, height)))
+    if (PrintErr(resizeInterop(&interop, screenPos.width, screenPos.height)))
     {
         puts("Exiting.");
         return -1;

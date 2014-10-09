@@ -1,8 +1,10 @@
 #include "glclContext.h"
+#include "openclHelper.h"
+#include "helper.h"
 #include <limits.h>
 #include <GL/glx.h>
 #include <stdio.h>
-#include "helper.h"
+#include <string.h>
 
 cl_context getClContext(cl_device_id* outputClDeviceId)
 {
@@ -142,6 +144,7 @@ int newInterop(struct Interop* result)
 {
     result->context = getClContext(&result->deviceId);
     result->clMems = NULL;
+    memset(&result->clContext, 0, sizeof(struct ClContext));
     
     if (!result->context)
     {
@@ -179,6 +182,8 @@ int newInterop(struct Interop* result)
 // Cleans up an Interop struct (does not deallocate the cl_context)
 void deleteInterop(struct Interop interop)
 {
+    if (interop.clContext.program)
+        deleteClContext(interop.clContext);
     glDeleteTextures(1, &interop.glTexture);
     glDeleteBuffers(1, &interop.glBuffer);
     clReleaseCommandQueue(interop.command_queue);
