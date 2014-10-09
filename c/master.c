@@ -1,3 +1,6 @@
+#define _POSIX_C_SOURCE 200112L
+#include <time.h>
+#undef _POSIX_C_SOURCE
 #include "master.h"
 #include <GL/glut.h>
 #include <math.h>
@@ -12,6 +15,8 @@ int* sockets = NULL;
 bool keyboard[UCHAR_MAX + 1] = {false};
 int animationFrame = 0;
 lua_State* luaState = NULL;
+struct timespec lastFrame;
+double fps = 0.0;
 
 void keyboardDownFunc(unsigned char c, int UNUSED x, int UNUSED y)
 {
@@ -25,11 +30,21 @@ void keyboardUpFunc(unsigned char c, int UNUSED x, int UNUSED y)
 
 void masterIdleFunc()
 {
-    if (PrintErr(runLua(luaState, 0.01))) // TODO: Clock time
+    struct timespec newFrame;
+    if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &newFrame)))
     {
         puts("Exiting.");
         exit(-1);
     }
+    double elapsed = (double)(newFrame.tv_sec - lastFrame.tv_sec) +
+                    (double)(newFrame.tv_nsec - lastFrame.tv_nsec) / 1000000000;
+    fps = (1 / elapsed + fps * 3) / 4;
+    if (PrintErr(runLua(luaState, elapsed)))
+    {
+        puts("Exiting.");
+        exit(-1);
+    }
+    lastFrame = newFrame;
     glutPostRedisplay();
 }
 
@@ -47,7 +62,20 @@ void masterDisplayFunc()
         glClearColor(0, 0, animationFrameVal, 1);
     glClear(GL_COLOR_BUFFER_BIT);
     animationFrame = (animationFrame + 1) % 3000;
+
+    char buffer[100];
+    snprintf(buffer, 100, "FPS: %f", fps);
+    glRasterPos2i(-1, 1);
+    for (int i = 0; buffer[i]; i++)
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, buffer[i]);
+
     glutSwapBuffers();
+
+    if (PrintErr(glGetError()))
+    {
+        puts("Exiting.");
+        exit(-1);
+    }
 }
 
 void doOnExit_master()
@@ -146,7 +174,13 @@ int main(int argc, char** argv)
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE);
-    glutCreateWindow("cClam2 Master");
+    glutCreateWindow("Clam2 Master");
+
+    if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &lastFrame)))
+    {
+        puts("Exiting.");
+        exit(-1);
+    }
 
     glutKeyboardFunc(keyboardDownFunc);
     glutKeyboardUpFunc(keyboardUpFunc);
