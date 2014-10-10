@@ -105,7 +105,7 @@ int send_all_str(const char* string)
     return errcode;
 }
 
-int recv_all()
+int recv_all(void)
 {
     int* socket = sockets;
     int errcode = 0;

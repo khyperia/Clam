@@ -10,6 +10,7 @@ CFLAGS=-g -c -O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
 
 LDFLAGS_MASTER=-lglut $(shell pkg-config --libs gl libpng lua)
 LDFLAGS_SLAVE=-lOpenCL -lglut $(shell pkg-config --libs gl)
+LDFLAGS_ECHO=-lpthread
 
 SOURCES=$(wildcard *.c)
 OBJECTS=$(patsubst %.c,$(OBJDIR)/%.o,$(SOURCES))
@@ -17,8 +18,9 @@ DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
 
 MASTERFILES=master luaHelper socketHelper helper
 SLAVEFILES=slave slaveSocket glclContext openclHelper socketHelper helper
+ECHOFILES=echo socketHelper helper
 
-all: $(BINDIR)/clam2_master $(BINDIR)/clam2_slave
+all: $(BINDIR)/clam2_master $(BINDIR)/clam2_slave $(BINDIR)/clam2_echo
 
 clean:
 	rm -r $(OBJDIR) $(BINDIR)
@@ -30,6 +32,10 @@ bin/clam2_master: $(OBJECTS)
 bin/clam2_slave: $(OBJECTS)
 	@mkdir -p $(@D)
 	$(CC) $(LDFLAGS_SLAVE) $(addsuffix .o,$(addprefix $(OBJDIR)/,$(SLAVEFILES))) -o $@
+
+bin/clam2_echo: $(OBJECTS)
+	@mkdir -p $(@D)
+	$(CC) $(LDFLAGS_ECHO) $(addsuffix .o,$(addprefix $(OBJDIR)/,$(ECHOFILES))) -o $@
 
 $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)

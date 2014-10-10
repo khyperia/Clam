@@ -26,6 +26,6 @@ function update(time)
         dlbuffer(1, width)
         rmbuffer(1)
     end
-    
+
     kernel("main", -1, -1, "0", special, posx, posy, zoom / 500)
 end

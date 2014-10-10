@@ -11,7 +11,7 @@ int socketFd;
 struct ScreenPos screenPos;
 struct Interop interop;
 
-void masterIdleFunc()
+void masterIdleFunc(void)
 {
     if (PrintErr(slaveSocket(&interop, socketFd, screenPos)))
     {
@@ -21,7 +21,7 @@ void masterIdleFunc()
     glutPostRedisplay();
 }
 
-void masterDisplayFunc()
+void masterDisplayFunc(void)
 {
     int newWidth = glutGet(GLUT_WINDOW_WIDTH);
     int newHeight = glutGet(GLUT_WINDOW_HEIGHT);
@@ -47,7 +47,7 @@ void masterDisplayFunc()
     }
 }
 
-void doOnExit_slave()
+void doOnExit_slave(void)
 {
     if (socketFd > 0)
         close(socketFd);

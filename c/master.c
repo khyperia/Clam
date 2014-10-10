@@ -28,7 +28,7 @@ void keyboardUpFunc(unsigned char c, int UNUSED x, int UNUSED y)
     keyboard[c] = false;
 }
 
-void masterIdleFunc()
+void masterIdleFunc(void)
 {
     struct timespec newFrame;
     if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &newFrame)))
@@ -48,7 +48,7 @@ void masterIdleFunc()
     glutPostRedisplay();
 }
 
-void masterDisplayFunc()
+void masterDisplayFunc(void)
 {
     float animationFrameVal = fmod(animationFrame / 1000.0f, 1.0f);
     if (animationFrameVal > 0.5)
@@ -78,7 +78,7 @@ void masterDisplayFunc()
     }
 }
 
-void doOnExit_master()
+void doOnExit_master(void)
 {
     if (sockets)
     {
