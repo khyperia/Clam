@@ -25,6 +25,7 @@ function update(time)
             posx, posy, zoom / width)
         dlbuffer(1, width)
         rmbuffer(1)
+        print("Saved screenshot")
     end
 
     kernel("main", -1, -1, "0", special, posx, posy, zoom / 500)

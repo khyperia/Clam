@@ -77,7 +77,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    const char* winpos = sgetenv("CLAM2_WINPOS", "512x512+0+0");
+    const char* winpos = sgetenv("CLAM2_WINPOS", "1024x1024+0+0");
     int winX, winY;
     if (sscanf(winpos, "%dx%d%d%d", &screenPos.width, &screenPos.height, &winX, &winY) != 4)
     {
@@ -85,7 +85,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-256-256");
+    const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-512-512");
     if (sscanf(renderpos, "%d%d", &screenPos.x, &screenPos.y) != 2)
     {
         puts("CLAM2_RENDERPOS not in correct format ([+-]OFFX[+-]OFFY). Exiting.");

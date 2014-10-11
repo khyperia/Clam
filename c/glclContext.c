@@ -82,6 +82,11 @@ int addMem(struct Interop* interop, int key, cl_mem mem, size_t memSize)
     struct cl_mem_list** toAssign = &interop->clMems;
     while (*toAssign)
     {
+        if ((*toAssign)->key == key)
+        {
+            printf("Buffer ID %d already exists, cannot create it\n", key);
+            return -1;
+        }
         toAssign = &(*toAssign)->next;
     }
     *toAssign = (struct cl_mem_list*)malloc(sizeof(struct cl_mem_list));
@@ -103,9 +108,9 @@ int allocMem(struct Interop* interop, int key, size_t memSize)
     cl_int openclError;
     cl_mem memory = clCreateBuffer(interop->context, CL_MEM_READ_WRITE, memSize,
         NULL, &openclError);
-    if (PrintErr(openclError && "clCreateBuffer()"))
+    if (PrintErr(openclError))
     {
-        puts("Continuing anyway, things may fail");
+        puts("  Was from clCreateBuffer()");
         return -1;
     }
     return addMem(interop, key, memory, memSize);
@@ -139,13 +144,33 @@ void freeMem(struct Interop* interop, int key)
     clReleaseMemObject(toFree);
 }
 
+float* dlMem(struct Interop interop, int key, size_t* memSize)
+{
+    cl_mem clmem = getMem(interop, key, memSize);
+    if (!clmem)
+        return NULL;
+    float* data = malloc(*memSize);
+    if (!data)
+    {
+        puts("malloc() failed");
+        exit(-1);
+    }
+    if (PrintErr(clEnqueueReadBuffer(interop.command_queue, clmem, 1, 0,
+                    *memSize, data, 0, NULL, NULL)))
+    {
+        free(data);
+        return NULL;
+    }
+    return data;
+}
+
 // Creates an Interop struct
 int newInterop(struct Interop* result)
 {
     result->context = getClContext(&result->deviceId);
     result->clMems = NULL;
     memset(&result->clContext, 0, sizeof(struct ClContext));
-    
+
     if (!result->context)
     {
         puts("No OpenCL devices found");

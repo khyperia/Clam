@@ -1,6 +1,7 @@
 #include "luaHelper.h"
 #include "helper.h"
 #include "socketHelper.h"
+#include "pngHelper.h"
 #include "master.h"
 #include <lualib.h>
 #include <lauxlib.h>
@@ -23,6 +24,10 @@ int checkArgs(lua_State* state, int* types)
     return 0;
 }
 
+// Note: `state` must be a local variable of type lua_State* to use this macro
+#define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
+
+/*
 void assertArgs(lua_State* state, int* types)
 {
     if (checkArgs(state, types))
@@ -31,17 +36,14 @@ void assertArgs(lua_State* state, int* types)
         lua_error(state);
     }
 }
+*/
 
 int run_iskeydown(lua_State* state)
 {
     int types[] = { LUA_TSTRING, LUA_TNONE };
-    assertArgs(state, types);
+    LuaPrintErr(checkArgs(state, types));
     const char* str = lua_tostring(state, 1);
-    if (strlen(str) != 1)
-    {
-        lua_pushstring(state, "key functions must take single-character strings");
-        lua_error(state);
-    }
+    LuaPrintErr(strlen(str) != 1);
     lua_pushboolean(state, keyboard[(unsigned char)str[0]]);
     return 1;
 }
@@ -49,13 +51,9 @@ int run_iskeydown(lua_State* state)
 int run_unsetkey(lua_State* state)
 {
     int types[] = { LUA_TSTRING, LUA_TNONE };
-    assertArgs(state, types);
+    LuaPrintErr(checkArgs(state, types));
     const char* str = lua_tostring(state, 1);
-    if (strlen(str) != 1)
-    {
-        lua_pushstring(state, "key functions must take single-character strings");
-        lua_error(state);
-    }
+    LuaPrintErr(strlen(str) != 1);
     keyboard[(unsigned char)str[0]] = false;
     return 0;
 }
@@ -133,99 +131,121 @@ int recv_all(void)
     return errcode;
 }
 
-int run_dlbuffer(lua_State* state)
-{
-    int types[] = { LUA_TNUMBER, LUA_TNONE };
-    assertArgs(state, types);
-    lua_pushstring(state, "dlbuffer not implemented");
-    lua_error(state);
-    return 0;
-}
-
 int run_mkbuffer(lua_State* state)
 {
     int types[] = { LUA_TNUMBER, LUA_TNUMBER, LUA_TNONE };
-    assertArgs(state, types);
-    lua_pushstring(state, "mkbuffer not implemented");
-    lua_error(state);
+    LuaPrintErr(checkArgs(state, types));
+    LuaPrintErr(send_all_msg(MessageMkBuffer));
+    int first = lua_tointeger(state, 1);
+    long second = lua_tointeger(state, 2);
+    LuaPrintErr(send_all(&first, sizeof(int)));
+    LuaPrintErr(send_all(&second, sizeof(long)));
+    LuaPrintErr(recv_all());
     return 0;
 }
 
 int run_rmbuffer(lua_State* state)
 {
     int types[] = { LUA_TNUMBER, LUA_TNONE };
-    assertArgs(state, types);
-    lua_pushstring(state, "mkbuffer not implemented");
-    lua_error(state);
+    LuaPrintErr(checkArgs(state, types));
+    LuaPrintErr(send_all_msg(MessageRmBuffer));
+    int first = lua_tointeger(state, 1);
+    LuaPrintErr(send_all(&first, sizeof(int)));
+    LuaPrintErr(recv_all());
+    return 0;
+}
+
+int run_dlbuffer(lua_State* state)
+{
+    int types[] = { LUA_TNUMBER, LUA_TNUMBER, LUA_TNONE };
+    LuaPrintErr(checkArgs(state, types));
+    LuaPrintErr(send_all_msg(MessageDlBuffer));
+    int bufferId = lua_tointeger(state, 1);
+    LuaPrintErr(send_all(&bufferId, sizeof(int)));
+    long width = lua_tointeger(state, 2);
+    int retval = 0;
+    for (int* socket = sockets; *socket; socket++)
+    {
+        if (*socket == -1)
+            continue;
+        long bufferSize = 0;
+        if (PrintErr(recv_p(*socket, &bufferSize, sizeof(long))))
+        {
+            close(*socket);
+            *socket = -1;
+            retval = -1;
+            continue;
+        }
+
+        if (PrintErr(bufferSize < 0))
+        {
+            printf("bufferSize = %ld\n", bufferSize);
+            close(*socket);
+            *socket = -1;
+            retval = -1;
+            continue;
+        }
+
+        float* data = malloc(bufferSize);
+        if (!data)
+        {
+            puts("malloc() failed in dlbuffer");
+            exit(-1);
+        }
+        if (PrintErr(recv_p(*socket, data, bufferSize)))
+        {
+            free(data);
+            close(*socket);
+            *socket = -1;
+            retval = -1;
+            continue;
+        }
+
+        if (PrintErr(savePng(bufferId, *socket, data, width,
+                        bufferSize / (width * 4 * sizeof(float)))))
+        {
+            puts("Ignoring PNG error.");
+        }
+
+        free(data);
+    }
+    if (retval)
+        luaL_error(state, "At least one slave failed to download buffer: %d", retval);
+    LuaPrintErr(recv_all());
     return 0;
 }
 
 int run_compile(lua_State* state)
 {
-    send_all_msg(MessageKernelSource);
+    LuaPrintErr(send_all_msg(MessageKernelSource));
     int argc = lua_gettop(state);
-    if (PrintErr(send_all(&argc, sizeof(int))))
-    {
-        lua_pushstring(state, "compile(): send() failure");
-        lua_error(state);
-    }
+    LuaPrintErr(send_all(&argc, sizeof(int)));
     for (int i = 1; i <= argc; i++)
     {
-        if (lua_isstring(state, i) == false)
-        {
-            lua_pushstring(state, "compile() must be called with only filenames");
-            lua_error(state);
-        }
+        LuaPrintErr(lua_isstring(state, i) == false);
         char* file = readWholeFile(lua_tostring(state, i));
-        if (!file)
-        {
-            lua_pushstring(state, "compile() file read failed");
-            lua_error(state);
-        }
+        LuaPrintErr(!file);
 
-        if (PrintErr(send_all_str(file)))
-        {
-            lua_pushstring(state, "compile(): send() failure");
-            lua_error(state);
-        }
+        LuaPrintErr(send_all_str(file));
 
         free(file);
     }
-    
-    if (PrintErr(recv_all()))
-    {
-        lua_pushstring(state, "compile(): recv() failure");
-        lua_error(state);
-    }
+
+    LuaPrintErr(recv_all());
     return 0;
 }
 
 int run_kernel(lua_State* state)
 {
-    send_all_msg(MessageKernelInvoke);
+    LuaPrintErr(send_all_msg(MessageKernelInvoke));
     int argc = lua_gettop(state);
-    if (argc < 3)
-    {
-        lua_pushstring(state, "kernel(): not enough arguments");
-        lua_error(state);
-    }
-    if (!lua_isstring(state, 1) || !lua_isnumber(state, 2) || !lua_isnumber(state, 3))
-    {
-        lua_pushstring(state, "kernel(): wrong types of first three arguments");
-        lua_error(state);
-    }
+    LuaPrintErr(argc < 3);
+    LuaPrintErr(!lua_isstring(state, 1) || !lua_isnumber(state, 2) || !lua_isnumber(state, 3));
+
     const char* kernelName = lua_tostring(state, 1);
     long launchSize[2] = { lua_tointeger(state, 2), lua_tointeger(state, 3) };
-    if (PrintErr(send_all_str(kernelName)))
-    {
-        lua_pushstring(state, "kernel(): send() failure");
-        lua_error(state);
-    }
-    if (PrintErr(send_all(launchSize, sizeof(launchSize))))
-    {
-        lua_pushstring(state, "kernel(): send() failure");
-        lua_error(state);
-    }
+    LuaPrintErr(send_all_str(kernelName));
+    LuaPrintErr(send_all(launchSize, sizeof(launchSize)));
     for (int i = 4; i <= argc; i++)
     {
         switch (lua_type(state, i))
@@ -233,40 +253,23 @@ int run_kernel(lua_State* state)
             case LUA_TFUNCTION:
                 {
                     int screenSizeMagicVal = -2;
-                    if (PrintErr(send_all(&screenSizeMagicVal, sizeof(int))))
-                    {
-                        lua_pushstring(state, "kernel(): send() failure");
-                        lua_error(state);
-                    }
+                    LuaPrintErr(send_all(&screenSizeMagicVal, sizeof(int)));
                 }
                 break;
             case LUA_TSTRING:
                 {
-                    if (!lua_isnumber(state, i))
-                    {
-                        lua_pushstring(state,
-                                "kernel(): buffer names must be a string representing a number");
-                        lua_error(state);
-                    }
+                    LuaPrintErr(!lua_isnumber(state, i));
                     int value[2] = { -1, 0 };
                     value[1] = lua_tointeger(state, i);
-                    if (PrintErr(send_all(&value, sizeof(value))))
-                    {
-                        lua_pushstring(state, "kernel(): send() failure");
-                        lua_error(state);
-                    }
+                    LuaPrintErr(send_all(&value, sizeof(value)));
                 }
                 break;
             case LUA_TNUMBER:
                 {
                     int size = sizeof(float);
                     float value = lua_tonumber(state, i);
-                    if (PrintErr(send_all(&size, sizeof(size))) ||
-                        PrintErr(send_all(&value, size)))
-                    {
-                        lua_pushstring(state, "kernel(): send() failure");
-                        lua_error(state);
-                    }
+                    LuaPrintErr(send_all(&size, sizeof(size)));
+                    LuaPrintErr(send_all(&value, size));
                 }
                 break;
             case LUA_TTABLE:
@@ -275,34 +278,29 @@ int run_kernel(lua_State* state)
                     lua_gettable(state, i);
                     int value[2] = { sizeof(int), lua_tointeger(state, -1) };
                     lua_pop(state, 1);
-                    if (PrintErr(send_all(&value, sizeof(value))))
-                    {
-                        lua_pushstring(state, "kernel(): send() failure");
-                        lua_error(state);
-                    }
+                    LuaPrintErr(send_all(&value, sizeof(value)));
                 }
                 break;
             default:
-                {
-                    lua_pushstring(state, "Unknown argument type in kernel()");
-                    lua_error(state);
-                }
+                luaL_error(state, "Unknown argument type in kernel()");
                 break;
         }
     }
-    
-    int doneValue = 0;
-    if (PrintErr(send_all(&doneValue, sizeof(int))))
-    {
-        lua_pushstring(state, "kernel: send() failure");
-        lua_error(state);
-    }
 
-    if (PrintErr(recv_all()))
-    {
-        lua_pushstring(state, "compile(): recv() failure");
-        lua_error(state);
-    }
+    int doneValue = 0;
+    LuaPrintErr(send_all(&doneValue, sizeof(int)));
+
+    LuaPrintErr(recv_all());
+    return 0;
+}
+
+int run_reload(lua_State* state)
+{
+    lua_getglobal(state, "__file__");
+    const char* str = lua_tostring(state, -1);
+    printf("Reloading %s\n", str);
+    LuaPrintErr(luaL_dofile(state, str));
+    lua_pop(state, 1);
     return 0;
 }
 
@@ -310,6 +308,8 @@ int newLua(lua_State** state, const char* filename)
 {
     *state = luaL_newstate();
     luaL_openlibs(*state);
+    lua_pushstring(*state, filename);
+    lua_setglobal(*state, "__file__");
     lua_register(*state, "iskeydown", run_iskeydown);
     lua_register(*state, "unsetkey", run_unsetkey);
     lua_register(*state, "dlbuffer", run_dlbuffer);
@@ -317,6 +317,7 @@ int newLua(lua_State** state, const char* filename)
     lua_register(*state, "rmbuffer", run_rmbuffer);
     lua_register(*state, "compile", run_compile);
     lua_register(*state, "kernel", run_kernel);
+    lua_register(*state, "reload", run_reload);
 
     if (PrintErr(luaL_dofile(*state, filename)))
     {

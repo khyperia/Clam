@@ -13,29 +13,31 @@ LDFLAGS_SLAVE=-lOpenCL -lglut $(shell pkg-config --libs gl)
 LDFLAGS_ECHO=-lpthread
 
 SOURCES=$(wildcard *.c)
-OBJECTS=$(patsubst %.c,$(OBJDIR)/%.o,$(SOURCES))
+# OBJECTS=$(patsubst %.c,$(OBJDIR)/%.o,$(SOURCES))
 DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
 
-MASTERFILES=master luaHelper socketHelper helper
+MASTERFILES=master luaHelper pngHelper socketHelper helper
 SLAVEFILES=slave slaveSocket glclContext openclHelper socketHelper helper
 ECHOFILES=echo socketHelper helper
+
+toobjs=$(addsuffix .o,$(addprefix $(OBJDIR)/,$(1)))
 
 all: $(BINDIR)/clam2_master $(BINDIR)/clam2_slave $(BINDIR)/clam2_echo
 
 clean:
 	rm -r $(OBJDIR) $(BINDIR)
 
-bin/clam2_master: $(OBJECTS)
+bin/clam2_master: $(call toobjs,$(MASTERFILES))
 	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS_MASTER) $(addsuffix .o,$(addprefix $(OBJDIR)/,$(MASTERFILES))) -o $@
+	$(CC) $(LDFLAGS_MASTER) $(call toobjs,$(MASTERFILES)) -o $@
 
-bin/clam2_slave: $(OBJECTS)
+bin/clam2_slave: $(call toobjs,$(SLAVEFILES))
 	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS_SLAVE) $(addsuffix .o,$(addprefix $(OBJDIR)/,$(SLAVEFILES))) -o $@
+	$(CC) $(LDFLAGS_SLAVE) $(call toobjs,$(SLAVEFILES)) -o $@
 
-bin/clam2_echo: $(OBJECTS)
+bin/clam2_echo: $(call toobjs,$(ECHOFILES))
 	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS_ECHO) $(addsuffix .o,$(addprefix $(OBJDIR)/,$(ECHOFILES))) -o $@
+	$(CC) $(LDFLAGS_ECHO) $(call toobjs,$(ECHOFILES)) -o $@
 
 $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)

@@ -14,7 +14,15 @@ int messageKernelSource(struct Interop* interop, int socketFd)
     for (int source = 0; source < numStrings; source++)
         sources[source] = recv_str(socketFd);
 
-    int result = PrintErr(newClContext(&interop->clContext, *interop, sources, numStrings));
+    if (interop->clContext.kernels)
+        deleteClContext(interop->clContext);
+
+    int result = PrintErr(newClContext(interop, sources, numStrings));
+
+    if (interop->clContext.kernels)
+    {
+        puts("Uh oh");
+    }
 
     for (int source = 0; source < numStrings; source++)
         free(sources[source]);
@@ -120,6 +128,52 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
     return result;
 }
 
+int messageMkBuffer(struct Interop* interop, int socketFd)
+{
+    int bufferId = 0;
+    long bufferSize = 0;
+    if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))) ||
+        PrintErr(recv_p(socketFd, &bufferSize, sizeof(long))))
+        return -1;
+    if (PrintErr(allocMem(interop, bufferId, bufferSize)))
+        return -1;
+    return 0;
+}
+
+int messageRmBuffer(struct Interop* interop, int socketFd)
+{
+    int bufferId = 0;
+    if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
+        return -1;
+    freeMem(interop, bufferId);
+    return 0;
+}
+
+// TODO: Protocol gets weird here, since we're sending data back
+int messageDlBuffer(struct Interop* interop, int socketFd)
+{
+    int bufferId = 0;
+    if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
+        return -1;
+    size_t memSize = 0;
+    float* data = dlMem(*interop, bufferId, &memSize);
+    if (!data)
+        return -1;
+    long memSizeL = memSize;
+    if (PrintErr(send_p(socketFd, &memSizeL, sizeof(long))))
+    {
+        free(data);
+        return -1;
+    }
+    if (PrintErr(send_p(socketFd, data, memSize)))
+    {
+        free(data);
+        return -1;
+    }
+    free(data);
+    return 0;
+}
+
 int parseMessage(enum MessageType messageType, struct Interop* interop,
         int socketFd, struct ScreenPos screenPos)
 {
@@ -138,14 +192,17 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
                 return -1;
             return 0;
         case MessageMkBuffer:
-            puts("MessageMkBuffer not supported yet");
-            return -1;
+            if (PrintErr(messageMkBuffer(interop, socketFd)))
+                return -1;
+            return 0;
         case MessageRmBuffer:
-            puts("MessageRmBuffer not supported yet");
-            return -1;
+            if (PrintErr(messageRmBuffer(interop, socketFd)))
+                return -1;
+            return 0;
         case MessageDlBuffer:
-            puts("MessageDlBuffer not supported yet");
-            return -1;
+            if (PrintErr(messageDlBuffer(interop, socketFd)))
+                return -1;
+            return 0;
         default:
             printf("Unknown message type %d\n", messageType);
             return -1;

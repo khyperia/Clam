@@ -3,35 +3,35 @@
 #include <stdio.h>
 #include <string.h>
 
-int newClContext(struct ClContext* result,
-        struct Interop interop, char** sources, int sourcesLength)
+int newClContext(struct Interop* interop, char** sources, int sourcesLength)
 {
     cl_int openclError = 0;
-    result->program = clCreateProgramWithSource(interop.context,
+    interop->clContext.program = clCreateProgramWithSource(interop->context,
             sourcesLength, (const char**)sources, NULL, &openclError);
     if (PrintErr(openclError && "clCreateProgramWithSource()"))
         return -1;
-    openclError = clBuildProgram(result->program, 1, &interop.deviceId,
+    openclError = clBuildProgram(interop->clContext.program, 1, &interop->deviceId,
             "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror", NULL, NULL);
     if (openclError)
     {
         size_t logSize;
-        clGetProgramBuildInfo(result->program, interop.deviceId, CL_PROGRAM_BUILD_LOG,
+        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId, CL_PROGRAM_BUILD_LOG,
                 0, NULL, &logSize);
-        
+
         char* str = (char*)malloc(logSize * sizeof(char));
         if (!str)
         {
             puts("malloc() failed. Exiting.");
             exit(-1);
         }
-        clGetProgramBuildInfo(result->program, interop.deviceId, CL_PROGRAM_BUILD_LOG,
+        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId, CL_PROGRAM_BUILD_LOG,
                 logSize, str, NULL);
         printf("OpenCL build failed:\n%s\n", str);
         free(str);
-        clReleaseProgram(result->program);
+        clReleaseProgram(interop->clContext.program);
         return -1;
     }
+    interop->clContext.kernels = NULL;
     // kernels are created on-demand
     return 0;
 }
@@ -42,8 +42,11 @@ void deleteClContext(struct ClContext context)
     while (list)
     {
         free(list->name);
+        list->name = NULL;
         clReleaseKernel(list->kernel);
+        list->kernel = NULL;
         struct cl_kernel_list* temp = list->next;
+        list->next = NULL;
         free(list);
         list = temp;
     }
@@ -55,6 +58,8 @@ cl_kernel getKernelByName(struct ClContext* context, const char* name)
     struct cl_kernel_list** listRef = &context->kernels;
     while (*listRef)
     {
+        if (PrintErr(!(*listRef)->name))
+            return NULL;
         if (strcmp((*listRef)->name, name) == 0)
             break;
         listRef = &(*listRef)->next;
@@ -68,6 +73,7 @@ cl_kernel getKernelByName(struct ClContext* context, const char* name)
         *listRef = (struct cl_kernel_list*)malloc(sizeof(struct cl_kernel_list));
         (*listRef)->name = my_strdup(name);
         (*listRef)->kernel = kernel;
+        (*listRef)->next = NULL;
     }
     return (*listRef)->kernel;
 }
