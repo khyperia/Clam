@@ -1,8 +1,8 @@
-#include "socketHelper.h"
-#include "helper.h"
 #define _POSIX_C_SOURCE 200112L
 #include <stdio.h>
 #undef _POSIX_C_SOURCE
+#include "socketHelper.h"
+#include "helper.h"
 #include <string.h>
 #include <netdb.h>
 #include <sys/socket.h>

@@ -3,13 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-int PrintErrImpl(int errcode, const char* message, const char* filename, int line)
-{
-    if (errcode != 0)
-        printf("%s(%d) `%s`: errcode %d\n", filename, line, message, errcode);
-    return errcode;
-}
-
 const char* sgetenv(const char* name, const char* defaultValue)
 {
     const char* result = getenv(name);

@@ -18,10 +18,10 @@
 #define NumRayBounces 2
 #define QualityFirstRay 2000
 #define QualityRestRay 128
-#define SpecularSize 0.1
-#define SpecularBrightness 1
+#define SpecularSize 0.4
+#define SpecularBrightness 3
 #define LightBrightnessMultiplier 20
-#define LightBrightness 1.0,0.5,0.3
-#define AmbientBrightness 0.3,0.3,0.4
+#define LightBrightness 1.0,0.7,0.7
+#define AmbientBrightness 0.3,0.3,0.5
 #define LightPos 5
 #define LightSize 0.2
