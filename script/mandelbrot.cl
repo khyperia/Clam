@@ -6,6 +6,18 @@
 #define Bailout 8
 #endif
 
+uint MWC64X(ulong *state)
+{
+    uint c=(*state)>>32, x=(*state)&0xFFFFFFFF;
+    *state = x*((ulong)4294883355U) + c;
+    return x^c;
+}
+
+float Rand(ulong* seed)
+{
+    return (float)MWC64X(seed) / UINT_MAX;
+}
+
 float3 GetColor(float i)
 {
     return (float3)(sin(i / 17.0) * 0.5 + 0.5,
@@ -38,17 +50,26 @@ float3 Iterate(float2 z)
 
 __kernel void main(__global float4* screen,
     int sx, int sy, int width, int height,
-    float offsetX, float offsetY, float zoom)
+    float offsetX, float offsetY, float zoom,
+    int frame)
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
     if (x >= width || y >= height)
         return;
-    
-    float2 coords = (float2)((float)(x + sx), (float)(y + sy));
+
+    ulong seed = sx + width * sy + width * height * frame;
+
+    float2 coords = (float2)((float)(x + sx), (float)(y + sy))
+        + (float2)(Rand(&seed), Rand(&seed)) * 1.1;
     coords = coords * zoom + (float2)(offsetX, offsetY);
 
     float3 color = Iterate(coords);
 
-    screen[y * width + x] = (float4)(color, 1);
+    float3 prev = screen[y * width + x].xyz;
+    if (frame != 0)
+        prev = (color + prev * frame) / (frame + 1);
+    else
+        prev = color;
+    screen[y * width + x] = (float4)(prev, 1);
 }

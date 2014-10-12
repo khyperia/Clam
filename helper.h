@@ -1,25 +1,21 @@
 #pragma once
 
-#include <memory>
+#include <stdio.h>
 
-template<typename T>
-struct is_pointer { static const bool value = false; };
+#if __GNUC__
+#define UNUSED __attribute__((__unused__))
+#else
+#define UNUSED
+#endif
 
-template<typename T>
-struct is_pointer<T*> { static const bool value = true; };
-
-void HandleErrImpl(unsigned int errcode, const char* message, const char* filename, int line);
-
-#define HandleErr(errcode) HandleErrImpl((errcode), (#errcode), __FILE__, __LINE__)
-
-void hsvToRgb(float h, float s, float v, float& r, float& g, float& b);
-
-    template<typename T, typename Func, typename... Args>
-std::shared_ptr<T> make_custom_shared(Func const destructor, Args... args)
+const char* sgetenv(const char* name, const char* defaultValue);
+char* my_strdup(const char* str);
+char* readWholeFile(const char* filename);
+inline int PrintErrImpl(int errcode, const char* message, const char* filename, int line)
 {
-    return std::shared_ptr<T>(new T(args...), [destructor](T* toDelete)
-        {
-            destructor(*toDelete);
-            delete toDelete;
-        });
+    if (errcode != 0)
+        printf("%s(%d) `%s`: errcode %d\n", filename, line, message, errcode);
+    return errcode;
 }
+
+#define PrintErr(errcode) PrintErrImpl((errcode), (#errcode), __FILE__, __LINE__)

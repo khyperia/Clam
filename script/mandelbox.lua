@@ -17,19 +17,19 @@ end
 
 compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
 
-function screenshot(filename, frame, width, height, numframes)
-    mkbuffer(filename, width * height * 4 * 4)
+function screenshot(bufferIndex, frame, width, height, numframes)
+    mkbuffer(bufferIndex, width * height * 4 * 4)
     for i=0,numframes do
-        kernel("Main", width, height, filename,
+        kernel("Main", width, height, tostring(bufferIndex),
         {math.floor(-width / 2)}, {math.floor(-height / 2)}, {width}, {height},
         frame.pos[1], frame.pos[2], frame.pos[3],
         frame.look[1], frame.look[2], frame.look[3],
         frame.up[1], frame.up[2], frame.up[3],
         frame.fov / width, frame.focalDistance, i)
-        print((i / numframes * 100), "% done");
+        print((i / numframes * 100), "% done")
     end
-    dlbuffer(filename, width)
-    rmbuffer(filename)
+    dlbuffer(bufferIndex, width)
+    rmbuffer(bufferIndex)
 end
 
 function video(frames)
@@ -61,14 +61,14 @@ function video(frames)
             print("Frame nil, breaking")
             break
         end
-        screenshot("tmp/video" .. tostring(frameIndex), frame, 800, 500, 10)
+        screenshot(frameIndex, frame, 800, 500, 10)
         print("Took frame", frameIndex)
         frameIndex = frameIndex + 1
     end
 end
 
 function update(time)
-    -- gh
+    -- free keys: gh
     if iskeydown("w") then
         frame.pos = addvec(frame.pos, mulvec(frame.look, time * frame.focalDistance))
         frame.frame = 0
@@ -79,12 +79,12 @@ function update(time)
     end
     if iskeydown("a") then
         frame.pos = addvec(frame.pos, mulvec(cross(frame.up, frame.look),
-            time * frame.focalDistance))
+        time * frame.focalDistance))
         frame.frame = 0
     end
     if iskeydown("d") then
         frame.pos = addvec(frame.pos, mulvec(cross(frame.look, frame.up),
-            time * frame.focalDistance))
+        time * frame.focalDistance))
         frame.frame = 0
     end
     if iskeydown(" ") then
@@ -103,11 +103,11 @@ function update(time)
         frame.focalDistance = frame.focalDistance / (1 + time * frame.fov)
         frame.frame = 0
     end
-    if iskeydown("u") then
+    if iskeydown("u") or iskeydown("q") then
         frame.up = rotate(frame.up, frame.look, time)
         frame.frame = 0
     end
-    if iskeydown("o") then
+    if iskeydown("o") or iskeydown("e") then
         frame.up = rotate(frame.up, frame.look, -time)
         frame.frame = 0
     end
@@ -163,9 +163,13 @@ function update(time)
         frame.frame = 0
         print("Recompiled")
     end
+    if iskeydown("g") then
+        unsetkey("g")
+        reload()
+    end
     if iskeydown("p") then
         unsetkey("p")
-        screenshot("fractal", frame, 2000, 2000, 200)
+        screenshot(1, frame, 2000, 2000, 200)
     end
     if iskeydown("x") then
         unsetkey("x")
@@ -186,11 +190,24 @@ function update(time)
         video(frames)
         print("Done taking video")
     end
+    if iskeydown("h") then
+        unsetkey("h")
+        print("wasd, space/z: move")
+        print("ijkl(uo|qe): rotate")
+        print("rf: speed/focal distance")
+        print("nm: field of view")
+        print("t: save state, y: load state")
+        print("b: recompile kernel, g: recompile lua")
+        print("p: screenshot")
+        print("c: add keyframe, x: clear keyframes")
+        print("v: video through keyframes")
+        print("h: this message")
+    end
 
     frame.look = normalize(frame.look)
     frame.up = normalize(cross(cross(frame.look, frame.up), frame.look))
 
-    kernel("Main", -1, -1, "",
+    kernel("Main", -1, -1, "0",
     special,
     frame.pos[1], frame.pos[2], frame.pos[3],
     frame.look[1], frame.look[2], frame.look[3],

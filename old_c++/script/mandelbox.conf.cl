@@ -17,11 +17,10 @@
 #define DirectLightingMaxSteps 64
 #define NumRayBounces 2
 #define QualityFirstRay 2000
-#define QualityRestRay 128
+#define QualityRestRay 64
 #define SpecularSize 0.4
-#define SpecularBrightness 3
-#define LightBrightnessMultiplier 20
-#define LightBrightness 1.0,0.7,0.7
-#define AmbientBrightness 0.3,0.3,0.5
+#define SpecularDiffuseRatio 0.6
+#define LightBrightness 2.0,1.4,1.0
+#define AmbientBrightness 0.3,0.3,0.4
 #define LightPos 5
 #define LightSize 0.2

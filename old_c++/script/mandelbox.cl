@@ -43,11 +43,11 @@ float De(float3 z)
         if (r2 > Bailout)
             break;
 
-        if (r2 < MinRadius2) {
+        if (r2 < MinRadius2) { 
             float temp = FixedRadius2 / MinRadius2;
             z *= temp;
             dz *= temp;
-        } else if (r2 < FixedRadius2) {
+        } else if (r2 < FixedRadius2) { 
             float temp = FixedRadius2 / r2;
             z *= temp;
             dz *= temp;
@@ -111,11 +111,11 @@ float3 DeColor(float3 z)
         if (r2 > Bailout)
             break;
 
-        if (r2 < MinRadius2) {
+        if (r2 < MinRadius2) { 
             float temp = FixedRadius2 / MinRadius2;
             z *= temp;
             hue += 11;
-        } else if (r2 < FixedRadius2) {
+        } else if (r2 < FixedRadius2) { 
             float temp = FixedRadius2 / r2;
             z *= temp;
             hue += 13;
@@ -180,8 +180,7 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand)
 {
     float distance = 1.0;
     float totalDistance = 0.0;
-    for (int i = 0; i < MaxRaySteps && totalDistance < MaxRayDist &&
-             distance * quality > totalDistance; i++) {
+    for (int i = 0; i < MaxRaySteps && totalDistance < MaxRayDist && distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
         totalDistance += distance;
     }
@@ -209,76 +208,59 @@ int Reaches(float3 source, float3 dest)
 
 float3 Cone(float3 normal, float fov, ulong* rand)
 {
-    const float3 dir1 = normalize((float3)(1,1,1));
-    const float3 dir2 = normalize((float3)(-1,1,1));
-    float3 dir = dir1;
-    if (fabs(dot(normal, dir1)) > cos(0.2))
-        dir = dir2;
-    float3 up = cross(cross(normal, normalize(dir)), normal);
+    float3 up = cross(cross(normal, (float3)(0,1,0)), normal);
     return RayDir(normal, up, RandCircle(rand), fov);
 }
 
-float BRDF(float3 point, float3 normal, float3 incoming, float3 outgoing)
+float3 DirectLighting(float3 position, float3 lightPos)
 {
-    float3 halfV = normalize(incoming + outgoing);
-    float angle = acos(dot(normal, halfV));
-    float multiplier = 1 + SpecularBrightness *
-        exp(-(angle * angle) / (SpecularSize * SpecularSize));
-    return multiplier;
+    //float thing = dot(normalize(lightPos - position), normalize(lightPos));
+    return
+        //thing > cos(0.1) &&
+        Reaches(position, lightPos) ? (float3)(LightBrightness) : (float3)(0.0);
 }
 
-float WeakeningFactor(float3 normal, float3 incoming)
+float3 TracePath(float3 rayPos, float3 rayDir, float focalDistance, ulong* rand)
 {
-    return dot(normal, incoming);
-}
-
-float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
-{
-    // not entirely too sure why I need the 1 constant here
-    // that is, "why not another number? This one is arbitrary" (pun sort of intended)
     float3 color = (float3)(1);
-    float3 total = (float3)(0);
+    float3 accum = (float3)(0);
     for (int i = 0; i < NumRayBounces; i++)
     {
-        float distanceTraveled = Trace(rayPos, rayDir, i==0?QualityFirstRay:QualityRestRay, rand);
+        float distanceToNearest = Trace(rayPos, rayDir, i == 0 ? QualityFirstRay : QualityRestRay, rand);
 
-        if (distanceTraveled > MaxRayDist)
+        rayPos = rayPos + rayDir * distanceToNearest;
+
+        if (distanceToNearest > MaxRayDist)
         {
-            total += color * (float3)(AmbientBrightness);
+            accum += (float3)(AmbientBrightness) * color;
             break;
         }
 
-        float3 newRayPos = rayPos + rayDir * distanceTraveled;
-        float3 normal = Normal(newRayPos);
-        float3 newRayDir = Cone(normal, 3.1415926535 / 2, rand);
+        float3 lightPos = (float3)(LightPos) + (float3)(Rand(rand) * 2 - 1, Rand(rand) * 2 - 1, Rand(rand) * 2 - 1) * (float)LightSize;
+        float3 directLighting = DirectLighting(rayPos, lightPos);
 
-        color *= DeColor(newRayPos);
-
-        float3 lightPos = (float3)(LightPos) + (float3)(LightSize) *
-            ((float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1);
-
-        if (Reaches(newRayPos, lightPos))
+        float3 normal = Normal(rayPos);
+        if (Rand(rand) > SpecularDiffuseRatio)
         {
-            // TODO: Not sure how to integrate direct light sampling
-            // Currently sort of approximating as if the material itself is giving off light
-            // (Le in the rendering equation)
-            // This produces wonkyness in the BRDF function,
-            // so I put DeColor before this because it seems logical (it should be in BRDF)
-            float3 distToLightsource2Vec = newRayPos - lightPos;
-            float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
-            distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
-            float3 light = (float3)(LightBrightness) * LightBrightnessMultiplier;
-            float bdrf = BRDF(newRayPos, normal, normalize(lightPos - newRayPos), -rayDir);
-            float weak = WeakeningFactor(normal, -rayDir);
-            total += weak / distanceToLightsource2 * bdrf * light * color;
+            rayDir = Cone(-2 * dot(normal, rayDir) * normal + rayDir, SpecularSize, rand);
+            if (dot(rayDir, normalize(lightPos - rayPos)) < cos(SpecularSize))
+                directLighting = (float3)(0);
+        }
+        else
+        {
+            color *= 2 * dot(-rayDir, normal);
+            float2 circ = RandCircle(rand);
+            float3 right = cross((float3)(0, 1, 0), normal);
+            float3 up = cross(right, (float3)(0, 1, 0));
+            float forward = sqrt(1 - dot(circ, circ));
+            rayDir = right * circ.x + up * circ.y + normal * forward;
+            directLighting *= dot(normal, normalize(lightPos - rayPos));
         }
 
-        color *= BRDF(newRayPos, normal, newRayDir, -rayDir) * WeakeningFactor(normal, newRayDir);
-
-        rayPos = newRayPos;
-        rayDir = newRayDir;
+        color *= DeColor(rayPos);
+        accum += color * directLighting;
     }
-    return total;
+    return accum;
 }
 
 __kernel void Main(__global float4* screen,
@@ -309,8 +291,8 @@ __kernel void Main(__global float4* screen,
     float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
     float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-    float3 color = RenderingEquation(pos, rayDir, &rand);
-
+    float3 color = TracePath(pos, rayDir, focalDistance, &rand);
+    
     int screenIndex = y * width + x;
     if (frame > 0)
     {
