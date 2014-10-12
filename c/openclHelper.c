@@ -5,11 +5,15 @@
 
 int newClContext(struct Interop* interop, char** sources, int sourcesLength)
 {
+    interop->clContext.kernels = NULL;
     cl_int openclError = 0;
     interop->clContext.program = clCreateProgramWithSource(interop->context,
             sourcesLength, (const char**)sources, NULL, &openclError);
     if (PrintErr(openclError && "clCreateProgramWithSource()"))
+    {
+        interop->clContext.program = NULL;
         return -1;
+    }
     openclError = clBuildProgram(interop->clContext.program, 1, &interop->deviceId,
             "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror", NULL, NULL);
     if (openclError)
@@ -29,9 +33,9 @@ int newClContext(struct Interop* interop, char** sources, int sourcesLength)
         printf("OpenCL build failed:\n%s\n", str);
         free(str);
         clReleaseProgram(interop->clContext.program);
+        interop->clContext.program = NULL;
         return -1;
     }
-    interop->clContext.kernels = NULL;
     // kernels are created on-demand
     return 0;
 }
