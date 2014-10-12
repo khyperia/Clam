@@ -180,7 +180,8 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand)
 {
     float distance = 1.0;
     float totalDistance = 0.0;
-    for (int i = 0; i < MaxRaySteps && totalDistance < MaxRayDist && distance * quality > totalDistance; i++) {
+    for (int i = 0; i < MaxRaySteps && totalDistance < MaxRayDist &&
+             distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
         totalDistance += distance;
     }
@@ -217,25 +218,26 @@ float3 Cone(float3 normal, float fov, ulong* rand)
     return RayDir(normal, up, RandCircle(rand), fov);
 }
 
-float BRDF(float3 normal, float3 incoming, float3 outgoing)
+float BRDF(float3 point, float3 normal, float3 incoming, float3 outgoing)
 {
-    float lambertian = dot(incoming, normal);
-    if (lambertian < 0)
-        lambertian = 0;
-    float specular = dot(normalize(incoming + outgoing), normal);
-    specular = pow(clamp(specular, 0.0, 1.0), SpecularHardness);
-    return lambertian * (1 - SpecularBrightness) + specular * SpecularBrightness;
+    float3 halfV = normalize(incoming + outgoing);
+    float angle = acos(dot(normal, halfV));
+    float multiplier = 1 + SpecularBrightness *
+        exp(-(angle * angle) / (SpecularSize * SpecularSize));
+    return multiplier;
 }
 
-float WeakeningFactor(float3 normal, float3 outgoing)
+float WeakeningFactor(float3 normal, float3 incoming)
 {
-    return dot(normal, outgoing);
+    return dot(normal, incoming);
 }
 
 float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
 {
-    float3 total = (float3)(0, 0, 0);
-    float3 color = (float3)(1, 1, 1);
+    // not entirely too sure why I need the 1 constant here
+    // that is, "why not another number? This one is arbitrary" (pun sort of intended)
+    float3 color = (float3)(1);
+    float3 total = (float3)(0);
     for (int i = 0; i < NumRayBounces; i++)
     {
         float distanceTraveled = Trace(rayPos, rayDir, i==0?QualityFirstRay:QualityRestRay, rand);
@@ -257,16 +259,21 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
 
         if (Reaches(newRayPos, lightPos))
         {
-            // TODO: Statistically innaccurate, not sure how to integrate direct light sampling
+            // TODO: Not sure how to integrate direct light sampling
+            // Currently sort of approximating as if the material itself is giving off light
+            // (Le in the rendering equation)
+            // This produces wonkyness in the BRDF function,
+            // so I put DeColor before this because it seems logical (it should be in BRDF)
             float3 distToLightsource2Vec = newRayPos - lightPos;
             float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
+            distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
             float3 light = (float3)(LightBrightness) * LightBrightnessMultiplier;
-            float bdrf = BRDF(normal, normalize(lightPos - newRayPos), -rayDir);
+            float bdrf = BRDF(newRayPos, normal, normalize(lightPos - newRayPos), -rayDir);
             float weak = WeakeningFactor(normal, -rayDir);
-            total += bdrf * weak / distanceToLightsource2 * light * color;
+            total += weak / distanceToLightsource2 * bdrf * light * color;
         }
 
-        color *= BRDF(normal, newRayDir, -rayDir) * WeakeningFactor(normal, -rayDir);
+        color *= BRDF(newRayPos, normal, newRayDir, -rayDir) * WeakeningFactor(normal, newRayDir);
 
         rayPos = newRayPos;
         rayDir = newRayDir;
