@@ -120,12 +120,7 @@ char* recv_str(int socketFd)
     int stringSize = 0;
     if (PrintErr(recv_p(socketFd, &stringSize, sizeof(int))))
         return NULL;
-    char* result = malloc((size_t)stringSize * sizeof(char));
-    if (!result)
-    {
-        puts("malloc() failed");
-        exit(-1);
-    }
+    char* result = malloc_s((size_t)stringSize * sizeof(char));
     if (PrintErr(recv_p(socketFd, result, (size_t)stringSize)))
     {
         free(result);

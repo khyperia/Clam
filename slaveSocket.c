@@ -10,7 +10,7 @@ int messageKernelSource(struct Interop* interop, int socketFd)
     int numStrings = 0;
     if (PrintErr(recv_p(socketFd, &numStrings, sizeof(int))))
         return -1;
-    char** sources = (char**)malloc((size_t)numStrings * sizeof(char*));
+    char** sources = malloc_s((size_t)numStrings * sizeof(char*));
     for (int source = 0; source < numStrings; source++)
         sources[source] = recv_str(socketFd);
 

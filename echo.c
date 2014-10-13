@@ -97,28 +97,23 @@ int main(int argc, char** argv)
         if (master == -1)
         {
             perror("accept()");
-            exit(-1);
+            return -1;
         }
 
         int slave = connectSocket(argv[slaveIndex * 2 + 2], argv[slaveIndex * 2 + 3]);
         if (slave == -1)
         {
             perror("connect()");
-            exit(-1);
+            return -1;
         }
 
-        int* argument = (int*)malloc(2 * sizeof(int));
-        if (!argument)
-        {
-            puts("malloc() failed");
-            exit(-1);
-        }
+        int* argument = malloc_s(2 * sizeof(int));
         argument[0] = master;
         argument[1] = slave;
         if (PrintErr(pthread_create(&threads[slaveIndex], NULL, echoThread, argument)))
         {
             puts("Exiting.");
-            exit(-1);
+            return -1;
         }
     }
 
@@ -131,7 +126,7 @@ int main(int argc, char** argv)
         if (PrintErr(pthread_join(threads[slaveIndex], NULL)))
         {
             puts("Exiting.");
-            exit(-1);
+            return -1;
         }
     }
 

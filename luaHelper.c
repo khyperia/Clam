@@ -186,12 +186,7 @@ int run_dlbuffer(lua_State* state)
             continue;
         }
 
-        float* data = malloc((size_t)bufferSize);
-        if (!data)
-        {
-            puts("malloc() failed in dlbuffer");
-            exit(-1);
-        }
+        float* data = malloc_s((size_t)bufferSize);
         if (PrintErr(recv_p(*socket, data, (size_t)bufferSize)))
         {
             free(data);

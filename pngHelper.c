@@ -1,3 +1,5 @@
+#include "pngHelper.h"
+#include "helper.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <png.h>
@@ -72,12 +74,7 @@ int savePng(int uid1, int uid2, float* data, long width, long height)
         return -1;
     }
 
-    unsigned char* row_ptr = malloc((size_t)width * 3);
-    if (!row_ptr)
-    {
-        puts("malloc() failed");
-        exit(-1);
-    }
+    unsigned char* row_ptr = malloc_s((size_t)width * 3);
     for (long row = 0; row < height; row++)
     {
         for (long col = 0; col < width; col++)

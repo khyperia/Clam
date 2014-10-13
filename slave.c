@@ -35,14 +35,20 @@ void masterDisplayFunc(void)
             exit(-1);
         }
         if (PrintErr(resizeInterop(&interop, screenPos.width, screenPos.height)))
+        {
+            puts("Exiting.");
             exit(-1);
+        }
     }
     if (PrintErr(blitInterop(interop, screenPos.width, screenPos.height)))
+    {
+        puts("Exiting.");
         exit(-1);
+    }
     glutSwapBuffers();
     if (PrintErr((int)glGetError()))
     {
-        puts("Failure of displayFunc. Exiting.");
+        puts("OpenGL failure of displayFunc. Exiting.");
         exit(-1);
     }
 }

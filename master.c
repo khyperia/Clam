@@ -108,12 +108,7 @@ int* connectToSlaves(char* slaves)
     }
     free(slavesDup);
 
-    int* ips = (int*)malloc(numIps * sizeof(int*) + 1);
-    if (!ips)
-    {
-        puts("malloc() failed");
-        exit(-1);
-    }
+    int* ips = malloc_s(numIps * sizeof(int*) + 1);
     for (size_t i = 0; i < numIps; i++)
     {
         char* slaveIp = strtok(i == 0 ? slaves : NULL, "~");
@@ -179,7 +174,7 @@ int main(int argc, char** argv)
     if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &lastFrame)))
     {
         puts("Exiting.");
-        exit(-1);
+        return -1;
     }
 
     glutKeyboardFunc(keyboardDownFunc);

@@ -22,12 +22,7 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
         clGetProgramBuildInfo(interop->clContext.program, interop->deviceId,
                 CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 
-        char* str = (char*)malloc(logSize * sizeof(char));
-        if (!str)
-        {
-            puts("malloc() failed. Exiting.");
-            exit(-1);
-        }
+        char* str = malloc_s(logSize * sizeof(char));
         clGetProgramBuildInfo(interop->clContext.program, interop->deviceId,
                 CL_PROGRAM_BUILD_LOG, logSize, str, NULL);
         printf("OpenCL build failed:\n%s\n", str);
@@ -74,7 +69,7 @@ cl_kernel getKernelByName(struct ClContext* context, const char* name)
         cl_kernel kernel = clCreateKernel(context->program, name, &openclError);
         if (PrintErr(openclError /* clCreateKernel() */))
             return NULL;
-        *listRef = (struct cl_kernel_list*)malloc(sizeof(struct cl_kernel_list));
+        *listRef = malloc_s(sizeof(struct cl_kernel_list));
         (*listRef)->name = my_strdup(name);
         (*listRef)->kernel = kernel;
         (*listRef)->next = NULL;

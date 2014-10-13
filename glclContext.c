@@ -90,12 +90,7 @@ int addMem(struct Interop* interop, int key, cl_mem mem, size_t memSize)
         }
         toAssign = &(*toAssign)->next;
     }
-    *toAssign = (struct cl_mem_list*)malloc(sizeof(struct cl_mem_list));
-    if (!*toAssign)
-    {
-        puts("malloc() failed (out of memory)");
-        exit(-1);
-    }
+    *toAssign = malloc_s(sizeof(struct cl_mem_list));
     (*toAssign)->key = key;
     (*toAssign)->memory = mem;
     (*toAssign)->memorySize = memSize;
@@ -152,12 +147,7 @@ float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSize
         return NULL;
     if (*memSize == 0)
         *memSize = screenSizeBytes;
-    float* data = malloc(*memSize);
-    if (!data)
-    {
-        puts("malloc() failed");
-        exit(-1);
-    }
+    float* data = malloc_s(*memSize);
     if (PrintErr(clEnqueueReadBuffer(interop.command_queue, clmem, 1, 0,
                     *memSize, data, 0, NULL, NULL)))
     {
