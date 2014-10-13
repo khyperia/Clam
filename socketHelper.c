@@ -36,8 +36,8 @@ int connectSocket(const char* host, const char* port)
     struct addrinfo* addr = NULL;
     for (addr = servinfo; addr != NULL; addr = addr->ai_next)
     {
-        if ((sock = socket(addr->ai_family, addr->ai_socktype | SOCK_CLOEXEC, addr->ai_protocol))
-                == -1)
+        if ((sock = socket(addr->ai_family,
+                        addr->ai_socktype | SOCK_CLOEXEC, addr->ai_protocol)) == -1)
         {
             perror("socket()");
             continue;
@@ -96,16 +96,21 @@ int recv_p(int socketFd, void* data, size_t numBytes)
 
 int send_p(int socketFd, const void* data, size_t numBytes)
 {
-    ssize_t result = send(socketFd, data, numBytes, 0);
-    if (result == -1)
+    size_t numBytesSent = 0;
+    while (numBytesSent < numBytes)
     {
-        perror("recv()");
-        return -1;
-    }
-    if ((size_t)result != numBytes)
-    {
-        printf("send(): not enough bytes sent (%lu of %lu)\n", result, numBytes);
-        return -1;
+        ssize_t result = send(socketFd, data, numBytes, 0);
+        if (result == -1)
+        {
+            perror("recv()");
+            return -1;
+        }
+        if (result == 0)
+        {
+            printf("send(): not enough bytes sent (%lu of %lu)\n", numBytesSent, numBytes);
+            return -1;
+        }
+        numBytesSent += (size_t)result;
     }
     return 0;
 }

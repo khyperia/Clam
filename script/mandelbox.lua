@@ -2,6 +2,9 @@ require("math")
 require("script/vector")
 require("script/table_save")
 
+-- TODO: Make this dynamic
+AssumedScreenWidth = 1024
+
 frame = {
     pos = {0, 0, 5},
     look = {0, 0, -1},
@@ -96,11 +99,11 @@ function update(time)
         frame.frame = 0
     end
     if iskeydown("r") then
-        frame.focalDistance = frame.focalDistance * (1 + time * frame.fov)
+        frame.focalDistance = frame.focalDistance * (1 + time * math.sqrt(frame.fov))
         frame.frame = 0
     end
     if iskeydown("f") then
-        frame.focalDistance = frame.focalDistance / (1 + time * frame.fov)
+        frame.focalDistance = frame.focalDistance / (1 + time * math.sqrt(frame.fov))
         frame.frame = 0
     end
     if iskeydown("u") or iskeydown("q") then
@@ -169,7 +172,28 @@ function update(time)
     end
     if iskeydown("p") then
         unsetkey("p")
-        screenshot(1, frame, 2000, 2000, 200)
+        print("Downloading screenbuffer at frame " .. tostring(frame.frame))
+        dlbuffer(0, AssumedScreenWidth)
+    end
+    if iskeydown("1") then
+        unsetkey("1")
+        screenshot(1, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 200)
+    end
+    if iskeydown("2") then
+        unsetkey("2")
+        screenshot(1, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 200)
+    end
+    if iskeydown("3") then
+        unsetkey("3")
+        screenshot(1, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 200)
+    end
+    if iskeydown("4") then
+        unsetkey("4")
+        screenshot(1, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 200)
+    end
+    if iskeydown("5") then
+        unsetkey("5")
+        screenshot(1, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 200)
     end
     if iskeydown("x") then
         unsetkey("x")
@@ -198,9 +222,10 @@ function update(time)
         print("nm: field of view")
         print("t: save state, y: load state")
         print("b: recompile kernel, g: recompile lua")
-        print("p: screenshot")
+        print("p: screenshot of framebuffer")
         print("c: add keyframe, x: clear keyframes")
         print("v: video through keyframes")
+        print("1-6: screenshot 2^(n + 6) pixels square")
         print("h: this message")
     end
 
@@ -212,7 +237,8 @@ function update(time)
     frame.pos[1], frame.pos[2], frame.pos[3],
     frame.look[1], frame.look[2], frame.look[3],
     frame.up[1], frame.up[2], frame.up[3],
-    frame.fov / 800, frame.focalDistance, frame.frame)
+    frame.fov / AssumedScreenWidth, frame.focalDistance, frame.frame)
 
     frame.frame = frame.frame + 1
+    frame.look = rotate(frame.look, frame.up, time * 0.1)
 end

@@ -19,8 +19,8 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
     if (openclError)
     {
         size_t logSize;
-        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId, CL_PROGRAM_BUILD_LOG,
-                0, NULL, &logSize);
+        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId,
+                CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 
         char* str = (char*)malloc(logSize * sizeof(char));
         if (!str)
@@ -28,8 +28,8 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
             puts("malloc() failed. Exiting.");
             exit(-1);
         }
-        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId, CL_PROGRAM_BUILD_LOG,
-                logSize, str, NULL);
+        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId,
+                CL_PROGRAM_BUILD_LOG, logSize, str, NULL);
         printf("OpenCL build failed:\n%s\n", str);
         free(str);
         clReleaseProgram(interop->clContext.program);
@@ -100,8 +100,8 @@ int invokeKernel(struct ClContext* context, struct Interop interop,
         (invokeSize[0] + local[0] - 1) / local[0] * local[0],
         (invokeSize[1] + local[1] - 1) / local[1] * local[1]
     };
-    if (PrintErr(clEnqueueNDRangeKernel(interop.command_queue, kernelObj, 2, NULL, global, local,
-                    0, NULL, NULL)))
+    if (PrintErr(clEnqueueNDRangeKernel(interop.command_queue, kernelObj,
+                    2, NULL, global, local, 0, NULL, NULL)))
         return -1;
     return 0;
 }

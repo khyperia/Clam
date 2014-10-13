@@ -23,7 +23,8 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
         cl_platform_id platformId = platformIds[platform];
 
         cl_uint openclDeviceCount = 0;
-        if (PrintErr(clGetDeviceIDs(platformId, CL_DEVICE_TYPE_GPU, 0, NULL, &openclDeviceCount)))
+        if (PrintErr(clGetDeviceIDs(platformId, CL_DEVICE_TYPE_GPU,
+                        0, NULL, &openclDeviceCount)))
             return NULL;
 
         cl_device_id deviceIds[openclDeviceCount];
@@ -144,11 +145,13 @@ void freeMem(struct Interop* interop, int key)
     clReleaseMemObject(toFree);
 }
 
-float* dlMem(struct Interop interop, int key, size_t* memSize)
+float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSizeBytes)
 {
     cl_mem clmem = getMem(interop, key, memSize);
     if (!clmem)
         return NULL;
+    if (*memSize == 0)
+        *memSize = screenSizeBytes;
     float* data = malloc(*memSize);
     if (!data)
     {
@@ -229,7 +232,7 @@ int resizeInterop(struct Interop* interop, int width, int height)
 
     freeMem(interop, 0);
     cl_int openclError = 0;
-    cl_mem openclBuffer = clCreateFromGLBuffer(interop->context, CL_MEM_WRITE_ONLY,
+    cl_mem openclBuffer = clCreateFromGLBuffer(interop->context, CL_MEM_READ_WRITE,
             interop->glBuffer, &openclError);
     if (PrintErr(openclError))
         return -1;

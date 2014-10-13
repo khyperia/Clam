@@ -122,7 +122,8 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
             }
         }
     }
-    int result = PrintErr(invokeKernel(&interop->clContext, *interop, kernelName, launchSize));
+    int result = PrintErr(invokeKernel(&interop->clContext,
+                *interop, kernelName, launchSize));
 
     free(kernelName);
 
@@ -151,13 +152,14 @@ int messageRmBuffer(struct Interop* interop, int socketFd)
 }
 
 // TODO: Protocol gets weird here, since we're sending data back
-int messageDlBuffer(struct Interop* interop, int socketFd)
+int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
 {
     int bufferId = 0;
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
         return -1;
     size_t memSize = 0;
-    float* data = dlMem(*interop, bufferId, &memSize);
+    float* data = dlMem(*interop, bufferId, &memSize,
+            (size_t)screenPos.width * (size_t)screenPos.height * 4 * 4);
     if (!data)
         return -1;
     long memSizeL = (long)memSize;
@@ -201,7 +203,7 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
                 return -1;
             return 0;
         case MessageDlBuffer:
-            if (PrintErr(messageDlBuffer(interop, socketFd)))
+            if (PrintErr(messageDlBuffer(interop, socketFd, screenPos)))
                 return -1;
             return 0;
         default:

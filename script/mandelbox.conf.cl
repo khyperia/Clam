@@ -17,7 +17,7 @@
 #define DirectLightingMaxSteps 64
 #define NumRayBounces 2
 #define QualityFirstRay 2000
-#define QualityRestRay 128
+#define QualityRestRay 100
 #define SpecularSize 0.4
 #define SpecularBrightness 3
 #define LightBrightnessMultiplier 20
