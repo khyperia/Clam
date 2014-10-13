@@ -32,8 +32,8 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
             return NULL;
 
         cl_context_properties contextProperties[] = {
-            CL_GL_CONTEXT_KHR, (cl_context_properties)glXGetCurrentContext(),
-            CL_GLX_DISPLAY_KHR, (cl_context_properties)glXGetCurrentDisplay(),
+            CL_GL_CONTEXT_KHR, (cl_context_properties)(void*)glXGetCurrentContext(),
+            CL_GLX_DISPLAY_KHR, (cl_context_properties)(void*)glXGetCurrentDisplay(),
             CL_CONTEXT_PLATFORM, (cl_context_properties)platformId,
             0, 0
         };
@@ -192,7 +192,7 @@ int newInterop(struct Interop* result)
     glBindTexture(GL_TEXTURE_2D, result->glTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    if (PrintErr(glGetError()))
+    if (PrintErr((int)glGetError()))
         return -1;
 
     cl_int openclError;
@@ -224,8 +224,8 @@ int resizeInterop(struct Interop* interop, int width, int height)
     size_t bufferSize = (size_t)width * (size_t)height * 4 * sizeof(float);
     glViewport(0, 0, width, height);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, interop->glBuffer);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, bufferSize, NULL, GL_DYNAMIC_COPY);
-    if (PrintErr(glGetError())) return -1;
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, (GLsizeiptr)bufferSize, NULL, GL_DYNAMIC_COPY);
+    if (PrintErr((int)glGetError())) return -1;
 
     freeMem(interop, 0);
     cl_int openclError = 0;
@@ -256,7 +256,7 @@ int resizeInterop(struct Interop* interop, int width, int height)
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, interop->glTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-    if (PrintErr(glGetError())) return -1;
+    if (PrintErr((int)glGetError())) return -1;
 
     return 0;
 }
@@ -268,6 +268,7 @@ int blitInterop(struct Interop interop, int width, int height)
     if (!screenMemList)
     {
         // TODO: Consider calling resizeInterop here
+        // This only happened ocasionally in the C++ version, though
         puts("Buffer 0 did not exist, cannot blit to screen");
         return -1;
     }
@@ -276,13 +277,13 @@ int blitInterop(struct Interop interop, int width, int height)
         return -1;
     if (PrintErr(clFinish(interop.command_queue)))
         return -1;
-    if (PrintErr(glGetError()))
+    if (PrintErr((int)glGetError()))
         return -1;
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, interop.glBuffer);
     glBindTexture(GL_TEXTURE_2D, interop.glTexture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_FLOAT, NULL);
-    if (PrintErr(glGetError())) return -1;
+    if (PrintErr((int)glGetError())) return -1;
 
     glBegin(GL_QUADS);
     glTexCoord2f(0.f, 1.f);
@@ -295,7 +296,7 @@ int blitInterop(struct Interop interop, int width, int height)
     glVertex3f(1.f, 0.f, 0.f);
     glEnd();
     glFinish();
-    if (PrintErr(glGetError())) return -1;
+    if (PrintErr((int)glGetError())) return -1;
 
     if (PrintErr(clEnqueueAcquireGLObjects(interop.command_queue, 1, screenMem, 0, NULL, NULL)))
         return -1;

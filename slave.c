@@ -40,7 +40,7 @@ void masterDisplayFunc(void)
     if (PrintErr(blitInterop(interop, screenPos.width, screenPos.height)))
         exit(-1);
     glutSwapBuffers();
-    if (PrintErr(glGetError()))
+    if (PrintErr((int)glGetError()))
     {
         puts("Failure of displayFunc. Exiting.");
         exit(-1);

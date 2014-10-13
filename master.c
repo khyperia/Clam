@@ -50,7 +50,7 @@ void masterIdleFunc(void)
 
 void masterDisplayFunc(void)
 {
-    float animationFrameVal = fmod(animationFrame / 1000.0f, 1.0f);
+    float animationFrameVal = (float)fmod(animationFrame / 1000.0f, 1.0f);
     if (animationFrameVal > 0.5)
         animationFrameVal = 1 - animationFrameVal;
     animationFrameVal *= 2;
@@ -71,7 +71,7 @@ void masterDisplayFunc(void)
 
     glutSwapBuffers();
 
-    if (PrintErr(glGetError()))
+    if (PrintErr((int)glGetError()))
     {
         puts("Exiting.");
         exit(-1);
@@ -101,7 +101,7 @@ void doOnExit_master(void)
 
 int* connectToSlaves(char* slaves)
 {
-    int numIps;
+    size_t numIps;
     char* slavesDup = my_strdup(slaves);
     for (numIps = 0; strtok(numIps == 0 ? slavesDup : NULL, "~"); numIps++)
     {
@@ -114,7 +114,7 @@ int* connectToSlaves(char* slaves)
         puts("malloc() failed");
         exit(-1);
     }
-    for (int i = 0; i < numIps; i++)
+    for (size_t i = 0; i < numIps; i++)
     {
         char* slaveIp = strtok(i == 0 ? slaves : NULL, "~");
         if (!slaveIp)

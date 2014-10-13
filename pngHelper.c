@@ -60,7 +60,7 @@ int savePng(int uid1, int uid2, float* data, long width, long height)
     }
 
     png_set_IHDR(png_ptr, info_ptr,
-            width, height,
+            (png_uint_32)width, (png_uint_32)height,
             8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
             PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
@@ -72,7 +72,7 @@ int savePng(int uid1, int uid2, float* data, long width, long height)
         return -1;
     }
 
-    unsigned char* row_ptr = malloc(width * 3);
+    unsigned char* row_ptr = malloc((size_t)width * 3);
     if (!row_ptr)
     {
         puts("malloc() failed");

@@ -73,38 +73,38 @@ int connectSocket(const char* host, const char* port)
     return sock;
 }
 
-int recv_p(int socketFd, void* data, int numBytes)
+int recv_p(int socketFd, void* data, size_t numBytes)
 {
     if (socketFd == -1)
     {
         puts("recv(): Bad socket file descriptor");
         return -1;
     }
-    int result = recv(socketFd, data, numBytes, MSG_WAITALL);
+    ssize_t result = recv(socketFd, data, numBytes, MSG_WAITALL);
     if (result == -1)
     {
         perror("recv()");
         return -1;
     }
-    if (result != numBytes)
+    if ((size_t)result != numBytes)
     {
-        printf("recv(): not enough bytes read (%d of %d)\n", result, numBytes);
+        printf("recv(): not enough bytes read (%lu of %lu)\n", result, numBytes);
         return -1;
     }
     return 0;
 }
 
-int send_p(int socketFd, const void* data, int numBytes)
+int send_p(int socketFd, const void* data, size_t numBytes)
 {
-    int result = send(socketFd, data, numBytes, 0);
+    ssize_t result = send(socketFd, data, numBytes, 0);
     if (result == -1)
     {
         perror("recv()");
         return -1;
     }
-    if (result != numBytes)
+    if ((size_t)result != numBytes)
     {
-        printf("send(): not enough bytes sent (%d of %d)\n", result, numBytes);
+        printf("send(): not enough bytes sent (%lu of %lu)\n", result, numBytes);
         return -1;
     }
     return 0;
@@ -115,13 +115,13 @@ char* recv_str(int socketFd)
     int stringSize = 0;
     if (PrintErr(recv_p(socketFd, &stringSize, sizeof(int))))
         return NULL;
-    char* result = malloc(stringSize * sizeof(char));
+    char* result = malloc((size_t)stringSize * sizeof(char));
     if (!result)
     {
         puts("malloc() failed");
         exit(-1);
     }
-    if (PrintErr(recv_p(socketFd, result, stringSize)))
+    if (PrintErr(recv_p(socketFd, result, (size_t)stringSize)))
     {
         free(result);
         return NULL;
@@ -131,10 +131,10 @@ char* recv_str(int socketFd)
 
 int send_str(int socketFd, const char* string)
 {
-    int len = strlen(string) + 1;
+    int len = (int)strlen(string) + 1;
     if (PrintErr(send_p(socketFd, &len, sizeof(int))))
         return -1;
-    if (PrintErr(send_p(socketFd, string, len)))
+    if (PrintErr(send_p(socketFd, string, (size_t)len)))
         return -1;
     return 0;
 }

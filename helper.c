@@ -17,14 +17,14 @@ const char* sgetenv(const char* name, const char* defaultValue)
 // because strdup is apparently not in <string.h>
 char* my_strdup(const char* str)
 {
-    int len = strlen(str) + 1;
+    size_t len = strlen(str) + 1;
     char* ret = (char*)malloc(len * sizeof(char));
     if (!ret)
     {
         puts("malloc() failed");
         exit(-1);
     }
-    for (int i = 0; i < len; i++)
+    for (size_t i = 0; i < len; i++)
         *(ret + i) = *(str + i);
     return ret;
 }
@@ -38,7 +38,7 @@ char* readWholeFile(const char* filename)
         return NULL;
     }
     fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
+    size_t fsize = (size_t)ftell(f);
     fseek(f, 0, SEEK_SET);
 
     char* string = malloc(fsize + 1);

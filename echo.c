@@ -36,7 +36,7 @@ void* echoThread(void* arg)
         int gotdata = 0;
         if (polls[0].revents & POLLIN)
         {
-            int size = recv(socketLeft, buf, bufsize, MSG_DONTWAIT);
+            ssize_t size = recv(socketLeft, buf, bufsize, MSG_DONTWAIT);
             if (size == -1)
             {
                 perror("recv()");
@@ -45,13 +45,13 @@ void* echoThread(void* arg)
             if (size > 0)
             {
                 gotdata = 1;
-                if (PrintErr(send_p(socketRight, buf, size)))
+                if (PrintErr((int)send_p(socketRight, buf, size)))
                     break;
             }
         }
         if (polls[1].revents & POLLIN)
         {
-            int size = recv(socketRight, buf, bufsize, MSG_DONTWAIT);
+            ssize_t size = recv(socketRight, buf, bufsize, MSG_DONTWAIT);
             if (size == -1)
             {
                 perror("recv()");

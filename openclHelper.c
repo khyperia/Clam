@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int newClContext(struct Interop* interop, char** sources, int sourcesLength)
+int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
 {
     interop->clContext.kernels = NULL;
     cl_int openclError = 0;

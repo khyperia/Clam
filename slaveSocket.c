@@ -10,14 +10,14 @@ int messageKernelSource(struct Interop* interop, int socketFd)
     int numStrings = 0;
     if (PrintErr(recv_p(socketFd, &numStrings, sizeof(int))))
         return -1;
-    char** sources = (char**)malloc(numStrings * sizeof(char*));
+    char** sources = (char**)malloc((size_t)numStrings * sizeof(char*));
     for (int source = 0; source < numStrings; source++)
         sources[source] = recv_str(socketFd);
 
     if (interop->clContext.kernels)
         deleteClContext(interop->clContext);
 
-    int result = PrintErr(newClContext(interop, sources, numStrings));
+    int result = PrintErr(newClContext(interop, sources, (cl_uint)numStrings));
 
     if (interop->clContext.kernels)
     {
@@ -47,8 +47,8 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
         launchSizeLong[0] = screenPos.width;
     if (launchSizeLong[1] == -1)
         launchSizeLong[1] = screenPos.height;
-    size_t launchSize[] = { launchSizeLong[0], launchSizeLong[1] };
-    for (int argIndex = 0;; argIndex++)
+    size_t launchSize[] = { (size_t)launchSizeLong[0], (size_t)launchSizeLong[1] };
+    for (cl_uint argIndex = 0;; argIndex++)
     {
         int arglen = 0;
         if (PrintErr(recv_p(socketFd, &arglen, sizeof(int))))
@@ -109,12 +109,13 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
         else
         {
             unsigned char arg[arglen];
-            if (PrintErr(recv_p(socketFd, arg, arglen)))
+            if (PrintErr(recv_p(socketFd, arg, (size_t)arglen)))
             {
                 free(kernelName);
                 return -1;
             }
-            if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex, arg, arglen)))
+            if (PrintErr(setKernelArg(&interop->clContext,
+                            kernelName, argIndex, arg, (size_t)arglen)))
             {
                 free(kernelName);
                 return -1;
@@ -135,7 +136,7 @@ int messageMkBuffer(struct Interop* interop, int socketFd)
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))) ||
         PrintErr(recv_p(socketFd, &bufferSize, sizeof(long))))
         return -1;
-    if (PrintErr(allocMem(interop, bufferId, bufferSize)))
+    if (PrintErr(allocMem(interop, bufferId, (size_t)bufferSize)))
         return -1;
     return 0;
 }
@@ -159,7 +160,7 @@ int messageDlBuffer(struct Interop* interop, int socketFd)
     float* data = dlMem(*interop, bufferId, &memSize);
     if (!data)
         return -1;
-    long memSizeL = memSize;
+    long memSizeL = (long)memSize;
     if (PrintErr(send_p(socketFd, &memSizeL, sizeof(long))))
     {
         free(data);
@@ -182,7 +183,7 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
         case MessageTerm:
             puts("MessageTerm caught in socket. Exiting.");
             exit(0);
-            return -1;
+            //return -1;
         case MessageKernelSource:
             if (PrintErr(messageKernelSource(interop, socketFd)))
                 return -1;

@@ -58,7 +58,7 @@ int run_unsetkey(lua_State* state)
     return 0;
 }
 
-int send_all(void* data, int numBytes)
+int send_all(void* data, size_t numBytes)
 {
     int* socket = sockets;
     int errcode = 0;
@@ -136,7 +136,7 @@ int run_mkbuffer(lua_State* state)
     int types[] = { LUA_TNUMBER, LUA_TNUMBER, LUA_TNONE };
     LuaPrintErr(checkArgs(state, types));
     LuaPrintErr(send_all_msg(MessageMkBuffer));
-    int first = lua_tointeger(state, 1);
+    int first = (int)lua_tointeger(state, 1);
     long second = lua_tointeger(state, 2);
     LuaPrintErr(send_all(&first, sizeof(int)));
     LuaPrintErr(send_all(&second, sizeof(long)));
@@ -149,7 +149,7 @@ int run_rmbuffer(lua_State* state)
     int types[] = { LUA_TNUMBER, LUA_TNONE };
     LuaPrintErr(checkArgs(state, types));
     LuaPrintErr(send_all_msg(MessageRmBuffer));
-    int first = lua_tointeger(state, 1);
+    int first = (int)lua_tointeger(state, 1);
     LuaPrintErr(send_all(&first, sizeof(int)));
     LuaPrintErr(recv_all());
     return 0;
@@ -160,7 +160,7 @@ int run_dlbuffer(lua_State* state)
     int types[] = { LUA_TNUMBER, LUA_TNUMBER, LUA_TNONE };
     LuaPrintErr(checkArgs(state, types));
     LuaPrintErr(send_all_msg(MessageDlBuffer));
-    int bufferId = lua_tointeger(state, 1);
+    int bufferId = (int)lua_tointeger(state, 1);
     LuaPrintErr(send_all(&bufferId, sizeof(int)));
     long width = lua_tointeger(state, 2);
     int retval = 0;
@@ -186,13 +186,13 @@ int run_dlbuffer(lua_State* state)
             continue;
         }
 
-        float* data = malloc(bufferSize);
+        float* data = malloc((size_t)bufferSize);
         if (!data)
         {
             puts("malloc() failed in dlbuffer");
             exit(-1);
         }
-        if (PrintErr(recv_p(*socket, data, bufferSize)))
+        if (PrintErr(recv_p(*socket, data, (size_t)bufferSize)))
         {
             free(data);
             close(*socket);
@@ -202,7 +202,7 @@ int run_dlbuffer(lua_State* state)
         }
 
         if (PrintErr(savePng(bufferId, *socket, data, width,
-                        bufferSize / (width * 4 * sizeof(float)))))
+                        bufferSize / (width * 4 * (long)sizeof(float)))))
         {
             puts("Ignoring PNG error.");
         }
@@ -260,23 +260,23 @@ int run_kernel(lua_State* state)
                 {
                     LuaPrintErr(!lua_isnumber(state, i));
                     int value[2] = { -1, 0 };
-                    value[1] = lua_tointeger(state, i);
+                    value[1] = (int)lua_tointeger(state, i);
                     LuaPrintErr(send_all(&value, sizeof(value)));
                 }
                 break;
             case LUA_TNUMBER:
                 {
                     int size = sizeof(float);
-                    float value = lua_tonumber(state, i);
+                    float value = (float)lua_tonumber(state, i);
                     LuaPrintErr(send_all(&size, sizeof(size)));
-                    LuaPrintErr(send_all(&value, size));
+                    LuaPrintErr(send_all(&value, (size_t)size));
                 }
                 break;
             case LUA_TTABLE:
                 {
                     lua_pushinteger(state, 1);
                     lua_gettable(state, i);
-                    int value[2] = { sizeof(int), lua_tointeger(state, -1) };
+                    int value[2] = { sizeof(int), (int)lua_tointeger(state, -1) };
                     lua_pop(state, 1);
                     LuaPrintErr(send_all(&value, sizeof(value)));
                 }
