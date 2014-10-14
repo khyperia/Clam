@@ -70,9 +70,10 @@ void ApplyMotionBlur(float3* position, float3 lookat, float3 up, float focalDist
     *position += motionBlur.x * right + motionBlur.y * up + motionBlur.z * lookat;
 }
 
-float Trace(float3 origin, float3 direction,
+float Trace(float3 origin, float3 direction, float maxRayDist,
                    struct Pillars pillars, float3* normal, float3* color)
 {
+    const float backstepDelta = 0.001;
     if (direction.y < 0)
     {
         int2 gridPos = convert_int2_rtn(origin.xz);
@@ -88,7 +89,7 @@ float Trace(float3 origin, float3 direction,
         {
             *normal = (float3)(0, 1, 0);
             *color = datapoint.xyz;
-            return intersectionDistance - 0.01;
+            return intersectionDistance - backstepDelta;
         }
     }
 
@@ -109,7 +110,9 @@ float Trace(float3 origin, float3 direction,
     for (int i = 0; i < MaxRaySteps; i++)
     {
         float distance = min(fabs(t_next.x), fabs(t_next.y));
-        float3 finalPos = origin + direction * (distance + 0.01);
+        if (distance > maxRayDist)
+            return distance;
+        float3 finalPos = origin + direction * (distance + backstepDelta);
         int2 gridPos = convert_int2_rtn(finalPos.xz);
         if (gridPos.x < 0 || gridPos.y < 0 ||
             gridPos.x >= pillars.width || gridPos.y >= pillars.height)
@@ -134,7 +137,7 @@ float Trace(float3 origin, float3 direction,
                     *normal = (float3)(-sign(direction.x), 0, 0);
                 else
                     *normal = (float3)(0, 0, -sign(direction.z));
-                return distance - 0.01;
+                return distance - backstepDelta;
             }
         }
         else if (intersectionDistance < min(fabs(t_next.x), fabs(t_next.y)))
@@ -154,7 +157,7 @@ float Trace(float3 origin, float3 direction,
                 intersectionDistance = distance;
                 *normal = (float3)(0, 0, -sign(direction.z));
             }
-            return intersectionDistance - 0.01;
+            return intersectionDistance - backstepDelta;
         }
     }
     return 1000000000;
@@ -163,8 +166,10 @@ float Trace(float3 origin, float3 direction,
 int Reaches(float3 source, float3 dest, struct Pillars pillars)
 {
     float3 color, normal;
-    return Trace(source, normalize(dest - source), pillars, &normal, &color)
-        > length(dest - source);
+    float len = length(dest - source);
+    return Trace(source, normalize(dest - source), len,
+                         pillars, &normal, &color)
+        > len;
 }
 
 float3 Cone(float3 normal, float fov, ulong* rand)
@@ -201,11 +206,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand, struct Pilla
     for (int i = 0; i < NumRayBounces; i++)
     {
         float3 normal, matColor;
-        float distanceTraveled = Trace(rayPos, rayDir, pillars, &normal, &matColor);
-
-        // --
-        // return sin(log(distanceTraveled / 100)) * 0.5 + 0.5;
-        // --
+        float distanceTraveled = Trace(rayPos, rayDir, MaxRayDist, pillars, &normal, &matColor);
 
         if (distanceTraveled > MaxRayDist)
         {
