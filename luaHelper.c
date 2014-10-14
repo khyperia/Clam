@@ -13,30 +13,32 @@ int checkArgs(lua_State* state, int* types)
 {
     int argc = lua_gettop(state);
     int argIdx = 1;
-    while (types[argIdx] != LUA_TNONE)
+    while (types[argIdx - 1] != LUA_TNONE)
     {
-        if (argIdx >= argc)
+        if (argIdx - 1 >= argc)
+        {
+            puts("Too many arguments");
             return -1;
-        if (lua_type(state, argIdx) != types[argIdx])
+        }
+        if (lua_type(state, argIdx) != types[argIdx - 1])
+        {
+            printf("Argument %d was wrong: `%s` is param, `%s` is required\n", argIdx,
+                    lua_typename(state, lua_type(state, argIdx)),
+                    lua_typename(state, types[argIdx - 1]));
             return -1;
+        }
         argIdx++;
+    }
+    if (argIdx - 1 != argc)
+    {
+        puts("Not enough arguments");
+        return -1;
     }
     return 0;
 }
 
 // Note: `state` must be a local variable of type lua_State* to use this macro
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
-
-/*
-void assertArgs(lua_State* state, int* types)
-{
-    if (checkArgs(state, types))
-    {
-        lua_pushstring(state, "Argument types for function were incorrect");
-        lua_error(state);
-    }
-}
-*/
 
 int run_iskeydown(lua_State* state)
 {
@@ -210,6 +212,29 @@ int run_dlbuffer(lua_State* state)
     return 0;
 }
 
+int run_uplbuffer(lua_State* state)
+{
+    int types[] = { LUA_TNUMBER, LUA_TSTRING, LUA_TNONE };
+    LuaPrintErr(checkArgs(state, types));
+    LuaPrintErr(send_all_msg(MessageUplBuffer));
+    int bufferId = (int)lua_tointeger(state, 1);
+    const char* filename = lua_tostring(state, 2);
+    long width = 0, height = 0;
+    float* buffer = loadPng(filename, &width, &height);
+    if (!buffer)
+    {
+        LuaPrintErr("loadPng error" && 1);
+    }
+    long size = width * height * 4 * 4;
+    LuaPrintErr(send_all(&bufferId, sizeof(bufferId)));
+    LuaPrintErr(send_all(&size, sizeof(size)));
+    LuaPrintErr(send_all(buffer, (size_t)size));
+    LuaPrintErr(recv_all());
+    lua_pushnumber(state, width);
+    lua_pushnumber(state, height);
+    return 2;
+}
+
 int run_compile(lua_State* state)
 {
     LuaPrintErr(send_all_msg(MessageKernelSource));
@@ -308,6 +333,7 @@ int newLua(lua_State** state, const char* filename)
     lua_register(*state, "iskeydown", run_iskeydown);
     lua_register(*state, "unsetkey", run_unsetkey);
     lua_register(*state, "dlbuffer", run_dlbuffer);
+    lua_register(*state, "uplbuffer", run_uplbuffer);
     lua_register(*state, "mkbuffer", run_mkbuffer);
     lua_register(*state, "rmbuffer", run_rmbuffer);
     lua_register(*state, "compile", run_compile);

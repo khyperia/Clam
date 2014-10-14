@@ -9,7 +9,8 @@ enum MessageType
     MessageKernelSource,
     MessageMkBuffer,
     MessageRmBuffer,
-    MessageDlBuffer
+    MessageDlBuffer,
+    MessageUplBuffer
 };
 
 int hostSocket(const char* port);

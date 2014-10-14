@@ -177,6 +177,29 @@ int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     return 0;
 }
 
+int messageUplBuffer(struct Interop* interop, int socketFd)
+{
+    int bufferId = 0;
+    if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
+        return -1;
+    long memSize = 0;
+    if (PrintErr(recv_p(socketFd, &memSize, sizeof(long))))
+        return -1;
+    float* data = malloc_s((size_t)memSize);
+    if (PrintErr(recv_p(socketFd, data, (size_t)memSize)))
+    {
+        free(data);
+        return -1;
+    }
+    if (PrintErr(uplMem(interop, bufferId, (size_t)memSize, data)))
+    {
+        free(data);
+        return -1;
+    }
+    free(data);
+    return 0;
+}
+
 int parseMessage(enum MessageType messageType, struct Interop* interop,
         int socketFd, struct ScreenPos screenPos)
 {
@@ -204,6 +227,10 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
             return 0;
         case MessageDlBuffer:
             if (PrintErr(messageDlBuffer(interop, socketFd, screenPos)))
+                return -1;
+            return 0;
+        case MessageUplBuffer:
+            if (PrintErr(messageUplBuffer(interop, socketFd)))
                 return -1;
             return 0;
         default:

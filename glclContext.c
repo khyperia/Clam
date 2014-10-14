@@ -157,6 +157,35 @@ float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSize
     return data;
 }
 
+int uplMem(struct Interop* interop, int key, size_t memSize, float* data)
+{
+    size_t gpuSize;
+    cl_mem gpu = getMem(*interop, key, &gpuSize);
+    if (gpu)
+    {
+        // We just assume people know what they're doing if it's a screenbuffer.
+        // This is probably a bad decision.
+        if (gpuSize != 0 && gpuSize != memSize)
+        {
+            printf("Cannot upload memory: GPU was of size %lu while data was %lu\n",
+                    gpuSize, memSize);
+            return -1;
+        }
+    }
+    else
+    {
+        printf("Allocating memory due to uplMem unknown buffer %d of size %lu\n",
+                key, memSize);
+        if (PrintErr(allocMem(interop, key, memSize)))
+            return -1;
+        gpu = getMem(*interop, key, &gpuSize);
+    }
+    if (PrintErr(clEnqueueWriteBuffer(interop->command_queue, gpu, 1, 0, memSize, data,
+                    0, NULL, NULL)))
+        return -1;
+    return 0;
+}
+
 // Creates an Interop struct
 int newInterop(struct Interop* result)
 {

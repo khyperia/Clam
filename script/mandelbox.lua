@@ -1,6 +1,5 @@
 require("math")
 require("script/vector")
-require("script/table_save")
 
 -- TODO: Make this dynamic
 AssumedScreenWidth = 1024
@@ -18,7 +17,11 @@ frames = {}
 function special()
 end
 
-compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
+function recompile()
+    compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
+end
+
+recompile()
 
 function screenshot(bufferIndex, frame, width, height, numframes)
     mkbuffer(bufferIndex, width * height * 4 * 4)
@@ -71,98 +74,11 @@ function video(frames)
 end
 
 function update(time)
-    -- free keys: gh
-    if iskeydown("w") then
-        frame.pos = addvec(frame.pos, mulvec(frame.look, time * frame.focalDistance))
-        frame.frame = 0
-    end
-    if iskeydown("s") then
-        frame.pos = addvec(frame.pos, mulvec(frame.look, -time * frame.focalDistance))
-        frame.frame = 0
-    end
-    if iskeydown("a") then
-        frame.pos = addvec(frame.pos, mulvec(cross(frame.up, frame.look),
-        time * frame.focalDistance))
-        frame.frame = 0
-    end
-    if iskeydown("d") then
-        frame.pos = addvec(frame.pos, mulvec(cross(frame.look, frame.up),
-        time * frame.focalDistance))
-        frame.frame = 0
-    end
-    if iskeydown(" ") then
-        frame.pos = addvec(frame.pos, mulvec(frame.up, -time * frame.focalDistance))
-        frame.frame = 0
-    end
-    if iskeydown("z") then
-        frame.pos = addvec(frame.pos, mulvec(frame.up, time * frame.focalDistance))
-        frame.frame = 0
-    end
-    if iskeydown("r") then
-        frame.focalDistance = frame.focalDistance * (1 + time * math.sqrt(frame.fov))
-        frame.frame = 0
-    end
-    if iskeydown("f") then
-        frame.focalDistance = frame.focalDistance / (1 + time * math.sqrt(frame.fov))
-        frame.frame = 0
-    end
-    if iskeydown("u") or iskeydown("q") then
-        frame.up = rotate(frame.up, frame.look, time)
-        frame.frame = 0
-    end
-    if iskeydown("o") or iskeydown("e") then
-        frame.up = rotate(frame.up, frame.look, -time)
-        frame.frame = 0
-    end
-    if iskeydown("j") then
-        frame.look = rotate(frame.look, frame.up, time * frame.fov)
-        frame.frame = 0
-    end
-    if iskeydown("l") then
-        frame.look = rotate(frame.look, frame.up, -time * frame.fov)
-        frame.frame = 0
-    end
-    if iskeydown("i") then
-        frame.look = rotate(frame.look, cross(frame.up, frame.look), time * frame.fov)
-        frame.frame = 0
-    end
-    if iskeydown("k") then
-        frame.look = rotate(frame.look, cross(frame.look, frame.up), time * frame.fov)
-        frame.frame = 0
-    end
-    if iskeydown("n") then
-        frame.fov = frame.fov * (1 + time)
-        frame.frame = 0
-    end
-    if iskeydown("m") then
-        frame.fov = frame.fov / (1 + time)
-        frame.frame = 0
-    end
-    if iskeydown("t") then
-        unsetkey("t")
-        result = table.save(frame, "frameSave.txt")
-        if result ~= nil then
-            print("Unable to save frameSave.txt")
-            print(result)
-        else
-            print("Saved camera state")
-        end
-    end
-    if iskeydown("y") then
-        unsetkey("y")
-        frameTemp, err = table.load("frameSave.txt")
-        if err == nil then
-            frame = frameTemp
-            frame.frame = 0
-            print("Loaded camera state")
-        else
-            print("Unable to load frameSave.txt")
-            print(err)
-        end
-    end
+    frame = update3dCamera(frame, time)
+
     if iskeydown("b") then
         unsetkey("b")
-        compile("script/mandelbox.conf.cl", "script/mandelbox.cl")
+        recompile()
         frame.frame = 0
         print("Recompiled")
     end
@@ -213,6 +129,7 @@ function update(time)
         print("Taking video")
         video(frames)
         print("Done taking video")
+        unsetkey("v")
     end
     if iskeydown("h") then
         unsetkey("h")
@@ -240,5 +157,4 @@ function update(time)
     frame.fov / AssumedScreenWidth, frame.focalDistance, frame.frame)
 
     frame.frame = frame.frame + 1
-    frame.look = rotate(frame.look, frame.up, time * 0.1)
 end
