@@ -324,7 +324,7 @@ int run_reload(lua_State* state)
     return 0;
 }
 
-int newLua(lua_State** state, const char* filename)
+int newLua(lua_State** state, const char* filename, char** args)
 {
     *state = luaL_newstate();
     luaL_openlibs(*state);
@@ -339,6 +339,14 @@ int newLua(lua_State** state, const char* filename)
     lua_register(*state, "compile", run_compile);
     lua_register(*state, "kernel", run_kernel);
     lua_register(*state, "reload", run_reload);
+    lua_newtable(*state);
+    for (int i = 1; *args; i++, args++)
+    {
+        lua_pushnumber(*state, i);
+        lua_pushstring(*state, *args);
+        lua_settable(*state, -3);
+    }
+    lua_setglobal(*state, "arg");
 
     if (PrintErr(luaL_dofile(*state, filename)))
     {

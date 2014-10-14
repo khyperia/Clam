@@ -146,7 +146,7 @@ int main(int argc, char** argv)
     if (PrintErr(atexit(doOnExit_master)))
         puts("Continuing anyway");
 
-    if (argc != 2)
+    if (argc < 2)
     {
         printf("Usage: %s [lua filename]\n", argv[0]);
         return -1;
@@ -161,13 +161,13 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    if (PrintErr(newLua(&luaState, argv[1])))
+    glutInit(&argc, argv);
+    if (PrintErr(newLua(&luaState, argv[1], argv + 2)))
     {
         puts("Exiting.");
         return -1;
     }
 
-    glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2 Master");
 
