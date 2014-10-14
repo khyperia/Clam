@@ -149,5 +149,9 @@ function update3dCamera(frame, time)
             print(err)
         end
     end
+    
+    frame.look = normalize(frame.look)
+    frame.up = normalize(cross(cross(frame.look, frame.up), frame.look))
+
     return frame
 end

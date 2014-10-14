@@ -146,9 +146,6 @@ function update(time)
         print("h: this message")
     end
 
-    frame.look = normalize(frame.look)
-    frame.up = normalize(cross(cross(frame.look, frame.up), frame.look))
-
     kernel("Main", -1, -1, "0",
     special,
     frame.pos[1], frame.pos[2], frame.pos[3],
