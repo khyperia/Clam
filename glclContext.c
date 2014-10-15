@@ -21,14 +21,15 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
     for (cl_uint platform = 0; platform < openclPlatformCount; platform++)
     {
         cl_platform_id platformId = platformIds[platform];
+        const cl_device_type clDeviceType = CL_DEVICE_TYPE_GPU;
 
         cl_uint openclDeviceCount = 0;
-        if (PrintErr(clGetDeviceIDs(platformId, CL_DEVICE_TYPE_GPU,
+        if (PrintErr(clGetDeviceIDs(platformId, clDeviceType,
                         0, NULL, &openclDeviceCount)))
             return NULL;
 
         cl_device_id deviceIds[openclDeviceCount];
-        if (PrintErr(clGetDeviceIDs(platformId, CL_DEVICE_TYPE_GPU, openclDeviceCount,
+        if (PrintErr(clGetDeviceIDs(platformId, clDeviceType, openclDeviceCount,
                         deviceIds, NULL)))
             return NULL;
 
@@ -50,11 +51,34 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
             {
                 if (outputClDeviceId)
                     *outputClDeviceId = deviceId;
-                return context;
+                break;
+            }
+            else
+            {
+                context = NULL;
             }
         }
+        if (context)
+            break;
     }
-    return NULL;
+    if (!context)
+        return NULL;
+    size_t nameSize = 0;
+    if (PrintErr(clGetDeviceInfo(*outputClDeviceId, CL_DEVICE_NAME, 0, NULL, &nameSize)))
+    {
+        puts("Ignoring.");
+        return context;
+    }
+    char* name = malloc_s(nameSize * sizeof(char));
+    if (PrintErr(clGetDeviceInfo(*outputClDeviceId, CL_DEVICE_NAME, nameSize, name, NULL)))
+    {
+        puts("Ignorning.");
+        free(name);
+        return context;
+    }
+    printf("Using device %s\n", name);
+    free(name);
+    return context;
 }
 
 // Returns the linked list node of that key, or null if not found
