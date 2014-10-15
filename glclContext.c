@@ -99,11 +99,11 @@ int addMem(struct Interop* interop, int key, cl_mem mem, size_t memSize)
 }
 
 // Allocates a cl_mem object and calls addMem()
-int allocMem(struct Interop* interop, int key, size_t memSize)
+int allocMem(struct Interop* interop, int key, size_t memSize, size_t screenSizeBytes)
 {
     cl_int openclError;
-    cl_mem memory = clCreateBuffer(interop->context, CL_MEM_READ_WRITE, memSize,
-        NULL, &openclError);
+    cl_mem memory = clCreateBuffer(interop->context, CL_MEM_READ_WRITE,
+            memSize == 0 ? screenSizeBytes : memSize, NULL, &openclError);
     if (PrintErr(openclError))
     {
         puts("  Was from clCreateBuffer()");
@@ -176,7 +176,12 @@ int uplMem(struct Interop* interop, int key, size_t memSize, float* data)
     {
         printf("Allocating memory due to uplMem unknown buffer %d of size %lu\n",
                 key, memSize);
-        if (PrintErr(allocMem(interop, key, memSize)))
+        if (memSize == 0)
+        {
+            puts("Cannot allocate a zero-sized gpu array");
+            return -1;
+        }
+        if (PrintErr(allocMem(interop, key, memSize, 0)))
             return -1;
         gpu = getMem(*interop, key, &gpuSize);
     }

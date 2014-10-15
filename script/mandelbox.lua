@@ -22,6 +22,7 @@ function recompile()
 end
 
 recompile()
+mkbuffer(1, 0) -- RNG buffer
 
 function screenshot(bufferIndex, frame, width, height, numframes)
     mkbuffer(bufferIndex, width * height * 4 * 4)
@@ -67,7 +68,7 @@ function video(frames)
             print("Frame nil, breaking")
             break
         end
-        screenshot(frameIndex, frame, 800, 500, 10)
+        screenshot(frameIndex + 2, frame, 800, 500, 10)
         print("Took frame", frameIndex)
         frameIndex = frameIndex + 1
     end
@@ -93,23 +94,23 @@ function update(time)
     end
     if iskeydown("1") then
         unsetkey("1")
-        screenshot(1, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 200)
+        screenshot(2, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 200)
     end
     if iskeydown("2") then
         unsetkey("2")
-        screenshot(1, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 200)
+        screenshot(2, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 200)
     end
     if iskeydown("3") then
         unsetkey("3")
-        screenshot(1, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 200)
+        screenshot(2, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 200)
     end
     if iskeydown("4") then
         unsetkey("4")
-        screenshot(1, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 200)
+        screenshot(2, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 200)
     end
     if iskeydown("5") then
         unsetkey("5")
-        screenshot(1, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 200)
+        screenshot(2, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 200)
     end
     if iskeydown("x") then
         unsetkey("x")
@@ -146,7 +147,7 @@ function update(time)
         print("h: this message")
     end
 
-    kernel("Main", -1, -1, "0",
+    kernel("Main", -1, -1, "0", "1",
     special,
     frame.pos[1], frame.pos[2], frame.pos[3],
     frame.look[1], frame.look[2], frame.look[3],

@@ -163,6 +163,7 @@ void ApplyMotionBlur(float3* position, float3 lookat, float3 up, float focalDist
 }
 
 float3 Normal(float3 pos) {
+    // TODO: Evaluate the value of delta. The 2 fixes things and I don't know why.
     const float delta = FLT_EPSILON * 2;
     float dppn = De(pos + (float3)(delta, delta, -delta));
     float dpnp = De(pos + (float3)(delta, -delta, delta));
@@ -282,6 +283,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
 }
 
 __kernel void Main(__global float4* screen,
+    __global uint4* rngBuffer,
     int screenX, int screenY, int width, int height,
     float posX, float posY, float posZ,
     float lookX, float lookY, float lookZ,
@@ -297,11 +299,19 @@ __kernel void Main(__global float4* screen,
     float3 look = (float3)(lookX, lookY, lookZ);
     float3 up = (float3)(upX, upY, upZ);
 
-    ulong rand = (ulong)get_global_id(0) +
-        (ulong)get_global_id(1) * get_global_size(0) +
-        (ulong)frame * get_global_size(0) * get_global_size(1);
-    for (int i = 0; i < RandSeedInitSteps; i++)
-        MWC64X(&rand);
+    ulong rand;
+    if (frame == 0)
+    {
+        rand = (ulong)get_global_id(0) + (ulong)get_global_id(1) * get_global_size(0);
+        for (int i = 0; (float)i / RandSeedInitSteps - 1 < Rand(&rand) * RandSeedInitSteps; i++)
+        {
+        }
+    }
+    else
+    {
+        uint4 randBuffer = rngBuffer[y * width + x];
+        rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
+    }
 
     ApplyDof(&pos, &look, focalDistance, &rand);
     ApplyMotionBlur(&pos, look, up, focalDistance, &rand);
@@ -314,12 +324,12 @@ __kernel void Main(__global float4* screen,
     int screenIndex = y * width + x;
     if (frame > 0)
     {
-        int frameFixed = (int)frame - 1;
         float3 old = screen[screenIndex].xyz;
         if (!isnan(old.x) && !isnan(old.y) && !isnan(old.z))
-            color = (color + old * frameFixed) / (frameFixed + 1);
+            color = (color + old * frame) / (frame + 1);
         else if (isnan(color.x) || isnan(color.y) || isnan(color.z))
             color = old;
     }
     screen[screenIndex] = (float4)(clamp(color, 0.0, 1.0), 1.0);
+    rngBuffer[screenIndex].xy = (uint2)((uint)(rand >> 32), (uint)rand);
 }

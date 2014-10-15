@@ -8,7 +8,7 @@
 #define HueVariance 2
 #define Reflectivity 1.0
 #define ColorBias 0.0,0.0,0.0
-#define RandSeedInitSteps 256
+#define RandSeedInitSteps 128
 #define DeMultiplier 0.95
 #define DofPickup 0.005
 #define MotionBlur 0.0,0.0,0.0

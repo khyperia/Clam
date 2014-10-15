@@ -130,14 +130,15 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
     return result;
 }
 
-int messageMkBuffer(struct Interop* interop, int socketFd)
+int messageMkBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
 {
     int bufferId = 0;
     long bufferSize = 0;
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))) ||
         PrintErr(recv_p(socketFd, &bufferSize, sizeof(long))))
         return -1;
-    if (PrintErr(allocMem(interop, bufferId, (size_t)bufferSize)))
+    if (PrintErr(allocMem(interop, bufferId, (size_t)bufferSize,
+                    (size_t)screenPos.width * (size_t)screenPos.height * 4 * 4)))
         return -1;
     return 0;
 }
@@ -218,7 +219,7 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
                 return -1;
             return 0;
         case MessageMkBuffer:
-            if (PrintErr(messageMkBuffer(interop, socketFd)))
+            if (PrintErr(messageMkBuffer(interop, socketFd, screenPos)))
                 return -1;
             return 0;
         case MessageRmBuffer:

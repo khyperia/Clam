@@ -41,7 +41,7 @@ int newInterop(struct Interop* result);
 void deleteInterop(struct Interop interop);
 int resizeInterop(struct Interop* interop, int width, int height);
 int blitInterop(struct Interop interop, int width, int height);
-int allocMem(struct Interop* interop, int key, size_t memSize);
+int allocMem(struct Interop* interop, int key, size_t memSize, size_t screenSizeBytes);
 cl_mem getMem(struct Interop interop, int key, size_t* memSize);
 void freeMem(struct Interop* interop, int key);
 float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSizeBytes); // must call free()
