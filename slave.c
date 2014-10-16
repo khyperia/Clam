@@ -16,7 +16,7 @@ void masterIdleFunc(void)
     if (PrintErr(slaveSocket(&interop, socketFd, screenPos)))
     {
         puts("Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     glutPostRedisplay();
 }
@@ -32,24 +32,24 @@ void masterDisplayFunc(void)
         if (screenPos.width <= 0 || screenPos.height <= 0)
         {
             puts("Window width or height was zero. This causes bad problems. Exiting.");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
         if (PrintErr(resizeInterop(&interop, screenPos.width, screenPos.height)))
         {
             puts("Exiting.");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
     }
     if (PrintErr(blitInterop(interop, screenPos.width, screenPos.height)))
     {
         puts("Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     glutSwapBuffers();
     if (PrintErr((int)glGetError()))
     {
         puts("OpenGL failure of displayFunc. Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -70,7 +70,7 @@ int main(int argc, char** argv)
     if (hostsocket == -1)
     {
         puts("Bad host socket. Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     puts("Accepting connection");
@@ -80,7 +80,7 @@ int main(int argc, char** argv)
     {
         perror("accept()");
         puts("Bad client socket. Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     const char* winpos = sgetenv("CLAM2_WINPOS", "1024x1024+0+0");
@@ -88,14 +88,14 @@ int main(int argc, char** argv)
     if (sscanf(winpos, "%dx%d%d%d", &screenPos.width, &screenPos.height, &winX, &winY) != 4)
     {
         puts("CLAM2_WINPOS not in correct format (WIDTHxHEIGHT+OFFX+OFFY). Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-512-512");
     if (sscanf(renderpos, "%d%d", &screenPos.x, &screenPos.y) != 2)
     {
         puts("CLAM2_RENDERPOS not in correct format ([+-]OFFX[+-]OFFY). Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     glutInit(&argc, argv);
@@ -107,17 +107,17 @@ int main(int argc, char** argv)
     if (PrintErr(newInterop(&interop)))
     {
         puts("Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
     if (PrintErr(resizeInterop(&interop, screenPos.width, screenPos.height)))
     {
         puts("Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     glutIdleFunc(masterIdleFunc);
     glutDisplayFunc(masterDisplayFunc);
     glutMainLoop();
     puts("glutMainLoop returned, that's odd");
-    return -1;
+    return EXIT_FAILURE;
 }

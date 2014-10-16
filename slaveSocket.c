@@ -19,11 +19,6 @@ int messageKernelSource(struct Interop* interop, int socketFd)
 
     int result = PrintErr(newClContext(interop, sources, (cl_uint)numStrings));
 
-    if (interop->clContext.kernels)
-    {
-        puts("Uh oh");
-    }
-
     for (int source = 0; source < numStrings; source++)
         free(sources[source]);
     free(sources);
@@ -152,7 +147,7 @@ int messageRmBuffer(struct Interop* interop, int socketFd)
     return 0;
 }
 
-// TODO: Protocol gets weird here, since we're sending data back
+// Protocol gets weird here, since we're sending data back
 int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
 {
     int bufferId = 0;
@@ -164,12 +159,8 @@ int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     if (!data)
         return -1;
     long memSizeL = (long)memSize;
-    if (PrintErr(send_p(socketFd, &memSizeL, sizeof(long))))
-    {
-        free(data);
-        return -1;
-    }
-    if (PrintErr(send_p(socketFd, data, memSize)))
+    if (PrintErr(send_p(socketFd, &memSizeL, sizeof(long))) ||
+        PrintErr(send_p(socketFd, data, memSize)))
     {
         free(data);
         return -1;
@@ -208,32 +199,19 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
     {
         case MessageTerm:
             puts("MessageTerm caught in socket. Exiting.");
-            exit(0);
-            //return -1;
+            exit(EXIT_SUCCESS);
         case MessageKernelSource:
-            if (PrintErr(messageKernelSource(interop, socketFd)))
-                return -1;
-            return 0;
+            return PrintErr(messageKernelSource(interop, socketFd));
         case MessageKernelInvoke:
-            if (PrintErr(messageKernelInvoke(interop, socketFd, screenPos)))
-                return -1;
-            return 0;
+            return PrintErr(messageKernelInvoke(interop, socketFd, screenPos));
         case MessageMkBuffer:
-            if (PrintErr(messageMkBuffer(interop, socketFd, screenPos)))
-                return -1;
-            return 0;
+            return PrintErr(messageMkBuffer(interop, socketFd, screenPos));
         case MessageRmBuffer:
-            if (PrintErr(messageRmBuffer(interop, socketFd)))
-                return -1;
-            return 0;
+            return PrintErr(messageRmBuffer(interop, socketFd));
         case MessageDlBuffer:
-            if (PrintErr(messageDlBuffer(interop, socketFd, screenPos)))
-                return -1;
-            return 0;
+            return PrintErr(messageDlBuffer(interop, socketFd, screenPos));
         case MessageUplBuffer:
-            if (PrintErr(messageUplBuffer(interop, socketFd)))
-                return -1;
-            return 0;
+            return PrintErr(messageUplBuffer(interop, socketFd));
         default:
             printf("Unknown message type %d\n", messageType);
             return -1;

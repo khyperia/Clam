@@ -34,7 +34,7 @@ void masterIdleFunc(void)
     if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &newFrame)))
     {
         puts("Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     double elapsed = (double)(newFrame.tv_sec - lastFrame.tv_sec) +
                     (double)(newFrame.tv_nsec - lastFrame.tv_nsec) / 1000000000;
@@ -42,7 +42,7 @@ void masterIdleFunc(void)
     if (PrintErr(runLua(luaState, elapsed)))
     {
         puts("Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     lastFrame = newFrame;
     glutPostRedisplay();
@@ -65,7 +65,7 @@ void masterDisplayFunc(void)
 
     char buffer[100];
     snprintf(buffer, 100, "FPS: %f", fps);
-    glRasterPos2i(-1, 1);
+    glRasterPos2i(0, 0);
     for (int i = 0; buffer[i]; i++)
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, buffer[i]);
 
@@ -74,7 +74,7 @@ void masterDisplayFunc(void)
     if (PrintErr((int)glGetError()))
     {
         puts("Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -158,14 +158,14 @@ int main(int argc, char** argv)
     if (!sockets)
     {
         puts("Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     glutInit(&argc, argv);
     if (PrintErr(newLua(&luaState, argv[1], argv + 2)))
     {
         puts("Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     glutInitDisplayMode(GLUT_DOUBLE);
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &lastFrame)))
     {
         puts("Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
 
     glutKeyboardFunc(keyboardDownFunc);
@@ -183,5 +183,5 @@ int main(int argc, char** argv)
     glutDisplayFunc(masterDisplayFunc);
     glutMainLoop();
     puts("glutMainLoop returned, that's odd");
-    return -1;
+    return EXIT_FAILURE;
 }

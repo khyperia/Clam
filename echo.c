@@ -45,7 +45,7 @@ void* echoThread(void* arg)
             if (size > 0)
             {
                 gotdata = 1;
-                if (PrintErr((int)send_p(socketRight, buf, size)))
+                if (PrintErr((int)send_p(socketRight, buf, (size_t)size)))
                     break;
             }
         }
@@ -60,7 +60,7 @@ void* echoThread(void* arg)
             if (size > 0)
             {
                 gotdata = 1;
-                if (PrintErr(send_p(socketLeft, buf, size)))
+                if (PrintErr(send_p(socketLeft, buf, (size_t)size)))
                     break;
             }
         }
@@ -81,13 +81,13 @@ int main(int argc, char** argv)
     if (argc < 4 || argc % 2 != 0)
     {
         printf("Usage: %s [host port] [dest ip1] [dest port1] [dest ip2] ...", argv[0]);
-        return -1;
+        return EXIT_FAILURE;
     }
     int hostsocket = hostSocket(argv[1]);
     if (hostsocket == -1)
     {
         puts("Unable to host socket. Exiting.");
-        return -1;
+        return EXIT_FAILURE;
     }
     int numOtherClients = argc / 2 - 1;
     pthread_t threads[numOtherClients];
@@ -97,14 +97,14 @@ int main(int argc, char** argv)
         if (master == -1)
         {
             perror("accept()");
-            return -1;
+            return EXIT_FAILURE;
         }
 
         int slave = connectSocket(argv[slaveIndex * 2 + 2], argv[slaveIndex * 2 + 3]);
         if (slave == -1)
         {
-            perror("connect()");
-            return -1;
+            PrintErr("connect()" && -1);
+            return EXIT_FAILURE;
         }
 
         int* argument = malloc_s(2 * sizeof(int));
@@ -113,7 +113,7 @@ int main(int argc, char** argv)
         if (PrintErr(pthread_create(&threads[slaveIndex], NULL, echoThread, argument)))
         {
             puts("Exiting.");
-            return -1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -126,11 +126,11 @@ int main(int argc, char** argv)
         if (PrintErr(pthread_join(threads[slaveIndex], NULL)))
         {
             puts("Exiting.");
-            return -1;
+            return EXIT_FAILURE;
         }
     }
 
     puts("All threads joined, echo server closing");
 
-    return 0;
+    return EXIT_SUCCESS;
 }

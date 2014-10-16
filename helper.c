@@ -8,7 +8,8 @@ const char* sgetenv(const char* name, const char* defaultValue)
     const char* result = getenv(name);
     if (!result)
     {
-        printf("Warning: %s env var not set, defaulting to %s\n", name, defaultValue);
+        printf("Warning: %s environment variable not set, defaulting to %s\n",
+                name, defaultValue);
         result = defaultValue;
     }
     return result;
@@ -51,7 +52,7 @@ void* malloc_s(size_t size)
     if (!result)
     {
         puts("malloc() failed. Exiting.");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     // memset(result, 0, size);
     return result;
