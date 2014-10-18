@@ -11,6 +11,7 @@ int socketFd;
 struct ScreenPos screenPos;
 struct Interop interop;
 
+// Glut function
 void masterIdleFunc(void)
 {
     if (PrintErr(slaveSocket(&interop, socketFd, screenPos)))
@@ -21,6 +22,7 @@ void masterIdleFunc(void)
     glutPostRedisplay();
 }
 
+// Glut function
 void masterDisplayFunc(void)
 {
     int newWidth = glutGet(GLUT_WINDOW_WIDTH);
@@ -53,6 +55,7 @@ void masterDisplayFunc(void)
     }
 }
 
+// Glut function
 void doOnExit_slave(void)
 {
     if (socketFd > 0)
@@ -60,6 +63,7 @@ void doOnExit_slave(void)
     deleteInterop(interop);
 }
 
+// Glut function
 int main(int argc, char** argv)
 {
     if (PrintErr(atexit(doOnExit_slave)))

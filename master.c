@@ -18,16 +18,19 @@ lua_State* luaState = NULL;
 struct timespec lastFrame;
 double fps = 0.0;
 
+// Glut function
 void keyboardDownFunc(unsigned char c, int UNUSED x, int UNUSED y)
 {
     keyboard[c] = true;
 }
 
+// Glut function
 void keyboardUpFunc(unsigned char c, int UNUSED x, int UNUSED y)
 {
     keyboard[c] = false;
 }
 
+// Runs the lua update() function once
 void masterIdleFunc(void)
 {
     struct timespec newFrame;
@@ -48,6 +51,7 @@ void masterIdleFunc(void)
     glutPostRedisplay();
 }
 
+// Makes a changing-color screen and a FPS counter
 void masterDisplayFunc(void)
 {
     float animationFrameVal = (float)fmod(animationFrame / 1000.0f, 1.0f);
@@ -78,6 +82,7 @@ void masterDisplayFunc(void)
     }
 }
 
+// Closes all sockets and deletes the lua state
 void doOnExit_master(void)
 {
     if (sockets)
@@ -99,6 +104,7 @@ void doOnExit_master(void)
         deleteLua(luaState);
 }
 
+// Parses and connects to all slaves
 int* connectToSlaves(char* slaves)
 {
     size_t numIps;
@@ -152,6 +158,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    // strdup because it will be mutated
     char* ips = my_strdup(sgetenv("CLAM2_SLAVES", "127.0.0.1:23456"));
     sockets = connectToSlaves(ips);
     free(ips);
@@ -162,6 +169,8 @@ int main(int argc, char** argv)
     }
 
     glutInit(&argc, argv);
+
+    // Pass on the rest of the args to lua
     if (PrintErr(newLua(&luaState, argv[1], argv + 2)))
     {
         puts("Exiting.");

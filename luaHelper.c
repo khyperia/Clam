@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <string.h>
 
+// Check that arguments are correct.
+// `types` contains LUA_T* variables, *with an extra LUA_TNONE to signify the end*
 int checkArgs(lua_State* state, int* types)
 {
     int argc = lua_gettop(state);
@@ -40,6 +42,7 @@ int checkArgs(lua_State* state, int* types)
 // Note: `state` must be a local variable of type lua_State* to use this macro
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
 
+// Checks if the character passed in is a currently pressed key
 int run_iskeydown(lua_State* state)
 {
     int types[] = { LUA_TSTRING, LUA_TNONE };
@@ -50,6 +53,8 @@ int run_iskeydown(lua_State* state)
     return 1;
 }
 
+// Unsets a key so iskeydown() does not return true the next time(s) it is called
+// (until the key is pressed again)
 int run_unsetkey(lua_State* state)
 {
     int types[] = { LUA_TSTRING, LUA_TNONE };
@@ -60,6 +65,7 @@ int run_unsetkey(lua_State* state)
     return 0;
 }
 
+// Sends data to all sockets;
 int send_all(void* data, size_t numBytes)
 {
     int* socket = sockets;
@@ -80,11 +86,13 @@ int send_all(void* data, size_t numBytes)
     return errcode;
 }
 
+// Sends an enum MessageType to all sockets
 int send_all_msg(enum MessageType messageType)
 {
     return send_all(&messageType, sizeof(messageType));
 }
 
+// Sends a string to all sockets
 int send_all_str(const char* string)
 {
     int* socket = sockets;
@@ -105,6 +113,7 @@ int send_all_str(const char* string)
     return errcode;
 }
 
+// Receives an int from all sockets and checks if it is zero
 int recv_all(void)
 {
     int* socket = sockets;
@@ -133,6 +142,7 @@ int recv_all(void)
     return errcode;
 }
 
+// Creates a buffer with arg(1) id, and arg(2) size
 int run_mkbuffer(lua_State* state)
 {
     int types[] = { LUA_TNUMBER, LUA_TNUMBER, LUA_TNONE };
@@ -146,6 +156,7 @@ int run_mkbuffer(lua_State* state)
     return 0;
 }
 
+// Deletes the buffer with arg(1) id
 int run_rmbuffer(lua_State* state)
 {
     int types[] = { LUA_TNUMBER, LUA_TNONE };
@@ -157,6 +168,7 @@ int run_rmbuffer(lua_State* state)
     return 0;
 }
 
+// Downloads a buffer to a png on disk
 int run_dlbuffer(lua_State* state)
 {
     int types[] = { LUA_TNUMBER, LUA_TNUMBER, LUA_TNONE };
@@ -212,6 +224,7 @@ int run_dlbuffer(lua_State* state)
     return 0;
 }
 
+// Uploads a png to a buffer
 int run_uplbuffer(lua_State* state)
 {
     int types[] = { LUA_TNUMBER, LUA_TSTRING, LUA_TNONE };
@@ -235,6 +248,7 @@ int run_uplbuffer(lua_State* state)
     return 2;
 }
 
+// Compiles a kernel with the sources in the files specified by the args
 int run_compile(lua_State* state)
 {
     LuaPrintErr(send_all_msg(MessageKernelSource));
@@ -255,6 +269,7 @@ int run_compile(lua_State* state)
     return 0;
 }
 
+// Invokes a kernel
 int run_kernel(lua_State* state)
 {
     LuaPrintErr(send_all_msg(MessageKernelInvoke));
@@ -314,6 +329,7 @@ int run_kernel(lua_State* state)
     return 0;
 }
 
+// Reloads the current lua file (simply re-executes the current file)
 int run_reload(lua_State* state)
 {
     lua_getglobal(state, "__file__");
@@ -324,6 +340,7 @@ int run_reload(lua_State* state)
     return 0;
 }
 
+// Creates a lua state, setting globals and such
 int newLua(lua_State** state, const char* filename, char** args)
 {
     *state = luaL_newstate();
@@ -357,11 +374,13 @@ int newLua(lua_State** state, const char* filename, char** args)
     return 0;
 }
 
+// Deletes a lua state
 void deleteLua(lua_State* state)
 {
     lua_close(state);
 }
 
+// Calls the update() function of a lua state
 int runLua(lua_State* state, double frameSeconds)
 {
     lua_getglobal(state, "update");

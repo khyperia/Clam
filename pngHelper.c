@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <png.h>
 
+// This file is a nightmare of libpng. I'm scared.
+
 inline unsigned char convByte(float value)
 {
     value = value * UCHAR_MAX;

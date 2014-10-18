@@ -6,8 +6,11 @@
 #include <stdio.h>
 #include <string.h>
 
+// Tries to create a cl_context and returns its associated cl_device_id
+// TODO: Allow the user to select a device if there is more than one?
 cl_context getClContext(cl_device_id* outputClDeviceId)
 {
+    // Get cl_platform_id count and then list
     cl_uint openclPlatformCount = 0;
     if (PrintErr(clGetPlatformIDs(0, NULL, &openclPlatformCount)))
         return NULL;
@@ -21,8 +24,10 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
     for (cl_uint platform = 0; platform < openclPlatformCount; platform++)
     {
         cl_platform_id platformId = platformIds[platform];
+        // Only allow GPU devices to be used
         const cl_device_type clDeviceType = CL_DEVICE_TYPE_GPU;
 
+        // Get cl_device_id count and then list
         cl_uint openclDeviceCount = 0;
         if (PrintErr(clGetDeviceIDs(platformId, clDeviceType,
                         0, NULL, &openclDeviceCount)))
@@ -33,6 +38,7 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
                         deviceIds, NULL)))
             return NULL;
 
+        // Properties to use when creating the context (code is platform-specific)
         cl_context_properties contextProperties[] = {
             CL_GL_CONTEXT_KHR, (cl_context_properties)(void*)glXGetCurrentContext(),
             CL_GLX_DISPLAY_KHR, (cl_context_properties)(void*)glXGetCurrentDisplay(),
@@ -44,6 +50,7 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
         {
             cl_device_id deviceId = deviceIds[device];
 
+            // Create the context and check for success
             cl_int clError;
             context = clCreateContext(contextProperties,
                     1, &deviceId, 0, 0, &clError);
@@ -63,6 +70,7 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
     }
     if (!context)
         return NULL;
+    // Print the device name
     size_t nameSize = 0;
     if (PrintErr(clGetDeviceInfo(*outputClDeviceId, CL_DEVICE_NAME, 0, NULL, &nameSize)))
     {
@@ -164,6 +172,7 @@ void freeMem(struct Interop* interop, int key)
     clReleaseMemObject(toFree);
 }
 
+// Download memory from the GPU
 float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSizeBytes)
 {
     cl_mem clmem = getMem(interop, key, memSize);
@@ -181,6 +190,7 @@ float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSize
     return data;
 }
 
+// Upload memory to the GPU
 int uplMem(struct Interop* interop, int key, size_t memSize, float* data)
 {
     size_t gpuSize;
@@ -319,7 +329,7 @@ int blitInterop(struct Interop interop, int width, int height)
     if (!screenMemList)
     {
         // TODO: Consider calling resizeInterop here
-        // This only happened ocasionally in the C++ version, though
+        // This only happened ocasionally in the C++ version, though (due to restartability)
         puts("Buffer 0 did not exist, cannot blit to screen");
         return -1;
     }

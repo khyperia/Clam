@@ -14,6 +14,7 @@ int hostSocket(const char* port)
     return connectSocket(NULL, port);
 }
 
+// if host is null, makes a hosting socket
 int connectSocket(const char* host, const char* port)
 {
     struct addrinfo hints, *servinfo = NULL;

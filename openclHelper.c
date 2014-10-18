@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+// Builds an openCl kernel (fills in interop->clContext)
 int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
 {
     interop->clContext.kernels = NULL;
@@ -35,6 +36,7 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
     return 0;
 }
 
+// Deletes/frees an openCl context
 void deleteClContext(struct ClContext context)
 {
     struct cl_kernel_list* list = context.kernels;
@@ -52,6 +54,7 @@ void deleteClContext(struct ClContext context)
     clReleaseProgram(context.program);
 }
 
+// Retrieves a kernel by it's name, creating it if needed
 cl_kernel getKernelByName(struct ClContext* context, const char* name)
 {
     struct cl_kernel_list** listRef = &context->kernels;
@@ -77,6 +80,7 @@ cl_kernel getKernelByName(struct ClContext* context, const char* name)
     return (*listRef)->kernel;
 }
 
+// Sets the specified kernel's arg
 int setKernelArg(struct ClContext* context, const char* kernel,
         cl_uint index, void* arg, size_t argsize)
 {
@@ -86,6 +90,7 @@ int setKernelArg(struct ClContext* context, const char* kernel,
     return 0;
 }
 
+// Calls a kernel
 int invokeKernel(struct ClContext* context, struct Interop interop,
         const char* kernel, size_t invokeSize[2])
 {

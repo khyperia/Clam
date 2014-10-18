@@ -53,7 +53,7 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
         }
         if (arglen == 0)
             break;
-        else if (arglen == -1)
+        else if (arglen == -1) // Special code for memory argument
         {
             int bufferName = 0;
             if (PrintErr(recv_p(socketFd, &bufferName, sizeof(int))))
@@ -74,7 +74,7 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
                 return -1;
             }
         }
-        else if (arglen == -2)
+        else if (arglen == -2) // Special code for x/y/width/height
         {
             if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
                             &screenPos.x, sizeof(int))))

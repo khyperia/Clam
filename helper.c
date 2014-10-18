@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+// getenv with a default value
 const char* sgetenv(const char* name, const char* defaultValue)
 {
     const char* result = getenv(name);
@@ -25,6 +26,7 @@ char* my_strdup(const char* str)
     return ret;
 }
 
+// Reads an entire binary file
 char* readWholeFile(const char* filename)
 {
     FILE* f = fopen(filename, "rb");
@@ -46,6 +48,7 @@ char* readWholeFile(const char* filename)
     return string;
 }
 
+// Malloc with an exit() safeguard for out-of-memory
 void* malloc_s(size_t size)
 {
     void* result = malloc(size);
