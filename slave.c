@@ -1,5 +1,6 @@
 #include <GL/glut.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include "helper.h"
@@ -102,11 +103,16 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    int isFullscreen = !strcmp(sgetenv("CLAM2_FULLSCREEN", "false"), "true");
+
     glutInit(&argc, argv);
     glutInitWindowSize(screenPos.width, screenPos.height);
     glutInitWindowPosition(winX, winY);
     glutInitDisplayMode(GLUT_DOUBLE);
     glutCreateWindow("Clam2 Slave");
+
+    if (isFullscreen)
+        glutFullScreen();
 
     if (PrintErr(newInterop(&interop)))
     {
