@@ -4,7 +4,7 @@
 #define FoldingLimit 1.0
 #define FixedRadius2 1.0
 #define MinRadius2 0.125
-#define Saturation 0.2
+#define Saturation 0.4
 #define HueVariance 2
 #define Reflectivity 1.0
 #define ColorBias 0.0,0.0,0.0
@@ -26,5 +26,5 @@
 #define AmbientBrightness 0.7,0.7,1.0
 #define LightPos 5
 #define LightSize 0.2
-#define FogDensity 5
+#define FogDensity 2
 #define FogColor 0.7

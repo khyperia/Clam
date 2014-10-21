@@ -186,12 +186,14 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand, int* is
         distance = De(origin + direction * totalDistance) * DeMultiplier;
         totalDistance += distance;
 
-        float density = pow(FogDensity, -distance);
-        float backstep = (Rand(rand) - density) / (1 - density);
-        if (backstep > 0)
+        // Fog. This code is magical mathematics.
+        float density = exp(-(float)(FogDensity) * distance);
+        float random = Rand(rand);
+        if (random > density)
         {
             *isFog = 1;
-            return totalDistance - distance * backstep;
+            float backstep = -log(random) / (float)(FogDensity);
+            return totalDistance - backstep;
         }
     }
     *isFog = 0;
@@ -290,6 +292,8 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
             float3 normal = Normal(newRayPos);
             newRayDir = Cone(normal, 3.1415926535 / 2, rand);
 
+            // Should be in BRDF, but because both direct lighting and reflection use it,
+            // we apply the result beforehand to cache it
             color *= DeColor(newRayPos);
 
             if (reachesLightsource)
@@ -297,8 +301,6 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
                 // TODO: Not sure how to integrate direct light sampling
                 // Currently sort of approximating as if the material itself is giving off light
                 // (Le in the rendering equation)
-                // This produces wonkyness in the BRDF function,
-                // so I put DeColor before this because it seems logical (it should be in BRDF)
                 float3 distToLightsource2Vec = newRayPos - lightPos;
                 float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
                 distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
