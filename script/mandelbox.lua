@@ -26,16 +26,18 @@ mkbuffer(1, 0) -- RNG buffer
 
 function screenshot(bufferIndex, frame, width, height, numframes)
     mkbuffer(bufferIndex, width * height * 4 * 4)
+    mkbuffer(bufferIndex + 1, width * height * 4 * 4)
     for i=0,numframes do
-        kernel("Main", width, height, tostring(bufferIndex),
-        {math.floor(-width / 2)}, {math.floor(-height / 2)}, {width}, {height},
-        frame.pos[1], frame.pos[2], frame.pos[3],
-        frame.look[1], frame.look[2], frame.look[3],
-        frame.up[1], frame.up[2], frame.up[3],
-        frame.fov / width, frame.focalDistance, i)
+        kernel("Main", width, height, tostring(bufferIndex), tostring(bufferIndex + 1),
+            {math.floor(-width / 2)}, {math.floor(-height / 2)}, {width}, {height},
+            frame.pos[1], frame.pos[2], frame.pos[3],
+            frame.look[1], frame.look[2], frame.look[3],
+            frame.up[1], frame.up[2], frame.up[3],
+            frame.fov / width, frame.focalDistance, i)
         print((i / numframes * 100), "% done")
     end
     dlbuffer(bufferIndex, width)
+    rmbuffer(bufferIndex + 1)
     rmbuffer(bufferIndex)
 end
 

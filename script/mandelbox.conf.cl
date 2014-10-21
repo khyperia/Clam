@@ -22,6 +22,9 @@
 #define SpecularBrightness 3
 #define LightBrightnessMultiplier 20
 #define LightBrightness 1.0,0.7,0.7
-#define AmbientBrightness 0.3,0.3,0.5
+#define AmbientBrightnessMultiplier 0.8
+#define AmbientBrightness 0.7,0.7,1.0
 #define LightPos 5
 #define LightSize 0.2
+#define FogDensity 5
+#define FogColor 0.7

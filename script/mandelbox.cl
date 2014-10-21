@@ -177,7 +177,7 @@ float3 Normal(float3 pos) {
     ));
 }
 
-float Trace(float3 origin, float3 direction, float quality, ulong* rand)
+float Trace(float3 origin, float3 direction, float quality, ulong* rand, int* isFog)
 {
     float distance = 1.0;
     float totalDistance = 0.0;
@@ -185,7 +185,16 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand)
              distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
         totalDistance += distance;
+
+        float density = pow(FogDensity, -distance);
+        float backstep = (Rand(rand) - density) / (1 - density);
+        if (backstep > 0)
+        {
+            *isFog = 1;
+            return totalDistance - distance * backstep;
+        }
     }
+    *isFog = 0;
     return totalDistance;
 }
 
@@ -239,46 +248,73 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
     // that is, "why not another number? This one is arbitrary" (pun sort of intended)
     float3 color = (float3)(1);
     float3 total = (float3)(0);
+    int isFog;
     for (int i = 0; i < NumRayBounces; i++)
     {
-        float distanceTraveled = Trace(rayPos, rayDir, i==0?QualityFirstRay:QualityRestRay, rand);
+        float distanceTraveled = Trace(rayPos, rayDir, i==0?QualityFirstRay:QualityRestRay,
+            rand, &isFog);
 
         if (distanceTraveled > MaxRayDist)
         {
-            total += color * (float3)(AmbientBrightness);
+            isFog = 1;
             break;
         }
 
         float3 newRayPos = rayPos + rayDir * distanceTraveled;
-        float3 normal = Normal(newRayPos);
-        float3 newRayDir = Cone(normal, 3.1415926535 / 2, rand);
-
-        color *= DeColor(newRayPos);
+        float3 newRayDir;
 
         float3 lightPos = (float3)(LightPos) + (float3)(LightSize) *
             ((float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1);
 
-        if (Reaches(newRayPos, lightPos))
+        int reachesLightsource = Reaches(newRayPos, lightPos);
+
+        if (isFog)
         {
-            // TODO: Not sure how to integrate direct light sampling
-            // Currently sort of approximating as if the material itself is giving off light
-            // (Le in the rendering equation)
-            // This produces wonkyness in the BRDF function,
-            // so I put DeColor before this because it seems logical (it should be in BRDF)
-            float3 distToLightsource2Vec = newRayPos - lightPos;
-            float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
-            distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
-            float3 light = (float3)(LightBrightness) * LightBrightnessMultiplier;
-            float bdrf = BRDF(newRayPos, normal, normalize(lightPos - newRayPos), -rayDir);
-            float weak = WeakeningFactor(normal, -rayDir);
-            total += weak / distanceToLightsource2 * bdrf * light * color;
+            do
+            {
+                newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
+            } while (dot(newRayDir, newRayDir) > 1);
+            newRayDir = normalize(newRayDir);
+            if (reachesLightsource)
+            {
+                float3 distToLightsource2Vec = newRayPos - lightPos;
+                float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
+                distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
+                total += color * (float3)(LightBrightness) * LightBrightnessMultiplier
+                    / distanceToLightsource2;
+            }
+            color *= (float3)(FogColor);
         }
+        else
+        {
+            float3 normal = Normal(newRayPos);
+            newRayDir = Cone(normal, 3.1415926535 / 2, rand);
 
-        color *= BRDF(newRayPos, normal, newRayDir, -rayDir) * WeakeningFactor(normal, newRayDir);
+            color *= DeColor(newRayPos);
 
+            if (reachesLightsource)
+            {
+                // TODO: Not sure how to integrate direct light sampling
+                // Currently sort of approximating as if the material itself is giving off light
+                // (Le in the rendering equation)
+                // This produces wonkyness in the BRDF function,
+                // so I put DeColor before this because it seems logical (it should be in BRDF)
+                float3 distToLightsource2Vec = newRayPos - lightPos;
+                float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
+                distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
+                float3 light = (float3)(LightBrightness) * LightBrightnessMultiplier;
+                float bdrf = BRDF(newRayPos, normal, normalize(lightPos - newRayPos), -rayDir);
+                float weak = WeakeningFactor(normal, -rayDir);
+                total += weak / distanceToLightsource2 * bdrf * light * color;
+            }
+
+            color *= BRDF(newRayPos, normal, newRayDir, -rayDir) * WeakeningFactor(normal, newRayDir);
+        }
         rayPos = newRayPos;
         rayDir = newRayDir;
     }
+    if (isFog)
+        total += color * (float3)(AmbientBrightness) * AmbientBrightnessMultiplier;
     return total;
 }
 
