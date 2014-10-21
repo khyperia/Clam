@@ -28,3 +28,5 @@
 #define LightSize 0.2
 #define FogDensity 2
 #define FogColor 0.7
+#define FogReflectance 0.1
+#define FogAntiScattering 0.5

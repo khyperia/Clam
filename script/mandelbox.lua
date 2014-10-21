@@ -1,6 +1,14 @@
 require("math")
 require("script/vector")
 
+function table.shallow_copy(t)
+  local t2 = {}
+  for k,v in pairs(t) do
+    t2[k] = v
+  end
+  return t2
+end
+
 -- TODO: Make this dynamic
 AssumedScreenWidth = 1024
 
@@ -34,7 +42,7 @@ function screenshot(bufferIndex, frame, width, height, numframes)
             frame.look[1], frame.look[2], frame.look[3],
             frame.up[1], frame.up[2], frame.up[3],
             frame.fov / width, frame.focalDistance, i)
-        print((i / numframes * 100), "% done")
+        --print((i / numframes * 100), "% done")
     end
     dlbuffer(bufferIndex, width)
     rmbuffer(bufferIndex + 1)
@@ -43,16 +51,16 @@ end
 
 function video(frames)
     function videoFrameAt(time)
-        fractional = time % 1
-        whole = math.floor(time)
-        frame1 = frames[whole]
-        frame2 = frames[whole + 1]
+        local fractional = time % 1
+        local whole = math.floor(time)
+        local frame1 = frames[whole]
+        local frame2 = frames[whole + 1]
         if frame1 == nil or frame2 == nil then
             return nil
         end
-        frame0 = frames[whole - 1]
+        local frame0 = frames[whole - 1]
         if frame0 == nil then frame0 = frame1 end
-        frame3 = frames[whole + 2]
+        local frame3 = frames[whole + 2]
         if frame3 == nil then frame3 = frame2 end
         return {
             pos = catmullRom(frame0.pos, frame1.pos, frame2.pos, frame3.pos, fractional),
@@ -70,7 +78,7 @@ function video(frames)
             print("Frame nil, breaking")
             break
         end
-        screenshot(frameIndex + 2, frame, 800, 500, 10)
+        screenshot(frameIndex + 2, frame, 800, 500, 20)
         print("Took frame", frameIndex)
         frameIndex = frameIndex + 1
     end
@@ -125,7 +133,7 @@ function update(time)
         while frames[index] ~= nil do
             index = index + 1
         end
-        frames[index] = frame
+        frames[index] = table.shallow_copy(frame)
         print("Added frame", index)
     end
     if iskeydown("v") then

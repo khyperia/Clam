@@ -276,14 +276,15 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
             {
                 newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
             } while (dot(newRayDir, newRayDir) > 1);
+            newRayDir += rayDir * (float)FogAntiScattering;
             newRayDir = normalize(newRayDir);
             if (reachesLightsource)
             {
                 float3 distToLightsource2Vec = newRayPos - lightPos;
                 float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
                 distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
-                total += color * (float3)(LightBrightness) * LightBrightnessMultiplier
-                    / distanceToLightsource2;
+                total += (float)FogReflectance * color * (float3)(LightBrightness)
+                    * LightBrightnessMultiplier / distanceToLightsource2;
             }
             color *= (float3)(FogColor);
         }
