@@ -148,6 +148,7 @@ int messageRmBuffer(struct Interop* interop, int socketFd)
 }
 
 // Protocol gets weird here, since we're sending data back
+// TODO: This breaks CLAM2_UNSAFE_DELAY_FRAMES (aka the above comment is why it's unsafe)
 int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
 {
     int bufferId = 0;
