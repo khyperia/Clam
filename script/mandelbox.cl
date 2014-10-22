@@ -27,13 +27,13 @@ float3 RayDir(float3 look, float3 up, float2 screenCoords, float fov)
     return direction;
 }
 
-float De(float3 z)
+float De(float3 z3d)
 {
-#ifndef JuliaCenter
-    float3 offset = z;
-#else
-    float3 offset = (float3)(JuliaCenter);
-#endif
+    // Note: Transform4D *must* be an orthonormal matrix, otherwise the De property doesn't hold
+    float4 z = z3d.x * (float4)(Transform4Dx) +
+                z3d.y * (float4)(Transform4Dy) +
+                z3d.z * (float4)(Transform4Dz);
+    float4 offset = z;
     float dz = 1.0;
     for (int n = 0; n < MaxIters; n++) {
         z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0 - z;
@@ -91,16 +91,15 @@ float3 HSVtoRGB(float h, float s, float v)
     }
 }
 
-float3 DeColor(float3 z)
+float3 DeColor(float3 z3d)
 {
-#if !defined(JuliaCenter)
-    float3 offset = z;
-#else
-    float3 offset = (float3)(JuliaCenter);
-#endif
+    float4 z = z3d.x * (float4)(Transform4Dx) +
+                z3d.y * (float4)(Transform4Dy) +
+                z3d.z * (float4)(Transform4Dz);
+    float4 offset = z;
     float hue = 0.0;
     for (int n = 0; n < MaxIters; n++) {
-        float3 zOld = z;
+        float4 zOld = z;
         z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0 - z;
         zOld -= z;
         if (dot(zOld, zOld) < 0.01)
@@ -202,6 +201,9 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand, int* is
 
 int Reaches(float3 source, float3 dest)
 {
+    // Spotlight
+    //if (dot(normalize(source - dest), normalize((float3)(-1,0,-1))) < cos(0.05))
+    //    return 0;
     float3 direction = dest - source;
     float len = length(direction);
     direction /= len;
@@ -297,11 +299,13 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
             // we apply the result beforehand to cache it
             color *= DeColor(newRayPos);
 
+            // Code inside this if block is weird. I think it's correct, but I can't prove it
+            // with math to be sure.
+            // What remains is proving that having a 50% chance of shooting a ray at the
+            // lightsource as bias is OK statistically.
+            // Might be okay since lightsource is zero size. (0 * infinity = sane number?)
             if (reachesLightsource)
             {
-                // TODO: Not sure how to integrate direct light sampling
-                // Currently sort of approximating as if the material itself is giving off light
-                // (Le in the rendering equation)
                 float3 distToLightsource2Vec = newRayPos - lightPos;
                 float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
                 distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
