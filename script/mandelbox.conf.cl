@@ -1,8 +1,8 @@
 #define MaxIters 64
 #define Bailout 128
-#define Transform4Dx -0.5,0.5,0.5,0.5
-#define Transform4Dy 0.5,-0.5,0.5,0.5
-#define Transform4Dz 0.5,0.5,-0.5,0.5
+#define Transform4Dx 1,0,0,0
+#define Transform4Dy 0,1,0,0
+#define Transform4Dz 0,0,1,0
 #define Scale -2.0
 #define FoldingLimit 1.0
 #define FixedRadius2 1.0
@@ -19,11 +19,11 @@
 #define MaxRaySteps 256
 #define DirectLightingMaxSteps 64
 #define NumRayBounces 2
-#define QualityFirstRay 5000
-#define QualityRestRay 100
+#define QualityFirstRay 500
+#define QualityRestRay 10
 #define SpecularSize 0.4
 #define SpecularBrightness 3
-#define LightBrightnessMultiplier 10
+#define LightBrightnessMultiplier 40
 #define LightBrightness 1.0,0.5,0.3
 #define AmbientBrightnessMultiplier 0.8
 #define AmbientBrightness 0.7,0.7,1.0
