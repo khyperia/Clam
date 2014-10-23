@@ -51,6 +51,7 @@ float3 Iterate(float2 z)
 __kernel void main(__global float4* screen,
     int sx, int sy, int width, int height,
     float offsetX, float offsetY, float zoom,
+    float juliaX, float juliaY,
     int frame)
 {
     int x = get_global_id(0);
@@ -64,7 +65,7 @@ __kernel void main(__global float4* screen,
         + (float2)(Rand(&seed), Rand(&seed)) * 1.1;
     coords = coords * zoom + (float2)(offsetX, offsetY);
 
-    float3 color = Iterate(coords);
+    float3 color = juliaX == 0 && juliaY == 0 ? Iterate(coords) : IterateAlt(coords, (float2)(juliaX, juliaY));
 
     float3 prev = screen[y * width + x].xyz;
     if (frame != 0)
