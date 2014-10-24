@@ -97,10 +97,10 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-512-512");
-    if (sscanf(renderpos, "%d%d", &screenPos.x, &screenPos.y) != 2)
+    const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-512,-512");
+    if (sscanf(renderpos, "%d,%d", &screenPos.x, &screenPos.y) != 2)
     {
-        puts("CLAM2_RENDERPOS not in correct format ([+-]OFFX[+-]OFFY). Exiting.");
+        puts("CLAM2_RENDERPOS not in correct format ([+-]OFFX,[+-]OFFY). Exiting.");
         return EXIT_FAILURE;
     }
 

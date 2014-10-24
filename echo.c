@@ -112,6 +112,9 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
+        printf("Echo: Got connection, routing to %s:%s\n",
+                argv[slaveIndex * 2 + 2], argv[slaveIndex * 2 + 3]);
+
         // get the outgoing connection
         int slave = connectSocket(argv[slaveIndex * 2 + 2], argv[slaveIndex * 2 + 3]);
         if (slave == -1)

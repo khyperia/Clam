@@ -37,14 +37,19 @@ int connectSocket(const char* host, const char* port)
     struct addrinfo* addr = NULL;
     for (addr = servinfo; addr != NULL; addr = addr->ai_next)
     {
-        if ((sock = socket(addr->ai_family,
-                        addr->ai_socktype | SOCK_CLOEXEC, addr->ai_protocol)) == -1)
+        if ((sock = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol)) == -1)
         {
             perror("socket()");
             continue;
         }
         if (host == NULL)
         {
+            int theTrue = 1;
+            if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &theTrue, sizeof(theTrue)))
+            {
+                perror("setsockopt()");
+                continue;
+            }
             if (bind(sock, addr->ai_addr, addr->ai_addrlen) == -1)
             {
                 perror("bind()");
