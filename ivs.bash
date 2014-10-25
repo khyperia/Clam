@@ -3,13 +3,10 @@ IVS_USER="$USER"
 IVS_HOSTNAME="127.0.0.1"
 IVS_TEMP_DIR="/home/${IVS_USER}/temp-clam2"
 ECHO_LISTEN_PORT=23456
+# Ports required in IP address
 ECHO_CONNECT_TO=127.0.0.1:23448\ 127.0.0.1:23449\ 127.0.0.1:23450\ 127.0.0.1:23451\ 127.0.0.1:23452\ 127.0.0.1:23453\ 127.0.0.1:23454\ 127.0.0.1:23455
 SCREENWIDTH=500
 SCREENHEIGHT=300
-
-CLAM2_SLAVES=$(printf "~%s" $(printf "${IVS_HOSTNAME}:${ECHO_LISTEN_PORT} %.0s" {1..8}))
-export CLAM2_SLAVES=${CLAM2_SLAVES:1}
-ECHO_ARGS=$ECHO_LISTEN_PORT\ ${ECHO_CONNECT_TO//:/ }
 
 MAX_SCREENCOORDS_X=2
 MAX_SCREENCOORDS_Y=4
@@ -39,15 +36,27 @@ function getScreenCoords() {
         127.0.0.1:23455)
             echo 1 3
             ;;
+        *)
+            echo 0 0
+            return 1
+            ;;
     esac
 }
 
+ECHO_CONNECT_TO_TEMP_ARR=(${ECHO_CONNECT_TO})
+CLAM2_SLAVES=$(printf "~%s" $(printf "${IVS_HOSTNAME}:${ECHO_LISTEN_PORT} %.0s" $(seq ${#ECHO_CONNECT_TO_TEMP_ARR[@]})))
+export CLAM2_SLAVES=${CLAM2_SLAVES:1}
+ECHO_ARGS=$ECHO_LISTEN_PORT\ ${ECHO_CONNECT_TO//:/ }
+
 trap 'cleanup' ERR
 trap 'cleanup' INT
-cleanup() {
-    echo 'Cleaning up'
+cleanupNoexit() {
     rm ./.temp-clam2-ssh-socket
     kill -TERM `jobs -p` &> /dev/null
+}
+cleanup() {
+    echo 'Cleaning up'
+    cleanupNoexit
     exit 1
 }
 
@@ -103,7 +112,7 @@ printMessage "Connected to IVS."
 
 # Create an ssh command with appropriate arguments that we can use
 # repeatedly to run programs on IVS. 
-SSH_CMD="ssh -t -t -x -S ./.temp-clam2-ssh-socket ${IVS_USER}@${IVS_HOSTNAME}"
+SSH_CMD="ssh -q -t -t -x -S ./.temp-clam2-ssh-socket ${IVS_USER}@${IVS_HOSTNAME}"
 
 printMessage "Creating $IVS_TEMP_DIR on IVS"
 ${SSH_CMD} mkdir -p "$IVS_TEMP_DIR"
@@ -126,7 +135,6 @@ for slave in $ECHO_CONNECT_TO; do
     screenY=$(bc <<< "$SCREENHEIGHT * ${xyArr[1]}")
     renderposX=$(bc <<< "$SCREENWIDTH * ${xyArr[0]} - $SCREENWIDTH * $MAX_SCREENCOORDS_X / 2")
     renderposY=$(bc <<< "$SCREENHEIGHT * ${xyArr[1]} - $SCREENHEIGHT * $MAX_SCREENCOORDS_Y / 2")
-    # TODO: check if port actually has :number
     port=(${slave//:/ })
     tile=${port[0]}
     port=${port[1]}
@@ -138,12 +146,14 @@ export CLAM2_PORT=${port}
 export DISPLAY=:0.0
 ./bin/clam2_slave"
     
-    printMessage "Booting slave ${tile}: ${renderposX},${renderposY}" 
+    printMessage "Running slave slave ${tile} at coordinates ${renderposX},${renderposY}"
     ${SSH_CMD} "ssh -t ${tile} \"${RUN_ON_TILE}\"" &
 done
 
+echo "Waiting a second for slaves to boot"
 sleep 1
 
+printMessage "Running master on localhost"
 ./bin/clam2_master $1
 
 # Loop until all jobs are completed. If there is only one job
@@ -154,7 +164,7 @@ while (( 1 )); do
     jobs
     if [[ `jobs | wc -l` -lt 2 ]]; then
 	    printMessage "Looks like everything finished successfully, cleaning up..."
-	    cleanup
+	    cleanupNoexit
 	    exit 0
     fi
 done

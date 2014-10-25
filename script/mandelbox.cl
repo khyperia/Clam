@@ -201,9 +201,10 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand, int* is
 
 int Reaches(float3 source, float3 dest)
 {
-    // Spotlight
-    //if (dot(normalize(source - dest), normalize((float3)(-1,0,-1))) < cos(0.05))
-    //    return 0;
+#ifdef Spotlight
+    if (dot(normalize(source - dest), normalize((float3)(Spotlight))) < cos(SpotlightAngle))
+        return 0;
+#endif
     float3 direction = dest - source;
     float len = length(direction);
     direction /= len;
@@ -302,7 +303,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
             // Code inside this if block is weird. I think it's correct, but I can't prove it
             // with math to be sure.
             // What remains is proving that having a 50% chance of shooting a ray at the
-            // lightsource as bias is OK statistically.
+            // lightsource as bias is OK statistically. (In reality we duplicate the ray)
             // Might be okay since lightsource is zero size. (0 * infinity = sane number?)
             if (reachesLightsource)
             {

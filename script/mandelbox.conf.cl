@@ -27,9 +27,11 @@
 #define LightBrightness 1.0,0.5,0.3
 #define AmbientBrightnessMultiplier 0.8
 #define AmbientBrightness 0.7,0.7,1.0
-#define LightPos 5,0,5
-#define LightSize 0.01
+#define LightPos 5
+#define LightSize 0.2
+#define Spotlight -1,-1,-1
+#define SpotlightAngle 0.4
 #define FogDensity 0.1
 #define FogColor 0.7
 #define FogReflectance 0.3
-#define FogAntiScattering 0.5
+#define FogAntiScattering 0.2
