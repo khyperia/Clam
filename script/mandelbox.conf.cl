@@ -1,4 +1,4 @@
-#define MaxIters 64
+#define MaxIters 32
 #define Bailout 128
 #define Transform4Dx 1,0,0,0
 #define Transform4Dy 0,1,0,0
@@ -14,12 +14,11 @@
 #define RandSeedInitSteps 128
 #define DeMultiplier 0.95
 #define DofPickup 0.005
-#define MotionBlur 0.0,0.0,0.0
 #define MaxRayDist 64
 #define MaxRaySteps 256
 #define DirectLightingMaxSteps 64
 #define NumRayBounces 2
-#define QualityFirstRay 2000
+#define QualityFirstRay 0.5
 #define QualityRestRay 64
 #define SpecularSize 0.4
 #define SpecularBrightness 3

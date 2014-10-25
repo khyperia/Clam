@@ -104,23 +104,23 @@ function update(time)
     end
     if iskeydown("1") then
         unsetkey("1")
-        screenshot(2, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 200)
+        screenshot(2, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 500)
     end
     if iskeydown("2") then
         unsetkey("2")
-        screenshot(2, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 200)
+        screenshot(2, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 500)
     end
     if iskeydown("3") then
         unsetkey("3")
-        screenshot(2, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 200)
+        screenshot(2, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 500)
     end
     if iskeydown("4") then
         unsetkey("4")
-        screenshot(2, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 200)
+        screenshot(2, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 500)
     end
     if iskeydown("5") then
         unsetkey("5")
-        screenshot(2, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 200)
+        screenshot(2, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 1000)
     end
     if iskeydown("x") then
         unsetkey("x")

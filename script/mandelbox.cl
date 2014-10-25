@@ -29,10 +29,10 @@ float3 RayDir(float3 look, float3 up, float2 screenCoords, float fov)
 
 float De(float3 z3d)
 {
-    // Note: Transform4D *must* be an orthonormal matrix, otherwise the De property doesn't hold
-    float4 z = z3d.x * (float4)(Transform4Dx) +
-                z3d.y * (float4)(Transform4Dy) +
-                z3d.z * (float4)(Transform4Dz);
+    // Note: Transform4D *must* be an orthogonal matrix, otherwise the De property doesn't hold
+    float4 z = z3d.x * normalize((float4)(Transform4Dx)) +
+                z3d.y * normalize((float4)(Transform4Dy)) +
+                z3d.z * normalize((float4)(Transform4Dz));
     float4 offset = z;
     float dz = 1.0;
     for (int n = 0; n < MaxIters; n++) {
@@ -93,9 +93,9 @@ float3 HSVtoRGB(float h, float s, float v)
 
 float3 DeColor(float3 z3d)
 {
-    float4 z = z3d.x * (float4)(Transform4Dx) +
-                z3d.y * (float4)(Transform4Dy) +
-                z3d.z * (float4)(Transform4Dz);
+    float4 z = z3d.x * normalize((float4)(Transform4Dx)) +
+                z3d.y * normalize((float4)(Transform4Dy)) +
+                z3d.z * normalize((float4)(Transform4Dz));
     float4 offset = z;
     float hue = 0.0;
     for (int n = 0; n < MaxIters; n++) {
@@ -151,14 +151,6 @@ void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
     float2 offset = RandCircle(rand);
     *lookat = normalize(*lookat + offset.x * DofPickup * xShift + offset.y * DofPickup * yShift);
     *position = focalPosition - *lookat * focalPlane;
-}
-
-void ApplyMotionBlur(float3* position, float3 lookat, float3 up, float focalDistance, ulong* rand)
-{
-    float amount = Rand(rand) * 2 - 1;
-    float3 right = cross(lookat, up);
-    float3 motionBlur = (float3)(MotionBlur) * focalDistance * amount;
-    *position += motionBlur.x * right + motionBlur.y * up + motionBlur.z * lookat;
 }
 
 float3 Normal(float3 pos) {
@@ -247,7 +239,7 @@ float WeakeningFactor(float3 normal, float3 incoming)
     return dot(normal, incoming);
 }
 
-float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
+float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, ulong* rand)
 {
     // not entirely too sure why I need the 1 constant here
     // that is, "why not another number? This one is arbitrary" (pun sort of intended)
@@ -256,8 +248,8 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, ulong* rand)
     int isFog;
     for (int i = 0; i < NumRayBounces; i++)
     {
-        float distanceTraveled = Trace(rayPos, rayDir, i==0?QualityFirstRay:QualityRestRay,
-            rand, &isFog);
+        float distanceTraveled = Trace(rayPos, rayDir,
+                i==0?QualityFirstRay*qualityMul:QualityRestRay, rand, &isFog);
 
         if (distanceTraveled > MaxRayDist)
         {
@@ -357,13 +349,12 @@ __kernel void Main(__global float4* screen,
         rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
     }
 
-    ApplyDof(&pos, &look, focalDistance, &rand);
-    ApplyMotionBlur(&pos, look, up, focalDistance, &rand);
-
     float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
     float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-    float3 color = RenderingEquation(pos, rayDir, &rand);
+    ApplyDof(&pos, &rayDir, focalDistance, &rand);
+
+    float3 color = RenderingEquation(pos, rayDir, 1 / fov, &rand);
 
     int screenIndex = y * width + x;
     if (frame > 0)
