@@ -4,16 +4,16 @@ float3 Rotate(float3 u, float theta, float3 vec)
     float cost1 = 1 - cost;
     float sint = sin(theta);
     return (float3)(
-        (cost + u.x * u.x * cost1) * vec.x +
-        (u.x * u.y * cost1 - u.z * sint) * vec.y +
-        (u.x * u.z * cost1 + u.y * sint) * vec.z,
-        (u.y * u.x * cost1 + u.z * sint) * vec.x +
-        (cost + u.y * u.y * cost1) * vec.y +
-        (u.y * u.z * cost1 - u.x * sint) * vec.z,
-        (u.z * u.x * cost1 - u.y * sint) * vec.x +
-        (u.z * u.y * cost1 + u.x * sint) * vec.y +
-        (cost + u.z * u.z * cost1) * vec.z
-    );
+            (cost + u.x * u.x * cost1) * vec.x +
+            (u.x * u.y * cost1 - u.z * sint) * vec.y +
+            (u.x * u.z * cost1 + u.y * sint) * vec.z,
+            (u.y * u.x * cost1 + u.z * sint) * vec.x +
+            (cost + u.y * u.y * cost1) * vec.y +
+            (u.y * u.z * cost1 - u.x * sint) * vec.z,
+            (u.z * u.x * cost1 - u.y * sint) * vec.x +
+            (u.z * u.y * cost1 + u.x * sint) * vec.y +
+            (cost + u.z * u.z * cost1) * vec.z
+            );
 }
 
 float3 RayDir(float3 look, float3 up, float2 screenCoords, float fov)
@@ -31,8 +31,8 @@ float De(float3 z3d)
 {
     // Note: Transform4D *must* be an orthogonal matrix, otherwise the De property doesn't hold
     float4 z = z3d.x * normalize((float4)(Transform4Dx)) +
-                z3d.y * normalize((float4)(Transform4Dy)) +
-                z3d.z * normalize((float4)(Transform4Dz));
+        z3d.y * normalize((float4)(Transform4Dy)) +
+        z3d.z * normalize((float4)(Transform4Dz));
     float4 offset = z;
     float dz = 1.0;
     for (int n = 0; n < MaxIters; n++) {
@@ -94,8 +94,8 @@ float3 HSVtoRGB(float h, float s, float v)
 float3 DeColor(float3 z3d)
 {
     float4 z = z3d.x * normalize((float4)(Transform4Dx)) +
-                z3d.y * normalize((float4)(Transform4Dy)) +
-                z3d.z * normalize((float4)(Transform4Dz));
+        z3d.y * normalize((float4)(Transform4Dy)) +
+        z3d.z * normalize((float4)(Transform4Dz));
     float4 offset = z;
     float hue = 0.0;
     for (int n = 0; n < MaxIters; n++) {
@@ -154,7 +154,6 @@ void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
 }
 
 float3 Normal(float3 pos) {
-    // TODO: Evaluate the value of delta. The 2 fixes things and I don't know why.
     const float delta = FLT_EPSILON * 2;
     float dppn = De(pos + (float3)(delta, delta, -delta));
     float dpnp = De(pos + (float3)(delta, -delta, delta));
@@ -162,18 +161,35 @@ float3 Normal(float3 pos) {
     float dnnn = De(pos + (float3)(-delta, -delta, -delta));
 
     return normalize((float3)(
-        (dppn + dpnp) - (dnpp + dnnn),
-        (dppn + dnpp) - (dpnp + dnnn),
-        (dpnp + dnpp) - (dppn + dnnn)
-    ));
+                (dppn + dpnp) - (dnpp + dnnn),
+                (dppn + dnpp) - (dpnp + dnnn),
+                (dpnp + dnpp) - (dppn + dnnn)
+                ));
 }
 
-float Trace(float3 origin, float3 direction, float quality, ulong* rand, int* isFog)
+float RaySphereIntersection(float3 rayOrigin, float3 rayDir, float3 sphereCenter, float sphereSize)
+{
+    float3 omC = rayOrigin - sphereCenter;
+    float lDotOmC = dot(rayDir, omC);
+    float underSqrt = lDotOmC * lDotOmC - dot(omC, omC) + sphereSize * sphereSize;
+    if (underSqrt < 0)
+        return FLT_MAX;
+    float dist = -lDotOmC - sqrt(underSqrt);
+    if (dist <= 0)
+        return FLT_MAX;
+    return dist;
+}
+
+float Trace(float3 origin, float3 direction, float quality, ulong* rand,
+        int* isFog, int* hitLightsource)
 {
     float distance = 1.0;
     float totalDistance = 0.0;
-    for (int i = 0; i < MaxRaySteps && totalDistance < MaxRayDist &&
-             distance * quality > totalDistance; i++) {
+    float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
+    float maxRayDist = min((float)MaxRayDist, sphereDist);
+    *isFog = 0;
+    for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
+            distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
         totalDistance += distance;
 
@@ -184,34 +200,15 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand, int* is
         {
             *isFog = 1;
             float backstep = -log(random) / (float)(FogDensity);
-            return totalDistance - backstep;
+            totalDistance -= backstep;
+            break;
         }
     }
-    *isFog = 0;
+    if (totalDistance > sphereDist)
+        *hitLightsource = 1;
+    else
+        *hitLightsource = 0;
     return totalDistance;
-}
-
-int Reaches(float3 source, float3 dest)
-{
-#ifdef Spotlight
-    if (dot(normalize(source - dest), normalize((float3)(Spotlight))) < cos(SpotlightAngle))
-        return 0;
-#endif
-    float3 direction = dest - source;
-    float len = length(direction);
-    direction /= len;
-    float totalDistance = 0.0;
-    for (int i = 0; i < DirectLightingMaxSteps; i++)
-    {
-        float distance = De(source + direction * totalDistance);
-        totalDistance += distance;
-        if (distance * QualityRestRay < totalDistance)
-            return 0;
-        float3 dist = source + direction * totalDistance - dest;
-        if (totalDistance > len)
-            return 1;
-    }
-    return 0;
 }
 
 float3 Cone(float3 normal, float fov, ulong* rand)
@@ -223,6 +220,64 @@ float3 Cone(float3 normal, float fov, ulong* rand)
         dir = dir2;
     float3 up = cross(cross(normal, normalize(dir)), normal);
     return RayDir(normal, up, RandCircle(rand), fov);
+}
+
+float3 NewRayDir(float3 pos, float3 normal, float* weight, ulong* rand)
+{
+    float3 toLight = (float3)(LightPos) - pos;
+    float toLightLen = length(toLight);
+    toLight /= toLightLen;
+    float angle = asin(LightSize / toLightLen);
+    if (isnan(angle))
+        angle = 1.58;
+    float probLight = angle * angle / 2.5; // TODO
+
+    if (Rand(rand) > 0.5) // TODO
+    {
+        *weight *= probLight;
+        float3 newRayDir = Cone(toLight, angle, rand);
+        if (dot(newRayDir, normal) < 0)
+            *weight = 0;
+        return newRayDir;
+    }
+    else
+    {
+        *weight *= 1 - probLight;
+        float3 newRayDir = Cone(normal, 3.14 / 2, rand);
+        if (dot(newRayDir, toLight) > cos(angle))
+            *weight = 0;
+        return newRayDir;
+    }
+}
+
+float3 NewSphereRayDir(float3 pos, float* weight, ulong* rand)
+{
+    float3 toLight = (float3)(LightPos) - pos;
+    float toLightLen = length(toLight);
+    toLight /= toLightLen;
+    float angle = asin(LightSize / toLightLen);
+    if (isnan(angle))
+        angle = 2.23;
+    float probLight = angle * angle / 5; // TODO
+
+    if (Rand(rand) > 0.5) // TODO
+    {
+        *weight *= probLight;
+        return Cone(toLight, angle, rand);
+    }
+    else
+    {
+        *weight *= 1 - probLight;
+        float3 newRayDir;
+        do
+        {
+            newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
+        } while (dot(newRayDir, newRayDir) > 1);
+        newRayDir = normalize(newRayDir);
+        if (dot(newRayDir, toLight) > cos(angle))
+            *weight = 0;
+        return newRayDir;
+    }
 }
 
 float BRDF(float3 point, float3 normal, float3 incoming, float3 outgoing)
@@ -239,7 +294,7 @@ float WeakeningFactor(float3 normal, float3 incoming)
     return dot(normal, incoming);
 }
 
-float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, ulong* rand)
+float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float* weight, ulong* rand)
 {
     // not entirely too sure why I need the 1 constant here
     // that is, "why not another number? This one is arbitrary" (pun sort of intended)
@@ -248,10 +303,17 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, ulong* 
     int isFog;
     for (int i = 0; i < NumRayBounces; i++)
     {
-        float distanceTraveled = Trace(rayPos, rayDir,
-                i==0?QualityFirstRay*qualityMul:QualityRestRay, rand, &isFog);
+        int hitLightsource;
 
-        if (distanceTraveled > MaxRayDist)
+        float distanceTraveled = Trace(rayPos, rayDir,
+                i==0?QualityFirstRay*qualityMul:QualityRestRay, rand, &isFog, &hitLightsource);
+
+        if (hitLightsource)
+        {
+            total += color * (float3)(LightBrightness) * LightBrightnessMultiplier;
+            break;
+        }
+        if (distanceTraveled >= MaxRayDist)
         {
             isFog = 1;
             break;
@@ -260,55 +322,23 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, ulong* 
         float3 newRayPos = rayPos + rayDir * distanceTraveled;
         float3 newRayDir;
 
-        float3 lightPos = (float3)(LightPos) + (float3)(LightSize) *
-            ((float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1);
-
-        int reachesLightsource = Reaches(newRayPos, lightPos);
-
         if (isFog)
         {
-            do
-            {
-                newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
-            } while (dot(newRayDir, newRayDir) > 1);
-            newRayDir += rayDir * (float)FogAntiScattering;
-            newRayDir = normalize(newRayDir);
-            if (reachesLightsource)
-            {
-                float3 distToLightsource2Vec = newRayPos - lightPos;
-                float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
-                distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
-                total += (float)FogReflectance * color * (float3)(LightBrightness)
-                    * LightBrightnessMultiplier / distanceToLightsource2;
-            }
+            newRayDir = NewSphereRayDir(newRayPos, weight, rand);
+            if (*weight == 0)
+                return total; // doesn't matter anyway
             color *= (float3)(FogColor);
         }
         else
         {
             float3 normal = Normal(newRayPos);
-            newRayDir = Cone(normal, 3.1415926535 / 2, rand);
 
-            // Should be in BRDF, but because both direct lighting and reflection use it,
-            // we apply the result beforehand to cache it
-            color *= DeColor(newRayPos);
+            newRayDir = NewRayDir(newRayPos, normal, weight, rand);
+            if (*weight == 0)
+                return total; // doesn't matter anyway
 
-            // Code inside this if block is weird. I think it's correct, but I can't prove it
-            // with math to be sure.
-            // What remains is proving that having a 50% chance of shooting a ray at the
-            // lightsource as bias is OK statistically. (In reality we duplicate the ray)
-            // Might be okay since lightsource is zero size. (0 * infinity = sane number?)
-            if (reachesLightsource)
-            {
-                float3 distToLightsource2Vec = newRayPos - lightPos;
-                float distanceToLightsource2 = dot(distToLightsource2Vec, distToLightsource2Vec);
-                distanceToLightsource2 += distanceTraveled * distanceTraveled * 0.05;
-                float3 light = (float3)(LightBrightness) * LightBrightnessMultiplier;
-                float bdrf = BRDF(newRayPos, normal, normalize(lightPos - newRayPos), -rayDir);
-                float weak = WeakeningFactor(normal, -rayDir);
-                total += weak / distanceToLightsource2 * bdrf * light * color;
-            }
-
-            color *= BRDF(newRayPos, normal, newRayDir, -rayDir) * WeakeningFactor(normal, newRayDir);
+            color *= DeColor(newRayPos) * BRDF(newRayPos, normal, newRayDir, -rayDir) *
+                WeakeningFactor(normal, newRayDir);
         }
         rayPos = newRayPos;
         rayDir = newRayDir;
@@ -319,12 +349,12 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, ulong* 
 }
 
 __kernel void Main(__global float4* screen,
-    __global uint4* rngBuffer,
-    int screenX, int screenY, int width, int height,
-    float posX, float posY, float posZ,
-    float lookX, float lookY, float lookZ,
-    float upX, float upY, float upZ,
-    float fov, float focalDistance, float frame)
+        __global uint4* rngBuffer,
+        int screenX, int screenY, int width, int height,
+        float posX, float posY, float posZ,
+        float lookX, float lookY, float lookZ,
+        float upX, float upY, float upZ,
+        float fov, float focalDistance, float frame)
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
@@ -354,17 +384,20 @@ __kernel void Main(__global float4* screen,
 
     ApplyDof(&pos, &rayDir, focalDistance, &rand);
 
-    float3 color = RenderingEquation(pos, rayDir, 1 / fov, &rand);
+    float weight = 1;
+    float3 color = RenderingEquation(pos, rayDir, 1 / fov, &weight, &rand);
+    float4 final;
 
     int screenIndex = y * width + x;
-    if (frame > 0)
-    {
-        float3 old = screen[screenIndex].xyz;
-        if (!isnan(old.x) && !isnan(old.y) && !isnan(old.z))
-            color = (color + old * frame) / (frame + 1);
-        else if (isnan(color.x) || isnan(color.y) || isnan(color.z))
-            color = old;
-    }
-    screen[screenIndex] = (float4)(clamp(color, 0.0, 1.0), 1.0);
+    float4 old = screen[screenIndex];
+    if (frame > 0 && old.w + weight > 0)
+        final = (float4)((color * weight + old.xyz * old.w) / (old.w + weight), old.w + weight);
+    else
+        final = (float4)(color, weight);
+    if (isnan(weight))
+        final = (float4)(0,0,1,1000);
+    if (isnan(final.x) || isnan(final.y) || isnan(final.z) || isnan(final.w))
+        final = (float4)(0,1,0,1000);
+    screen[screenIndex] = final;
     rngBuffer[screenIndex].xy = (uint2)((uint)(rand >> 32), (uint)rand);
 }
