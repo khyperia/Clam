@@ -4,10 +4,11 @@ IVS_HOSTNAME="127.0.0.1"
 IVS_TEMP_DIR="/home/${IVS_USER}/temp-clam2"
 ECHO_LISTEN_PORT=23456
 # Ports required in IP address
-ECHO_CONNECT_TO=127.0.0.1:23448\ 127.0.0.1:23449\ 127.0.0.1:23450\ 127.0.0.1:23451\ 127.0.0.1:23452\ 127.0.0.1:23453\ 127.0.0.1:23454\ 127.0.0.1:23455
+ECHO_CONNECT_TO="127.0.0.1:23448 127.0.0.1:23449 127.0.0.1:23450 127.0.0.1:23451 127.0.0.1:23452 127.0.0.1:23453 127.0.0.1:23454 127.0.0.1:23455"
 SCREENWIDTH=500
 SCREENHEIGHT=300
 
+OFFSET_WINDOWS=0
 MAX_SCREENCOORDS_X=2
 MAX_SCREENCOORDS_Y=4
 function getScreenCoords() {
@@ -46,7 +47,7 @@ function getScreenCoords() {
 ECHO_CONNECT_TO_TEMP_ARR=(${ECHO_CONNECT_TO})
 CLAM2_SLAVES=$(printf "~%s" $(printf "${IVS_HOSTNAME}:${ECHO_LISTEN_PORT} %.0s" $(seq ${#ECHO_CONNECT_TO_TEMP_ARR[@]})))
 export CLAM2_SLAVES=${CLAM2_SLAVES:1}
-ECHO_ARGS=$ECHO_LISTEN_PORT\ ${ECHO_CONNECT_TO//:/ }
+ECHO_ARGS="$ECHO_LISTEN_PORT ${ECHO_CONNECT_TO//:/ }"
 
 trap 'cleanup' ERR
 trap 'cleanup' INT
@@ -124,15 +125,15 @@ printMessage "Running sync on IVS"
 ${SSH_CMD} sync
 
 printMessage "Running make bin/clam2_echo on IVS"
-${SSH_CMD} make -C "${IVS_TEMP_DIR}" bin/clam2_echo bin/clam2_slave
+${SSH_CMD} make -C "${IVS_TEMP_DIR}" bin/clam2_echo bin/clam2_slave PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/ LDFLAGS_MASTER=""
 
 printMessage "Running echo server on IVS"
 ${SSH_CMD} "${IVS_TEMP_DIR}/bin/clam2_echo ${ECHO_ARGS}" &
 
 for slave in $ECHO_CONNECT_TO; do
     xyArr=($(getScreenCoords $slave))
-    screenX=$(bc <<< "$SCREENWIDTH * ${xyArr[0]}")
-    screenY=$(bc <<< "$SCREENHEIGHT * ${xyArr[1]}")
+    screenX=$(bc <<< "$OFFSET_WINDOWS * $SCREENWIDTH * ${xyArr[0]}")
+    screenY=$(bc <<< "$OFFSET_WINDOWS * $SCREENHEIGHT * ${xyArr[1]}")
     renderposX=$(bc <<< "$SCREENWIDTH * ${xyArr[0]} - $SCREENWIDTH * $MAX_SCREENCOORDS_X / 2")
     renderposY=$(bc <<< "$SCREENHEIGHT * ${xyArr[1]} - $SCREENHEIGHT * $MAX_SCREENCOORDS_Y / 2")
     port=(${slave//:/ })

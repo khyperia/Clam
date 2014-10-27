@@ -3,17 +3,14 @@ OBJDIR=obj
 BINDIR=bin
 
 WARNINGFLAGS=-Wall -Wextra
-
-# My system doesn't have opencl.pc or glut.pc
 PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua)
-CFLAGS=-g -c -O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
+CFLAGS=-c -O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
 
 LDFLAGS_MASTER=-lglut $(shell pkg-config --libs gl libpng lua)
-LDFLAGS_SLAVE=-lOpenCL -lglut $(shell pkg-config --libs gl)
+LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
 LDFLAGS_ECHO=-lpthread
 
 SOURCES=$(wildcard *.c)
-# OBJECTS=$(patsubst %.c,$(OBJDIR)/%.o,$(SOURCES))
 DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
 
 MASTERFILES=master luaHelper pngHelper socketHelper helper
