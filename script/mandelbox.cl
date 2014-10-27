@@ -230,7 +230,7 @@ float3 NewRayDir(float3 pos, float3 normal, float* weight, ulong* rand)
     float angle = asin(LightSize / toLightLen);
     if (isnan(angle))
         angle = 1.58;
-    float probLight = angle * angle / 2.5; // TODO
+    float probLight = (LightSize * LightSize) / (toLightLen * toLightLen);
 
     if (Rand(rand) > 0.5) // TODO
     {
@@ -258,7 +258,7 @@ float3 NewSphereRayDir(float3 pos, float* weight, ulong* rand)
     float angle = asin(LightSize / toLightLen);
     if (isnan(angle))
         angle = 2.23;
-    float probLight = angle * angle / 5; // TODO
+    float probLight = (LightSize * LightSize) / (toLightLen * toLightLen) / 2;
 
     if (Rand(rand) > 0.5) // TODO
     {
@@ -349,7 +349,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float* 
 }
 
 __kernel void Main(__global float4* screen,
-        __global uint4* rngBuffer,
+        __global uint2* rngBuffer,
         int screenX, int screenY, int width, int height,
         float posX, float posY, float posZ,
         float lookX, float lookY, float lookZ,
@@ -366,17 +366,14 @@ __kernel void Main(__global float4* screen,
     float3 up = (float3)(upX, upY, upZ);
 
     ulong rand;
+    uint2 randBuffer = rngBuffer[y * width + x];
+    rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
+    rand += (ulong)get_global_id(0) + (ulong)get_global_id(1) * get_global_size(0);
     if (frame == 0)
     {
-        rand = (ulong)get_global_id(0) + (ulong)get_global_id(1) * get_global_size(0);
         for (int i = 0; (float)i / RandSeedInitSteps - 1 < Rand(&rand) * RandSeedInitSteps; i++)
         {
         }
-    }
-    else
-    {
-        uint4 randBuffer = rngBuffer[y * width + x];
-        rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
     }
 
     float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
@@ -390,14 +387,14 @@ __kernel void Main(__global float4* screen,
 
     int screenIndex = y * width + x;
     float4 old = screen[screenIndex];
-    if (frame > 0 && old.w + weight > 0)
+    if (frame != 0 && old.w + weight > 0)
         final = (float4)((color * weight + old.xyz * old.w) / (old.w + weight), old.w + weight);
-    else
+    else if (!isnan(color.x) && !isnan(color.y) && !isnan(color.z) && !isnan(weight))
         final = (float4)(color, weight);
-    if (isnan(weight))
-        final = (float4)(0,0,1,1000);
-    if (isnan(final.x) || isnan(final.y) || isnan(final.z) || isnan(final.w))
-        final = (float4)(0,1,0,1000);
+    else if (frame != 0)
+        final = old;
+    else
+        final = (float4)(0);
     screen[screenIndex] = final;
-    rngBuffer[screenIndex].xy = (uint2)((uint)(rand >> 32), (uint)rand);
+    rngBuffer[screenIndex] = (uint2)((uint)(rand >> 32), (uint)rand);
 }

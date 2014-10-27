@@ -3,7 +3,7 @@
 #define Transform4Dx 1,0,0,0
 #define Transform4Dy 0,1,0,0
 #define Transform4Dz 0,0,1,0
-#define Scale -2.0
+#define Scale -1.5
 #define FoldingLimit 1.0
 #define FixedRadius2 1.0
 #define MinRadius2 0.125
@@ -18,7 +18,7 @@
 #define MaxRaySteps 256
 #define DirectLightingMaxSteps 64
 #define NumRayBounces 2
-#define QualityFirstRay 2
+#define QualityFirstRay 1
 #define QualityRestRay 64
 #define SpecularSize 0.4
 #define SpecularBrightness 3
@@ -28,7 +28,5 @@
 #define AmbientBrightness 0.7,0.7,1.0
 #define LightPos 3
 #define LightSize 0.2
-#define Spotlight -1,-1,-1
-#define SpotlightAngle 0.4
-#define FogDensity 0.4
+#define FogDensity 0.1
 #define FogColor 0.9
