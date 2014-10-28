@@ -232,9 +232,9 @@ float3 NewRayDir(float3 pos, float3 normal, float* weight, ulong* rand)
         angle = 1.58;
     float probLight = (LightSize * LightSize) / (toLightLen * toLightLen);
 
-    if (Rand(rand) > 0.5) // TODO
+    if (Rand(rand) < DirectLightProbability)
     {
-        *weight *= probLight;
+        *weight *= probLight / DirectLightProbability;
         float3 newRayDir = Cone(toLight, angle, rand);
         if (dot(newRayDir, normal) < 0)
             *weight = 0;
@@ -242,7 +242,7 @@ float3 NewRayDir(float3 pos, float3 normal, float* weight, ulong* rand)
     }
     else
     {
-        *weight *= 1 - probLight;
+        *weight *= (1 - probLight) / (1 - DirectLightProbability);
         float3 newRayDir = Cone(normal, 3.14 / 2, rand);
         if (dot(newRayDir, toLight) > cos(angle))
             *weight = 0;
@@ -260,14 +260,14 @@ float3 NewSphereRayDir(float3 pos, float* weight, ulong* rand)
         angle = 2.23;
     float probLight = (LightSize * LightSize) / (toLightLen * toLightLen) / 2;
 
-    if (Rand(rand) > 0.5) // TODO
+    if (Rand(rand) < DirectLightProbability)
     {
-        *weight *= probLight;
+        *weight *= probLight / DirectLightProbability;
         return Cone(toLight, angle, rand);
     }
     else
     {
-        *weight *= 1 - probLight;
+        *weight *= (1 - probLight) / (1 - DirectLightProbability);
         float3 newRayDir;
         do
         {

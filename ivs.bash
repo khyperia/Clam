@@ -8,6 +8,7 @@ ECHO_CONNECT_TO="127.0.0.1:23448 127.0.0.1:23449 127.0.0.1:23450 127.0.0.1:23451
 SCREENWIDTH=500
 SCREENHEIGHT=300
 
+BORDER_PIXEL_SIZE=20
 OFFSET_WINDOWS=0
 MAX_SCREENCOORDS_X=2
 MAX_SCREENCOORDS_Y=4
@@ -134,8 +135,8 @@ for slave in $ECHO_CONNECT_TO; do
     xyArr=($(getScreenCoords $slave))
     screenX=$(bc <<< "$OFFSET_WINDOWS * $SCREENWIDTH * ${xyArr[0]}")
     screenY=$(bc <<< "$OFFSET_WINDOWS * $SCREENHEIGHT * ${xyArr[1]}")
-    renderposX=$(bc <<< "$SCREENWIDTH * ${xyArr[0]} - $SCREENWIDTH * $MAX_SCREENCOORDS_X / 2")
-    renderposY=$(bc <<< "$SCREENHEIGHT * ${xyArr[1]} - $SCREENHEIGHT * $MAX_SCREENCOORDS_Y / 2")
+    renderposX=$(bc <<< "$SCREENWIDTH * (${xyArr[0]} - $MAX_SCREENCOORDS_X / 2) + $BORDER_PIXEL_SIZE * ${xyArr[0]}")
+    renderposY=$(bc <<< "$SCREENHEIGHT * (${xyArr[1]} - $MAX_SCREENCOORDS_Y / 2) + $BORDER_PIXEL_SIZE * ${xyArr[1]}")
     port=(${slave//:/ })
     tile=${port[0]}
     port=${port[1]}

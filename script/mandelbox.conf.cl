@@ -22,7 +22,7 @@
 #define QualityRestRay 64
 #define SpecularSize 0.4
 #define SpecularBrightness 3
-#define LightBrightnessMultiplier 1000
+#define LightBrightnessMultiplier 500
 #define LightBrightness 1.0,0.5,0.3
 #define AmbientBrightnessMultiplier 0.8
 #define AmbientBrightness 0.7,0.7,1.0
@@ -30,3 +30,5 @@
 #define LightSize 0.2
 #define FogDensity 0.1
 #define FogColor 0.9
+
+#define DirectLightProbability 0.4
