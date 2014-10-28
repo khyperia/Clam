@@ -12,7 +12,7 @@ const char* sgetenv(const char* name, const char* defaultValue);
 char* my_strdup(const char* str);
 char* readWholeFile(const char* filename);
 void* malloc_s(size_t size);
-inline int PrintErrImpl(int errcode, const char* message, const char* filename, int line)
+static inline int PrintErrImpl(int errcode, const char* message, const char* filename, int line)
 {
     if (errcode != 0)
         printf("%s(%d) `%s`: errcode %d\n", filename, line, message, errcode);

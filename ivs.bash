@@ -1,41 +1,42 @@
 #!/bin/bash
 IVS_USER="$USER"
-IVS_HOSTNAME="127.0.0.1"
-IVS_TEMP_DIR="/home/${IVS_USER}/temp-clam2"
+IVS_HOSTNAME="ivs.research.mtu.edu"
+IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam2"
 ECHO_LISTEN_PORT=23456
 # Ports required in IP address
-ECHO_CONNECT_TO="127.0.0.1:23448 127.0.0.1:23449 127.0.0.1:23450 127.0.0.1:23451 127.0.0.1:23452 127.0.0.1:23453 127.0.0.1:23454 127.0.0.1:23455"
-SCREENWIDTH=500
-SCREENHEIGHT=300
+# ECHO_CONNECT_TO="tile-0-0:23456 tile-0-1:23456 tile-0-2:23456 tile-0-3:23456 tile-0-4:23456 tile-0-5:23456 tile-0-6:23456 tile-0-7:23456"
+ECHO_CONNECT_TO="tile-0-0:23456 tile-0-1:23456 tile-0-3:23456 tile-0-4:23456 tile-0-5:23456 tile-0-6:23456 tile-0-7:23456"
+SCREENWIDTH=5760
+SCREENHEIGHT=1080
 
-BORDER_PIXEL_SIZE=20
+BORDER_PIXEL_SIZE=8
 OFFSET_WINDOWS=0
 MAX_SCREENCOORDS_X=2
 MAX_SCREENCOORDS_Y=4
 function getScreenCoords() {
     case $1 in
-        127.0.0.1:23448)
+        tile-0-3:23456)
             echo 0 0
             ;;
-        127.0.0.1:23449)
+        tile-0-2:23456)
             echo 0 1
             ;;
-        127.0.0.1:23450)
+        tile-0-1:23456)
             echo 0 2
             ;;
-        127.0.0.1:23451)
+        tile-0-0:23456)
             echo 0 3
             ;;
-        127.0.0.1:23452)
+        tile-0-7:23456)
             echo 1 0
             ;;
-        127.0.0.1:23453)
+        tile-0-6:23456)
             echo 1 1
             ;;
-        127.0.0.1:23454)
+        tile-0-5:23456)
             echo 1 2
             ;;
-        127.0.0.1:23455)
+        tile-0-4:23456)
             echo 1 3
             ;;
         *)
@@ -85,7 +86,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 printMessage "Running make bin/clam2_master"
-make bin/clam2_master
+make bin/clam2_master PKGCONFIGCFLAGS="$(pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src" LDFLAGS_MASTER="-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(pkg-config --libs gl libpng)"
 
 # Create a persistant ssh connection that we will reuse. This will
 # just make it so we have to SSH into ivs once (might be slow, might
@@ -153,7 +154,7 @@ export DISPLAY=:0.0
 done
 
 echo "Waiting a second for slaves to boot"
-sleep 1
+sleep 2
 
 printMessage "Running master on localhost"
 ./bin/clam2_master $1

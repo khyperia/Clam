@@ -26,15 +26,15 @@ clean:
 
 bin/clam2_master: $(call toobjs,$(MASTERFILES))
 	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS_MASTER) $(call toobjs,$(MASTERFILES)) -o $@
+	$(CC) $(call toobjs,$(MASTERFILES)) -o $@ $(LDFLAGS_MASTER)
 
 bin/clam2_slave: $(call toobjs,$(SLAVEFILES))
 	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS_SLAVE) $(call toobjs,$(SLAVEFILES)) -o $@
+	$(CC) $(call toobjs,$(SLAVEFILES)) -o $@ $(LDFLAGS_SLAVE)
 
 bin/clam2_echo: $(call toobjs,$(ECHOFILES))
 	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS_ECHO) $(call toobjs,$(ECHOFILES)) -o $@
+	$(CC) $(call toobjs,$(ECHOFILES)) -o $@ $(LDFLAGS_ECHO)
 
 $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)

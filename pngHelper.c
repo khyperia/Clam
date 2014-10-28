@@ -2,6 +2,7 @@
 #include "helper.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #include <png.h>
 
 // This file is a nightmare of libpng. I'm scared.
