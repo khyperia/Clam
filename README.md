@@ -24,6 +24,7 @@ Get the code with
     bin/clam2_master script/[scriptname].lua
 
 You may want to run the slave and master executables in separate terminal windows to not confuse output of each program.
+
 See the other ways of running the program for other parameters (the defaults are okay for localhost)
 
 ##### Running it remotely:
@@ -66,14 +67,22 @@ Clam2 is a dynamic scripting framework, and is useless on it's own. It needs a l
 
 ### Included lua scripts (at the moment):
 
+##### colors.lua:
+
+A very basic kernel that is essentially just boilerplate to fork for other scripts. Good to start with if someone would like to make their own script.
+
 ##### mandelbrot.lua:
 
 Renders either the juliabrot/mandelbrot set. Eventually a helptext will be included when pressing "h" while the script is running, for now it is here:
 
 wasd: move around
+
 rf: zoom in/out
+
 j: toggle juliabrot/mandelbrot set
+
 u: set the juliabrot C value to the coordinates of the center of the screen
+
 p: take a render (edit the script code to set image size)
 
 ##### mandelbox.lua:
@@ -95,8 +104,13 @@ Unsupported. Similar to mandelbox.lua, except requires a png image parameter to 
 (subject to change, run as specified under 'local' above to get a reliable printing of parameters through "Warning: foo not set" messages)
 
 CLAM2_PORT: Self-explanatory, port to host server on
+
 CLAM2_WINPOS: Where to create the GLUT window (handily in the format of xrandr)
+
 CLAM2_RENDERPOS: Where the top-left corner of the window is with respect to the absolute screen center (in the case of multiple windows spread over multiple computers, this is important)
+
 CLAM2_FULLLSCREEN: Whether or not to tell GLUT to fullscreen the window
+
 CLAM2_UNSAFE_DELAY_FRAMES: You probably don't want to set this to anything other than 0. However, increasing to 1, 2 or 3 may increase framerate due to network lag. Setting it to anything other than zero **WILL BREAK** any lua scripts that download buffers!
+
 CLAM2_SLAVES: Tilde-separated list of IPs for the host to connect to (in the case of echo servers, this will probably be the same IP repeated multiple times)
