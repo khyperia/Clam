@@ -143,6 +143,15 @@ float2 RandCircle(ulong* rand)
     return (float2)(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
 }
 
+// Box-Muller transform
+// returns two normally-distributed independent variables
+float2 RandNormal(ulong* rand)
+{
+    float mul = sqrt(-2 * log(Rand(rand)));
+    float angle = 6.28318530718 * Rand(rand);
+    return mul * (float2)(cos(angle), sin(angle));
+}
+
 void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
 {
     float3 focalPosition = *position + *lookat * focalPlane;
@@ -186,28 +195,24 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand,
     float distance = 1.0;
     float totalDistance = 0.0;
     float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
-    float maxRayDist = min((float)MaxRayDist, sphereDist);
-    *isFog = 0;
+    float fogDist = -log(Rand(rand)) / (float)FogDensity;
+    float maxRayDist = min((float)MaxRayDist, min(fogDist, sphereDist));
     for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
             distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
         totalDistance += distance;
-
-        // Fog. This code is magical mathematics.
-        float density = exp(-(float)(FogDensity) * distance);
-        float random = Rand(rand);
-        if (random > density)
-        {
-            *isFog = 1;
-            float backstep = -log(random) / (float)(FogDensity);
-            totalDistance -= backstep;
-            break;
-        }
     }
     if (totalDistance > sphereDist)
         *hitLightsource = 1;
     else
         *hitLightsource = 0;
+    if (totalDistance > fogDist)
+    {
+        *isFog = 1;
+        totalDistance = fogDist;
+    }
+    else
+        *isFog = 0;
     return totalDistance;
 }
 
@@ -297,11 +302,7 @@ float3 NewSphereRayDir(float3 pos, float* weight, ulong* rand)
         float3 newRayDir;
         for (int i = 0; i < 8; i++)
         {
-            do
-            {
-                newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
-            } while (dot(newRayDir, newRayDir) > 1);
-            newRayDir = normalize(newRayDir);
+            newRayDir = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
             if (dot(newRayDir, toLight) > cos(angle))
                 continue;
             return newRayDir;
@@ -416,7 +417,6 @@ __kernel void Main(__global float4* screen,
     {
         float dist = SimpleTrace(pos, rayDir, 1 / fov);
         dist = sqrt(dist);
-        //dist = sin(log(dist) * 10) * 0.5 + 0.5;
         screen[screenIndex] = (float4)(dist);
     }
     else
