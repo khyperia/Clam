@@ -211,6 +211,22 @@ float Trace(float3 origin, float3 direction, float quality, ulong* rand,
     return totalDistance;
 }
 
+float SimpleTrace(float3 origin, float3 direction, float quality)
+{
+    float distance = 1.0;
+    float totalDistance = 0.0;
+    float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
+    float maxRayDist = min((float)MaxRayDist, sphereDist);
+    int i;
+    for (i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
+            distance * quality > totalDistance; i++)
+    {
+        distance = De(origin + direction * totalDistance) * DeMultiplier;
+        totalDistance += distance;
+    }
+    return (float)i / MaxRaySteps;
+}
+
 float3 Cone(float3 normal, float fov, ulong* rand)
 {
     const float3 dir1 = normalize((float3)(1,1,1));
@@ -235,18 +251,28 @@ float3 NewRayDir(float3 pos, float3 normal, float* weight, ulong* rand)
     if (Rand(rand) < DirectLightProbability)
     {
         *weight *= probLight / DirectLightProbability;
-        float3 newRayDir = Cone(toLight, angle, rand);
-        if (dot(newRayDir, normal) < 0)
-            *weight = 0;
-        return newRayDir;
+        for (int i = 0; i < 8; i++)
+        {
+            float3 newRayDir = Cone(toLight, angle, rand);
+            if (dot(newRayDir, normal) < 0)
+                continue;
+            return newRayDir;
+        }
+        *weight = 0;
+        return (float3)(0);
     }
     else
     {
         *weight *= (1 - probLight) / (1 - DirectLightProbability);
-        float3 newRayDir = Cone(normal, 3.14 / 2, rand);
-        if (dot(newRayDir, toLight) > cos(angle))
-            *weight = 0;
-        return newRayDir;
+        for (int i = 0; i < 8; i++)
+        {
+            float3 newRayDir = Cone(normal, 3.14 / 2, rand);
+            if (dot(newRayDir, toLight) > cos(angle))
+                continue;
+            return newRayDir;
+        }
+        *weight = 0;
+        return (float3)(0);
     }
 }
 
@@ -269,14 +295,19 @@ float3 NewSphereRayDir(float3 pos, float* weight, ulong* rand)
     {
         *weight *= (1 - probLight) / (1 - DirectLightProbability);
         float3 newRayDir;
-        do
+        for (int i = 0; i < 8; i++)
         {
-            newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
-        } while (dot(newRayDir, newRayDir) > 1);
-        newRayDir = normalize(newRayDir);
-        if (dot(newRayDir, toLight) > cos(angle))
-            *weight = 0;
-        return newRayDir;
+            do
+            {
+                newRayDir = (float3)(Rand(rand), Rand(rand), Rand(rand)) * 2 - 1;
+            } while (dot(newRayDir, newRayDir) > 1);
+            newRayDir = normalize(newRayDir);
+            if (dot(newRayDir, toLight) > cos(angle))
+                continue;
+            return newRayDir;
+        }
+        *weight = 0;
+        return (float3)(0);
     }
 }
 
@@ -378,23 +409,34 @@ __kernel void Main(__global float4* screen,
 
     float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
     float3 rayDir = RayDir(look, up, screenCoords, fov);
-
     ApplyDof(&pos, &rayDir, focalDistance, &rand);
-
-    float weight = 1;
-    float3 color = RenderingEquation(pos, rayDir, 1 / fov, &weight, &rand);
-    float4 final;
-
     int screenIndex = y * width + x;
-    float4 old = screen[screenIndex];
-    if (frame != 0 && old.w + weight > 0)
-        final = (float4)((color * weight + old.xyz * old.w) / (old.w + weight), old.w + weight);
-    else if (!isnan(color.x) && !isnan(color.y) && !isnan(color.z) && !isnan(weight))
-        final = (float4)(color, weight);
-    else if (frame != 0)
-        final = old;
+
+    if (frame == 0)
+    {
+        float dist = SimpleTrace(pos, rayDir, 1 / fov);
+        dist = sqrt(dist);
+        //dist = sin(log(dist) * 10) * 0.5 + 0.5;
+        screen[screenIndex] = (float4)(dist);
+    }
     else
-        final = (float4)(0);
-    screen[screenIndex] = final;
+    {
+        frame -= 1;
+
+        float weight = 1;
+        float3 color = RenderingEquation(pos, rayDir, 1 / fov, &weight, &rand);
+        float4 final;
+
+        float4 old = screen[screenIndex];
+        if (frame != 0 && old.w + weight > 0)
+            final = (float4)((color * weight + old.xyz * old.w) / (old.w + weight), old.w + weight);
+        else if (!isnan(color.x) && !isnan(color.y) && !isnan(color.z) && !isnan(weight))
+            final = (float4)(color, weight);
+        else if (frame != 0)
+            final = old;
+        else
+            final = (float4)(0);
+        screen[screenIndex] = final;
+    }
     rngBuffer[screenIndex] = (uint2)((uint)(rand >> 32), (uint)rand);
 }
