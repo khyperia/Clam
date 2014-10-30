@@ -59,39 +59,7 @@ float De(float3 z3d)
     return length(z) / dz;
 }
 
-float3 HSVtoRGB(float h, float s, float v)
-{
-    int i;
-    float f, p, q, t;
-    if( s == 0 ) {
-        // achromatic (grey)
-        return (float3)(v);
-    }
-    h = fmod(h, 360);
-    h /= 60;            // sector 0 to 5
-    i = floor( h );
-    f = h - i;          // factorial part of h
-    p = v * ( 1 - s );
-    q = v * ( 1 - s * f );
-    t = v * ( 1 - s * ( 1 - f ) );
-    switch( i ) {
-        case 0:
-            return (float3)(v,t,p);
-            break;
-        case 1:
-            return (float3)(q,v,p);
-        case 2:
-            return (float3)(p,v,t);
-        case 3:
-            return (float3)(p,q,v);
-        case 4:
-            return (float3)(t,p,v);
-        default:        // case 5:
-            return (float3)(v,p,q);
-    }
-}
-
-float3 DeColor(float3 z3d)
+float DeColor(float3 z3d, float lightHue)
 {
     float4 z = z3d.x * normalize((float4)(Transform4Dx)) +
         z3d.y * normalize((float4)(Transform4Dy)) +
@@ -122,7 +90,9 @@ float3 DeColor(float3 z3d)
 
         z = Scale * z + offset;
     }
-    return HSVtoRGB(hue * HueVariance, Saturation, Reflectivity) + (float3)(ColorBias);
+    float fullValue = fabs(lightHue - fmod(hue * HueVariance, 1));
+    fullValue = 1 - (1 - fullValue) * Saturation;
+    return fullValue;
 }
 
 uint MWC64X(ulong *state)
@@ -152,13 +122,15 @@ float2 RandNormal(ulong* rand)
     return mul * (float2)(cos(angle), sin(angle));
 }
 
-void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
+void ApplyDof(float3* position, float3* lookat, float focalPlane, float hue, ulong* rand)
 {
+    //focalPlane *= exp((hue - 0.5) * ChromaticAbberation);
     float3 focalPosition = *position + *lookat * focalPlane;
     float3 xShift = cross((float3)(0, 0, 1), *lookat);
     float3 yShift = cross(*lookat, xShift);
     float2 offset = RandCircle(rand);
-    *lookat = normalize(*lookat + offset.x * DofPickup * xShift + offset.y * DofPickup * yShift);
+    float dofPickup = DofAmount(hue);
+    *lookat = normalize(*lookat + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
     *position = focalPosition - *lookat * focalPlane;
 }
 
@@ -189,13 +161,13 @@ float RaySphereIntersection(float3 rayOrigin, float3 rayDir, float3 sphereCenter
     return dist;
 }
 
-float Trace(float3 origin, float3 direction, float quality, ulong* rand,
+float Trace(float3 origin, float3 direction, float quality, float hue, ulong* rand,
         int* isFog, int* hitLightsource)
 {
     float distance = 1.0;
     float totalDistance = 0.0;
     float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
-    float fogDist = -log(Rand(rand)) / (float)FogDensity;
+    float fogDist = -log(Rand(rand)) / (float)(FogDensity(hue));
     float maxRayDist = min((float)MaxRayDist, min(fogDist, sphereDist));
     for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
             distance * quality > totalDistance; i++) {
@@ -326,23 +298,24 @@ float WeakeningFactor(float3 normal, float3 incoming)
     return dot(normal, incoming);
 }
 
-float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float* weight, ulong* rand)
+float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hue, float* weight, ulong* rand)
 {
     // not entirely too sure why I need the 1 constant here
     // that is, "why not another number? This one is arbitrary" (pun sort of intended)
-    float3 color = (float3)(1);
-    float3 total = (float3)(0);
+    float color = 1;
+    float total = 0;
     int isFog;
     for (int i = 0; i < NumRayBounces; i++)
     {
         int hitLightsource;
 
         float distanceTraveled = Trace(rayPos, rayDir,
-                i==0?QualityFirstRay*qualityMul:QualityRestRay, rand, &isFog, &hitLightsource);
+                i==0?QualityFirstRay*qualityMul:QualityRestRay,
+                hue, rand, &isFog, &hitLightsource);
 
         if (hitLightsource)
         {
-            total += color * (float3)(LightBrightness) * LightBrightnessMultiplier;
+            total += color * (LightBrightness(hue));
             break;
         }
         if (distanceTraveled >= MaxRayDist)
@@ -359,7 +332,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float* 
             newRayDir = NewSphereRayDir(newRayPos, weight, rand);
             if (*weight == 0)
                 return total; // doesn't matter anyway
-            color *= (float3)(FogColor);
+            color *= FogColor(hue);
         }
         else
         {
@@ -369,15 +342,43 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float* 
             if (*weight == 0)
                 return total; // doesn't matter anyway
 
-            color *= DeColor(newRayPos) * BRDF(newRayPos, normal, newRayDir, -rayDir) *
+            color *= DeColor(newRayPos, hue) * BRDF(newRayPos, normal, newRayDir, -rayDir) *
                 WeakeningFactor(normal, newRayDir);
         }
         rayPos = newRayPos;
         rayDir = newRayDir;
     }
     if (isFog)
-        total += color * (float3)(AmbientBrightness) * AmbientBrightnessMultiplier;
+        total += color * AmbientBrightness(hue);
     return total;
+}
+
+float3 HueToRGB(float hue, float value)
+{
+    hue *= 4;
+    float frac = fmod(hue, 1);
+    float3 color;
+    switch ((int)hue)
+    {
+        case 0:
+            color = (float3)(frac, 0, 0);
+            break;
+        case 1:
+            color = (float3)(1 - frac, frac, 0);
+            break;
+        case 2:
+            color = (float3)(0, 1 - frac, frac);
+            break;
+        case 3:
+            color = (float3)(0, 0, 1 - frac);
+            break;
+        default:
+            color = (float3)(value);
+            break;
+    }
+    color = sqrt(color);
+    color *= value;
+    return color;
 }
 
 __kernel void Main(__global float4* screen,
@@ -408,9 +409,12 @@ __kernel void Main(__global float4* screen,
         }
     }
 
+    float hue = Rand(&rand);
+
     float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
+    fov *= exp((hue - 0.5) * FovAbberation);
     float3 rayDir = RayDir(look, up, screenCoords, fov);
-    ApplyDof(&pos, &rayDir, focalDistance, &rand);
+    ApplyDof(&pos, &rayDir, focalDistance, hue, &rand);
     int screenIndex = y * width + x;
 
     if (frame == 0)
@@ -424,7 +428,8 @@ __kernel void Main(__global float4* screen,
         frame -= 1;
 
         float weight = 1;
-        float3 color = RenderingEquation(pos, rayDir, 1 / fov, &weight, &rand);
+        float intensity = RenderingEquation(pos, rayDir, 1 / fov, hue, &weight, &rand);
+        float3 color = HueToRGB(hue, intensity);
         float4 final;
 
         float4 old = screen[screenIndex];
