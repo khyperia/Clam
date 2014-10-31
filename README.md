@@ -5,6 +5,10 @@ A dynamic, scriptable OpenCL/Lua-based cluster computing rendering engine.
 
 --
 
+Clam2 provides a framework for an easily-programmed scripting environment that renders images using OpenCL. A master computer, running a Lua script, calls builtin functions to do operations like create, transfer, and delete buffers, and call OpenCL kernels that operate on those buffers. These commands are sent over the network to multiple slave computers, who perform those commands on their respective GPUs. A specially named buffer represents the screen, and writing to it is essentially to writing to the screen (in reality, OpenGL interop is required, and a fullscreen quad is drawn using the OpenCL buffer as a texture). In this way, complex structures can be rendered and displayed in realtime using the extreme power of GPUs, in an easy to program way.
+
+--
+
 # How to run:
 
 Note: Only Linux supported at this time.

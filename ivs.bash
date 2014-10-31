@@ -4,8 +4,7 @@ IVS_HOSTNAME="ivs.research.mtu.edu"
 IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam2"
 ECHO_LISTEN_PORT=23456
 # Ports required in IP address
-# ECHO_CONNECT_TO="tile-0-0:23456 tile-0-1:23456 tile-0-2:23456 tile-0-3:23456 tile-0-4:23456 tile-0-5:23456 tile-0-6:23456 tile-0-7:23456"
-ECHO_CONNECT_TO="tile-0-0:23456 tile-0-1:23456 tile-0-3:23456 tile-0-4:23456 tile-0-5:23456 tile-0-6:23456 tile-0-7:23456"
+ECHO_CONNECT_TO="tile-0-0:23456 tile-0-1:23456 tile-0-2:23456 tile-0-3:23456 tile-0-4:23456 tile-0-5:23456 tile-0-6:23456 tile-0-7:23456"
 SCREENWIDTH=5760
 SCREENHEIGHT=1080
 
@@ -116,6 +115,20 @@ printMessage "Connected to IVS."
 # Create an ssh command with appropriate arguments that we can use
 # repeatedly to run programs on IVS. 
 SSH_CMD="ssh -q -t -t -x -S ./.temp-clam2-ssh-socket ${IVS_USER}@${IVS_HOSTNAME}"
+
+# This check adds about a second to our startup time and usually works
+# successfully. However, it is a helpful in the unlikely case where a
+# tile goes down.
+printMessage "Checking that tile nodes are accessible from IVS..."
+for i in $ECHO_CONNECT_TO; do
+	echo "Testing connection to tile $i"
+	if ! ${SSH_CMD} ssh $i 'exit'; then
+		echo "ERROR: Unable to establish an ssh connection with tile: $i"
+		echo "Perhaps the tile is turned off or you can't ssh to it?"
+		echo "To run without a specific tile, remove the tile from the ECHO_CONNECT_TO variable."
+		exit 1
+	fi
+done
 
 printMessage "Creating $IVS_TEMP_DIR on IVS"
 ${SSH_CMD} mkdir -p "$IVS_TEMP_DIR"
