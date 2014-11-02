@@ -4,6 +4,7 @@ clam2_master
 clam2_echo
 clam2_slave
 *.o
+*.so
 *.d
 *.swp
 /etc

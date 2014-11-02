@@ -144,3 +144,77 @@ int send_str(int socketFd, const char* string)
         return -1;
     return 0;
 }
+
+// Sends data to all sockets;
+int send_all(int* socket, void* data, size_t numBytes)
+{
+    int errcode = 0;
+    while (*socket)
+    {
+        if (*socket == -1)
+            continue;
+        int err = PrintErr(send_p(*socket, data, numBytes));
+        if (err)
+        {
+            close(*socket);
+            *socket = -1;
+            errcode = err;
+        }
+        socket++;
+    }
+    return errcode;
+}
+
+// Sends an enum MessageType to all sockets
+int send_all_msg(int* socket, enum MessageType messageType)
+{
+    return send_all(socket, &messageType, sizeof(messageType));
+}
+
+// Sends a string to all sockets
+int send_all_str(int* socket, const char* string)
+{
+    int errcode = 0;
+    while (*socket)
+    {
+        if (*socket == -1)
+            continue;
+        int err = PrintErr(send_str(*socket, string));
+        if (err)
+        {
+            close(*socket);
+            *socket = -1;
+            errcode = err;
+        }
+        socket++;
+    }
+    return errcode;
+}
+
+// Receives an int from all sockets and checks if it is zero
+int recv_all(int* socket)
+{
+    int errcode = 0;
+    while (*socket)
+    {
+        if (*socket == -1)
+            continue;
+        int result = 0;
+        int err = PrintErr(recv_p(*socket, &result, sizeof(int)));
+        if (err)
+        {
+            close(*socket);
+            *socket = -1;
+            errcode = err;
+        }
+        else if (result)
+        {
+            PrintErr(result && "Slave didn't respond with zero");
+            close(*socket);
+            *socket = -1;
+            errcode = result;
+        }
+        socket++;
+    }
+    return errcode;
+}

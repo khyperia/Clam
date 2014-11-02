@@ -1,0 +1,3 @@
+loadlib("makevoxel")
+
+makevoxel("potato");

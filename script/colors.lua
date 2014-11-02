@@ -1,3 +1,6 @@
+require("script/plugin")
+loadlib("imagebuffer")
+
 totalTime = 0
 
 function special()

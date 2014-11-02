@@ -1,5 +1,7 @@
 require("math")
 require("script/vector")
+require("script/plugin")
+loadlib("imagebuffer")
 
 function table.shallow_copy(t)
   local t2 = {}
@@ -104,15 +106,15 @@ function update(time)
     end
     if iskeydown("1") then
         unsetkey("1")
-        screenshot(2, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 2000)
+        screenshot(2, frame, math.pow(2, 1 + 6), math.pow(2, 1 + 6), 200)
     end
     if iskeydown("2") then
         unsetkey("2")
-        screenshot(2, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 2000)
+        screenshot(2, frame, math.pow(2, 2 + 6), math.pow(2, 2 + 6), 500)
     end
     if iskeydown("3") then
         unsetkey("3")
-        screenshot(2, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 2000)
+        screenshot(2, frame, math.pow(2, 3 + 6), math.pow(2, 3 + 6), 1000)
     end
     if iskeydown("4") then
         unsetkey("4")

@@ -1,16 +1,20 @@
 CC=c99
 OBJDIR=obj
 BINDIR=bin
+SCRIPTDIR=script
 
 WARNINGFLAGS=-Wall -Wextra
 PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua)
-CFLAGS=-c -O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
+CFLAGS=-O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
 
-LDFLAGS_MASTER=-lglut $(shell pkg-config --libs gl libpng lua)
+LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)
 LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
 LDFLAGS_ECHO=-lpthread
+LDFLAGS_SO=$(shell pkg-config --libs lua)
 
-SOURCES=$(wildcard *.c)
+PLUGIN_SOURCES=$(wildcard $(SCRIPTDIR)/*.c)
+PLUGINS=$(patsubst %.c,%.so,$(PLUGIN_SOURCES))
+SOURCES=$(wildcard *.c) $(PLUGIN_SOURCES)
 DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
 
 MASTERFILES=master luaHelper pngHelper socketHelper helper
@@ -19,10 +23,19 @@ ECHOFILES=echo socketHelper helper
 
 toobjs=$(addsuffix .o,$(addprefix $(OBJDIR)/,$(1)))
 
-all: $(BINDIR)/clam2_master $(BINDIR)/clam2_slave $(BINDIR)/clam2_echo
+.PHONY: all
+all: master slave echo
 
+.PHONY: clean
 clean:
-	rm -r $(OBJDIR) $(BINDIR)
+	rm -r $(OBJDIR) $(BINDIR) $(PLUGINS)
+
+.PHONY: master
+master: bin/clam2_master $(PLUGINS)
+.PHONY: slave
+slave: bin/clam2_slave
+.PHONY: echo
+echo: bin/clam2_echo
 
 bin/clam2_master: $(call toobjs,$(MASTERFILES))
 	@mkdir -p $(@D)
@@ -38,6 +51,10 @@ bin/clam2_echo: $(call toobjs,$(ECHOFILES))
 
 $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -MMD $< -o $@
+	$(CC) -c $(CFLAGS) -MMD $< -o $@
+
+%.so: %.c Makefile
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -shared -o $@ -fPIC $< $(LDFLAGS_SO)
 
 -include $(DEPENDS)
