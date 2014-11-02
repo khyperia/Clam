@@ -1,35 +1,13 @@
 #include "luaHelper.h"
 #include "helper.h"
 #include "socketHelper.h"
-#include "pngHelper.h"
 #include "master.h"
 #include <lualib.h>
 #include <lauxlib.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 
 // Note: `state` must be a local variable of type lua_State* to use this macro
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
-
-// Checks if the character passed in is a currently pressed key
-int run_iskeydown(lua_State* state)
-{
-    const char* str = luaL_checkstring(state, 1);
-    LuaPrintErr(strlen(str) != 1);
-    lua_pushboolean(state, keyboard[(unsigned char)str[0]]);
-    return 1;
-}
-
-// Unsets a key so iskeydown() does not return true the next time(s) it is called
-// (until the key is pressed again)
-int run_unsetkey(lua_State* state)
-{
-    const char* str = luaL_checkstring(state, 1);
-    LuaPrintErr(strlen(str) != 1);
-    keyboard[(unsigned char)str[0]] = false;
-    return 0;
-}
 
 // Creates a buffer with arg(1) id, and arg(2) size
 int run_mkbuffer(lua_State* state)
@@ -151,8 +129,6 @@ int newLua(lua_State** state, const char* filename, char** args)
     luaL_openlibs(*state);
     lua_pushstring(*state, filename);
     lua_setglobal(*state, "__file__");
-    lua_register(*state, "iskeydown", run_iskeydown);
-    lua_register(*state, "unsetkey", run_unsetkey);
     lua_register(*state, "mkbuffer", run_mkbuffer);
     lua_register(*state, "rmbuffer", run_rmbuffer);
     lua_register(*state, "compile", run_compile);

@@ -1,5 +1,6 @@
 require("script/plugin")
 loadlib("imagebuffer")
+loadlib("input")
 
 totalTime = 0
 

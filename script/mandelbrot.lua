@@ -1,3 +1,6 @@
+require("script/plugin")
+loadlib("input")
+
 posx = 0.0
 posy = 0.0
 zoom = 1.0

@@ -1,7 +1,8 @@
 require("math")
-require("script/vector")
 require("script/plugin")
 loadlib("imagebuffer")
+loadlib("input")
+require("script/vector")
 
 function table.shallow_copy(t)
   local t2 = {}

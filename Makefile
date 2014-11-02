@@ -17,7 +17,7 @@ PLUGINS=$(patsubst %.c,%.so,$(PLUGIN_SOURCES))
 SOURCES=$(wildcard *.c) $(PLUGIN_SOURCES)
 DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
 
-MASTERFILES=master luaHelper pngHelper socketHelper helper
+MASTERFILES=master luaHelper socketHelper helper
 SLAVEFILES=slave slaveSocket glclContext openclHelper socketHelper helper
 ECHOFILES=echo socketHelper helper
 
@@ -57,4 +57,5 @@ $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -shared -o $@ -fPIC $< $(LDFLAGS_SO)
 
+-include $(patsubst %.so,%.mk,$(PLUGINS))
 -include $(DEPENDS)
