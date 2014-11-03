@@ -4,14 +4,33 @@ OBJDIR=obj
 BINDIR=bin
 SCRIPTDIR=script
 
-WARNINGFLAGS=-Wall -Wextra
-PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua)
-CFLAGS=-O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
+HOSTNAME=$(shell hostname)
+IVS_SLAVENAME=ivs.research.mtu.edu
+IVS_MASTERNAME=ccsr.ee
 
+
+WARNINGFLAGS=-Wall -Wextra
+ifeq ($(HOSTNAME), $(IVS_SLAVENAME))
+# Building on ivs.research.mtu.edu
+PKGCONFIGCFLAGS="$(pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src"
+LDFLAGS_MASTER="-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(pkg-config --libs gl libpng)"
+LDFLAGS_SO="-L/home/kuhl/public-vrlab/lua/src -llua"
+else
+# Common between ccsr.ee and standard
 LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)
+LDFLAGS_SO=$(shell pkg-config --libs lua)
+ifeq ($(HOSTNAME), $(IVS_MASTERNAME))
+# Building on ccsr.ee
+PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/
+else
+# Standard build
+PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua)
 LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
 LDFLAGS_ECHO=-lpthread
-LDFLAGS_SO=$(shell pkg-config --libs lua)
+endif
+endif
+
+CFLAGS=-O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
 
 PLUGIN_SOURCES=$(wildcard $(SCRIPTDIR)/*.c) $(wildcard $(SCRIPTDIR)/*.cpp)
 PLUGINS:=$(PLUGIN_SOURCES)

@@ -84,8 +84,8 @@ if [[ $# -lt 1 ]]; then
     exit 1
 fi
 
-printMessage "Running make bin/clam2_master"
-make master PKGCONFIGCFLAGS="$(pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src" LDFLAGS_MASTER="-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(pkg-config --libs gl libpng)" LDFLAGS_SO="-L/home/kuhl/public-vrlab/lua/src -llua"
+printMessage "Running make master"
+make master
 
 # Create a persistant ssh connection that we will reuse. This will
 # just make it so we have to SSH into ivs once (might be slow, might
@@ -140,8 +140,7 @@ printMessage "Running sync on IVS"
 ${SSH_CMD} sync
 
 printMessage "Running 'make echo slave' on IVS"
-${SSH_CMD} make -C "${IVS_TEMP_DIR}" 'echo' slave PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/ LDFLAGS_MASTER=""
-
+${SSH_CMD} make -C "${IVS_TEMP_DIR}" 'echo' slave 
 printMessage "Running echo server on IVS"
 ${SSH_CMD} "${IVS_TEMP_DIR}/bin/clam2_echo ${ECHO_ARGS}" &
 
