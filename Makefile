@@ -6,27 +6,27 @@ SCRIPTDIR=script
 
 HOSTNAME=$(shell hostname)
 IVS_SLAVENAME=ivs.research.mtu.edu
-IVS_MASTERNAME=ccsr.ee
-
+IVS_MASTERNAME=ccsr.ee.mtu.edu
 
 WARNINGFLAGS=-Wall -Wextra
 ifeq ($(HOSTNAME), $(IVS_SLAVENAME))
 # Building on ivs.research.mtu.edu
-PKGCONFIGCFLAGS="$(pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src"
-LDFLAGS_MASTER="-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(pkg-config --libs gl libpng)"
-LDFLAGS_SO="-L/home/kuhl/public-vrlab/lua/src -llua"
+PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/
+LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
+LDFLAGS_ECHO=-lpthread
 else
-# Common between ccsr.ee and standard
-LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)
-LDFLAGS_SO=$(shell pkg-config --libs lua)
 ifeq ($(HOSTNAME), $(IVS_MASTERNAME))
 # Building on ccsr.ee
-PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/
+LDFLAGS_MASTER=-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(shell pkg-config --libs gl libpng)
+PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src
+LDFLAGS_SO=-L/home/kuhl/public-vrlab/lua/src -llua
 else
 # Standard build
+LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)
 PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua)
 LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
 LDFLAGS_ECHO=-lpthread
+LDFLAGS_SO=$(shell pkg-config --libs lua)
 endif
 endif
 
