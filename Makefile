@@ -31,9 +31,15 @@ endif
 endif
 
 CFLAGS=-O2 $(WARNINGFLAGS) $(PKGCONFIGCFLAGS)
+ifeq ("","$(wildcard $(SCRIPTDIR)/pluginBlacklist.txt)")
+$(warning "$(SCRIPTDIR)/pluginBlacklist.txt doesn't exist, touching it. Fill it in with .c/.cpp plugin files that you don't want compiled")
+$(shell touch $(SCRIPTDIR)/pluginBlacklist.txt)
+endif
 
 PLUGIN_SOURCES=$(wildcard $(SCRIPTDIR)/*.c) $(wildcard $(SCRIPTDIR)/*.cpp)
-PLUGINS:=$(PLUGIN_SOURCES)
+PLUGIN_BLACKLIST=$(addprefix $(SCRIPTDIR)/,$(shell cat $(SCRIPTDIR)/pluginBlacklist.txt))
+PLUGIN_SOURCES:=$(filter-out $(PLUGIN_BLACKLIST),$(PLUGIN_SOURCES))
+PLUGINS=$(PLUGIN_SOURCES)
 PLUGINS:=$(patsubst %.cpp,%.so,$(PLUGINS))
 PLUGINS:=$(patsubst %.c,%.so,$(PLUGINS))
 SOURCES=$(wildcard *.c) $(PLUGIN_SOURCES)

@@ -8,3 +8,4 @@ clam2_slave
 *.d
 *.swp
 /etc
+/script/pluginBlacklist.txt
