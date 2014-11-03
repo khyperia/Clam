@@ -1,5 +1,7 @@
 require("script/table_save")
 
+vrpn_server = "Wand@tcp://VRPN-SERVER-IP-ADDRESS"; -- TODO
+
 function addvec(left, right)
     return {left[1] + right[1], left[2] + right[2], left[3] + right[3]}
 end
@@ -12,10 +14,14 @@ function mulvec(left, right)
     return {left[1] * right, left[2] * right, left[3] * right}
 end
 
-function cross(v1, v2, vR)
+function cross(v1, v2)
     return { ( (v1[2] * v2[3]) - (v1[3] * v2[2]) ),
             -( (v1[1] * v2[3]) - (v1[3] * v2[1]) ),
              ( (v1[1] * v2[2]) - (v1[2] * v2[1]) ) }
+end
+
+function dot(v1, v2)
+    return v1[1] * v2[1] + v1[2] * v2[2] + v1[3] * v2[3]
 end
 
 function normalize(v)
@@ -149,7 +155,25 @@ function update3dCamera(frame, time)
             print(err)
         end
     end
-    
+    if iskeydown("\\") then
+        unsetkey("\\")
+        if frame.vrpn == nil or frame.vrpn == false then
+            if vrpn == nil then
+                loadlib("vrpn_help")
+            end
+            frame.vrpn = true
+        else
+            frame.vrpn = false
+        end
+    end
+    if frame.vrpn then
+        tpos, tlook, tup = vrpn(vrpn_server)
+        frame.pos = tpos
+        frame.look = tlook
+        frame.up = tup
+        frame.frame = 0 -- TODO: think of a way to avoid this
+    end
+
     frame.look = normalize(frame.look)
     frame.up = normalize(cross(cross(frame.look, frame.up), frame.look))
 

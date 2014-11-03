@@ -1,4 +1,5 @@
 CC=c99
+CCP=c++ -std=c++98
 OBJDIR=obj
 BINDIR=bin
 SCRIPTDIR=script
@@ -12,10 +13,14 @@ LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
 LDFLAGS_ECHO=-lpthread
 LDFLAGS_SO=$(shell pkg-config --libs lua)
 
-PLUGIN_SOURCES=$(wildcard $(SCRIPTDIR)/*.c)
-PLUGINS=$(patsubst %.c,%.so,$(PLUGIN_SOURCES))
+PLUGIN_SOURCES=$(wildcard $(SCRIPTDIR)/*.c) $(wildcard $(SCRIPTDIR)/*.cpp)
+PLUGINS:=$(PLUGIN_SOURCES)
+PLUGINS:=$(patsubst %.cpp,%.so,$(PLUGINS))
+PLUGINS:=$(patsubst %.c,%.so,$(PLUGINS))
 SOURCES=$(wildcard *.c) $(PLUGIN_SOURCES)
-DEPENDS=$(patsubst %.c,$(OBJDIR)/%.d,$(SOURCES))
+DEPENDS=$(SOURCES)
+DEPENDS:=$(patsubst %.cpp,$(OBJDIR)/%.d,$(DEPENDS))
+DEPENDS:=$(patsubst %.c,$(OBJDIR)/%.d,$(DEPENDS))
 
 MASTERFILES=master luaHelper socketHelper helper
 SLAVEFILES=slave slaveSocket glclContext openclHelper socketHelper helper
@@ -53,9 +58,13 @@ $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)
 	$(CC) -c $(CFLAGS) -MMD $< -o $@
 
-%.so: %.c Makefile
+%.so: %.c Makefile $(wildcard %.mk)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -shared -o $@ -fPIC $< $(LDFLAGS_SO)
+
+%.so: %.cpp Makefile $(wildcard %.mk)
+	@mkdir -p $(@D)
+	$(CCP) $(CFLAGS) -shared -o $@ -fPIC $< $(LDFLAGS_SO)
 
 -include $(patsubst %.so,%.mk,$(PLUGINS))
 -include $(DEPENDS)
