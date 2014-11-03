@@ -11,10 +11,12 @@ IVS_MASTERNAME=ccsr.ee.mtu.edu
 WARNINGFLAGS=-Wall -Wextra
 ifeq ($(HOSTNAME), $(IVS_SLAVENAME))
 # Building on ivs.research.mtu.edu
-PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/
-LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
-LDFLAGS_ECHO=-lpthread
+PKGCONFIGCFLAGS="$(pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src"
+LDFLAGS_MASTER="-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(pkg-config --libs gl libpng)"
+LDFLAGS_SO="-L/home/kuhl/public-vrlab/lua/src"
 else
+# Common between ccsr.ee and standard
+LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)
 ifeq ($(HOSTNAME), $(IVS_MASTERNAME))
 # Building on ccsr.ee
 LDFLAGS_MASTER=-L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(shell pkg-config --libs gl libpng)

@@ -1,6 +1,12 @@
+require("script/plugin")
 loadlib("makevoxel")
+loadlib("rawbuffer")
 
-makevoxel("potato");
+if false then
+    makevoxel("voxel.dat")
+end
+print("Done making data file, uploading")
+uplrawbuffer("1", "voxel.dat")
 
 function update(time)
 

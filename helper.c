@@ -48,6 +48,26 @@ char* readWholeFile(const char* filename)
     return string;
 }
 
+// Reads an entire binary file
+void* readWholeBinFile(const char* filename, size_t* size)
+{
+    FILE* f = fopen(filename, "rb");
+    if (!f)
+    {
+        perror("readWholeBinFile()");
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    *size = (size_t)ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char* string = malloc_s(*size);
+    fread(string, *size, 1, f);
+    fclose(f);
+
+    return string;
+}
+
 // Malloc with an exit() safeguard for out-of-memory
 void* malloc_s(size_t size)
 {
