@@ -3,19 +3,17 @@
 #include <math.h>
 #include <stdio.h>
 
-#define CUBE_SIZE 256
+#define CUBE_SIZE 1024
 
 int colornormal(int ix, int iy, int iz, float* result)
 {
     double x = (double)ix / CUBE_SIZE * 2 - 1;
     double y = (double)iy / CUBE_SIZE * 2 - 1;
     double z = (double)iz / CUBE_SIZE * 2 - 1;
-    double len = sqrt(x * x + y * y + z * z);
-    if (len > 0.5 || len < 0.4)
+    double len = x * x + y * y + z * z;
+    if (len > 0.5 * 0.5 || len < 0.495 * 0.495)
         return 0;
-    //printf("%d %d %d\n", ix, iy, iz);
-    if (len <= 0)
-        len = 0.0001;
+    len = sqrt(len);
 
     x /= len;
     y /= len;
@@ -32,45 +30,65 @@ int colornormal(int ix, int iy, int iz, float* result)
 
 long recurse(int x, int y, int z, int s, FILE* file)
 {
-    float result[6];
     if (s == 1)
     {
+        float result[6];
         if (colornormal(x, y, z, result))
         {
             long pos = ftell(file);
             fwrite(result, sizeof(float), 6, file);
             return pos;
         }
-        return 0;
+        return -1;
     }
-    long curpos = ftell(file);
+
     int s2 = s / 2;
     int i = 0;
+
+    long leaves[8];
+
     for (int dx = 0; dx < 2; dx++)
     {
         for (int dy = 0; dy < 2; dy++)
         {
             for (int dz = 0; dz < 2; dz++)
             {
-                long filepos = recurse(x + dx * s2, y + dy * s2, z + dz * s2, s2, file);
-                if (filepos)
-                    filepos -= curpos;
-                long finalPos = ftell(file);
-                fseek(file, curpos + i * (long)sizeof(long), SEEK_SET);
-                fwrite(&filepos, sizeof(long), 1, file);
-                fseek(file, finalPos, SEEK_SET);
-                i++;
+                long value = recurse(x + dx * s2, y + dy * s2, z + dz * s2, s2, file);
+                leaves[i++] = value;
             }
         }
     }
+    long curpos = ftell(file);
+    int isWrite = 0;
+    int toWrite[8];
+    for (i = 0; i < 8; i++)
+    {
+        if (leaves[i] == -1)
+        {
+            toWrite[i] = 0;
+        }
+        else
+        {
+            toWrite[i] = (int)(leaves[i] - curpos); // will probably end up negative
+            isWrite = 1;
+        }
+    }
+    if (!isWrite)
+        return -1;
+    fwrite(toWrite, sizeof(int), 8, file);
     return curpos;
 }
 
 int run_makevoxel(lua_State* luaState)
 {
     const char* filename = luaL_checkstring(luaState, 1);
+    remove(filename);
     FILE* file = fopen(filename, "wb");
-    recurse(0, 0, 0, CUBE_SIZE, file);
+    int zero = 0;
+    fwrite(&zero, sizeof(int), 1, file);
+    int header = (int)recurse(0, 0, 0, CUBE_SIZE, file);
+    fseek(file, 0, SEEK_SET);
+    fwrite(&header, sizeof(int), 1, file);
     fclose(file);
     return 0;
 }
