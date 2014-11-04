@@ -48,4 +48,6 @@ function update(time)
     if julia then julx = juliax; july = juliay end
     kernel("main", -1, -1, "0", special, posx, posy, zoom / 1024, julx, july, {frame})
     frame = frame + 1
+
+    softsync()
 end

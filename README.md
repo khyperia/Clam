@@ -115,6 +115,4 @@ CLAM2_RENDERPOS: Where the top-left corner of the window is with respect to the 
 
 CLAM2_FULLLSCREEN: Whether or not to tell GLUT to fullscreen the window
 
-CLAM2_UNSAFE_DELAY_FRAMES: You probably don't want to set this to anything other than 0. However, increasing to 1, 2 or 3 may increase framerate due to network lag. Setting it to anything other than zero **WILL BREAK** any lua scripts that download buffers!
-
 CLAM2_SLAVES: Tilde-separated list of IPs for the host to connect to (in the case of echo servers, this will probably be the same IP repeated multiple times)

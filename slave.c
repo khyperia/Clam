@@ -3,7 +3,6 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <errno.h>
 #include "helper.h"
 #include "socketHelper.h"
 #include "glclContext.h"
@@ -125,21 +124,6 @@ int main(int argc, char** argv)
         puts("Exiting.");
         return EXIT_FAILURE;
     }
-
-    errno = 0;
-    char* endDelayFrames;
-    int delayFrames = (int)strtol(sgetenv("CLAM2_UNSAFE_DELAY_FRAMES", "0"),
-            &endDelayFrames, 10);
-    if (*endDelayFrames)
-    {
-        perror("strtol()");
-        return EXIT_FAILURE;
-    }
-
-    int zero = 0;
-    for (int i = 0; i < delayFrames; i++)
-        if (PrintErr(send_p(socketFd, &zero, sizeof(int))))
-            return EXIT_FAILURE;
 
     glutIdleFunc(masterIdleFunc);
     glutDisplayFunc(masterDisplayFunc);

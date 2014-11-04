@@ -47,7 +47,7 @@ DEPENDS=$(SOURCES)
 DEPENDS:=$(patsubst %.cpp,$(OBJDIR)/%.d,$(DEPENDS))
 DEPENDS:=$(patsubst %.c,$(OBJDIR)/%.d,$(DEPENDS))
 
-MASTERFILES=master luaHelper socketHelper helper
+MASTERFILES=master masterSocket luaHelper socketHelper helper
 SLAVEFILES=slave slaveSocket glclContext openclHelper socketHelper helper
 ECHOFILES=echo socketHelper helper
 

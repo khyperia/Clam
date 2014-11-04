@@ -37,4 +37,5 @@ function update(time)
 
     kernel("main", -1, -1, "0", special, totalTime)
     totalTime = totalTime + time;
+    softsync()
 end

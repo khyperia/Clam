@@ -44,4 +44,6 @@ function update(time)
     frame.look[1], frame.look[2], frame.look[3],
     frame.up[1], frame.up[2], frame.up[3],
     frame.fov / AssumedScreenWidth, frame.focalDistance, frame.frame)
+
+    softsync()
 end

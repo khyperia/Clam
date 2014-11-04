@@ -5,6 +5,18 @@
 #include <poll.h>
 #include <stdio.h>
 
+#include <unistd.h>
+
+// This is used to make sure the master doesn't get too far ahead of the client
+// softSync is for
+int messageSync(int socketFd)
+{
+    enum MessageType message = MessageSync;
+    if (PrintErr(send_p(socketFd, &message, sizeof(message))))
+        return -1;
+    return 0;
+}
+
 int messageKernelSource(struct Interop* interop, int socketFd)
 {
     int numStrings = 0;
@@ -147,10 +159,11 @@ int messageRmBuffer(struct Interop* interop, int socketFd)
     return 0;
 }
 
-// Protocol gets weird here, since we're sending data back
-// TODO: This breaks CLAM2_UNSAFE_DELAY_FRAMES (aka the above comment is why it's unsafe)
 int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
 {
+    long userdata = 0;
+    if (PrintErr(recv_p(socketFd, &userdata, sizeof(userdata))))
+        return -1;
     int bufferId = 0;
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
         return -1;
@@ -160,7 +173,10 @@ int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     if (!data)
         return -1;
     long memSizeL = (long)memSize;
-    if (PrintErr(send_p(socketFd, &memSizeL, sizeof(long))) ||
+    enum MessageType dlbuffer = MessageDlBuffer;
+    if (PrintErr(send_p(socketFd, &dlbuffer, sizeof(dlbuffer))) ||
+        PrintErr(send_p(socketFd, &userdata, sizeof(long))) ||
+        PrintErr(send_p(socketFd, &memSizeL, sizeof(long))) ||
         PrintErr(send_p(socketFd, data, memSize)))
     {
         free(data);
@@ -201,6 +217,8 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
         case MessageTerm:
             puts("MessageTerm caught in socket. Exiting.");
             exit(EXIT_SUCCESS);
+        case MessageSync:
+            return PrintErr(messageSync(socketFd));
         case MessageKernelSource:
             return PrintErr(messageKernelSource(interop, socketFd));
         case MessageKernelInvoke:
@@ -242,7 +260,8 @@ int slaveSocket(struct Interop* interop, int socketFd, struct ScreenPos screenPo
             return -1;
 
         int result = PrintErr(parseMessage(messageType, interop, socketFd, screenPos));
-        if (PrintErr(send_p(socketFd, &result, sizeof(int))) || result)
+
+        if (result)
             return -1;
     }
     return 0;

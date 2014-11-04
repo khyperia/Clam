@@ -2,12 +2,34 @@
 #include "helper.h"
 #include "socketHelper.h"
 #include "master.h"
+#include "masterSocket.h"
 #include <lualib.h>
 #include <lauxlib.h>
 #include <stdlib.h>
+#include <time.h>
 
 // Note: `state` must be a local variable of type lua_State* to use this macro
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
+
+int run_softsync(lua_State* state)
+{
+    time_t begin = clock();
+    while (numWaitingSoftSync > 0)
+    {
+        LuaPrintErr(masterSocketRecv(sockets));
+        if ((clock() - begin) / CLOCKS_PER_SEC > 10)
+            luaL_error(state, "softsync() time out, call softsync() more often to make sure "
+                    "the slaves stay in sync");
+    }
+    LuaPrintErr(send_all_msg(sockets, MessageSync));
+    for (int* socket = sockets; *socket; socket++)
+    {
+        if (*socket == -1)
+            continue;
+        numWaitingSoftSync++;
+    }
+    return 0;
+}
 
 // Creates a buffer with arg(1) id, and arg(2) size
 int run_mkbuffer(lua_State* state)
@@ -17,7 +39,6 @@ int run_mkbuffer(lua_State* state)
     long second = luaL_checkinteger(state, 2);
     LuaPrintErr(send_all(sockets, &first, sizeof(int)));
     LuaPrintErr(send_all(sockets, &second, sizeof(long)));
-    LuaPrintErr(recv_all(sockets));
     return 0;
 }
 
@@ -27,7 +48,6 @@ int run_rmbuffer(lua_State* state)
     LuaPrintErr(send_all_msg(sockets, MessageRmBuffer));
     int first = (int)luaL_checkinteger(state, 1);
     LuaPrintErr(send_all(sockets, &first, sizeof(int)));
-    LuaPrintErr(recv_all(sockets));
     return 0;
 }
 
@@ -47,8 +67,6 @@ int run_compile(lua_State* state)
 
         free(file);
     }
-
-    LuaPrintErr(recv_all(sockets));
     return 0;
 }
 
@@ -106,8 +124,6 @@ int run_kernel(lua_State* state)
 
     int doneValue = 0;
     LuaPrintErr(send_all(sockets, &doneValue, sizeof(int)));
-
-    LuaPrintErr(recv_all(sockets));
     return 0;
 }
 
@@ -129,6 +145,7 @@ int newLua(lua_State** state, const char* filename, char** args)
     luaL_openlibs(*state);
     lua_pushstring(*state, filename);
     lua_setglobal(*state, "__file__");
+    lua_register(*state, "softsync", run_softsync);
     lua_register(*state, "mkbuffer", run_mkbuffer);
     lua_register(*state, "rmbuffer", run_rmbuffer);
     lua_register(*state, "compile", run_compile);

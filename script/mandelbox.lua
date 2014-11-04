@@ -46,6 +46,7 @@ function screenshot(bufferIndex, frame, width, height, numframes)
             frame.up[1], frame.up[2], frame.up[3],
             frame.fov / width, frame.focalDistance, i)
         print((i / numframes * 100), "% done")
+        softsync()
     end
     dlbuffer(bufferIndex, width)
     rmbuffer(bufferIndex + 1)
@@ -103,7 +104,7 @@ function update(time)
     if iskeydown("p") then
         unsetkey("p")
         print("Downloading screenbuffer at frame " .. tostring(frame.frame))
-        dlbuffer(0, AssumedScreenWidth)
+        dlbuffer(0, AssumedScreenWidth) -- issues if screen isn't this size
     end
     if iskeydown("1") then
         unsetkey("1")
@@ -168,4 +169,6 @@ function update(time)
     frame.fov / AssumedScreenWidth, frame.focalDistance, frame.frame)
 
     frame.frame = frame.frame + 1
+
+    softsync()
 end

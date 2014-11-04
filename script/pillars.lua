@@ -50,4 +50,6 @@ function update(time)
     "1", {pilwidth}, {pilheight})
 
     frame.frame = frame.frame + 1
+
+    softsync()
 end

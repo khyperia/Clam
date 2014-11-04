@@ -190,31 +190,3 @@ int send_all_str(int* socket, const char* string)
     }
     return errcode;
 }
-
-// Receives an int from all sockets and checks if it is zero
-int recv_all(int* socket)
-{
-    int errcode = 0;
-    while (*socket)
-    {
-        if (*socket == -1)
-            continue;
-        int result = 0;
-        int err = PrintErr(recv_p(*socket, &result, sizeof(int)));
-        if (err)
-        {
-            close(*socket);
-            *socket = -1;
-            errcode = err;
-        }
-        else if (result)
-        {
-            PrintErr(result && "Slave didn't respond with zero");
-            close(*socket);
-            *socket = -1;
-            errcode = result;
-        }
-        socket++;
-    }
-    return errcode;
-}

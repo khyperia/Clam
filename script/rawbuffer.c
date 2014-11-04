@@ -10,9 +10,10 @@
 #include "../helper.h"
 #include "../socketHelper.h"
 #include "../master.h"
+
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
 
-int saveRaw(int uid1, int uid2, float* data, long dataSize)
+int saveRaw(float* data, long dataSize)
 {
     const char* home = getenv("HOME");
     if (!home)
@@ -22,7 +23,7 @@ int saveRaw(int uid1, int uid2, float* data, long dataSize)
     }
 
     char filename[256];
-    snprintf(filename, sizeof(filename), "%s/fractal_id%d_sock%d.png", home, uid1, uid2);
+    snprintf(filename, sizeof(filename), "%s/clam2_buffer.dat", home);
 
     FILE* fp = fopen(filename, "wb");
     if (!fp)
@@ -36,56 +37,22 @@ int saveRaw(int uid1, int uid2, float* data, long dataSize)
     return 0;
 }
 
+int dlrawbuffer_callback(float* data, long bufferSize)
+{
+    if (PrintErr(saveRaw(data, bufferSize)))
+    {
+        puts("Ignoring raw write error.");
+    }
+    return 0;
+}
 
 int run_dlrawbuffer(lua_State* state)
 {
     LuaPrintErr(send_all_msg(sockets, MessageDlBuffer));
+    long callback = (long)&dlrawbuffer_callback;
+    LuaPrintErr(send_all(sockets, &callback, sizeof(callback)));
     int bufferId = (int)luaL_checkinteger(state, 1);
     LuaPrintErr(send_all(sockets, &bufferId, sizeof(int)));
-    //long width = luaL_checkinteger(state, 2);
-    int retval = 0;
-    for (int* socket = sockets; *socket; socket++)
-    {
-        if (*socket == -1)
-            continue;
-        long bufferSize = 0;
-        if (PrintErr(recv_p(*socket, &bufferSize, sizeof(long))))
-        {
-            close(*socket);
-            *socket = -1;
-            retval = -1;
-            continue;
-        }
-
-        if (PrintErr(bufferSize < 0))
-        {
-            printf("bufferSize = %ld\n", bufferSize);
-            close(*socket);
-            *socket = -1;
-            retval = -1;
-            continue;
-        }
-
-        float* data = malloc_s((size_t)bufferSize);
-        if (PrintErr(recv_p(*socket, data, (size_t)bufferSize)))
-        {
-            free(data);
-            close(*socket);
-            *socket = -1;
-            retval = -1;
-            continue;
-        }
-
-        if (PrintErr(saveRaw(bufferId, *socket, data, bufferSize)))
-        {
-            puts("Ignoring raw write error.");
-        }
-
-        free(data);
-    }
-    if (retval)
-        luaL_error(state, "At least one slave failed to download buffer: %d", retval);
-    LuaPrintErr(recv_all(sockets));
     return 0;
 }
 
@@ -104,9 +71,8 @@ int run_uplrawbuffer(lua_State* state)
     LuaPrintErr(send_all(sockets, &size, sizeof(size)));
     LuaPrintErr(send_all(sockets, buffer, size));
     free(buffer);
-    LuaPrintErr(recv_all(sockets));
     lua_pushnumber(state, size);
-    return 2;
+    return 1;
 }
 
 int rawbuffer(lua_State* state)

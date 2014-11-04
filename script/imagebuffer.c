@@ -23,7 +23,7 @@ inline unsigned char convByte(float value)
     return (unsigned char)value;
 }
 
-int savePng(int uid1, int uid2, float* data, long width, long height)
+int savePng(float* data, long width, long height)
 {
     const char* home = getenv("HOME");
     if (!home)
@@ -33,7 +33,7 @@ int savePng(int uid1, int uid2, float* data, long width, long height)
     }
 
     char filename[256];
-    snprintf(filename, sizeof(filename), "%s/fractal_id%d_sock%d.png", home, uid1, uid2);
+    snprintf(filename, sizeof(filename), "%s/clam2_buffer.png", home);
 
     FILE* fp = fopen(filename, "wb");
     if (!fp)
@@ -175,7 +175,7 @@ float* loadPng(const char* filename, long* width, long* height)
     int bit_depth, color_type;
     png_uint_32 temp_width, temp_height;
     png_get_IHDR(png_ptr, info_ptr, &temp_width, &temp_height, &bit_depth, &color_type,
-        NULL, NULL, NULL);
+            NULL, NULL, NULL);
 
     if (width){ *width = temp_width; }
     if (height){ *height = temp_height; }
@@ -216,57 +216,26 @@ float* loadPng(const char* filename, long* width, long* height)
 
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
 
+// TODO: Find a better way to get buffer size
+static long dlbuffer_callback_width;
+
+int dlbuffer_callback(float* data, long bufferSize)
+{
+    long width = dlbuffer_callback_width;
+    if (PrintErr(savePng(data, width, bufferSize / (width * 4 * (long)sizeof(float)))))
+        puts("Ignoring PNG error.");
+    return 0;
+}
+
 // Downloads a buffer to a png on disk
 int run_dlbuffer(lua_State* state)
 {
     LuaPrintErr(send_all_msg(sockets, MessageDlBuffer));
+    long callback = (long)&dlbuffer_callback;
+    LuaPrintErr(send_all(sockets, &callback, sizeof(callback)));
     int bufferId = (int)luaL_checkinteger(state, 1);
     LuaPrintErr(send_all(sockets, &bufferId, sizeof(int)));
-    long width = luaL_checkinteger(state, 2);
-    int retval = 0;
-    for (int* socket = sockets; *socket; socket++)
-    {
-        if (*socket == -1)
-            continue;
-        long bufferSize = 0;
-        if (PrintErr(recv_p(*socket, &bufferSize, sizeof(long))))
-        {
-            close(*socket);
-            *socket = -1;
-            retval = -1;
-            continue;
-        }
-
-        if (PrintErr(bufferSize < 0))
-        {
-            printf("bufferSize = %ld\n", bufferSize);
-            close(*socket);
-            *socket = -1;
-            retval = -1;
-            continue;
-        }
-
-        float* data = malloc_s((size_t)bufferSize);
-        if (PrintErr(recv_p(*socket, data, (size_t)bufferSize)))
-        {
-            free(data);
-            close(*socket);
-            *socket = -1;
-            retval = -1;
-            continue;
-        }
-
-        if (PrintErr(savePng(bufferId, *socket, data, width,
-                        bufferSize / (width * 4 * (long)sizeof(float)))))
-        {
-            puts("Ignoring PNG error.");
-        }
-
-        free(data);
-    }
-    if (retval)
-        luaL_error(state, "At least one slave failed to download buffer: %d", retval);
-    LuaPrintErr(recv_all(sockets));
+    dlbuffer_callback_width = luaL_checkinteger(state, 2);
     return 0;
 }
 
@@ -286,7 +255,6 @@ int run_uplbuffer(lua_State* state)
     LuaPrintErr(send_all(sockets, &bufferId, sizeof(bufferId)));
     LuaPrintErr(send_all(sockets, &size, sizeof(size)));
     LuaPrintErr(send_all(sockets, buffer, (size_t)size));
-    LuaPrintErr(recv_all(sockets));
     lua_pushnumber(state, width);
     lua_pushnumber(state, height);
     return 2;
