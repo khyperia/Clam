@@ -42,6 +42,33 @@ function update(time)
         rmbuffer(1)
         print("Saved screenshot")
     end
+    if iskeydown("\\") then
+        unsetkey("\\")
+        if useVrpn == nil or useVrpn == false then
+            if vrpn == nil then
+                loadlib("vrpn_help")
+            end
+            useVrpn = true
+        else
+            useVrpn = false
+        end
+    end
+    if useVrpn then
+        tpos, tlook, tup = vrpn(vrpn_server)
+        posx = tpos[1]
+        posy = tpos[2]
+        zoom = math.exp(tpos[3])
+        frame = 0
+    end
+    if iskeydown("h") then
+        unsetkey("h")
+        print("wasd: move")
+        print("rf: zoom")
+        print("j: toggle juliaset")
+        print("u: set juliaset seed to current position")
+        print("p: render image")
+        print("\\: toggle VRPN control")
+    end
 
     local julx = 0
     local july = 0

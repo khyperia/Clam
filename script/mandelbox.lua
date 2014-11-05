@@ -159,6 +159,7 @@ function update(time)
         print("v: video through keyframes")
         print("1-6: screenshot 2^(n + 6) pixels square")
         print("h: this message")
+        print("\\: toggle VRPN control")
     end
 
     kernel("Main", -1, -1, "0", "1",

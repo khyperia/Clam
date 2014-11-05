@@ -77,17 +77,9 @@ A very basic kernel that is essentially just boilerplate to fork for other scrip
 
 ##### mandelbrot.lua:
 
-Renders either the juliabrot/mandelbrot set. Eventually a helptext will be included when pressing "h" while the script is running, for now it is here:
+Renders either the juliabrot/mandelbrot set.
 
-wasd: move around
-
-rf: zoom in/out
-
-j: toggle juliabrot/mandelbrot set
-
-u: set the juliabrot C value to the coordinates of the center of the screen
-
-p: take a render (edit the script code to set image size)
+Pressing "h" will dump what keys do what to stdout of the master program.
 
 ##### mandelbox.lua:
 
@@ -100,6 +92,10 @@ Editing script/mandelbox.conf.cl changes various parameters of the kernel (recom
 ##### pillars.lua:
 
 Unsupported. Similar to mandelbox.lua, except requires a png image parameter to the script (as in 'bin/clam2_master pillars.lua image.png'). It was forked from an old version of mandelbox.lua and, instead of the mandelbox, renders the png as 3d square pillars with height equal to r+g+b.
+
+##### voxels.lua:
+
+Unsupported. Similar to mandelbox.lua, except it uses a voxel octree rather than a fractal formula.
 
 --
 
