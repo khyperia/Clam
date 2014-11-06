@@ -39,7 +39,7 @@ int messageKernelSource(struct Interop* interop, int socketFd)
 }
 
 int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenPos,
-        const char* kernelName, cl_uint argIndex)
+        const char* kernelName, cl_uint* argIndex)
 {
     int arglen = 0;
     if (PrintErr(recv_p(socketFd, &arglen, sizeof(int))))
@@ -58,7 +58,7 @@ int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenP
         {
             return -1;
         }
-        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex,
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, *argIndex,
                         &memory, sizeof(cl_mem))))
         {
             return -1;
@@ -66,22 +66,22 @@ int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenP
     }
     else if (arglen == -2) // Special code for x/y/width/height
     {
-        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, (*argIndex)++,
                         &screenPos.x, sizeof(int))))
         {
             return -1;
         }
-        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, (*argIndex)++,
                         &screenPos.y, sizeof(int))))
         {
             return -1;
         }
-        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, (*argIndex)++,
                         &screenPos.width, sizeof(int))))
         {
             return -1;
         }
-        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex,
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, *argIndex,
                         &screenPos.height, sizeof(int))))
         {
             return -1;
@@ -95,7 +95,7 @@ int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenP
             return -1;
         }
         if (PrintErr(setKernelArg(&interop->clContext,
-                        kernelName, argIndex, arg, (size_t)arglen)))
+                        kernelName, *argIndex, arg, (size_t)arglen)))
         {
             return -1;
         }
@@ -121,7 +121,7 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
     size_t launchSize[] = { (size_t)launchSizeLong[0], (size_t)launchSizeLong[1] };
     for (cl_uint argIndex = 0;; argIndex++)
     {
-        int argResult = recvArgument(interop, socketFd, screenPos, kernelName, argIndex);
+        int argResult = recvArgument(interop, socketFd, screenPos, kernelName, &argIndex);
         if (argResult == 1)
             break;
         else if (PrintErr(argResult /* recvArgument() */))

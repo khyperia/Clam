@@ -1,5 +1,5 @@
-#define CUBE_SIZE 1024
-#define LOG2_CUBE_SIZE 10
+#define CUBE_SIZE 256
+#define LOG2_CUBE_SIZE 8
 
 float3 Rotate(float3 u, float theta, float3 vec)
 {
@@ -61,7 +61,82 @@ void undoOctree(float3* pos, int index)
     *pos = (*pos + convert_float3(offset)) / 2.0;
 }
 
+float minnz(float left, float right)
+{
+    if (left < 0)
+        return right;
+    if (right < 0)
+        return left;
+    return min(left, right);
+}
+
+float minvec(float3 vec)
+{
+    return minnz(minnz(vec.x, vec.y), vec.z);
+}
+
+float VoxelAdvanceDist(float3 pos, float3 look)
+{
+    // 0 = look * x + pos
+    // -pos / look = x
+    // (1 - pos) / look = x
+
+    return minnz(minvec(-pos / look), minvec((1 - pos) / look)) + 0.01;
+}
+
+// This function works. Why? I don't know. How? I don't know. It just does.
 float3 Trace(float3 pos, float3 look, __global Octree* octree)
+{
+    float3 originalPos = pos;
+    int stack[LOG2_CUBE_SIZE];
+    __global Octree* stackOct[LOG2_CUBE_SIZE];
+    int stackDepth = 0;
+    while (true)
+    {
+        while (true)
+        {
+            if (stackDepth == LOG2_CUBE_SIZE)
+            {
+                float3 color, normal;
+                color.x = octree->leaf.colornormal[0];
+                color.y = octree->leaf.colornormal[1];
+                color.z = octree->leaf.colornormal[2];
+                normal.x = octree->leaf.colornormal[3];
+                normal.y = octree->leaf.colornormal[4];
+                normal.z = octree->leaf.colornormal[5];
+                return fabs(normal);
+            }
+            if (pos.x < 0 || pos.x >= 1 || pos.y < 0 || pos.y >= 1 || pos.z < 0 || pos.z >= 1)
+            {
+                return (float3)(1,0,0);
+            }
+            stack[stackDepth] = applyOctree(&pos);
+            int offset = octree->branch.offsets[stack[stackDepth]];
+            if (offset == 0)
+            {
+                break;
+            }
+            stackOct[stackDepth] = octree;
+            octree = (__global Octree*)((__global char*)octree + offset);
+            stackDepth++;
+        }
+
+        pos += look * VoxelAdvanceDist(pos, look);
+
+        undoOctree(&pos, stack[stackDepth]);
+
+        while (pos.x < 0 || pos.x >= 1 || pos.y < 0 || pos.y >= 1 || pos.z < 0 || pos.z >= 1)
+        {
+            stackDepth--;
+            if (stackDepth == -1)
+                return (float3)(length(originalPos - pos));
+            undoOctree(&pos, stack[stackDepth]);
+            octree = stackOct[stackDepth];
+        }
+    }
+}
+
+float3 TraceConstDist(float3 pos, float3 look, __global Octree* octree)
 {
     pos += look * 0.5;
     int stack[LOG2_CUBE_SIZE];
@@ -97,7 +172,7 @@ __kernel void Main(__global float4* screen, __global Octree* octree,
         float posX, float posY, float posZ,
         float lookX, float lookY, float lookZ,
         float upX, float upY, float upZ,
-        float fov, float focalDistance, float frame)
+        float fov)
 {
     int x = get_global_id(0);
     int y = get_global_id(1);

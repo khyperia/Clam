@@ -3,7 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 
-#define CUBE_SIZE 1024
+#define CUBE_SIZE 256
 
 int colornormal(int ix, int iy, int iz, float* result)
 {
@@ -11,7 +11,7 @@ int colornormal(int ix, int iy, int iz, float* result)
     double y = (double)iy / CUBE_SIZE * 2 - 1;
     double z = (double)iz / CUBE_SIZE * 2 - 1;
     double len = x * x + y * y + z * z;
-    if (len > 0.5 * 0.5 || len < 0.495 * 0.495)
+    if (len > 0.5 * 0.5 || len < 0.45 * 0.45)
         return 0;
     len = sqrt(len);
 
