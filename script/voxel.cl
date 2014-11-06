@@ -1,6 +1,33 @@
 #define CUBE_SIZE 256
 #define LOG2_CUBE_SIZE 8
 
+uint MWC64X(ulong *state)
+{
+    uint c=(*state)>>32, x=(*state)&0xFFFFFFFF;
+    *state = x*((ulong)4294883355U) + c;
+    return x^c;
+}
+
+float Rand(ulong* seed)
+{
+    return (float)MWC64X(seed) / UINT_MAX;
+}
+
+float2 RandCircle(ulong* rand)
+{
+    float2 polar = (float2)(Rand(rand) * 6.28318531, sqrt(Rand(rand)));
+    return (float2)(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
+}
+
+// Box-Muller transform
+// returns two normally-distributed independent variables
+float2 RandNormal(ulong* rand)
+{
+    float mul = sqrt(-2 * log(Rand(rand)));
+    float angle = 6.28318530718 * Rand(rand);
+    return mul * (float2)(cos(angle), sin(angle));
+}
+
 float3 Rotate(float3 u, float theta, float3 vec)
 {
     float cost = cos(theta);
@@ -75,17 +102,24 @@ float minvec(float3 vec)
     return minnz(minnz(vec.x, vec.y), vec.z);
 }
 
+#define VOXEL_ADVANCE_DIST_EPS 0.001
+
 float VoxelAdvanceDist(float3 pos, float3 look)
 {
     // 0 = look * x + pos
     // -pos / look = x
     // (1 - pos) / look = x
 
-    return minnz(minvec(-pos / look), minvec((1 - pos) / look)) + 0.01;
+    return minnz(minvec(-pos / look), minvec((1 - pos) / look)) + VOXEL_ADVANCE_DIST_EPS;
+}
+
+float RayPlaneIntersection(float3 pos, float3 look, float3 plane)
+{
+    return -(dot(pos, plane) + dot((float3)(0.5), plane)) / dot(look, plane);
 }
 
 // This function works. Why? I don't know. How? I don't know. It just does.
-float3 Trace(float3 pos, float3 look, __global Octree* octree)
+float3 Trace(float3 pos, float3 look, __global Octree* octree, float3* color, float3* normal)
 {
     float3 originalPos = pos;
     int stack[LOG2_CUBE_SIZE];
@@ -97,23 +131,37 @@ float3 Trace(float3 pos, float3 look, __global Octree* octree)
         {
             if (stackDepth == LOG2_CUBE_SIZE)
             {
-                float3 color, normal;
-                color.x = octree->leaf.colornormal[0];
-                color.y = octree->leaf.colornormal[1];
-                color.z = octree->leaf.colornormal[2];
-                normal.x = octree->leaf.colornormal[3];
-                normal.y = octree->leaf.colornormal[4];
-                normal.z = octree->leaf.colornormal[5];
-                return fabs(normal);
+                color->x = octree->leaf.colornormal[0];
+                color->y = octree->leaf.colornormal[1];
+                color->z = octree->leaf.colornormal[2];
+                normal->x = octree->leaf.colornormal[3];
+                normal->y = octree->leaf.colornormal[4];
+                normal->z = octree->leaf.colornormal[5];
+
+                /*
+                float3 newPos = pos + look * VoxelAdvanceDist(pos, look);
+                if (dot(newPos - (float3)(0.5), normal) > 0)
+                {
+                    pos = newPos;
+                    break;
+                }
+                */
+
+                pos -= look * (1.1 * VOXEL_ADVANCE_DIST_EPS);
+                while (stackDepth >= 0)
+                    undoOctree(&pos, stack[stackDepth--]);
+                return pos;
             }
             if (pos.x < 0 || pos.x >= 1 || pos.y < 0 || pos.y >= 1 || pos.z < 0 || pos.z >= 1)
             {
-                return (float3)(1,0,0);
+                return (float3)(-1);
             }
             stack[stackDepth] = applyOctree(&pos);
             int offset = octree->branch.offsets[stack[stackDepth]];
             if (offset == 0)
             {
+                pos += look * VoxelAdvanceDist(pos, look);
+                undoOctree(&pos, stack[stackDepth]);
                 break;
             }
             stackOct[stackDepth] = octree;
@@ -121,50 +169,49 @@ float3 Trace(float3 pos, float3 look, __global Octree* octree)
             stackDepth++;
         }
 
-        pos += look * VoxelAdvanceDist(pos, look);
-
-        undoOctree(&pos, stack[stackDepth]);
-
         while (pos.x < 0 || pos.x >= 1 || pos.y < 0 || pos.y >= 1 || pos.z < 0 || pos.z >= 1)
         {
             stackDepth--;
             if (stackDepth == -1)
-                return (float3)(length(originalPos - pos));
+                return pos;
             undoOctree(&pos, stack[stackDepth]);
             octree = stackOct[stackDepth];
         }
     }
 }
 
-float3 TraceConstDist(float3 pos, float3 look, __global Octree* octree)
+float3 Cone(float3 normal, float fov, ulong* rand)
 {
-    pos += look * 0.5;
-    int stack[LOG2_CUBE_SIZE];
-    int stackDepth = 0;
-    while (true)
+    const float3 dir1 = normalize((float3)(1,1,1));
+    const float3 dir2 = normalize((float3)(-1,1,1));
+    float3 dir = dir1;
+    if (fabs(dot(normal, dir1)) > cos(0.2))
+        dir = dir2;
+    float3 up = cross(cross(normal, normalize(dir)), normal);
+    return RayDir(normal, up, RandCircle(rand), fov);
+}
+
+float3 RenderingEquation(float3 rayPos, float3 rayDir, __global Octree* octree, ulong* rand)
+{
+    float3 colorAccum = (float3)(1);
+    float3 total = (float3)(0);
+    for (int i = 0; i < 2; i++)
     {
-        if (stackDepth == LOG2_CUBE_SIZE)
+        float3 color, normal;
+        rayPos = Trace(rayPos, rayDir, octree, &color, &normal);
+        if (rayPos.x < 0 || rayPos.x >= 1 ||
+            rayPos.y < 0 || rayPos.y >= 1 ||
+            rayPos.z < 0 || rayPos.z >= 1)
         {
-            for (int i = LOG2_CUBE_SIZE - 1; i >= 0; i--)
-            {
-                undoOctree(&pos, stack[i]);
-            }
-            float x = octree->leaf.colornormal[3];
-            float y = octree->leaf.colornormal[4];
-            float z = octree->leaf.colornormal[5];
-            return (float3)(x, y, z);
+            if (rayPos.x > 0.5 && rayPos.y > 0.5 && rayPos.z > 0.5)
+                total += colorAccum * (float3)(2);
+            break;
         }
-        else
-        {
-            int index = applyOctree(&pos);
-            int offset = octree->branch.offsets[index];
-            if (offset == 0)
-                return (float3)(1, 0, 0);
-            octree = (__global Octree*)((__global char*)octree + offset);
-            stack[stackDepth] = index;
-            stackDepth++;
-        }
+        colorAccum *= color;
+        rayDir = Cone(normal, 3.0 / 2, rand);
+        rayPos += 2.0 / CUBE_SIZE * rayDir;
     }
+    return total;
 }
 
 __kernel void Main(__global float4* screen, __global Octree* octree,
@@ -172,7 +219,7 @@ __kernel void Main(__global float4* screen, __global Octree* octree,
         float posX, float posY, float posZ,
         float lookX, float lookY, float lookZ,
         float upX, float upY, float upZ,
-        float fov)
+        float fov, int frame)
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
@@ -188,5 +235,13 @@ __kernel void Main(__global float4* screen, __global Octree* octree,
     float2 screenCoords = (float2)((float)(x + screenX), (float)(y + screenY));
     float3 rayDir = RayDir(look, up, screenCoords, fov);
 
-    screen[y * width + x].xyz = Trace(pos, rayDir, octree);
+    ulong rand = frame * width * height + y * width + x;
+    for (int i = 0; i < 100; i++)
+        Rand(&rand);
+
+    float3 new = RenderingEquation(pos, rayDir, octree, &rand);
+    float3 old = screen[y * width + x].xyz;
+    if (frame != 0)
+        new = (new + old * frame) / (frame + 1);
+    screen[y * width + x].xyz = new;
 }

@@ -43,7 +43,7 @@ function update(time)
     frame.pos[1], frame.pos[2], frame.pos[3],
     frame.look[1], frame.look[2], frame.look[3],
     frame.up[1], frame.up[2], frame.up[3],
-    frame.fov / AssumedScreenWidth)
+    frame.fov / AssumedScreenWidth, {frame.frame})
 
     frame.frame = frame.frame + 1
 

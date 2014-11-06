@@ -5,23 +5,35 @@
 
 #define CUBE_SIZE 256
 
+#define SPHERE_OUT 0.5
+#define SPHERE_IN 0.45
+
+inline int abs(int val)
+{
+    return val < 0 ? -val : val;
+}
+
 int colornormal(int ix, int iy, int iz, float* result)
 {
     double x = (double)ix / CUBE_SIZE * 2 - 1;
     double y = (double)iy / CUBE_SIZE * 2 - 1;
     double z = (double)iz / CUBE_SIZE * 2 - 1;
     double len = x * x + y * y + z * z;
-    if (len > 0.5 * 0.5 || len < 0.45 * 0.45)
+    if (len > SPHERE_OUT * SPHERE_OUT || len < SPHERE_IN * SPHERE_IN ||
+            (abs(ix - CUBE_SIZE / 2) < 30 && iz > CUBE_SIZE / 2))
         return 0;
     len = sqrt(len);
+
+    if (len < (SPHERE_OUT + SPHERE_IN) / 2)
+        len *= -1;
 
     x /= len;
     y /= len;
     z /= len;
 
-    result[0] = 1;
-    result[1] = 1;
-    result[2] = 1;
+    result[0] = (float)fabs(x);
+    result[1] = (float)fabs(y);
+    result[2] = (float)fabs(z);
     result[3] = (float)x;
     result[4] = (float)y;
     result[5] = (float)z;
