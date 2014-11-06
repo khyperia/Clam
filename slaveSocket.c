@@ -38,7 +38,71 @@ int messageKernelSource(struct Interop* interop, int socketFd)
     return result;
 }
 
-// TODO: Clean up kernelName in a less-verbose way
+int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenPos,
+        const char* kernelName, cl_uint argIndex)
+{
+    int arglen = 0;
+    if (PrintErr(recv_p(socketFd, &arglen, sizeof(int))))
+        return -1;
+    if (arglen == 0)
+        return 1; // Special return code for "done"
+    else if (arglen == -1) // Special code for memory argument
+    {
+        int bufferName = 0;
+        if (PrintErr(recv_p(socketFd, &bufferName, sizeof(int))))
+        {
+            return -1;
+        }
+        cl_mem memory = getMem(*interop, bufferName, NULL);
+        if (memory == NULL)
+        {
+            return -1;
+        }
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex,
+                        &memory, sizeof(cl_mem))))
+        {
+            return -1;
+        }
+    }
+    else if (arglen == -2) // Special code for x/y/width/height
+    {
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
+                        &screenPos.x, sizeof(int))))
+        {
+            return -1;
+        }
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
+                        &screenPos.y, sizeof(int))))
+        {
+            return -1;
+        }
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
+                        &screenPos.width, sizeof(int))))
+        {
+            return -1;
+        }
+        if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex,
+                        &screenPos.height, sizeof(int))))
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        unsigned char arg[arglen];
+        if (PrintErr(recv_p(socketFd, arg, (size_t)arglen)))
+        {
+            return -1;
+        }
+        if (PrintErr(setKernelArg(&interop->clContext,
+                        kernelName, argIndex, arg, (size_t)arglen)))
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
 {
     char* kernelName = recv_str(socketFd);
@@ -57,76 +121,13 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
     size_t launchSize[] = { (size_t)launchSizeLong[0], (size_t)launchSizeLong[1] };
     for (cl_uint argIndex = 0;; argIndex++)
     {
-        int arglen = 0;
-        if (PrintErr(recv_p(socketFd, &arglen, sizeof(int))))
+        int argResult = recvArgument(interop, socketFd, screenPos, kernelName, argIndex);
+        if (argResult == 1)
+            break;
+        else if (PrintErr(argResult /* recvArgument() */))
         {
             free(kernelName);
             return -1;
-        }
-        if (arglen == 0)
-            break;
-        else if (arglen == -1) // Special code for memory argument
-        {
-            int bufferName = 0;
-            if (PrintErr(recv_p(socketFd, &bufferName, sizeof(int))))
-            {
-                free(kernelName);
-                return -1;
-            }
-            cl_mem memory = getMem(*interop, bufferName, NULL);
-            if (memory == NULL)
-            {
-                free(kernelName);
-                return -1;
-            }
-            if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex,
-                            &memory, sizeof(cl_mem))))
-            {
-                free(kernelName);
-                return -1;
-            }
-        }
-        else if (arglen == -2) // Special code for x/y/width/height
-        {
-            if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
-                            &screenPos.x, sizeof(int))))
-            {
-                free(kernelName);
-                return -1;
-            }
-            if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
-                            &screenPos.y, sizeof(int))))
-            {
-                free(kernelName);
-                return -1;
-            }
-            if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex++,
-                            &screenPos.width, sizeof(int))))
-            {
-                free(kernelName);
-                return -1;
-            }
-            if (PrintErr(setKernelArg(&interop->clContext, kernelName, argIndex,
-                            &screenPos.height, sizeof(int))))
-            {
-                free(kernelName);
-                return -1;
-            }
-        }
-        else
-        {
-            unsigned char arg[arglen];
-            if (PrintErr(recv_p(socketFd, arg, (size_t)arglen)))
-            {
-                free(kernelName);
-                return -1;
-            }
-            if (PrintErr(setKernelArg(&interop->clContext,
-                            kernelName, argIndex, arg, (size_t)arglen)))
-            {
-                free(kernelName);
-                return -1;
-            }
         }
     }
     int result = PrintErr(invokeKernel(&interop->clContext,
@@ -142,7 +143,7 @@ int messageMkBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     int bufferId = 0;
     long bufferSize = 0;
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))) ||
-        PrintErr(recv_p(socketFd, &bufferSize, sizeof(long))))
+            PrintErr(recv_p(socketFd, &bufferSize, sizeof(long))))
         return -1;
     if (PrintErr(allocMem(interop, bufferId, (size_t)bufferSize,
                     (size_t)screenPos.width * (size_t)screenPos.height * 4 * 4)))
@@ -175,9 +176,9 @@ int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     long memSizeL = (long)memSize;
     enum MessageType dlbuffer = MessageDlBuffer;
     if (PrintErr(send_p(socketFd, &dlbuffer, sizeof(dlbuffer))) ||
-        PrintErr(send_p(socketFd, &userdata, sizeof(long))) ||
-        PrintErr(send_p(socketFd, &memSizeL, sizeof(long))) ||
-        PrintErr(send_p(socketFd, data, memSize)))
+            PrintErr(send_p(socketFd, &userdata, sizeof(long))) ||
+            PrintErr(send_p(socketFd, &memSizeL, sizeof(long))) ||
+            PrintErr(send_p(socketFd, data, memSize)))
     {
         free(data);
         return -1;

@@ -11,7 +11,7 @@
 // Note: `state` must be a local variable of type lua_State* to use this macro
 #define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
 
-int run_softsync(lua_State* state)
+void sync_waitmessage(lua_State* state)
 {
     time_t begin = clock();
     while (numWaitingSoftSync > 0)
@@ -21,6 +21,10 @@ int run_softsync(lua_State* state)
             luaL_error(state, "softsync() time out, call softsync() more often to make sure "
                     "the slaves stay in sync");
     }
+}
+
+void sync_sendmessage(lua_State* state)
+{
     LuaPrintErr(send_all_msg(sockets, MessageSync));
     for (int* socket = sockets; *socket; socket++)
     {
@@ -28,6 +32,19 @@ int run_softsync(lua_State* state)
             continue;
         numWaitingSoftSync++;
     }
+}
+
+int run_softsync(lua_State* state)
+{
+    sync_waitmessage(state);
+    sync_sendmessage(state);
+    return 0;
+}
+
+int run_hardsync(lua_State* state)
+{
+    sync_sendmessage(state);
+    sync_waitmessage(state);
     return 0;
 }
 
@@ -146,6 +163,7 @@ int newLua(lua_State** state, const char* filename, char** args)
     lua_pushstring(*state, filename);
     lua_setglobal(*state, "__file__");
     lua_register(*state, "softsync", run_softsync);
+    lua_register(*state, "hardsync", run_hardsync);
     lua_register(*state, "mkbuffer", run_mkbuffer);
     lua_register(*state, "rmbuffer", run_rmbuffer);
     lua_register(*state, "compile", run_compile);

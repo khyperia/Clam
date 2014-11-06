@@ -6,11 +6,68 @@
 #include <stdio.h>
 #include <string.h>
 
-// Tries to create a cl_context and returns its associated cl_device_id
-// TODO: Allow the user to select a device if there is more than one?
-cl_context getClContext(cl_device_id* outputClDeviceId)
+void printDeviceIdName(cl_device_id device)
 {
-    // Get cl_platform_id count and then list
+    size_t nameSize = 0;
+    if (PrintErr(clGetDeviceInfo(device, CL_DEVICE_NAME, 0, NULL, &nameSize)))
+    {
+        puts("Ignoring.");
+        return;
+    }
+    char name[nameSize];
+    if (PrintErr(clGetDeviceInfo(device, CL_DEVICE_NAME, nameSize, name, NULL)))
+    {
+        puts("Ignorning.");
+        return;
+    }
+    printf("Using device %s\n", name);
+}
+
+cl_context createClContextFromDevice(cl_platform_id platformId, cl_device_id deviceId)
+{
+    // Properties to use when creating the context (code is platform-specific)
+    cl_context_properties contextProperties[] = {
+        CL_GL_CONTEXT_KHR, (cl_context_properties)(void*)glXGetCurrentContext(),
+        CL_GLX_DISPLAY_KHR, (cl_context_properties)(void*)glXGetCurrentDisplay(),
+        CL_CONTEXT_PLATFORM, (cl_context_properties)platformId,
+        0, 0
+    };
+    cl_int clError;
+    cl_context context = clCreateContext(contextProperties, 1, &deviceId, 0, 0, &clError);
+    if (clError == CL_SUCCESS)
+        return context;
+    return NULL;
+}
+
+cl_context createClContextFromPlatform(cl_platform_id platformId, cl_device_id* outputClDeviceId)
+{
+    // Only allow GPU devices to be used
+    const cl_device_type clDeviceType = CL_DEVICE_TYPE_GPU;
+
+    // Get cl_device_id count and then list
+    cl_uint openclDeviceCount = 0;
+    if (PrintErr(clGetDeviceIDs(platformId, clDeviceType, 0, NULL, &openclDeviceCount)))
+        return NULL;
+
+    cl_device_id deviceIds[openclDeviceCount];
+    if (PrintErr(clGetDeviceIDs(platformId, clDeviceType, openclDeviceCount, deviceIds, NULL)))
+        return NULL;
+
+    for (cl_uint device = 0; device < openclDeviceCount; device++)
+    {
+        cl_device_id deviceId = deviceIds[device];
+        cl_context context = createClContextFromDevice(platformId, deviceId);
+        if (context)
+        {
+            *outputClDeviceId = deviceId;
+            return context;
+        }
+    }
+    return NULL;
+}
+
+cl_context createClContextFromNothing(cl_device_id* outputClDeviceId)
+{
     cl_uint openclPlatformCount = 0;
     if (PrintErr(clGetPlatformIDs(0, NULL, &openclPlatformCount)))
         return NULL;
@@ -19,74 +76,28 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
     if (PrintErr(clGetPlatformIDs(openclPlatformCount, platformIds, NULL)))
         return NULL;
 
-    cl_context context = NULL;
-
     for (cl_uint platform = 0; platform < openclPlatformCount; platform++)
     {
         cl_platform_id platformId = platformIds[platform];
-        // Only allow GPU devices to be used
-        const cl_device_type clDeviceType = CL_DEVICE_TYPE_GPU;
-
-        // Get cl_device_id count and then list
-        cl_uint openclDeviceCount = 0;
-        if (PrintErr(clGetDeviceIDs(platformId, clDeviceType,
-                        0, NULL, &openclDeviceCount)))
-            return NULL;
-
-        cl_device_id deviceIds[openclDeviceCount];
-        if (PrintErr(clGetDeviceIDs(platformId, clDeviceType, openclDeviceCount,
-                        deviceIds, NULL)))
-            return NULL;
-
-        // Properties to use when creating the context (code is platform-specific)
-        cl_context_properties contextProperties[] = {
-            CL_GL_CONTEXT_KHR, (cl_context_properties)(void*)glXGetCurrentContext(),
-            CL_GLX_DISPLAY_KHR, (cl_context_properties)(void*)glXGetCurrentDisplay(),
-            CL_CONTEXT_PLATFORM, (cl_context_properties)platformId,
-            0, 0
-        };
-
-        for (cl_uint device = 0; device < openclDeviceCount; device++)
-        {
-            cl_device_id deviceId = deviceIds[device];
-
-            // Create the context and check for success
-            cl_int clError;
-            context = clCreateContext(contextProperties,
-                    1, &deviceId, 0, 0, &clError);
-            if (clError == CL_SUCCESS)
-            {
-                if (outputClDeviceId)
-                    *outputClDeviceId = deviceId;
-                break;
-            }
-            else
-            {
-                context = NULL;
-            }
-        }
+        cl_context context = createClContextFromPlatform(platformId, outputClDeviceId);
         if (context)
-            break;
+            return context;
     }
-    if (!context)
-        return NULL;
-    // Print the device name
-    size_t nameSize = 0;
-    if (PrintErr(clGetDeviceInfo(*outputClDeviceId, CL_DEVICE_NAME, 0, NULL, &nameSize)))
+    return NULL;
+}
+
+// Tries to create a cl_context and returns its associated cl_device_id
+// TODO: Allow the user to select a device if there is more than one?
+cl_context getClContext(cl_device_id* outputClDeviceId)
+{
+    cl_context context = createClContextFromNothing(outputClDeviceId);
+    if (context)
     {
-        puts("Ignoring.");
+        printDeviceIdName(*outputClDeviceId);
         return context;
     }
-    char* name = malloc_s(nameSize * sizeof(char));
-    if (PrintErr(clGetDeviceInfo(*outputClDeviceId, CL_DEVICE_NAME, nameSize, name, NULL)))
-    {
-        puts("Ignorning.");
-        free(name);
-        return context;
-    }
-    printf("Using device %s\n", name);
-    free(name);
-    return context;
+    puts("Unable to find suitable OpenCL device");
+    return NULL;
 }
 
 // Returns the linked list node of that key, or null if not found

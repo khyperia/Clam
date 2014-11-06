@@ -3,6 +3,15 @@
 #include <stdio.h>
 #include <string.h>
 
+void printBuildLog(cl_device_id deviceId, cl_program program)
+{
+    size_t logSize;
+    clGetProgramBuildInfo(program, deviceId, CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+    char str[logSize];
+    clGetProgramBuildInfo(program, deviceId, CL_PROGRAM_BUILD_LOG, logSize, str, NULL);
+    puts(str);
+}
+
 // Builds an openCl kernel (fills in interop->clContext)
 int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
 {
@@ -15,19 +24,11 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
         interop->clContext.program = NULL;
         return -1;
     }
-    openclError = clBuildProgram(interop->clContext.program, 1, &interop->deviceId,
-            "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror", NULL, NULL);
-    if (openclError)
+    if (PrintErr(clBuildProgram(interop->clContext.program, 1, &interop->deviceId,
+            "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror", NULL, NULL)))
     {
-        size_t logSize;
-        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId,
-                CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
-
-        char* str = malloc_s(logSize * sizeof(char));
-        clGetProgramBuildInfo(interop->clContext.program, interop->deviceId,
-                CL_PROGRAM_BUILD_LOG, logSize, str, NULL);
-        printf("OpenCL build failed:\n%s\n", str);
-        free(str);
+        puts("OpenCL build failed:");
+        printBuildLog(interop->deviceId, interop->clContext.program);
         clReleaseProgram(interop->clContext.program);
         interop->clContext.program = NULL;
         return -1;
