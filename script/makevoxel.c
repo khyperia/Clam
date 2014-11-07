@@ -5,8 +5,7 @@
 
 #define CUBE_SIZE 256
 
-#define SPHERE_OUT 0.5
-#define SPHERE_IN 0.45
+#define SPHERE 0.5
 
 inline int abs(int val)
 {
@@ -15,17 +14,20 @@ inline int abs(int val)
 
 int colornormal(int ix, int iy, int iz, float* result)
 {
-    double x = (double)ix / CUBE_SIZE * 2 - 1;
-    double y = (double)iy / CUBE_SIZE * 2 - 1;
-    double z = (double)iz / CUBE_SIZE * 2 - 1;
-    double len = x * x + y * y + z * z;
-    if (len > SPHERE_OUT * SPHERE_OUT || len < SPHERE_IN * SPHERE_IN ||
-            (abs(ix - CUBE_SIZE / 2) < 30 && iz > CUBE_SIZE / 2))
-        return 0;
-    len = sqrt(len);
+    double x0 = (double)ix / CUBE_SIZE - 0.5;
+    double y0 = (double)iy / CUBE_SIZE - 0.5;
+    double z0 = (double)iz / CUBE_SIZE - 0.5;
+    double len0 = sqrt(x0 * x0 + y0 * y0 + z0 * z0);
 
-    if (len < (SPHERE_OUT + SPHERE_IN) / 2)
-        len *= -1;
+    double extralen = (len0 - SPHERE / 2) * CUBE_SIZE;
+
+    if (fabs(extralen) > sqrt(3))
+        return 0;
+
+    double x = (ix + 0.5) / CUBE_SIZE * 2 - 1;
+    double y = (iy + 0.5) / CUBE_SIZE * 2 - 1;
+    double z = (iz + 0.5) / CUBE_SIZE * 2 - 1;
+    double len = sqrt(x * x + y * y + z * z);
 
     x /= len;
     y /= len;
@@ -37,6 +39,7 @@ int colornormal(int ix, int iy, int iz, float* result)
     result[3] = (float)x;
     result[4] = (float)y;
     result[5] = (float)z;
+    result[6] = (float)extralen;
     return 1;
 }
 
@@ -44,11 +47,11 @@ long recurse(int x, int y, int z, int s, FILE* file)
 {
     if (s == 1)
     {
-        float result[6];
+        float result[7];
         if (colornormal(x, y, z, result))
         {
             long pos = ftell(file);
-            fwrite(result, sizeof(float), 6, file);
+            fwrite(result, sizeof(float), sizeof(result) / sizeof(float), file);
             return pos;
         }
         return -1;

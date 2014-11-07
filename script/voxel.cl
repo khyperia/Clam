@@ -67,7 +67,7 @@ typedef union
     {
         // DO NOT use a floatN here, as they must be alinged to an N*4 byte boundary
         // (which they aren't due to wacked-out storage format of the octree)
-        float colornormal[6];
+        float colornormal[7];
     } leaf;
 } Octree;
 
@@ -102,7 +102,7 @@ float minvec(float3 vec)
     return minnz(minnz(vec.x, vec.y), vec.z);
 }
 
-#define VOXEL_ADVANCE_DIST_EPS 0.001
+#define VOXEL_ADVANCE_DIST_EPS (0.001)
 
 float VoxelAdvanceDist(float3 pos, float3 look)
 {
@@ -113,9 +113,9 @@ float VoxelAdvanceDist(float3 pos, float3 look)
     return minnz(minvec(-pos / look), minvec((1 - pos) / look)) + VOXEL_ADVANCE_DIST_EPS;
 }
 
-float RayPlaneIntersection(float3 pos, float3 look, float3 plane)
+float RayPlaneIntersection(float3 pos, float3 look, float3 plane, float planeDist)
 {
-    return -(dot(pos, plane) + dot((float3)(0.5), plane)) / dot(look, plane);
+    return -(dot(pos, plane) + planeDist) / dot(look, plane);
 }
 
 // This function works. Why? I don't know. How? I don't know. It just does.
@@ -137,17 +137,19 @@ float3 Trace(float3 pos, float3 look, __global Octree* octree, float3* color, fl
                 normal->x = octree->leaf.colornormal[3];
                 normal->y = octree->leaf.colornormal[4];
                 normal->z = octree->leaf.colornormal[5];
+                float planeDist = octree->leaf.colornormal[6];
 
-                /*
-                float3 newPos = pos + look * VoxelAdvanceDist(pos, look);
-                if (dot(newPos - (float3)(0.5), normal) > 0)
+                float vda = VoxelAdvanceDist(pos, look);
+                float rpi = RayPlaneIntersection(pos, look, *normal, planeDist);
+                if (rpi < 0 || rpi > vda)
                 {
-                    pos = newPos;
+                    pos += look * vda;
                     break;
                 }
-                */
 
-                pos -= look * (1.1 * VOXEL_ADVANCE_DIST_EPS);
+                pos += look * rpi;
+                pos += *normal * VOXEL_ADVANCE_DIST_EPS;
+                stackDepth--;
                 while (stackDepth >= 0)
                     undoOctree(&pos, stack[stackDepth--]);
                 return pos;
@@ -204,7 +206,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, __global Octree* octree, 
             rayPos.z < 0 || rayPos.z >= 1)
         {
             if (rayPos.x > 0.5 && rayPos.y > 0.5 && rayPos.z > 0.5)
-                total += colorAccum * (float3)(2);
+                total += colorAccum * (float3)(1);
             break;
         }
         colorAccum *= color;
