@@ -56,13 +56,29 @@ float3 RayDir(float3 look, float3 up, float2 screenCoords, float fov)
 
 typedef struct
 {
-    float verts[9];
+    int numVerts;
+    union
+    {
+        struct
+        {
+            int offset1;
+            int verts[];
+        } leaf;
+        struct
+        {
+            float bbox[6];
+            int offset1;
+            int offset2;
+        } branch;
+    } u;
 } Tri;
 
 typedef struct
 {
     __global Tri* tris;
-    unsigned int size;
+    __global float* verts;
+    __global float* normals;
+    int offset;
 } Tris;
 
 // http://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
@@ -89,24 +105,81 @@ float MollerTrumbore(float3 v1, float3 v2, float3 v3, float3 o, float3 d)
     return dist;
 }
 
+float rayBbox(float3 o, float3 d, float3 minb, float3 maxb)
+{
+    float3 t1 = (minb - o) / d;
+    float3 t2 = (maxb - o) / d;
+    float3 tmin = min(t1, t2);
+    float3 tmax = max(t1, t2);
+    float dmin = max(max(tmin.x, tmin.y), tmin.z);
+    float dmax = min(min(tmax.x, tmax.y), tmax.z);
+    if (dmax > dmin && dmax > 0)
+        return dmin;
+    return -1;
+}
+
 float Trace(float3 pos, float3 look, Tris tris, float3* color, float3* normal)
 {
     float mini = FLT_MAX;
     *color = (float3)(0.5);
-    for (unsigned int i = 0; i < tris.size; i++)
+
+    while (true)
     {
-        Tri tri = tris.tris[i];
-        float3 vert1 = (float3)(tri.verts[0], tri.verts[1], tri.verts[2]);
-        float3 vert2 = (float3)(tri.verts[3], tri.verts[4], tri.verts[5]);
-        float3 vert3 = (float3)(tri.verts[6], tri.verts[7], tri.verts[8]);
-        float newMin = MollerTrumbore(vert1, vert2, vert3, pos, look);
-        if (newMin < mini)
+        __global Tri* tri = (__global Tri*)((__global char*)tris.tris + tris.offset);
+        int numVerts = tri->numVerts;
+        if (numVerts == 0)
         {
-            mini = newMin;
-            *normal = cross(normalize(vert2 - vert1), normalize(vert3 - vert1));
+            float3 minb = (float3)(tri->u.branch.bbox[0], tri->u.branch.bbox[1], tri->u.branch.bbox[2]);
+            float3 maxb = (float3)(tri->u.branch.bbox[3], tri->u.branch.bbox[4], tri->u.branch.bbox[5]);
+            float bbox = rayBbox(pos, look, minb, maxb);
+            if (bbox > 0 && bbox < mini)
+                tris.offset = tri->u.branch.offset2;
+            else
+                tris.offset = tri->u.branch.offset1;
         }
+        else
+        {
+            tris.offset = tri->u.leaf.offset1;
+            for (int i = 0; i < numVerts; i++)
+            {
+                int vert1i = tri->u.leaf.verts[i * 3 + 0];
+                float3 vert1 = (float3)(
+                        tris.verts[vert1i * 3 + 0],
+                        tris.verts[vert1i * 3 + 1],
+                        tris.verts[vert1i * 3 + 2]);
+                float3 normal1 = (float3)(
+                        tris.normals[vert1i * 3 + 0],
+                        tris.normals[vert1i * 3 + 1],
+                        tris.normals[vert1i * 3 + 2]);
+                int vert2i = tri->u.leaf.verts[i * 3 + 1];
+                float3 vert2 = (float3)(
+                        tris.verts[vert2i * 3 + 0],
+                        tris.verts[vert2i * 3 + 1],
+                        tris.verts[vert2i * 3 + 2]);
+                float3 normal2 = (float3)(
+                        tris.normals[vert2i * 3 + 0],
+                        tris.normals[vert2i * 3 + 1],
+                        tris.normals[vert2i * 3 + 2]);
+                int vert3i = tri->u.leaf.verts[i * 3 + 2];
+                float3 vert3 = (float3)(
+                        tris.verts[vert3i * 3 + 0],
+                        tris.verts[vert3i * 3 + 1],
+                        tris.verts[vert3i * 3 + 2]);
+                float3 normal3 = (float3)(
+                        tris.normals[vert3i * 3 + 0],
+                        tris.normals[vert3i * 3 + 1],
+                        tris.normals[vert3i * 3 + 2]);
+                float newMin = MollerTrumbore(vert1, vert2, vert3, pos, look);
+                if (newMin < mini)
+                {
+                    mini = newMin;
+                    *normal = normalize(normal1 + normal2 + normal3);
+                }
+            }
+        }
+        if (tris.offset == 0)
+            return mini;
     }
-    return mini;
 }
 
 float3 Cone(float3 normal, float fov, ulong* rand)
@@ -131,7 +204,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, Tris tris, ulong* rand)
         if (traceAmount >= FLT_MAX)
         {
             if (rayDir.x > 0.0 && rayDir.y > 0.0 && rayDir.z > 0.0)
-                total += colorAccum * (float3)(1);
+                total += colorAccum * (float3)(5);
             break;
         }
         rayPos += rayDir * traceAmount;
@@ -142,7 +215,7 @@ float3 RenderingEquation(float3 rayPos, float3 rayDir, Tris tris, ulong* rand)
     return total;
 }
 
-__kernel void Main(__global float4* screen, __global Tri* triArr, unsigned int triSize,
+__kernel void Main(__global float4* screen, __global Tri* triArr,
         int screenX, int screenY, int width, int height,
         float posX, float posY, float posZ,
         float lookX, float lookY, float lookZ,
@@ -167,7 +240,9 @@ __kernel void Main(__global float4* screen, __global Tri* triArr, unsigned int t
 
     Tris tris;
     tris.tris = triArr;
-    tris.size = triSize;
+    tris.verts = (__global float*)((__global char*)triArr + *((__global int*)triArr + 1));
+    tris.normals = (__global float*)((__global char*)triArr + *((__global int*)triArr + 2));
+    tris.offset = *(__global int*)triArr;
 
     float3 new = RenderingEquation(pos, rayDir, tris, &rand);
     float3 old = screen[y * width + x].xyz;

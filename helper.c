@@ -74,7 +74,7 @@ void* malloc_s(size_t size)
     void* result = malloc(size);
     if (!result)
     {
-        puts("malloc() failed. Exiting.");
+        printf("malloc(%ld) failed. Exiting.\n", size);
         exit(EXIT_FAILURE);
     }
     // memset(result, 0, size);
