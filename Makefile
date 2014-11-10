@@ -17,9 +17,9 @@ LDFLAGS_ECHO=-lpthread
 else
 ifeq ($(HOSTNAME), $(IVS_MASTERNAME))
 # Building on ccsr.ee.mtu.edu
-LDFLAGS_MASTER=-rdynamic -L/home/kuhl/public-vrlab/lua/src -llua -lglut -lrt $(shell pkg-config --libs gl libpng)
-PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/lua/src
-LDFLAGS_SO=-L/home/kuhl/public-vrlab/lua/src -llua
+LDFLAGS_MASTER=-rdynamic -L/home/echauck/lua/src -llua -lglut -lrt $(shell pkg-config --libs gl libpng)
+PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng) -I/home/echauck/lua/src
+LDFLAGS_SO=-L/home/echauck/lua/src -llua
 else
 # Standard build
 LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)

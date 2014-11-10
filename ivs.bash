@@ -98,8 +98,8 @@ make master
 # Use -oBatchMode=yes to cause a failure if a password prompt appears.
 printMessage "Connecting to IVS..."
 rm -rf ./.temp-dgr-ssh-socket
-ssh -oBatchMode=yes -q -t -t -x -M -S ./.temp-clam2-ssh-socket ${IVS_USER}@${IVS_HOSTNAME} "sleep 1d" &
-sleep 1
+ssh -oBatchMode=yes -q -t -t -x -M -S ./.temp-clam2-ssh-socket ${IVS_USER}@${IVS_HOSTNAME} "sleep 1m" &
+sleep 2
 if [[ ! -r ./.temp-clam2-ssh-socket ]]; then
 	echo "We failed to establish an SSH control socket."
 	echo "You can typically resolve this problem by:"
@@ -115,20 +115,6 @@ printMessage "Connected to IVS."
 # Create an ssh command with appropriate arguments that we can use
 # repeatedly to run programs on IVS. 
 SSH_CMD="ssh -q -t -t -x -S ./.temp-clam2-ssh-socket ${IVS_USER}@${IVS_HOSTNAME}"
-
-# This check adds about a second to our startup time and usually works
-# successfully. However, it is a helpful in the unlikely case where a
-# tile goes down.
-printMessage "Checking that tile nodes are accessible from IVS..."
-for i in $ECHO_CONNECT_TO; do
-	echo "Testing connection to tile $i"
-	if ! ${SSH_CMD} ssh $i 'exit'; then
-		echo "ERROR: Unable to establish an ssh connection with tile: $i"
-		echo "Perhaps the tile is turned off or you can't ssh to it?"
-		echo "To run without a specific tile, remove the tile from the ECHO_CONNECT_TO variable."
-		exit 1
-	fi
-done
 
 printMessage "Creating $IVS_TEMP_DIR on IVS"
 ${SSH_CMD} mkdir -p "$IVS_TEMP_DIR"
