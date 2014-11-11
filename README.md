@@ -20,6 +20,8 @@ Get the code with
     git clone https://github.com/khyperia/Clam2.git
     cd Clam2
 
+Note: If a plugin fails to build, and its functionality is not needed, it is possible to blacklist it by placing the name of the source file (i.e. with .c extension) in the file script/pluginBlacklist.txt. This file should already exist (via touch) if the makefile has been ran once.
+
 ##### Running it locally:
 
     make
@@ -63,6 +65,12 @@ On ccsr.ee:
 
     ./ivs.bash script/[scriptname].lua
 
+You may have to build lua and modify some lines in the Makefile (specifically inside the if statement if HOSTNAME equals IVS_MASTERNAME) to point at the directory you built it in. Ensure you build lua with PIC enabled, as in:
+
+    make linux MYCFLAGS=-fPIC
+
+Note also it may be necessary to blacklist some plugins, as described above (in script/pluginBlacklist.txt)
+
 --
 
 # What script/[scriptname].lua means:
@@ -73,7 +81,7 @@ Clam2 is a dynamic scripting framework, and is useless on it's own. It needs a l
 
 ##### colors.lua:
 
-A very basic kernel that is essentially just boilerplate to fork for other scripts. Good to start with if someone would like to make their own script.
+A very basic kernel that is essentially just boilerplate to fork for other scripts. Good to start with if someone would like to make their own script. Also good to test the framework is working.
 
 ##### mandelbrot.lua:
 
@@ -88,6 +96,10 @@ Renders the 3d mandelbox. Incredibly taxing on GPUs, a small screen size (CLAM2_
 Pressing "h" will dump what keys do what to stdout of the master program.
 
 Editing script/mandelbox.conf.cl changes various parameters of the kernel (recompile of script after editing needed, i.e. pressing 'b').
+
+##### tris.lua:
+
+Renders an object model (read in by assimp, usually .obj) by raytracing. Even though it is represented in a KD-tree, the maximum numbers of triangles possible to render is fairly small, struggling at counts above 5000 or so.
 
 ##### pillars.lua:
 
