@@ -18,7 +18,7 @@ frame = {
 function special() end
 
 print("Generating tris data file")
-local trisfile = maketris("duck.dae")
+local trisfile = maketris("../duck.dae")
 print("Done making data file, uploading")
 uplrawbuffer("1", trisfile)
 

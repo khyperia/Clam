@@ -115,7 +115,53 @@ float rayBbox(float3 o, float3 d, float3 minb, float3 maxb)
     float dmax = min(min(tmax.x, tmax.y), tmax.z);
     if (dmax > dmin && dmax > 0)
         return dmin;
-    return -1;
+    return FLT_MIN;
+}
+
+inline void grabTriData(float3 pos, float3 look, Tris tris, __global Tri* tri, int i,
+        float* mini, float3* normal)
+{
+    int vert1i = tri->u.leaf.verts[i * 3 + 0];
+    int vert2i = tri->u.leaf.verts[i * 3 + 1];
+    int vert3i = tri->u.leaf.verts[i * 3 + 2];
+    float3 vert1 = (float3)(
+            tris.verts[vert1i * 3 + 0],
+            tris.verts[vert1i * 3 + 1],
+            tris.verts[vert1i * 3 + 2]);
+    float3 vert2 = (float3)(
+            tris.verts[vert2i * 3 + 0],
+            tris.verts[vert2i * 3 + 1],
+            tris.verts[vert2i * 3 + 2]);
+    float3 vert3 = (float3)(
+            tris.verts[vert3i * 3 + 0],
+            tris.verts[vert3i * 3 + 1],
+            tris.verts[vert3i * 3 + 2]);
+    float newMin = MollerTrumbore(vert1, vert2, vert3, pos, look);
+    if (newMin < *mini)
+    {
+        *mini = newMin;
+        float3 normal1 = (float3)(
+                tris.normals[vert1i * 3 + 0],
+                tris.normals[vert1i * 3 + 1],
+                tris.normals[vert1i * 3 + 2]);
+        float3 normal2 = (float3)(
+                tris.normals[vert2i * 3 + 0],
+                tris.normals[vert2i * 3 + 1],
+                tris.normals[vert2i * 3 + 2]);
+        float3 normal3 = (float3)(
+                tris.normals[vert3i * 3 + 0],
+                tris.normals[vert3i * 3 + 1],
+                tris.normals[vert3i * 3 + 2]);
+        float3 pos = pos + newMin * look;
+        float n1w = dot(pos - vert1, pos - vert1);
+        float n2w = dot(pos - vert2, pos - vert2);
+        float n3w = dot(pos - vert3, pos - vert3);
+        float sum = n1w + n2w + n3w;
+        n1w = sum - n1w;
+        n2w = sum - n2w;
+        n3w = sum - n3w;
+        *normal = normalize(normal1 * n1w + normal2 * n2w + normal3 * n3w);
+    }
 }
 
 float Trace(float3 pos, float3 look, Tris tris, float3* color, float3* normal)
@@ -129,53 +175,20 @@ float Trace(float3 pos, float3 look, Tris tris, float3* color, float3* normal)
         int numVerts = tri->numVerts;
         if (numVerts == 0)
         {
-            float3 minb = (float3)(tri->u.branch.bbox[0], tri->u.branch.bbox[1], tri->u.branch.bbox[2]);
-            float3 maxb = (float3)(tri->u.branch.bbox[3], tri->u.branch.bbox[4], tri->u.branch.bbox[5]);
+            float3 minb =
+                (float3)(tri->u.branch.bbox[0], tri->u.branch.bbox[1], tri->u.branch.bbox[2]);
+            float3 maxb =
+                (float3)(tri->u.branch.bbox[3], tri->u.branch.bbox[4], tri->u.branch.bbox[5]);
             float bbox = rayBbox(pos, look, minb, maxb);
-            if (bbox > 0 && bbox < mini)
-                tris.offset = tri->u.branch.offset2;
-            else
-                tris.offset = tri->u.branch.offset1;
+            tris.offset = bbox == FLT_MIN || bbox > mini ?
+                tri->u.branch.offset1 :
+                tri->u.branch.offset2;
         }
         else
         {
             tris.offset = tri->u.leaf.offset1;
             for (int i = 0; i < numVerts; i++)
-            {
-                int vert1i = tri->u.leaf.verts[i * 3 + 0];
-                float3 vert1 = (float3)(
-                        tris.verts[vert1i * 3 + 0],
-                        tris.verts[vert1i * 3 + 1],
-                        tris.verts[vert1i * 3 + 2]);
-                float3 normal1 = (float3)(
-                        tris.normals[vert1i * 3 + 0],
-                        tris.normals[vert1i * 3 + 1],
-                        tris.normals[vert1i * 3 + 2]);
-                int vert2i = tri->u.leaf.verts[i * 3 + 1];
-                float3 vert2 = (float3)(
-                        tris.verts[vert2i * 3 + 0],
-                        tris.verts[vert2i * 3 + 1],
-                        tris.verts[vert2i * 3 + 2]);
-                float3 normal2 = (float3)(
-                        tris.normals[vert2i * 3 + 0],
-                        tris.normals[vert2i * 3 + 1],
-                        tris.normals[vert2i * 3 + 2]);
-                int vert3i = tri->u.leaf.verts[i * 3 + 2];
-                float3 vert3 = (float3)(
-                        tris.verts[vert3i * 3 + 0],
-                        tris.verts[vert3i * 3 + 1],
-                        tris.verts[vert3i * 3 + 2]);
-                float3 normal3 = (float3)(
-                        tris.normals[vert3i * 3 + 0],
-                        tris.normals[vert3i * 3 + 1],
-                        tris.normals[vert3i * 3 + 2]);
-                float newMin = MollerTrumbore(vert1, vert2, vert3, pos, look);
-                if (newMin < mini)
-                {
-                    mini = newMin;
-                    *normal = normalize(normal1 + normal2 + normal3);
-                }
-            }
+                grabTriData(pos, look, tris, tri, i, &mini, normal);
         }
         if (tris.offset == 0)
             return mini;

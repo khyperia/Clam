@@ -25,7 +25,8 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
         return -1;
     }
     if (PrintErr(clBuildProgram(interop->clContext.program, 1, &interop->deviceId,
-            "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror", NULL, NULL)))
+            "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -cl-single-precision-constant -cl-strict-aliasing -Werror",
+            NULL, NULL)))
     {
         puts("OpenCL build failed:");
         printBuildLog(interop->deviceId, interop->clContext.program);
@@ -33,6 +34,8 @@ int newClContext(struct Interop* interop, char** sources, cl_uint sourcesLength)
         interop->clContext.program = NULL;
         return -1;
     }
+    puts("OpenCL build log:");
+    printBuildLog(interop->deviceId, interop->clContext.program);
     // kernels are created on-demand
     return 0;
 }

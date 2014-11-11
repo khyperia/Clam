@@ -6,6 +6,8 @@
 #include <assimp/scene.h>
 #include "../helper.h"
 
+const size_t maxTrisPerBlock = 5;
+
 struct mesh3D
 {
     unsigned int* indices;
@@ -288,7 +290,6 @@ void writeBbox(FILE* file, struct mesh3D mesh)
         max = maxVector3D(max, tri.vert1);
         max = maxVector3D(max, tri.vert2);
     }
-    //printf("%f %f %f %f %f %f\n", min.x, min.y, min.z, max.z, max.y, max.z);
     writevec(min, file);
     writevec(max, file);
 }
@@ -300,7 +301,7 @@ long writeTris(FILE* file, struct mesh3D tris, long gotoDone)
         puts("Warning: writeTris() count == 0");
         return 0;
     }
-    if (tris.numTris < 5)
+    if (tris.numTris <= maxTrisPerBlock)
     {
         long tell = ftell(file);
         fwrite(&tris.numTris, sizeof(int), 1, file);
