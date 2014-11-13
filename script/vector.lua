@@ -1,6 +1,6 @@
 require("script/table_save")
 
-vrpn_server = "Wand@tcp://VRPN-SERVER-IP-ADDRESS"; -- TODO
+vrpn_server = "Wand@tcp://VRPN_IP"; -- TODO
 
 function addvec(left, right)
     return {left[1] + right[1], left[2] + right[2], left[3] + right[3]}

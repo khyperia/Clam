@@ -1,6 +1,8 @@
 require("script/plugin")
 loadlib("input")
 
+vrpn_server = "Wand@tcp://VRPN_IP"; -- TODO
+
 posx = 0.0
 posy = 0.0
 zoom = 1.0
@@ -57,7 +59,7 @@ function update(time)
         tpos, tlook, tup = vrpn(vrpn_server)
         posx = tpos[1]
         posy = tpos[2]
-        zoom = math.exp(tpos[3])
+        zoom = math.exp(tpos[3] * 2 - 3)
         frame = 0
     end
     if iskeydown("h") then
