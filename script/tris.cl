@@ -76,8 +76,8 @@ typedef struct
 typedef struct
 {
     __global Tri* tris;
-    __global float* verts;
-    __global float* normals;
+    __global float4* verts;
+    __global float4* normals;
     int offset;
 } Tris;
 
@@ -124,38 +124,20 @@ inline void grabTriData(float3 pos, float3 look, Tris tris, __global Tri* tri, i
     int vert1i = tri->u.leaf.verts[i * 3 + 0];
     int vert2i = tri->u.leaf.verts[i * 3 + 1];
     int vert3i = tri->u.leaf.verts[i * 3 + 2];
-    float3 vert1 = (float3)(
-            tris.verts[vert1i * 3 + 0],
-            tris.verts[vert1i * 3 + 1],
-            tris.verts[vert1i * 3 + 2]);
-    float3 vert2 = (float3)(
-            tris.verts[vert2i * 3 + 0],
-            tris.verts[vert2i * 3 + 1],
-            tris.verts[vert2i * 3 + 2]);
-    float3 vert3 = (float3)(
-            tris.verts[vert3i * 3 + 0],
-            tris.verts[vert3i * 3 + 1],
-            tris.verts[vert3i * 3 + 2]);
+    float3 vert1 = tris.verts[vert1i].xyz;
+    float3 vert2 = tris.verts[vert2i].xyz;
+    float3 vert3 = tris.verts[vert3i].xyz;
     float newMin = MollerTrumbore(vert1, vert2, vert3, pos, look);
     if (newMin < *mini)
     {
         *mini = newMin;
-        float3 normal1 = (float3)(
-                tris.normals[vert1i * 3 + 0],
-                tris.normals[vert1i * 3 + 1],
-                tris.normals[vert1i * 3 + 2]);
-        float3 normal2 = (float3)(
-                tris.normals[vert2i * 3 + 0],
-                tris.normals[vert2i * 3 + 1],
-                tris.normals[vert2i * 3 + 2]);
-        float3 normal3 = (float3)(
-                tris.normals[vert3i * 3 + 0],
-                tris.normals[vert3i * 3 + 1],
-                tris.normals[vert3i * 3 + 2]);
-        float3 pos = pos + newMin * look;
-        float n1w = dot(pos - vert1, pos - vert1);
-        float n2w = dot(pos - vert2, pos - vert2);
-        float n3w = dot(pos - vert3, pos - vert3);
+        float3 normal1 = tris.normals[vert1i].xyz;
+        float3 normal2 = tris.normals[vert2i].xyz;
+        float3 normal3 = tris.normals[vert3i].xyz;
+        pos = pos + newMin * look;
+        float n1w = length(pos - vert1);
+        float n2w = length(pos - vert2);
+        float n3w = length(pos - vert3);
         float sum = n1w + n2w + n3w;
         n1w = sum - n1w;
         n2w = sum - n2w;
@@ -253,8 +235,8 @@ __kernel void Main(__global float4* screen, __global Tri* triArr,
 
     Tris tris;
     tris.tris = triArr;
-    tris.verts = (__global float*)((__global char*)triArr + *((__global int*)triArr + 1));
-    tris.normals = (__global float*)((__global char*)triArr + *((__global int*)triArr + 2));
+    tris.verts = (__global float4*)((__global char*)triArr + *((__global int*)triArr + 1));
+    tris.normals = (__global float4*)((__global char*)triArr + *((__global int*)triArr + 2));
     tris.offset = *(__global int*)triArr;
 
     float3 new = RenderingEquation(pos, rayDir, tris, &rand);

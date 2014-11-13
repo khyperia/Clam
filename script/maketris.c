@@ -6,7 +6,7 @@
 #include <assimp/scene.h>
 #include "../helper.h"
 
-const size_t maxTrisPerBlock = 5;
+const size_t maxTrisPerBlock = 3;
 
 struct mesh3D
 {
@@ -125,15 +125,14 @@ void writevec(struct aiVector3D vec, FILE* file)
     fwrite(data, sizeof(float), sizeof(data) / sizeof(float), file);
 }
 
-void writetri(struct tri3D tri, FILE* file)
+void writevecPadded(struct aiVector3D vec, FILE* file)
 {
     float data[] = {
-        tri.vert0.x, tri.vert0.y, tri.vert0.z,
-        tri.vert1.x, tri.vert1.y, tri.vert1.z,
-        tri.vert2.x, tri.vert2.y, tri.vert2.z
+        vec.x, vec.y, vec.z, 0.0f
     };
     fwrite(data, sizeof(float), sizeof(data) / sizeof(float), file);
 }
+
 
 struct mesh3D makeTriList(const struct aiScene* scene)
 {
@@ -154,27 +153,12 @@ struct mesh3D makeTriList(const struct aiScene* scene)
     for (size_t i = 0; i < mesh->mNumFaces; i++)
     {
         struct aiFace face = mesh->mFaces[i];
-        switch (face.mNumIndices)
+        for (size_t ind = 2; ind < face.mNumIndices; ind++)
         {
-            case 3:
-                result.indices[result.numTris * 3 + 0] = face.mIndices[0];
-                result.indices[result.numTris * 3 + 1] = face.mIndices[1];
-                result.indices[result.numTris * 3 + 2] = face.mIndices[2];
-                result.numTris++;
-                break;
-            case 4:
-                result.indices[result.numTris * 3 + 0] = face.mIndices[0];
-                result.indices[result.numTris * 3 + 1] = face.mIndices[1];
-                result.indices[result.numTris * 3 + 2] = face.mIndices[2];
-                result.numTris++;
-                result.indices[result.numTris * 3 + 0] = face.mIndices[0];
-                result.indices[result.numTris * 3 + 1] = face.mIndices[2];
-                result.indices[result.numTris * 3 + 2] = face.mIndices[3];
-                result.numTris++;
-                break;
-            default:
-                printf("Face had %d verts, only 3/4 supported; skipping\n", face.mNumIndices);
-                break;
+            result.indices[result.numTris * 3 + 0] = face.mIndices[0];
+            result.indices[result.numTris * 3 + 1] = face.mIndices[ind - 1];
+            result.indices[result.numTris * 3 + 2] = face.mIndices[ind];
+            result.numTris++;
         }
     }
     return result;
@@ -183,13 +167,13 @@ struct mesh3D makeTriList(const struct aiScene* scene)
 void writeVerts(FILE* file, struct mesh3D mesh)
 {
     for (size_t i = 0; i < mesh.numVerts; i++)
-        writevec(mesh.verts[i], file);
+        writevecPadded(mesh.verts[i], file);
 }
 
 void writeNormals(FILE* file, struct mesh3D mesh)
 {
     for (size_t i = 0; i < mesh.numVerts; i++)
-        writevec(mesh.normals[i], file);
+        writevecPadded(mesh.normals[i], file);
 }
 
 struct tri3D tri3dFromMesh(struct mesh3D mesh, size_t n)
@@ -200,32 +184,50 @@ struct tri3D tri3dFromMesh(struct mesh3D mesh, size_t n)
             mesh.verts[mesh.indices[n * 3 + 2]]);
 }
 
+int fltCompare(const void* left, const void* right)
+{
+    return *(float*)left < *(float*)right;
+}
+
 float findMidpoint(struct mesh3D tris, int* axis)
 {
-    struct aiVector3D mean = new_vec3d(0, 0, 0);
-    struct aiVector3D M2 = new_vec3d(0, 0, 0);
+    float* xs = malloc_s(tris.numTris * sizeof(float));
+    float* ys = malloc_s(tris.numTris * sizeof(float));
+    float* zs = malloc_s(tris.numTris * sizeof(float));
     for (size_t n = 0; n < tris.numTris; n++)
     {
         struct aiVector3D center = centerTri3D(tri3dFromMesh(tris, n));
-        struct aiVector3D delta = subVector3D(center, mean);
-        mean = addVector3D(mean, mulVector3D(delta, 1.0f / (n + 1)));
-        M2 = addVector3D(M2, mulVector3D3D(delta, subVector3D(center, mean)));
+        xs[n] = center.x;
+        ys[n] = center.y;
+        zs[n] = center.z;
     }
-    struct aiVector3D variance = mulVector3D(M2, 1.0f / (tris.numTris - 1));
-    if (variance.x > variance.y && variance.x > variance.z)
+    qsort(xs, tris.numTris, sizeof(float), fltCompare);
+    qsort(ys, tris.numTris, sizeof(float), fltCompare);
+    qsort(zs, tris.numTris, sizeof(float), fltCompare);
+    float meanX = xs[tris.numTris / 2];
+    float meanY = ys[tris.numTris / 2];
+    float meanZ = zs[tris.numTris / 2];
+    float varX = xs[tris.numTris - 1] - xs[0];
+    float varY = ys[tris.numTris - 1] - ys[0];
+    float varZ = zs[tris.numTris - 1] - zs[0];
+    free(xs);
+    free(ys);
+    free(zs);
+
+    if (varX > varY && varX > varZ)
     {
         *axis = 0;
-        return mean.x;
+        return meanX;
     }
-    else if (variance.y > variance.z)
+    else if (varY > varZ)
     {
         *axis = 1;
-        return mean.y;
+        return meanY;
     }
     else
     {
         *axis = 2;
-        return mean.z;
+        return meanZ;
     }
 }
 
@@ -242,7 +244,7 @@ void splitTris(struct mesh3D tris, float split, int axis,
     less->numTris = 0;
 
     for (size_t i = 0; i < tris.numTris; i++)
-        if (indexVector3D(centerTri3D(tri3dFromMesh(tris, i)), axis) < split)
+        if (indexVector3D(centerTri3D(tri3dFromMesh(tris, i)), axis) <= split)
             less->numTris++;
     greater->numTris = tris.numTris - less->numTris;
     less->indices = malloc_s(less->numTris * 3 * sizeof(int));
@@ -251,7 +253,7 @@ void splitTris(struct mesh3D tris, float split, int axis,
     greater->numTris = 0;
     for (size_t i = 0; i < tris.numTris; i++)
     {
-        if (indexVector3D(centerTri3D(tri3dFromMesh(tris, i)), axis) < split)
+        if (indexVector3D(centerTri3D(tri3dFromMesh(tris, i)), axis) <= split)
         {
             less->indices[less->numTris * 3 + 0] = tris.indices[i * 3 + 0];
             less->indices[less->numTris * 3 + 1] = tris.indices[i * 3 + 1];
@@ -340,7 +342,7 @@ int run_loadtris(lua_State* state)
     FILE* output = fopen(outputFilename, "wb");
 
     long begin = ftell(output);
-    fseek(output, sizeof(int) * 3, SEEK_CUR);
+    fseek(output, sizeof(int) * 4, SEEK_CUR);
 
     long verts = ftell(output);
     writeVerts(output, unpacked);

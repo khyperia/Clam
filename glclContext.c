@@ -23,6 +23,23 @@ void printDeviceIdName(cl_device_id device)
     printf("Using device %s\n", name);
 }
 
+void printDeviceVersion(cl_device_id device)
+{
+    size_t nameSize = 0;
+    if (PrintErr(clGetDeviceInfo(device, CL_DEVICE_VERSION, 0, NULL, &nameSize)))
+    {
+        puts("Ignoring.");
+        return;
+    }
+    char name[nameSize];
+    if (PrintErr(clGetDeviceInfo(device, CL_DEVICE_VERSION, nameSize, name, NULL)))
+    {
+        puts("Ignorning.");
+        return;
+    }
+    printf("Device version %s\n", name);
+}
+
 cl_context createClContextFromDevice(cl_platform_id platformId, cl_device_id deviceId)
 {
     // Properties to use when creating the context (code is platform-specific)
@@ -94,6 +111,7 @@ cl_context getClContext(cl_device_id* outputClDeviceId)
     if (context)
     {
         printDeviceIdName(*outputClDeviceId);
+        printDeviceVersion(*outputClDeviceId);
         return context;
     }
     puts("Unable to find suitable OpenCL device");
