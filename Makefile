@@ -12,20 +12,18 @@ WARNINGFLAGS=-Wall -Wextra
 ifeq ($(HOSTNAME), $(IVS_SLAVENAME))
 # Building on ivs.research.mtu.edu
 PKGCONFIGCFLAGS=-I/export/apps/cuda-5.0/include/
-LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
-LDFLAGS_ECHO=-lpthread
+LDFLAGS_SLAVE=-lOpenCL -lGL -lSDL2 -lSDL2_net
 else
 ifeq ($(HOSTNAME), $(IVS_MASTERNAME))
 # Building on ccsr.ee.mtu.edu
-LDFLAGS_MASTER=-rdynamic -L/home/echauck/lua/src -llua -lglut -lrt $(shell pkg-config --libs gl libpng)
-PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng) -I/home/kuhl/public-vrlab/vrpn -I/home/echauck/lua/src
+LDFLAGS_MASTER=-rdynamic -L/home/echauck/lua/src -llua -lrt -lSDL2 -lSDL2_net $(shell pkg-config --libs gl libpng)
+PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng sdl2) -I/home/kuhl/public-vrlab/vrpn -I/home/echauck/lua/src
 LDFLAGS_SO=-L/home/echauck/lua/src -L/home/kuhl/public-vrlab/vrpn/build -llua
 else
 # Standard build
-LDFLAGS_MASTER=-rdynamic -lglut $(shell pkg-config --libs gl libpng lua)
-PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua)
-LDFLAGS_SLAVE=-lOpenCL -lglut -lGL
-LDFLAGS_ECHO=-lpthread
+LDFLAGS_MASTER=-rdynamic $(shell pkg-config --libs gl libpng lua SDL2_net)
+PKGCONFIGCFLAGS=$(shell pkg-config --cflags gl libpng lua sdl2 SDL2_net)
+LDFLAGS_SLAVE=-lOpenCL -lGL $(shell pkg-config --libs sdl2 SDL2_net)
 LDFLAGS_SO=$(shell pkg-config --libs lua)
 endif
 endif
@@ -49,12 +47,11 @@ DEPENDS:=$(patsubst %.c,$(OBJDIR)/%.d,$(DEPENDS))
 
 MASTERFILES=master masterSocket luaHelper socketHelper helper
 SLAVEFILES=slave slaveSocket glclContext openclHelper socketHelper helper
-ECHOFILES=echo socketHelper helper
 
 toobjs=$(addsuffix .o,$(addprefix $(OBJDIR)/,$(1)))
 
 .PHONY: all
-all: master slave echo
+all: master slave
 
 .PHONY: clean
 clean:
@@ -64,8 +61,6 @@ clean:
 master: bin/clam2_master $(PLUGINS)
 .PHONY: slave
 slave: bin/clam2_slave
-.PHONY: echo
-echo: bin/clam2_echo
 
 bin/clam2_master: $(call toobjs,$(MASTERFILES))
 	@mkdir -p $(@D)
@@ -74,10 +69,6 @@ bin/clam2_master: $(call toobjs,$(MASTERFILES))
 bin/clam2_slave: $(call toobjs,$(SLAVEFILES))
 	@mkdir -p $(@D)
 	$(CC) $(call toobjs,$(SLAVEFILES)) -o $@ $(LDFLAGS_SLAVE)
-
-bin/clam2_echo: $(call toobjs,$(ECHOFILES))
-	@mkdir -p $(@D)
-	$(CC) $(call toobjs,$(ECHOFILES)) -o $@ $(LDFLAGS_ECHO)
 
 $(OBJDIR)/%.o: %.c Makefile
 	@mkdir -p $(@D)

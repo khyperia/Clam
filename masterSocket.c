@@ -1,8 +1,8 @@
 #include "masterSocket.h"
+#include <limits.h>
 #include <poll.h>
 #include <stdlib.h>
 #include "helper.h"
-#include "socketHelper.h"
 
 int numWaitingSoftSync = 0;
 
@@ -22,7 +22,7 @@ int messageSync(void)
 // This function is the response handler for an earlier request to the slave for MessageDlBuffer
 // The first argument is a long that represents a function pointer to a handler that was specified
 // when it was originally dispatched
-int messageDlBuffer(int socketFd)
+int messageDlBuffer(TCPsocket socketFd)
 {
     long functionPointer;
     if (PrintErr(recv_p(socketFd, &functionPointer, sizeof(functionPointer))))
@@ -56,7 +56,7 @@ int messageDlBuffer(int socketFd)
 
 // Similar to slaveSocket's parseMessage, but the meanings of the enums are different
 // due to messages going slave->master rather than master->slave
-int parseMessage(enum MessageType messageType, int socketFd)
+int parseMessage(enum MessageType messageType, TCPsocket socketFd)
 {
     // We don't handle all the cases that the slave does, so ignore the warning
     switch (messageType)
@@ -71,41 +71,67 @@ int parseMessage(enum MessageType messageType, int socketFd)
     }
 }
 
+void removeSocketH(TCPsocket* toRemove)
+{
+    while (*toRemove)
+    {
+        *toRemove = toRemove[1];
+        toRemove++;
+    }
+}
+
 // Run the master socket receive loop.
 // This and functions it calls should be the only ones reading from the sockets
 // This function is very similar to slaveSocket's slaveSocket() function
-int masterSocketRecv(int* socketFds)
+int masterSocketRecv(TCPsocket* socketFds)
 {
-    for (;*socketFds; socketFds++)
+    int socketCount = 0;
+    for (TCPsocket* sock = socketFds; *sock; sock++)
+        socketCount++;
+    SDLNet_SocketSet set = SDLNet_AllocSocketSet(socketCount);
+    for (TCPsocket* sock = socketFds; *sock; sock++)
+        SDLNet_TCP_AddSocket(set, *sock);
+
+    while (1)
     {
-        if (*socketFds == -1)
-            continue;
-        int socketFd = *socketFds;
-        while (1)
+        int numSocks = SDLNet_CheckSockets(set, 0);
+        if (numSocks == -1)
         {
-            struct pollfd poll_fd;
-            poll_fd.events = POLLIN;
-            poll_fd.fd = socketFd;
-            int pollResult = poll(&poll_fd, 1, 0);
-            if (PrintErr(pollResult == -1 && "poll()"))
-                return -1;
-            if (pollResult == 0 || !(poll_fd.revents & POLLIN))
-                break;
-            if (!(poll_fd.revents & POLLIN))
-            {
-                printf("Unknown pollfd.revents %d\n", poll_fd.revents);
-                return -1;
-            }
+            puts("SDLNet_CheckSockets errored");
+            SDLNet_FreeSocketSet(set);
+            return -1;
+        }
+        if (numSocks == 0)
+            break;
+
+        for (TCPsocket* sock = socketFds; *sock; sock++)
+        {
+            TCPsocket socketFd = *socketFds;
+
+            if (!SDLNet_SocketReady(socketFd))
+                continue;
 
             enum MessageType messageType;
             if (PrintErr(recv_p(socketFd, &messageType, sizeof(messageType))))
-                return -1;
+            {
+                SDLNet_TCP_DelSocket(set, *sock);
+                SDLNet_TCP_Close(*sock);
+                removeSocketH(sock);
+                continue;
+            }
 
             int result = PrintErr(parseMessage(messageType, socketFd));
 
             if (result)
-                return -1;
+            {
+                puts("Closing socket");
+                SDLNet_TCP_DelSocket(set, *sock);
+                SDLNet_TCP_Close(*sock);
+                removeSocketH(sock);
+                continue;
+            }
         }
     }
+    SDLNet_FreeSocketSet(set);
     return 0;
 }

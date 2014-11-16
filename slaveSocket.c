@@ -1,7 +1,6 @@
 #include "slaveSocket.h"
 #include "helper.h"
 #include "openclHelper.h"
-#include "socketHelper.h"
 #include <poll.h>
 #include <stdio.h>
 
@@ -9,7 +8,7 @@
 
 // This is used to make sure the master doesn't get too far ahead of the client
 // softSync is for
-int messageSync(int socketFd)
+int messageSync(TCPsocket socketFd)
 {
     enum MessageType message = MessageSync;
     if (PrintErr(send_p(socketFd, &message, sizeof(message))))
@@ -17,7 +16,7 @@ int messageSync(int socketFd)
     return 0;
 }
 
-int messageKernelSource(struct Interop* interop, int socketFd)
+int messageKernelSource(struct Interop* interop, TCPsocket socketFd)
 {
     int numStrings = 0;
     if (PrintErr(recv_p(socketFd, &numStrings, sizeof(int))))
@@ -38,8 +37,8 @@ int messageKernelSource(struct Interop* interop, int socketFd)
     return result;
 }
 
-int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenPos,
-        const char* kernelName, cl_uint* argIndex)
+int recvArgument(struct Interop* interop, TCPsocket socketFd, struct ScreenPos screenPos,
+        const char* kernelName, cl_uint* argIndex, int* involvedBuf0)
 {
     int arglen = 0;
     if (PrintErr(recv_p(socketFd, &arglen, sizeof(int))))
@@ -53,6 +52,8 @@ int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenP
         {
             return -1;
         }
+        if (bufferName == 0)
+            *involvedBuf0 = 1;
         cl_mem memory = getMem(*interop, bufferName, NULL);
         if (memory == NULL)
         {
@@ -103,7 +104,8 @@ int recvArgument(struct Interop* interop, int socketFd, struct ScreenPos screenP
     return 0;
 }
 
-int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
+int messageKernelInvoke(struct Interop* interop, TCPsocket socketFd, struct ScreenPos screenPos,
+        int* involvedBuf0)
 {
     char* kernelName = recv_str(socketFd);
     if (kernelName == NULL)
@@ -121,7 +123,8 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
     size_t launchSize[] = { (size_t)launchSizeLong[0], (size_t)launchSizeLong[1] };
     for (cl_uint argIndex = 0;; argIndex++)
     {
-        int argResult = recvArgument(interop, socketFd, screenPos, kernelName, &argIndex);
+        int argResult = recvArgument(interop, socketFd, screenPos, kernelName, &argIndex,
+                involvedBuf0);
         if (argResult == 1)
             break;
         else if (PrintErr(argResult /* recvArgument() */))
@@ -138,7 +141,7 @@ int messageKernelInvoke(struct Interop* interop, int socketFd, struct ScreenPos 
     return result;
 }
 
-int messageMkBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
+int messageMkBuffer(struct Interop* interop, TCPsocket socketFd, struct ScreenPos screenPos)
 {
     int bufferId = 0;
     long bufferSize = 0;
@@ -151,7 +154,7 @@ int messageMkBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     return 0;
 }
 
-int messageRmBuffer(struct Interop* interop, int socketFd)
+int messageRmBuffer(struct Interop* interop, TCPsocket socketFd)
 {
     int bufferId = 0;
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
@@ -160,7 +163,7 @@ int messageRmBuffer(struct Interop* interop, int socketFd)
     return 0;
 }
 
-int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
+int messageDlBuffer(struct Interop* interop, TCPsocket socketFd, struct ScreenPos screenPos)
 {
     long userdata = 0;
     if (PrintErr(recv_p(socketFd, &userdata, sizeof(userdata))))
@@ -187,7 +190,7 @@ int messageDlBuffer(struct Interop* interop, int socketFd, struct ScreenPos scre
     return 0;
 }
 
-int messageUplBuffer(struct Interop* interop, int socketFd)
+int messageUplBuffer(struct Interop* interop, TCPsocket socketFd)
 {
     int bufferId = 0;
     if (PrintErr(recv_p(socketFd, &bufferId, sizeof(int))))
@@ -211,19 +214,19 @@ int messageUplBuffer(struct Interop* interop, int socketFd)
 }
 
 int parseMessage(enum MessageType messageType, struct Interop* interop,
-        int socketFd, struct ScreenPos screenPos)
+        TCPsocket socketFd, struct ScreenPos screenPos, int* involvedBuf0)
 {
     switch (messageType)
     {
         case MessageTerm:
-            puts("MessageTerm caught in socket. Exiting.");
+            puts("MessageTerm caught in socket.");
             exit(EXIT_SUCCESS);
         case MessageSync:
             return PrintErr(messageSync(socketFd));
         case MessageKernelSource:
             return PrintErr(messageKernelSource(interop, socketFd));
         case MessageKernelInvoke:
-            return PrintErr(messageKernelInvoke(interop, socketFd, screenPos));
+            return PrintErr(messageKernelInvoke(interop, socketFd, screenPos, involvedBuf0));
         case MessageMkBuffer:
             return PrintErr(messageMkBuffer(interop, socketFd, screenPos));
         case MessageRmBuffer:
@@ -238,32 +241,42 @@ int parseMessage(enum MessageType messageType, struct Interop* interop,
     }
 }
 
-int slaveSocket(struct Interop* interop, int socketFd, struct ScreenPos screenPos)
+int slaveSocket(struct Interop* interop, TCPsocket socketFd, struct ScreenPos screenPos)
 {
+    SDLNet_SocketSet set = SDLNet_AllocSocketSet(1);
+    SDLNet_TCP_AddSocket(set, socketFd);
     while (1)
     {
-        struct pollfd poll_fd;
-        poll_fd.events = POLLIN;
-        poll_fd.fd = socketFd;
-        int pollResult = poll(&poll_fd, 1, 0);
-        if (PrintErr(pollResult == -1 && "poll()"))
-            return -1;
-        if (pollResult == 0 || !(poll_fd.revents & POLLIN))
-            break;
-        if (!(poll_fd.revents & POLLIN))
+        int check = SDLNet_CheckSockets(set, 0);
+        if (check == -1)
         {
-            printf("Unknown pollfd.revents %d\n", poll_fd.revents);
+            printf("SDLNet_CheckSockets: %s\n", SDLNet_GetError());
+            SDLNet_FreeSocketSet(set);
             return -1;
+        }
+        if (check == 0)
+        {
+            SDLNet_FreeSocketSet(set);
+            break;
         }
 
         enum MessageType messageType;
         if (PrintErr(recv_p(socketFd, &messageType, sizeof(messageType))))
             return -1;
 
-        int result = PrintErr(parseMessage(messageType, interop, socketFd, screenPos));
+        int involvedBuf0 = 0;
+        int result = PrintErr(parseMessage(messageType, interop, socketFd, screenPos, &involvedBuf0));
 
         if (result)
             return -1;
+
+        if (involvedBuf0)
+        {
+            // Give a chance for the slave to update the screen in a situation where commands are
+            // coming in faster than execution
+            // (Update screen if special buffer 0 was involved)
+            break;
+        }
     }
     return 0;
 }

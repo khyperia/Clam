@@ -1,4 +1,6 @@
 #pragma once
 
+#include "socketHelper.h"
+
 extern int numWaitingSoftSync;
-int masterSocketRecv(int* socketFds);
+int masterSocketRecv(TCPsocket* socketFds);

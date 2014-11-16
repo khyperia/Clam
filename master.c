@@ -1,111 +1,43 @@
-#define _POSIX_C_SOURCE 200112L
-#include <time.h>
-#undef _POSIX_C_SOURCE
+#include <SDL2/SDL.h>
 #include "master.h"
-#include <GL/glut.h>
 #include <math.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include "luaHelper.h"
-#include "socketHelper.h"
 #include "helper.h"
 
-int* sockets = NULL;
+SDL_Window* window = NULL;
+TCPsocket* sockets = NULL;
 bool keyboard[UCHAR_MAX + 1] = {false};
 int animationFrame = 0;
 lua_State* luaState = NULL;
-struct timespec lastFrame;
-double fps = 0.0;
-
-// Glut function
-void keyboardDownFunc(unsigned char c, int UNUSED x, int UNUSED y)
-{
-    keyboard[c] = true;
-}
-
-// Glut function
-void keyboardUpFunc(unsigned char c, int UNUSED x, int UNUSED y)
-{
-    keyboard[c] = false;
-}
-
-// Runs the lua update() function once
-void masterIdleFunc(void)
-{
-    struct timespec newFrame;
-    if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &newFrame)))
-    {
-        puts("Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    double elapsed = (double)(newFrame.tv_sec - lastFrame.tv_sec) +
-                    (double)(newFrame.tv_nsec - lastFrame.tv_nsec) / 1000000000;
-    fps = (1 / elapsed + fps * 3) / 4;
-    if (PrintErr(runLua(luaState, elapsed)))
-    {
-        puts("Exiting.");
-        exit(EXIT_FAILURE);
-    }
-    lastFrame = newFrame;
-    glutPostRedisplay();
-}
-
-// Makes a changing-color screen and a FPS counter
-void masterDisplayFunc(void)
-{
-    float animationFrameVal = (float)fmod(animationFrame / 1000.0f, 1.0f);
-    if (animationFrameVal > 0.5)
-        animationFrameVal = 1 - animationFrameVal;
-    animationFrameVal *= 2;
-    if (animationFrame < 1000)
-        glClearColor(animationFrameVal, 0, 0, 1);
-    else if (animationFrame < 2000)
-        glClearColor(0, animationFrameVal, 0, 1);
-    else
-        glClearColor(0, 0, animationFrameVal, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
-    animationFrame = (animationFrame + 1) % 3000;
-
-    char buffer[100];
-    snprintf(buffer, 100, "FPS: %f", fps);
-    glRasterPos2i(0, 0);
-    for (int i = 0; buffer[i]; i++)
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, buffer[i]);
-
-    glutSwapBuffers();
-
-    if (PrintErr((int)glGetError()))
-    {
-        puts("Exiting.");
-        exit(EXIT_FAILURE);
-    }
-}
+Uint32 lastSdl2Ticks = 0;
+double fps = 1.0;
+Uint32 second = 0;
 
 // Closes all sockets and deletes the lua state
 void doOnExit_master(void)
 {
     if (sockets)
     {
-        int* sock = sockets;
-        while (*sock)
+        for (TCPsocket* sock = sockets; *sock; sock++)
         {
-            if (*sock != -1)
-            {
-                int msgTerm = MessageTerm;
-                send_p(*sock, &msgTerm, sizeof(int));
-                close(*sock);
-            }
-            sock++;
+            int msgTerm = MessageTerm;
+            send_p(*sock, &msgTerm, sizeof(int));
+            SDLNet_TCP_Close(*sock);
         }
         free(sockets);
     }
     if (luaState)
         deleteLua(luaState);
+    if (window)
+        SDL_DestroyWindow(window);
+    puts("Exiting");
 }
 
 // Parses and connects to all slaves
-int* connectToSlaves(char* slaves)
+TCPsocket* connectToSlaves(char* slaves)
 {
     size_t numIps;
     char* slavesDup = my_strdup(slaves);
@@ -114,37 +46,42 @@ int* connectToSlaves(char* slaves)
     }
     free(slavesDup);
 
-    int* ips = malloc_s(numIps * sizeof(int*) + 1);
+    TCPsocket* ips = malloc_s(numIps * sizeof(TCPsocket) + 1);
     for (size_t i = 0; i < numIps; i++)
     {
-        char* slaveIp = strtok(i == 0 ? slaves : NULL, "~");
-        if (!slaveIp)
+        char* slaveIpFull = strtok(i == 0 ? slaves : NULL, "~");
+        if (!slaveIpFull)
         {
             puts("Internal error, strtok returned null when it shouldn't have");
             free(ips);
             return NULL;
         }
-        char* slavePort = strchr(slaveIp, ':');
-        if (slavePort)
+
+        char slaveIp[strlen(slaveIpFull) + 1];
+        int slavePort;
+        if (sscanf(slaveIpFull, "%[^:]:%d", slaveIp, &slavePort) != 2)
         {
-            *slavePort = '\0';
-            slavePort++;
+            printf("IP was not in the correct format hostname:port - %s\n", slaveIpFull);
+            free(ips);
+            return NULL;
         }
-        else
+
+        printf("Connecting to %s:%d\n", slaveIp, slavePort);
+        ips[i] = connectSocket(slaveIp, (Uint16)slavePort);
+        if (!ips[i])
         {
-            slavePort = "23456";
-        }
-        printf("Connecting to %s:%s\n", slaveIp, slavePort);
-        ips[i] = connectSocket(slaveIp, slavePort);
-        if (ips[i] <= 0)
-        {
-            printf("Unable to connect to %s:%s.\n", slaveIp, slavePort);
+            printf("Unable to connect to %s:%d.\n", slaveIp, slavePort);
             free(ips);
             return NULL;
         }
     }
     ips[numIps] = 0;
     return ips;
+}
+
+int eventFilter(void UNUSED *userdata, SDL_Event* event)
+{
+    return event->type == SDL_QUIT || event->type == SDL_KEYUP || event->type == SDL_KEYDOWN;
 }
 
 int main(int argc, char** argv)
@@ -163,34 +100,49 @@ int main(int argc, char** argv)
     sockets = connectToSlaves(ips);
     free(ips);
     if (!sockets)
-    {
-        puts("Exiting.");
-        return EXIT_FAILURE;
-    }
+        exit(EXIT_FAILURE);
 
-    glutInit(&argc, argv);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER);
+
+    SDL_SetEventFilter(eventFilter, NULL);
+
+    window = SDL_CreateWindow("Clam2 Master", 100, 100, 500, 500,
+            SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_INPUT_FOCUS);
 
     // Pass on the rest of the args to lua
     if (PrintErr(newLua(&luaState, argv[1], argv + 2)))
+        exit(EXIT_FAILURE);
+
+    while (true)
     {
-        puts("Exiting.");
-        return EXIT_FAILURE;
+        SDL_Event event;
+        bool exit = false;
+        while (!exit && SDL_PollEvent(&event))
+        {
+            if (event.type == SDL_QUIT)
+                exit = true;
+            if (event.type == SDL_KEYUP || event.type == SDL_KEYDOWN)
+            {
+                SDL_Keycode keycode = event.key.keysym.sym;
+                if (keycode >= 0 && keycode <= UCHAR_MAX)
+                    keyboard[(unsigned char)keycode] = event.type == SDL_KEYDOWN;
+            }
+        }
+        if (exit)
+            break;
+
+        Uint32 current = SDL_GetTicks();
+        double elapsed = (current - lastSdl2Ticks) / 1000.0;
+        lastSdl2Ticks = current;
+        if (PrintErr(runLua(luaState, elapsed)))
+            return -1;
+        fps = (elapsed + fps * 29) / 30;
+        Uint32 newsecond = current / 1000;
+        if (newsecond != second)
+        {
+            second = newsecond;
+            printf("FPS: %f\n", 1 / fps);
+        }
     }
-
-    glutInitDisplayMode(GLUT_DOUBLE);
-    glutCreateWindow("Clam2 Master");
-
-    if (PrintErr(clock_gettime(CLOCK_MONOTONIC, &lastFrame)))
-    {
-        puts("Exiting.");
-        return EXIT_FAILURE;
-    }
-
-    glutKeyboardFunc(keyboardDownFunc);
-    glutKeyboardUpFunc(keyboardUpFunc);
-    glutIdleFunc(masterIdleFunc);
-    glutDisplayFunc(masterDisplayFunc);
-    glutMainLoop();
-    puts("glutMainLoop returned, that's odd");
-    return EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }

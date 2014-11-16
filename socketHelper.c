@@ -1,192 +1,145 @@
-#define _POSIX_C_SOURCE 200112L
-#include <stdio.h>
-#undef _POSIX_C_SOURCE
 #include "socketHelper.h"
 #include "helper.h"
 #include <string.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <stdlib.h>
+#include <limits.h>
 
-int hostSocket(const char* port)
+TCPsocket hostSocket(Uint16 port)
 {
-    return connectSocket(NULL, port);
-}
-
-// if host is null, makes a hosting socket
-int connectSocket(const char* host, const char* port)
-{
-    struct addrinfo hints, *servinfo = NULL;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = host == NULL ? AI_PASSIVE : 0;
-    hints.ai_protocol = 0;
-    hints.ai_canonname = NULL;
-    hints.ai_addr = NULL;
-    hints.ai_next = NULL;
-
-    int rv;
-    if ((rv = getaddrinfo(host, port, &hints, &servinfo)) != 0) {
-        printf("getaddrinfo(): %s\n", gai_strerror(rv));
-        return -1;
-    }
-
-    int sock = -1;
-    struct addrinfo* addr = NULL;
-    for (addr = servinfo; addr != NULL; addr = addr->ai_next)
+    IPaddress ip;
+    if (PrintErr(SDLNet_ResolveHost(&ip, NULL, port)))
     {
-        if ((sock = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol)) == -1)
-        {
-            perror("socket()");
-            continue;
-        }
-        if (host == NULL)
-        {
-            int theTrue = 1;
-            if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &theTrue, sizeof(theTrue)))
-            {
-                perror("setsockopt()");
-                continue;
-            }
-            if (bind(sock, addr->ai_addr, addr->ai_addrlen) == -1)
-            {
-                perror("bind()");
-                continue;
-            }
-            if (listen(sock, 16) == -1)
-            {
-                perror("listen()");
-                continue;
-            }
-            break;
-        }
-        else
-        {
-            if (connect(sock, addr->ai_addr, addr->ai_addrlen) == -1)
-            {
-                perror("connect()");
-                close(sock);
-                continue;
-            }
-            break;
-        }
-    }
-    if (addr == NULL)
-        return -1;
-    freeaddrinfo(servinfo);
-    return sock;
-}
-
-int recv_p(int socketFd, void* data, size_t numBytes)
-{
-    if (socketFd == -1)
-    {
-        puts("recv(): Bad socket file descriptor");
-        return -1;
-    }
-    ssize_t result = recv(socketFd, data, numBytes, MSG_WAITALL);
-    if (result == -1)
-    {
-        perror("recv()");
-        return -1;
-    }
-    if ((size_t)result != numBytes)
-    {
-        printf("recv(): not enough bytes read (%lu of %lu)\n", result, numBytes);
-        return -1;
-    }
-    return 0;
-}
-
-int send_p(int socketFd, const void* data, size_t numBytes)
-{
-    size_t numBytesSent = 0;
-    while (numBytesSent < numBytes)
-    {
-        ssize_t result = send(socketFd, data, numBytes, 0);
-        if (result == -1)
-        {
-            perror("recv()");
-            return -1;
-        }
-        if (result == 0)
-        {
-            printf("send(): not enough bytes sent (%lu of %lu)\n", numBytesSent, numBytes);
-            return -1;
-        }
-        numBytesSent += (size_t)result;
-    }
-    return 0;
-}
-
-char* recv_str(int socketFd)
-{
-    int stringSize = 0;
-    if (PrintErr(recv_p(socketFd, &stringSize, sizeof(int))))
+        puts(SDLNet_GetError());
         return NULL;
-    char* result = malloc_s((size_t)stringSize * sizeof(char));
-    if (PrintErr(recv_p(socketFd, result, (size_t)stringSize)))
+    }
+    TCPsocket result = SDLNet_TCP_Open(&ip);
+    if (!result)
     {
-        free(result);
+        printf("SDLNet_TCP_Open: %s\n", SDLNet_GetError());
         return NULL;
     }
     return result;
 }
 
-int send_str(int socketFd, const char* string)
+TCPsocket connectSocket(const char* host, Uint16 port)
 {
-    int len = (int)strlen(string) + 1;
-    if (PrintErr(send_p(socketFd, &len, sizeof(int))))
+    IPaddress ip;
+    if (PrintErr(SDLNet_ResolveHost(&ip, host, port)))
+    {
+        puts(SDLNet_GetError());
+        return NULL;
+    }
+    TCPsocket result = SDLNet_TCP_Open(&ip);
+    if (!result)
+    {
+        printf("SDLNet_TCP_Open: %s\n", SDLNet_GetError());
+        return NULL;
+    }
+    return result;
+}
+
+int recv_p(TCPsocket socketFd, void* data, size_t numBytes)
+{
+    size_t read = 0;
+    while (read < numBytes)
+    {
+        int numBytesThis = INT_MAX;
+        if (numBytes - read < (size_t)numBytesThis)
+            numBytesThis = (int)(numBytes - read);
+        int result = SDLNet_TCP_Recv(socketFd, (char*)data + read, numBytesThis);
+        if (result == -1)
+        {
+            printf("SDLNet_TCP_Recv(%d) == %d: %s\n", numBytesThis, result, SDLNet_GetError());
+            return -1;
+        }
+        read += (size_t)result;
+    }
+    return 0;
+}
+
+int send_p(TCPsocket socketFd, const void* data, size_t numBytes)
+{
+    size_t read = 0;
+    while (read < numBytes)
+    {
+        int numBytesThis = INT_MAX;
+        if (numBytes - read < (size_t)numBytesThis)
+            numBytesThis = (int)(numBytes - read);
+        int result = SDLNet_TCP_Send(socketFd, (char*)data + read, numBytesThis);
+        if (result == -1)
+        {
+            printf("SDLNet_TCP_Send(%d) == %d: %s\n", numBytesThis, result, SDLNet_GetError());
+            return -1;
+        }
+        read += (size_t)result;
+    }
+    return 0;
+}
+
+char* recv_str(TCPsocket socketFd)
+{
+    unsigned long size;
+    if (PrintErr(recv_p(socketFd, &size, sizeof(size))))
+        return NULL;
+    char* result = malloc_s((size_t)size + 1);
+    if (PrintErr(recv_p(socketFd, result, size)))
+    {
+        free(result);
+        return NULL;
+    }
+    result[size] = '\0';
+    return result;
+}
+
+int send_str(TCPsocket socketFd, const char* string)
+{
+    unsigned long len = strlen(string);
+    if (PrintErr(send_p(socketFd, &len, sizeof(len))))
         return -1;
-    if (PrintErr(send_p(socketFd, string, (size_t)len)))
+    if (PrintErr(send_p(socketFd, string, len)))
         return -1;
     return 0;
 }
 
-// Sends data to all sockets;
-int send_all(int* socket, void* data, size_t numBytes)
+void removeSocket(TCPsocket* toRemove)
 {
-    int errcode = 0;
-    while (*socket)
+    while (*toRemove)
     {
-        if (*socket == -1)
-            continue;
-        int err = PrintErr(send_p(*socket, data, numBytes));
-        if (err)
-        {
-            close(*socket);
-            *socket = -1;
-            errcode = err;
-        }
-        socket++;
+        *toRemove = toRemove[1];
+        toRemove++;
     }
-    return errcode;
 }
 
-// Sends an enum MessageType to all sockets
-int send_all_msg(int* socket, enum MessageType messageType)
+int send_all(TCPsocket* sockets, void* data, size_t numBytes)
 {
-    return send_all(socket, &messageType, sizeof(messageType));
+    for (TCPsocket* sock = sockets; *sock; sock++)
+    {
+        if (PrintErr(send_p(*sock, data, numBytes)))
+        {
+            puts("Disconnecting client and ignoring error");
+            SDLNet_TCP_Close(*sock);
+            removeSocket(sock);
+            sock--;
+        }
+    }
+    return 0;
 }
 
-// Sends a string to all sockets
-int send_all_str(int* socket, const char* string)
+int send_all_msg(TCPsocket* sockets, enum MessageType messageType)
 {
-    int errcode = 0;
-    while (*socket)
+    return PrintErr(send_all(sockets, &messageType, sizeof(messageType)));
+}
+
+int send_all_str(TCPsocket* sockets, const char* string)
+{
+    for (TCPsocket* sock = sockets; *sock; sock++)
     {
-        if (*socket == -1)
-            continue;
-        int err = PrintErr(send_str(*socket, string));
-        if (err)
+        if (PrintErr(send_str(*sock, string)))
         {
-            close(*socket);
-            *socket = -1;
-            errcode = err;
+            puts("Disconnecting client and ignoring error");
+            SDLNet_TCP_Close(*sock);
+            removeSocket(sock);
+            sock--;
         }
-        socket++;
     }
-    return errcode;
+    return 0;
 }

@@ -25,13 +25,11 @@ void sync_waitmessage(lua_State* state)
 
 void sync_sendmessage(lua_State* state)
 {
+    if (numWaitingSoftSync > 0)
+        luaL_error(state, "Sync failure: did not wait before sending another sync message");
     LuaPrintErr(send_all_msg(sockets, MessageSync));
-    for (int* socket = sockets; *socket; socket++)
-    {
-        if (*socket == -1)
-            continue;
+    for (TCPsocket* socket = sockets; *socket; socket++)
         numWaitingSoftSync++;
-    }
 }
 
 int run_softsync(lua_State* state)
@@ -121,7 +119,7 @@ int run_kernel(lua_State* state)
                     int size = sizeof(float);
                     float value = (float)luaL_checknumber(state, i);
                     LuaPrintErr(send_all(sockets, &size, sizeof(size)));
-                    LuaPrintErr(send_all(sockets, &value, (size_t)size));
+                    LuaPrintErr(send_all(sockets, &value, size));
                 }
                 break;
             case LUA_TTABLE:
