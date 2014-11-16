@@ -82,8 +82,8 @@ if [[ $# -lt 1 ]]; then
     exit 1
 fi
 
-printMessage "Running make master"
-make master
+printMessage "Running make master on localhost"
+mkdir build && cd build && cmake .. && make clam2_master && cd ..
 
 # Create a persistant ssh connection that we will reuse. This will
 # just make it so we have to SSH into ivs once (might be slow, might
@@ -118,13 +118,19 @@ printMessage "Creating $IVS_TEMP_DIR on IVS"
 ${SSH_CMD} mkdir -p "$IVS_TEMP_DIR"
 
 printMessage "Copying CWD to $IVS_TEMP_DIR"
-rsync -ah -e ssh --exclude=.svn --exclude=.git --exclude=bin --exclude=obj --checksum --partial --no-whole-file --inplace --delete . ${IVS_USER}@${IVS_HOSTNAME}:${IVS_TEMP_DIR}
+rsync -ah -e ssh --exclude=.svn --exclude=.git --exclude=build --checksum --partial --no-whole-file --inplace --delete . ${IVS_USER}@${IVS_HOSTNAME}:${IVS_TEMP_DIR}
 
 printMessage "Running sync on IVS"
 ${SSH_CMD} sync
 
-printMessage "Running 'make slave' on IVS"
-${SSH_CMD} make -C "${IVS_TEMP_DIR}" slave
+printMessage "Making slave on IVS"
+${SSH_CMD} "olddir=$PWD
+cd "${IVS_TEMP_DIR}"
+mkdir build
+cd build
+cmake ..
+make clam2_slave
+cd $olddir"
 
 for slave in ${SLAVE_IPS[@]}; do
     xyArr=($(getScreenCoords $slave))
@@ -136,12 +142,12 @@ for slave in ${SLAVE_IPS[@]}; do
     tile=${port[0]}
     port=${port[1]}
 
-    RUN_ON_TILE="cd ${IVS_TEMP_DIR}
+    RUN_ON_TILE="cd ${IVS_TEMP_DIR}/build
 export CLAM2_WINPOS=${SCREENWIDTH}x${SCREENHEIGHT}+${screenX}+${screenY}
 export CLAM2_RENDERPOS=${renderposX},${renderposY}
 export CLAM2_PORT=${port}
 export DISPLAY=:0.0
-./bin/clam2_slave"
+./clam2_slave"
     
     printMessage "Running slave slave ${tile} at coordinates ${renderposX},${renderposY}"
     ${SSH_CMD} "ssh -t ${tile} \"${RUN_ON_TILE}\"" &
@@ -162,7 +168,7 @@ echo "Waiting a second for echoes to boot"
 sleep 2
 
 printMessage "Running master on localhost"
-./bin/clam2_master $1
+./build/clam2_master $1
 
 # Loop until all jobs are completed. If there is only one job
 # remaining, it is probably the ssh master connection. We can kill
