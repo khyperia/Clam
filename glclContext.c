@@ -49,8 +49,6 @@ cl_context createClContextFromDevice(cl_platform_id platformId, cl_device_id dev
         CL_CONTEXT_PLATFORM, (cl_context_properties)platformId,
         0, 0
     };
-    printf("context: %p\n", glXGetCurrentContext());
-    printf("display: %p\n", glXGetCurrentDisplay());
     cl_int clError;
     cl_context context = clCreateContext(contextProperties, 1, &deviceId, 0, 0, &clError);
     if (clError == CL_SUCCESS)

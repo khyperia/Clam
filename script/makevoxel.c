@@ -108,7 +108,7 @@ int run_makevoxel(lua_State* luaState)
     return 0;
 }
 
-int makevoxel(lua_State* luaState)
+int luaopen_makevoxel(lua_State* luaState)
 {
     lua_register(luaState, "makevoxel", run_makevoxel);
     return 0;

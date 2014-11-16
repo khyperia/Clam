@@ -1,8 +1,7 @@
-require("script/vector")
-require("script/plugin")
-loadlib("maketris")
-loadlib("rawbuffer")
-loadlib("input")
+require("vector")
+require("maketris")
+require("rawbuffer")
+require("input")
 
 AssumedScreenWidth = 1024
 

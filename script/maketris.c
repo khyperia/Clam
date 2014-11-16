@@ -372,7 +372,7 @@ int run_loadtris(lua_State* state)
     return 1;
 }
 
-int maketris(lua_State* state)
+int luaopen_maketris(lua_State* state)
 {
     lua_register(state, "maketris", run_loadtris);
     return 0;

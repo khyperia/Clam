@@ -1,8 +1,7 @@
 require("math")
-require("script/plugin")
-loadlib("imagebuffer")
-loadlib("input")
-require("script/vector")
+require("imagebuffer")
+require("input")
+require("vector")
 
 -- TODO: Make this dynamic
 AssumedScreenWidth = 1024

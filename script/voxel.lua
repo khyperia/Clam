@@ -1,8 +1,7 @@
-require("script/vector")
-require("script/plugin")
-loadlib("makevoxel")
-loadlib("rawbuffer")
-loadlib("input")
+require("vector")
+require("makevoxel")
+require("rawbuffer")
+require("input")
 
 AssumedScreenWidth = 1024
 

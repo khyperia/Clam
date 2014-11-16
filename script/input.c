@@ -27,7 +27,7 @@ int run_unsetkey(lua_State* state)
     return 0;
 }
 
-int input(lua_State* state)
+int luaopen_input(lua_State* state)
 {
     lua_register(state, "iskeydown", run_iskeydown);
     lua_register(state, "unsetkey", run_unsetkey);

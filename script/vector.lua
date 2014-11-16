@@ -1,4 +1,4 @@
-require("script/table_save")
+require("table_save")
 
 vrpn_server = "Wand@tcp://VRPN_IP"; -- TODO
 
@@ -159,7 +159,7 @@ function update3dCamera(frame, time)
         unsetkey("\\")
         if frame.vrpn == nil or frame.vrpn == false then
             if vrpn == nil then
-                loadlib("vrpn_help")
+                require("vrpn_help")
             end
             frame.vrpn = true
         else

@@ -2,9 +2,9 @@
 IVS_USER="$USER"
 IVS_HOSTNAME="ivs.research.mtu.edu"
 IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam2"
-ECHO_LISTEN_PORT=23456
-# Ports required in IP address
-ECHO_CONNECT_TO="tile-0-0:23456 tile-0-1:23456 tile-0-2:23456 tile-0-3:23456 tile-0-4:23456 tile-0-5:23456 tile-0-6:23456 tile-0-7:23456"
+# Unique ports required in each IP addres
+SLAVE_IPS=("tile-0-0:23450" "tile-0-1:23451" "tile-0-2:23452" "tile-0-3:23453" "tile-0-4:23454" "tile-0-5:23456" "tile-0-6:23456" "tile-0-7:23457")
+ECHO_PORTS=(23450 23451 23452 23453 23454 23456 23456 23457)
 SCREENWIDTH=5760
 SCREENHEIGHT=1080
 
@@ -45,10 +45,8 @@ function getScreenCoords() {
     esac
 }
 
-ECHO_CONNECT_TO_TEMP_ARR=(${ECHO_CONNECT_TO})
-CLAM2_SLAVES=$(printf "~%s" $(printf "${IVS_HOSTNAME}:${ECHO_LISTEN_PORT} %.0s" $(seq ${#ECHO_CONNECT_TO_TEMP_ARR[@]})))
+CLAM2_SLAVES=$(printf "~${IVS_HOSTNAME}:%s" $ECHO_PORTS)
 export CLAM2_SLAVES=${CLAM2_SLAVES:1}
-ECHO_ARGS="$ECHO_LISTEN_PORT ${ECHO_CONNECT_TO//:/ }"
 
 trap 'cleanup' ERR
 trap 'cleanup' INT
@@ -125,12 +123,10 @@ rsync -ah -e ssh --exclude=.svn --exclude=.git --exclude=bin --exclude=obj --che
 printMessage "Running sync on IVS"
 ${SSH_CMD} sync
 
-printMessage "Running 'make echo slave' on IVS"
-${SSH_CMD} make -C "${IVS_TEMP_DIR}" 'echo' slave 
-printMessage "Running echo server on IVS"
-${SSH_CMD} "${IVS_TEMP_DIR}/bin/clam2_echo ${ECHO_ARGS}" &
+printMessage "Running 'make slave' on IVS"
+${SSH_CMD} make -C "${IVS_TEMP_DIR}" slave
 
-for slave in $ECHO_CONNECT_TO; do
+for slave in ${SLAVE_IPS[@]}; do
     xyArr=($(getScreenCoords $slave))
     screenX=$(bc <<< "$OFFSET_WINDOWS * $SCREENWIDTH * ${xyArr[0]}")
     screenY=$(bc <<< "$OFFSET_WINDOWS * $SCREENHEIGHT * ${xyArr[1]}")
@@ -152,6 +148,17 @@ export DISPLAY=:0.0
 done
 
 echo "Waiting a second for slaves to boot"
+sleep 2
+
+printMessage "Running echo servers on IVS (netcat)"
+for ((i = 0; i < ${#SLAVE_IPS[@]}; ++i )); do
+    slaveIp = ${SLAVE_IPS[i]}
+    fifoname = "fifo${ECHO_PORTS[i]}"
+    # this would be a lot easier if gnu netcat was installed rather than bsd netcat
+    ${SSH_CMD} "mkfifo $fifoname; nc -lp ${ECHO_PORTS[i]} <$fifoname | nc ${slaveIp/:/ } >$fifoname; rm $fifoname" &
+done
+
+echo "Waiting a second for echoes to boot"
 sleep 2
 
 printMessage "Running master on localhost"

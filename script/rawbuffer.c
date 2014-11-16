@@ -75,7 +75,7 @@ int run_uplrawbuffer(lua_State* state)
     return 1;
 }
 
-int rawbuffer(lua_State* state)
+int luaopen_rawbuffer(lua_State* state)
 {
     lua_register(state, "dlrawbuffer", run_dlrawbuffer);
     lua_register(state, "uplrawbuffer", run_uplrawbuffer);

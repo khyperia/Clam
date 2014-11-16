@@ -13,7 +13,7 @@
 
 // This section is a nightmare of libpng.
 
-inline unsigned char convByte(float value)
+static inline unsigned char convByte(float value)
 {
     value = value * UCHAR_MAX;
     if (value < 0)
@@ -260,7 +260,7 @@ int run_uplbuffer(lua_State* state)
     return 2;
 }
 
-int imagebuffer(lua_State* state)
+int luaopen_imagebuffer(lua_State* state)
 {
     lua_register(state, "dlbuffer", run_dlbuffer);
     lua_register(state, "uplbuffer", run_uplbuffer);

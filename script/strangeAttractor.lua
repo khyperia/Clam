@@ -1,6 +1,5 @@
-require("script/plugin")
-loadlib("imagebuffer")
-loadlib("input")
+require("imagebuffer")
+require("input")
 
 mkbuffer(1, 0)
 

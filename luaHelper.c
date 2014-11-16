@@ -176,9 +176,18 @@ int newLua(lua_State** state, const char* filename, char** args)
     }
     lua_setglobal(*state, "arg");
 
+    if (PrintErr(luaL_dostring(*state,
+                    "package.cpath=package.cpath .. \";./script/lib?.so;./script/lib?.dll\"\n"
+                    "package.path=package.path .. \";./script/?.lua\"\n")))
+    {
+        printf("Lua failed to execute script setup:\n%s\n", lua_tostring(*state, -1));
+        lua_pop(*state, 1);
+        return -1;
+    }
+
     if (PrintErr(luaL_dofile(*state, filename)))
     {
-        printf("Lua failed to execute file:\n%s\n", luaL_checkstring(*state, -1));
+        printf("Lua failed to execute file:\n%s\n", lua_tostring(*state, -1));
         lua_pop(*state, 1);
         return -1;
     }

@@ -1,5 +1,4 @@
-require("script/plugin")
-loadlib("input")
+require("input")
 
 vrpn_server = "Wand@tcp://VRPN_IP"; -- TODO
 
@@ -48,7 +47,7 @@ function update(time)
         unsetkey("\\")
         if useVrpn == nil or useVrpn == false then
             if vrpn == nil then
-                loadlib("vrpn_help")
+                require("vrpn_help")
             end
             useVrpn = true
         else
