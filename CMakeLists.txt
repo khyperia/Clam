@@ -6,8 +6,18 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra")
 
-set(CMAKE_LIBRARY_PATH "/home/echauck/lua/src" ${CMAKE_LIBRARY_PATH})
-set(CMAKE_INCLUDE_PATH "/home/echauck/lua/src" ${CMAKE_INCLUDE_PATH})
+set(CMAKE_LIBRARY_PATH
+    "/home/echauck/lua/src"
+    "/home/echauck/SDL2/lib"
+    "/home/echauck/SDL2_net/lib"
+    "/home/kuhl/public-vrlab/vrpn/build"
+    ${CMAKE_LIBRARY_PATH})
+set(CMAKE_INCLUDE_PATH
+    "/home/echauck/lua/src"
+    "/home/echauck/SDL2/include"
+    "/home/echauck/SDL2_net/include"
+    "/home/kuhl/public-vrlab/vrpn"
+    ${CMAKE_INCLUDE_PATH})
 
 add_executable(clam2_master master.c masterSocket.c luaHelper.c socketHelper.c helper.c)
 add_executable(clam2_slave slave.c slaveSocket.c glclContext.c openclHelper.c socketHelper.c helper.c)
@@ -15,7 +25,7 @@ add_executable(clam2_slave slave.c slaveSocket.c glclContext.c openclHelper.c so
 macro(my_package pacname)
     find_package(${pacname})
     string(TOUPPER ${pacname} pacname_upper)
-    if (${${pacname_upper}_FOUND})
+    if (${pacname_upper}_FOUND)
         include_directories(${${pacname_upper}_INCLUDE_DIRS})
     endif()
 endmacro()
@@ -44,12 +54,12 @@ target_link_libraries(clam2_slave
 
 file(GLOB files "script/*.c" "script/*.cpp")
 
-if (NOT (${ASSIMP_FOUND}))
+if (NOT (ASSIMP_FOUND))
     list(REMOVE_ITEM files "${CMAKE_CURRENT_SOURCE_DIR}/script/maketris.c")
     message(STATUS "Assimp not found, not building maketris")
 endif()
 
-if (NOT (${VRPN_FOUND}))
+if (NOT (VRPN_FOUND))
     list(REMOVE_ITEM files "${CMAKE_CURRENT_SOURCE_DIR}/script/vrpn_help.cpp")
     message(STATUS "VRPN not found, not building vrpn_help")
 endif()

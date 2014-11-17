@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL_net.h>
+#include <SDL_net.h>
 
 enum MessageType
 {
