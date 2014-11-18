@@ -106,7 +106,7 @@ int masterSocketRecv(TCPsocket* socketFds)
 
         for (TCPsocket* sock = socketFds; *sock; sock++)
         {
-            TCPsocket socketFd = *socketFds;
+            TCPsocket socketFd = *sock;
 
             if (!SDLNet_SocketReady(socketFd))
                 continue;

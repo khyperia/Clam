@@ -57,8 +57,8 @@ function update(time)
     if useVrpn then
         tpos, tlook, tup = vrpn(vrpn_server)
         posx = tpos[1]
-        posy = tpos[2]
-        zoom = math.exp(tpos[3] * 2 - 3)
+        posy = (tpos[3] - 1.5) * 2
+        zoom = math.exp(tpos[2] * -2)
         frame = 0
     end
     if iskeydown("h") then

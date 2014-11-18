@@ -1,5 +1,5 @@
 #ifndef MaxIters
-#define MaxIters 2048
+#define MaxIters 256
 #endif
 
 #ifndef Bailout

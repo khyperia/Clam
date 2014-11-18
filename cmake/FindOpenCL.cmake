@@ -39,8 +39,10 @@ find_package_handle_standard_args(
 
 if(OPENCL_FOUND)
   set(OPENCL_LIBRARIES ${OPENCL_LIBRARY})
+  set(OPENCL_INCLUDE_DIRS ${OPENCL_INCLUDE_DIR})
 else(OPENCL_FOUND)
   set(OPENCL_LIBRARIES)
+  set(OPENCL_INCLUDE_DIRS)
 endif(OPENCL_FOUND)
 
 mark_as_advanced(

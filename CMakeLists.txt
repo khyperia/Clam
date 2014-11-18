@@ -17,6 +17,7 @@ set(CMAKE_INCLUDE_PATH
     "/home/echauck/SDL2/include"
     "/home/echauck/SDL2_net/include"
     "/home/kuhl/public-vrlab/vrpn"
+    "/export/apps/cuda-5.0/include"
     ${CMAKE_INCLUDE_PATH})
 
 add_executable(clam2_master master.c masterSocket.c luaHelper.c socketHelper.c helper.c)
@@ -39,12 +40,14 @@ my_package(Lua)
 my_package(assimp)
 my_package(VRPN)
 
+if (LUA_FOUND)
 target_link_libraries(clam2_master
     ${OPENGL_LIBRARIES}
     ${PNG_LIBRARIES}
     ${LUA_LIBRARIES}
     ${SDL2_LIBRARIES}
     ${SDL2_NET_LIBRARIES})
+endif()
 
 target_link_libraries(clam2_slave
     ${OPENCL_LIBRARIES}
@@ -64,11 +67,16 @@ if (NOT (VRPN_FOUND))
     message(STATUS "VRPN not found, not building vrpn_help")
 endif()
 
+if (LUA_FOUND)
+
+set(pluginList)
+
 foreach(file ${files})
     get_filename_component(libname ${file} NAME_WE)
     add_library(${libname} SHARED ${file})
     set_target_properties(${libname} PROPERTIES LIBRARY_OUTPUT_DIRECTORY script)
     target_link_libraries(${libname} ${LUA_LIBRARIES})
+    set(pluginList ${pluginList} ${libname})
 endforeach()
 
 if (TARGET maketris)
@@ -78,7 +86,12 @@ if (TARGET vrpn_help)
     target_link_libraries(vrpn_help ${VRPN_LIBRARIES})
 endif()
 
+add_custom_target(plugins DEPENDS ${pluginList})
+
 file(GLOB scriptFiles RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "script/*")
 foreach(scriptFile ${scriptFiles})
 	configure_file(${scriptFile} ${scriptFile})
 endforeach()
+else()
+    message(STATUS "LUA not found, not building scripts")
+endif() # LUA_FOUND

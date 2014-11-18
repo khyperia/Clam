@@ -72,7 +72,7 @@ extern "C" {
         return 3;
     }
 
-    int vrpn_help(lua_State* luaState)
+    int luaopen_vrpn_help(lua_State* luaState)
     {
         lua_register(luaState, "vrpn", run_vrpn);
         return 0;
