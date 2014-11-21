@@ -90,7 +90,11 @@ float DeColor(float3 z3d, float lightHue)
 
         z = Scale * z + offset;
     }
-    float fullValue = fabs(lightHue - fmod(hue * HueVariance, 1));
+    float fullValue = lightHue - hue * HueVariance;
+    fullValue *= 3.14159;
+    fullValue = cos(fullValue);
+    fullValue *= fullValue;
+    fullValue = pow(fullValue, ColorSharpness);
     fullValue = 1 - (1 - fullValue) * Saturation;
     return fullValue;
 }
@@ -168,6 +172,7 @@ float Trace(float3 origin, float3 direction, float quality, float hue, ulong* ra
     float totalDistance = 0.0;
     float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
     float fogDist = -log(Rand(rand)) / (float)(FogDensity(hue));
+    fogDist = *isFog == 2 ? FLT_MAX : fogDist;
     float maxRayDist = min((float)MaxRayDist, min(fogDist, sphereDist));
     for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
             distance * quality > totalDistance; i++) {
@@ -215,82 +220,11 @@ float3 Cone(float3 normal, float fov, ulong* rand)
     return RayDir(normal, up, RandCircle(rand), fov);
 }
 
-float3 NewRayDir(float3 pos, float3 normal, float* weight, ulong* rand)
-{
-    float3 toLight = (float3)(LightPos) - pos;
-    float toLightLen = length(toLight);
-    toLight /= toLightLen;
-    float angle = asin(LightSize / toLightLen);
-    if (isnan(angle))
-        angle = 1.58;
-    float probLight = (LightSize * LightSize) / (toLightLen * toLightLen);
-
-    if (Rand(rand) < DirectLightProbability)
-    {
-        *weight *= probLight / DirectLightProbability;
-        for (int i = 0; i < 8; i++)
-        {
-            float3 newRayDir = Cone(toLight, angle, rand);
-            if (dot(newRayDir, normal) < 0)
-                continue;
-            return newRayDir;
-        }
-        *weight = 0;
-        return (float3)(0);
-    }
-    else
-    {
-        *weight *= (1 - probLight) / (1 - DirectLightProbability);
-        for (int i = 0; i < 8; i++)
-        {
-            float3 newRayDir = Cone(normal, 3.14 / 2, rand);
-            if (dot(newRayDir, toLight) > cos(angle))
-                continue;
-            return newRayDir;
-        }
-        *weight = 0;
-        return (float3)(0);
-    }
-}
-
-float3 NewSphereRayDir(float3 pos, float* weight, ulong* rand)
-{
-    float3 toLight = (float3)(LightPos) - pos;
-    float toLightLen = length(toLight);
-    toLight /= toLightLen;
-    float angle = asin(LightSize / toLightLen);
-    if (isnan(angle))
-        angle = 2.23;
-    float probLight = (LightSize * LightSize) / (toLightLen * toLightLen) / 2;
-
-    if (Rand(rand) < DirectLightProbability)
-    {
-        *weight *= probLight / DirectLightProbability;
-        return Cone(toLight, angle, rand);
-    }
-    else
-    {
-        *weight *= (1 - probLight) / (1 - DirectLightProbability);
-        float3 newRayDir;
-        for (int i = 0; i < 8; i++)
-        {
-            newRayDir = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
-            if (dot(newRayDir, toLight) > cos(angle))
-                continue;
-            return newRayDir;
-        }
-        *weight = 0;
-        return (float3)(0);
-    }
-}
-
-float BRDF(float3 point, float3 normal, float3 incoming, float3 outgoing)
+float BRDF(float3 normal, float3 incoming, float3 outgoing)
 {
     float3 halfV = normalize(incoming + outgoing);
     float angle = acos(dot(normal, halfV));
-    float multiplier = 1 + SpecularBrightness *
-        exp(-(angle * angle) / (SpecularSize * SpecularSize));
-    return multiplier;
+    return 1 + SpecularHighlight(angle);
 }
 
 float WeakeningFactor(float3 normal, float3 incoming)
@@ -298,13 +232,27 @@ float WeakeningFactor(float3 normal, float3 incoming)
     return dot(normal, incoming);
 }
 
-float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hue, float* weight, ulong* rand)
+float DirectLighting(float3 newRayPos, float hue, ulong* rand, float3* lightDir)
+{
+    float3 light = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
+    *lightDir = normalize(light * LightSize + (float3)(LightPos) - newRayPos);
+    if (dot(light, *lightDir) > 0)
+        *lightDir = normalize(-light * LightSize + (float3)(LightPos) - newRayPos);
+    int isFogLight = 2, isHitLight;
+    float dist = Trace(newRayPos, *lightDir, QualityRestRay, hue, rand, &isFogLight, &isHitLight);
+
+    if (isHitLight)
+        return LightBrightness(hue) / (dist * dist); // clearly wrong, but I don't care
+    return 0;
+}
+
+float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hue, ulong* rand)
 {
     // not entirely too sure why I need the 1 constant here
     // that is, "why not another number? This one is arbitrary" (pun sort of intended)
     float color = 1;
     float total = 0;
-    int isFog;
+    int isFog = 0;
     for (int i = 0; i < NumRayBounces; i++)
     {
         int hitLightsource;
@@ -313,38 +261,45 @@ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hu
                 i==0?QualityFirstRay*qualityMul:QualityRestRay,
                 hue, rand, &isFog, &hitLightsource);
 
-        if (hitLightsource)
+        if (hitLightsource && i == 0)
         {
-            total += color * (LightBrightness(hue));
+            total += color * LightBrightness(hue);
             break;
         }
         if (distanceTraveled >= MaxRayDist)
         {
-            isFog = 1;
+            isFog = 1; // TODO: Is this required?
             break;
         }
 
         float3 newRayPos = rayPos + rayDir * distanceTraveled;
         float3 newRayDir;
 
+        float3 normal;
         if (isFog)
         {
-            newRayDir = NewSphereRayDir(newRayPos, weight, rand);
-            if (*weight == 0)
-                return total; // doesn't matter anyway
+            newRayDir = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
             color *= FogColor(hue);
         }
         else
         {
-            float3 normal = Normal(newRayPos);
-
-            newRayDir = NewRayDir(newRayPos, normal, weight, rand);
-            if (*weight == 0)
-                return total; // doesn't matter anyway
-
-            color *= DeColor(newRayPos, hue) * BRDF(newRayPos, normal, newRayDir, -rayDir) *
-                WeakeningFactor(normal, newRayDir);
+            normal = Normal(newRayPos);
+            newRayDir = Cone(normal, 3.14 / 2, rand);
+            color *= DeColor(newRayPos, hue);
         }
+
+        float3 lightingRayDir;
+        float direct = DirectLighting(newRayPos, hue, rand, &lightingRayDir);
+
+        if (!isFog)
+        {
+            color *= BRDF(normal, newRayDir, -rayDir) *
+                WeakeningFactor(normal, newRayDir);
+            direct *= BRDF(normal, lightingRayDir, -rayDir)
+                * WeakeningFactor(normal, lightingRayDir);
+        }
+        total += color * direct;
+
         rayPos = newRayPos;
         rayDir = newRayDir;
     }
@@ -427,8 +382,8 @@ __kernel void Main(__global float4* screen,
     {
         frame -= 1;
 
-        float weight = 1;
-        float intensity = RenderingEquation(pos, rayDir, 1 / fov, hue, &weight, &rand);
+        const float weight = 1;
+        float intensity = RenderingEquation(pos, rayDir, 1 / fov, hue, &rand);
         float3 color = HueToRGB(hue, intensity);
         float4 final;
 

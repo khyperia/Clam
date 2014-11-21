@@ -26,8 +26,6 @@ Note for lua, make sure to compile with PIC, as in:
 
     make linux MYCFLAGS=-fPIC
 
-Note: If a plugin fails to build, and its functionality is not needed, it is possible to blacklist it by placing the name of the source file (i.e. with .c extension) in the file script/pluginBlacklist.txt. This file should already exist (via touch) if the makefile has been ran once.
-
 ##### Running it locally:
 
     mkdir build && cd build
@@ -36,8 +34,6 @@ Note: If a plugin fails to build, and its functionality is not needed, it is pos
     ./clam2_master script/[scriptname].lua
 
 You may want to run the slave and master executables in separate terminal windows to not confuse output of each program.
-
-See the other ways of running the program for other parameters (the defaults are okay for localhost)
 
 ##### Running it remotely:
 
@@ -66,8 +62,7 @@ On ccsr.ee:
 
     ./ivs.bash script/[scriptname].lua
 
-You may have to build lua and modify some lines in the Makefile (specifically inside the if statement if HOSTNAME equals IVS_MASTERNAME) to point at the directory you built it in. Ensure you build lua with PIC enabled, as in:
-
+You may have to modify the CMAKE_LIBRARY_PATH and CMAKE_INCLUDE_PATH in CMakeLists.txt to point at valid install directories of the libraries.
 
 --
 
@@ -121,4 +116,4 @@ CLAM2_RENDERPOS: Where the top-left corner of the window is with respect to the 
 
 CLAM2_FULLLSCREEN: Whether or not to tell GLUT to fullscreen the window
 
-CLAM2_SLAVES: Tilde-separated list of IPs for the host to connect to (in the case of echo servers, this will probably be the same IP repeated multiple times)
+CLAM2_SLAVES: Tilde-separated list of IPs for the host to connect to
