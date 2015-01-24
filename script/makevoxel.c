@@ -1,7 +1,6 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <math.h>
-#include <stdio.h>
 
 #define CUBE_SIZE 256
 

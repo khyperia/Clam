@@ -1,17 +1,9 @@
 // Note: This is a module using builtin functions of the master program. Edit at your own risk.
 
-#include <lua.h>
-#include <lauxlib.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <limits.h>
-#include <png.h>
-#include "../helper.h"
 #include "../socketHelper.h"
 #include "../master.h"
-
-#define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
+#include "../luaHelper.h"
+#include <lauxlib.h>
 
 int saveRaw(float* data, long dataSize)
 {

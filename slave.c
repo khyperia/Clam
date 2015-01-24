@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <string.h>
 #include "helper.h"
 #include "socketHelper.h"
 #include "glclContext.h"
@@ -52,12 +50,12 @@ void doOnExit_slave(void)
     puts("Exiting");
 }
 
-int eventFilter(void UNUSED *userdata, SDL_Event* event)
+int eventFilter(void UNUSED* userData, SDL_Event* event)
 {
     return event->type == SDL_QUIT;
 }
 
-int main(int UNUSED argc, char UNUSED **argv)
+int main(int UNUSED argc, char UNUSED** argv)
 {
     if (PrintErr(atexit(doOnExit_slave)))
         puts("Continuing anyway");
@@ -108,8 +106,8 @@ int main(int UNUSED argc, char UNUSED **argv)
         exit(EXIT_FAILURE);
     }
 
-    const char* renderpos = sgetenv("CLAM2_RENDERPOS", "-512,-512");
-    if (sscanf(renderpos, "%d,%d", &screenPos.x, &screenPos.y) != 2)
+    const char* renderPos = sgetenv("CLAM2_RENDERPOS", "-512,-512");
+    if (sscanf(renderPos, "%d,%d", &screenPos.x, &screenPos.y) != 2)
     {
         puts("CLAM2_RENDERPOS not in correct format ([+-]OFFX,[+-]OFFY).");
         exit(EXIT_FAILURE);

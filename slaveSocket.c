@@ -1,10 +1,6 @@
 #include "slaveSocket.h"
 #include "helper.h"
 #include "openclHelper.h"
-#include <poll.h>
-#include <stdio.h>
-
-#include <unistd.h>
 
 // This is used to make sure the master doesn't get too far ahead of the client
 // softSync is for
@@ -60,7 +56,7 @@ int recvArgument(struct Interop* interop, TCPsocket socketFd, struct ScreenPos s
             return -1;
         }
         if (PrintErr(setKernelArg(&interop->clContext, kernelName, *argIndex,
-                        &memory, sizeof(cl_mem))))
+                &memory, sizeof(cl_mem))))
         {
             return -1;
         }
@@ -68,22 +64,22 @@ int recvArgument(struct Interop* interop, TCPsocket socketFd, struct ScreenPos s
     else if (arglen == -2) // Special code for x/y/width/height
     {
         if (PrintErr(setKernelArg(&interop->clContext, kernelName, (*argIndex)++,
-                        &screenPos.x, sizeof(int))))
+                &screenPos.x, sizeof(int))))
         {
             return -1;
         }
         if (PrintErr(setKernelArg(&interop->clContext, kernelName, (*argIndex)++,
-                        &screenPos.y, sizeof(int))))
+                &screenPos.y, sizeof(int))))
         {
             return -1;
         }
         if (PrintErr(setKernelArg(&interop->clContext, kernelName, (*argIndex)++,
-                        &screenPos.width, sizeof(int))))
+                &screenPos.width, sizeof(int))))
         {
             return -1;
         }
         if (PrintErr(setKernelArg(&interop->clContext, kernelName, *argIndex,
-                        &screenPos.height, sizeof(int))))
+                &screenPos.height, sizeof(int))))
         {
             return -1;
         }
@@ -96,7 +92,7 @@ int recvArgument(struct Interop* interop, TCPsocket socketFd, struct ScreenPos s
             return -1;
         }
         if (PrintErr(setKernelArg(&interop->clContext,
-                        kernelName, *argIndex, arg, (size_t)arglen)))
+                kernelName, *argIndex, arg, (size_t)arglen)))
         {
             return -1;
         }
@@ -120,8 +116,8 @@ int messageKernelInvoke(struct Interop* interop, TCPsocket socketFd, struct Scre
         launchSizeLong[0] = screenPos.width;
     if (launchSizeLong[1] == -1)
         launchSizeLong[1] = screenPos.height;
-    size_t launchSize[] = { (size_t)launchSizeLong[0], (size_t)launchSizeLong[1] };
-    for (cl_uint argIndex = 0;; argIndex++)
+    size_t launchSize[] = {(size_t)launchSizeLong[0], (size_t)launchSizeLong[1]};
+    for (cl_uint argIndex = 0; ; argIndex++)
     {
         int argResult = recvArgument(interop, socketFd, screenPos, kernelName, &argIndex,
                 involvedBuf0);
@@ -134,7 +130,7 @@ int messageKernelInvoke(struct Interop* interop, TCPsocket socketFd, struct Scre
         }
     }
     int result = PrintErr(invokeKernel(&interop->clContext,
-                *interop, kernelName, launchSize));
+            *interop, kernelName, launchSize));
 
     free(kernelName);
 
@@ -149,7 +145,7 @@ int messageMkBuffer(struct Interop* interop, TCPsocket socketFd, struct ScreenPo
             PrintErr(recv_p(socketFd, &bufferSize, sizeof(long))))
         return -1;
     if (PrintErr(allocMem(interop, bufferId, (size_t)bufferSize,
-                    (size_t)screenPos.width * (size_t)screenPos.height * 4 * 4)))
+            (size_t)screenPos.width * (size_t)screenPos.height * 4 * 4)))
         return -1;
     return 0;
 }

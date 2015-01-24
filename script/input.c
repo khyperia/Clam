@@ -3,10 +3,8 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <string.h>
-#include "../helper.h"
 #include "../master.h"
-
-#define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
+#include "../luaHelper.h"
 
 // Checks if the character passed in is a currently pressed key
 int run_iskeydown(lua_State* state)

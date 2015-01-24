@@ -1,7 +1,4 @@
 #include "masterSocket.h"
-#include <limits.h>
-#include <poll.h>
-#include <stdlib.h>
 #include "helper.h"
 
 int numWaitingSoftSync = 0;

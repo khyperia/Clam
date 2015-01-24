@@ -1,15 +1,10 @@
 // Note: This is a module using builtin functions of the master program. Edit at your own risk.
 
-#include <lua.h>
-#include <lauxlib.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <limits.h>
-#include <png.h>
-#include "../helper.h"
 #include "../socketHelper.h"
+#include "../luaHelper.h"
 #include "../master.h"
+#include <lauxlib.h>
+#include <png.h>
 
 // This section is a nightmare of libpng.
 
@@ -162,7 +157,8 @@ float* loadPng(const char* filename, long* width, long* height)
         return NULL;
     }
 
-    if (setjmp(png_jmpbuf(png_ptr))) {
+    if (setjmp(png_jmpbuf(png_ptr)))
+    {
         puts("Error from libpng.");
         png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
         fclose(fp);
@@ -177,8 +173,10 @@ float* loadPng(const char* filename, long* width, long* height)
     png_get_IHDR(png_ptr, info_ptr, &temp_width, &temp_height, &bit_depth, &color_type,
             NULL, NULL, NULL);
 
-    if (width){ *width = temp_width; }
-    if (height){ *height = temp_height; }
+    if (width)
+    {*width = temp_width;}
+    if (height)
+    {*height = temp_height;}
 
     png_read_update_info(png_ptr, info_ptr);
 
@@ -213,8 +211,6 @@ float* loadPng(const char* filename, long* width, long* height)
 }
 
 // Lua section
-
-#define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
 
 // TODO: Find a better way to get buffer size
 static long dlbuffer_callback_width;

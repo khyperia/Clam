@@ -9,10 +9,15 @@
 #endif
 
 const char* sgetenv(const char* name, const char* defaultValue);
+
 char* my_strdup(const char* str);
+
 char* readWholeFile(const char* filename);
+
 void* readWholeBinFile(const char* filename, size_t* size);
+
 void* malloc_s(size_t size);
+
 static inline int PrintErrImpl(int errcode, const char* message, const char* filename, int line)
 {
     if (errcode != 0)

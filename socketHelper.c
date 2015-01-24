@@ -1,6 +1,5 @@
 #include "socketHelper.h"
 #include "helper.h"
-#include <string.h>
 #include <limits.h>
 
 TCPsocket hostSocket(Uint16 port)

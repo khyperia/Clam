@@ -1,10 +1,10 @@
+#include "../helper.h"
 #include <stdlib.h>
 #include <limits.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
-#include "../helper.h"
 
 const size_t maxTrisPerBlock = 3;
 
@@ -120,7 +120,7 @@ struct aiVector3D centerTri3D(struct tri3D tri)
 void writevec(struct aiVector3D vec, FILE* file)
 {
     float data[] = {
-        vec.x, vec.y, vec.z
+            vec.x, vec.y, vec.z
     };
     fwrite(data, sizeof(float), sizeof(data) / sizeof(float), file);
 }
@@ -128,7 +128,7 @@ void writevec(struct aiVector3D vec, FILE* file)
 void writevecPadded(struct aiVector3D vec, FILE* file)
 {
     float data[] = {
-        vec.x, vec.y, vec.z, 0.0f
+            vec.x, vec.y, vec.z, 0.0f
     };
     fwrite(data, sizeof(float), sizeof(data) / sizeof(float), file);
 }
@@ -320,7 +320,7 @@ long writeTris(FILE* file, struct mesh3D tris, long gotoDone)
     int zero = 0;
     fwrite(&zero, sizeof(int), 1, file);
     writeBbox(file, tris);
-    int offsets[] = { (int)gotoDone, (int)greaterFile };
+    int offsets[] = {(int)gotoDone, (int)greaterFile};
     fwrite(offsets, sizeof(int), sizeof(offsets) / sizeof(int), file);
     free(less.indices);
     free(greater.indices);
@@ -358,7 +358,7 @@ int run_loadtris(lua_State* state)
     }
 
     fseek(output, begin, SEEK_SET);
-    int header[] = { (int)finalStreamPos, (int)verts, (int)normals };
+    int header[] = {(int)finalStreamPos, (int)verts, (int)normals};
     fwrite(header, sizeof(int), 3, output);
 
     free(unpacked.indices);

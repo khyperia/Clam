@@ -1,15 +1,10 @@
 #include "luaHelper.h"
-#include "helper.h"
 #include "socketHelper.h"
 #include "master.h"
 #include "masterSocket.h"
 #include <lualib.h>
 #include <lauxlib.h>
-#include <stdlib.h>
 #include <time.h>
-
-// Note: `state` must be a local variable of type lua_State* to use this macro
-#define LuaPrintErr(expr) if (PrintErr(expr)) luaL_error(state, "LuaPrintErr assertion fail")
 
 void sync_waitmessage(lua_State* state)
 {
@@ -93,7 +88,7 @@ int run_kernel(lua_State* state)
     LuaPrintErr(argc < 3);
 
     const char* kernelName = luaL_checkstring(state, 1);
-    long launchSize[2] = { luaL_checkinteger(state, 2), luaL_checkinteger(state, 3) };
+    long launchSize[2] = {luaL_checkinteger(state, 2), luaL_checkinteger(state, 3)};
     LuaPrintErr(send_all_str(sockets, kernelName));
     LuaPrintErr(send_all(sockets, launchSize, sizeof(launchSize)));
     for (int i = 4; i <= argc; i++)
@@ -101,35 +96,35 @@ int run_kernel(lua_State* state)
         switch (lua_type(state, i))
         {
             case LUA_TFUNCTION:
-                {
-                    int screenSizeMagicVal = -2;
-                    LuaPrintErr(send_all(sockets, &screenSizeMagicVal, sizeof(int)));
-                }
+            {
+                int screenSizeMagicVal = -2;
+                LuaPrintErr(send_all(sockets, &screenSizeMagicVal, sizeof(int)));
+            }
                 break;
             case LUA_TSTRING:
-                {
-                    LuaPrintErr(!lua_isnumber(state, i));
-                    int value[2] = { -1, 0 };
-                    value[1] = (int)lua_tointeger(state, i);
-                    LuaPrintErr(send_all(sockets, &value, sizeof(value)));
-                }
+            {
+                LuaPrintErr(!lua_isnumber(state, i));
+                int value[2] = {-1, 0};
+                value[1] = (int)lua_tointeger(state, i);
+                LuaPrintErr(send_all(sockets, &value, sizeof(value)));
+            }
                 break;
             case LUA_TNUMBER:
-                {
-                    int size = sizeof(float);
-                    float value = (float)luaL_checknumber(state, i);
-                    LuaPrintErr(send_all(sockets, &size, sizeof(size)));
-                    LuaPrintErr(send_all(sockets, &value, size));
-                }
+            {
+                int size = sizeof(float);
+                float value = (float)luaL_checknumber(state, i);
+                LuaPrintErr(send_all(sockets, &size, sizeof(size)));
+                LuaPrintErr(send_all(sockets, &value, size));
+            }
                 break;
             case LUA_TTABLE:
-                {
-                    lua_pushinteger(state, 1);
-                    lua_gettable(state, i);
-                    int value[2] = { sizeof(int), (int)luaL_checkinteger(state, -1) };
-                    lua_pop(state, 1);
-                    LuaPrintErr(send_all(sockets, &value, sizeof(value)));
-                }
+            {
+                lua_pushinteger(state, 1);
+                lua_gettable(state, i);
+                int value[2] = {sizeof(int), (int)luaL_checkinteger(state, -1)};
+                lua_pop(state, 1);
+                LuaPrintErr(send_all(sockets, &value, sizeof(value)));
+            }
                 break;
             default:
                 luaL_error(state, "Unknown argument type in kernel()");
@@ -177,7 +172,7 @@ int newLua(lua_State** state, const char* filename, char** args)
     lua_setglobal(*state, "arg");
 
     if (PrintErr(luaL_dostring(*state,
-                    "package.cpath=package.cpath .. \";./script/lib?.so;./script/lib?.dll\"\n"
+            "package.cpath=package.cpath .. \";./script/lib?.so;./script/lib?.dll\"\n"
                     "package.path=package.path .. \";./script/?.lua\"\n")))
     {
         printf("Lua failed to execute script setup:\n%s\n", lua_tostring(*state, -1));

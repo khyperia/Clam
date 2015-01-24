@@ -1,16 +1,10 @@
 #include <SDL.h>
 #include "master.h"
-#include <math.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
 #include "luaHelper.h"
-#include "helper.h"
 
 SDL_Window* window = NULL;
 TCPsocket* sockets = NULL;
 bool keyboard[UCHAR_MAX + 1] = {false};
-int animationFrame = 0;
 lua_State* luaState = NULL;
 Uint32 lastSdl2Ticks = 0;
 double fps = 1.0;
@@ -79,7 +73,7 @@ TCPsocket* connectToSlaves(char* slaves)
     return ips;
 }
 
-int eventFilter(void UNUSED *userdata, SDL_Event* event)
+int eventFilter(void UNUSED* userdata, SDL_Event* event)
 {
     return event->type == SDL_QUIT || event->type == SDL_KEYUP || event->type == SDL_KEYDOWN;
 }
@@ -91,7 +85,7 @@ int main(int argc, char** argv)
 
     if (argc < 2)
     {
-        printf("Usage: %s [lua filename]\n", argv[0]);
+        printf("Usage: %s [lua filename] [arguments to lua script]\n", argv[0]);
         return -1;
     }
 
@@ -123,9 +117,9 @@ int main(int argc, char** argv)
                 exit = true;
             if (event.type == SDL_KEYUP || event.type == SDL_KEYDOWN)
             {
-                SDL_Keycode keycode = event.key.keysym.sym;
-                if (keycode >= 0 && keycode <= UCHAR_MAX)
-                    keyboard[(unsigned char)keycode] = event.type == SDL_KEYDOWN;
+                SDL_Keycode keyCode = event.key.keysym.sym;
+                if (keyCode >= 0 && keyCode <= UCHAR_MAX)
+                    keyboard[(unsigned char)keyCode] = event.type == SDL_KEYDOWN;
             }
         }
         if (exit)
@@ -137,10 +131,10 @@ int main(int argc, char** argv)
         if (PrintErr(runLua(luaState, elapsed)))
             return -1;
         fps = (elapsed + fps * 29) / 30;
-        Uint32 newsecond = current / 1000;
-        if (newsecond != second)
+        Uint32 newSecond = current / 1000;
+        if (newSecond != second)
         {
-            second = newsecond;
+            second = newSecond;
             printf("FPS: %f\n", 1 / fps);
         }
     }

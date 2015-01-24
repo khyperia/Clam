@@ -1,9 +1,7 @@
 #include "glclContext.h"
 #include "openclHelper.h"
 #include "helper.h"
-#include <limits.h>
 #include <GL/glx.h>
-#include <stdio.h>
 #include <string.h>
 
 void printDeviceIdName(cl_device_id device)
@@ -43,11 +41,12 @@ void printDeviceVersion(cl_device_id device)
 cl_context createClContextFromDevice(cl_platform_id platformId, cl_device_id deviceId)
 {
     // Properties to use when creating the context (code is platform-specific)
+    // Must modify when porting to another platform (the two glX* lines)
     cl_context_properties contextProperties[] = {
-        CL_GL_CONTEXT_KHR, (cl_context_properties)(void*)glXGetCurrentContext(),
-        CL_GLX_DISPLAY_KHR, (cl_context_properties)(void*)glXGetCurrentDisplay(),
-        CL_CONTEXT_PLATFORM, (cl_context_properties)platformId,
-        0, 0
+            CL_GL_CONTEXT_KHR, (cl_context_properties)(void*)glXGetCurrentContext(),
+            CL_GLX_DISPLAY_KHR, (cl_context_properties)(void*)glXGetCurrentDisplay(),
+            CL_CONTEXT_PLATFORM, (cl_context_properties)platformId,
+            0, 0
     };
     cl_int clError;
     cl_context context = clCreateContext(contextProperties, 1, &deviceId, 0, 0, &clError);
@@ -59,6 +58,8 @@ cl_context createClContextFromDevice(cl_platform_id platformId, cl_device_id dev
 cl_context createClContextFromPlatform(cl_platform_id platformId, cl_device_id* outputClDeviceId)
 {
     // Only allow GPU devices to be used
+    // If your machine has integrated graphics or something, you might have to change this
+    // (You can tell if it spits at you "Unable to find suitable OpenCL device")
     const cl_device_type clDeviceType = CL_DEVICE_TYPE_GPU;
 
     // Get cl_device_id count and then list
@@ -211,7 +212,7 @@ float* dlMem(struct Interop interop, int key, size_t* memSize, size_t screenSize
         *memSize = screenSizeBytes;
     float* data = malloc_s(*memSize);
     if (PrintErr(clEnqueueReadBuffer(interop.command_queue, clmem, 1, 0,
-                    *memSize, data, 0, NULL, NULL)))
+            *memSize, data, 0, NULL, NULL)))
     {
         free(data);
         return NULL;
@@ -249,7 +250,7 @@ int uplMem(struct Interop* interop, int key, size_t memSize, float* data)
         gpu = getMem(*interop, key, &gpuSize);
     }
     if (PrintErr(clEnqueueWriteBuffer(interop->command_queue, gpu, 1, 0, memSize, data,
-                    0, NULL, NULL)))
+            0, NULL, NULL)))
         return -1;
     return 0;
 }
@@ -324,7 +325,7 @@ int resizeInterop(struct Interop* interop, int width, int height)
     if (PrintErr(openclError))
         return -1;
     if (PrintErr(clEnqueueAcquireGLObjects(interop->command_queue, 1,
-                    &openclBuffer, 0, NULL, NULL)))
+            &openclBuffer, 0, NULL, NULL)))
         return -1;
     if (PrintErr(addMem(interop, 0, openclBuffer, 0)))
         return -1;

@@ -1,6 +1,5 @@
 #include "openclHelper.h"
 #include "helper.h"
-#include <stdio.h>
 #include <string.h>
 
 void printBuildLog(cl_device_id deviceId, cl_program program)
@@ -99,13 +98,13 @@ int invokeKernel(struct ClContext* context, struct Interop interop,
         const char* kernel, size_t invokeSize[2])
 {
     cl_kernel kernelObj = getKernelByName(context, kernel);
-    size_t local[] = { 8, 8 };
+    size_t local[] = {8, 8};
     size_t global[] = {
-        (invokeSize[0] + local[0] - 1) / local[0] * local[0],
-        (invokeSize[1] + local[1] - 1) / local[1] * local[1]
+            (invokeSize[0] + local[0] - 1) / local[0] * local[0],
+            (invokeSize[1] + local[1] - 1) / local[1] * local[1]
     };
     if (PrintErr(clEnqueueNDRangeKernel(interop.command_queue, kernelObj,
-                    2, NULL, global, local, 0, NULL, NULL)))
+            2, NULL, global, local, 0, NULL, NULL)))
         return -1;
     return 0;
 }
