@@ -1,6 +1,14 @@
 require("input")
 
-vrpn_server = "Wand@tcp://VRPN_IP"; -- TODO
+function readAllFile(filename)
+    filename = filename:gsub('~', os.getenv('HOME'))
+    local f = io.open(filename, "rb")
+    local content = f:read("*all")
+    f:close()
+    return content
+end
+
+vrpn_server = "Wand@tcp://" .. readAllFile("~/.vrpn-server");
 
 posx = 0.0
 posy = 0.0
@@ -57,7 +65,7 @@ function update(time)
     if useVrpn then
         tpos, tlook, tup = vrpn(vrpn_server)
         posx = tpos[1]
-        posy = (tpos[3] - 1.5) * 2
+        posy = (tpos[3] - 1.5) * -2
         zoom = math.exp(tpos[2] * -2)
         frame = 0
     end

@@ -1,6 +1,14 @@
 require("table_save")
 
-vrpn_server = "Wand@tcp://VRPN_IP"; -- TODO
+function readAllFile(filename)
+    filename = filename:gsub('~', os.getenv('HOME'))
+    local f = io.open(filename, "rb")
+    local content = f:read("*all")
+    f:close()
+    return content
+end
+
+vrpn_server = "Wand@tcp://" .. readAllFile("~/.vrpn-server");
 
 function addvec(left, right)
     return {left[1] + right[1], left[2] + right[2], left[3] + right[3]}
