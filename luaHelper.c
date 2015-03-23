@@ -41,7 +41,8 @@ int run_hardsync(lua_State* state)
     return 0;
 }
 
-// Creates a buffer with arg(1) id, and arg(2) size
+// Creates a buffer with arg(1) id, and arg(2) size (in bytes)
+// if size == 0, then size = (num pixels on screen * sizeof(float) * 4)
 int run_mkbuffer(lua_State* state)
 {
     LuaPrintErr(send_all_msg(sockets, MessageMkBuffer));

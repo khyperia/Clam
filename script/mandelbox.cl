@@ -152,28 +152,35 @@ float3 Normal(float3 pos) {
                 ));
 }
 
-float RaySphereIntersection(float3 rayOrigin, float3 rayDir, float3 sphereCenter, float sphereSize)
+float RaySphereIntersection(float3 rayOrigin, float3 rayDir,
+    float3 sphereCenter, float sphereSize,
+    bool canBePast)
 {
     float3 omC = rayOrigin - sphereCenter;
     float lDotOmC = dot(rayDir, omC);
     float underSqrt = lDotOmC * lDotOmC - dot(omC, omC) + sphereSize * sphereSize;
     if (underSqrt < 0)
         return FLT_MAX;
-    float dist = -lDotOmC - sqrt(underSqrt);
-    if (dist <= 0)
-        return FLT_MAX;
-    return dist;
+    float theSqrt = sqrt(underSqrt);
+    float dist = -lDotOmC - theSqrt;
+    if (dist > 0)
+        return dist;
+    dist = -lDotOmC + theSqrt;
+    if (canBePast && dist > 0)
+        return dist;
+    return FLT_MAX;
 }
 
 float Trace(float3 origin, float3 direction, float quality, float hue, ulong* rand,
-        int* isFog, int* hitLightsource)
+        int* isFog, int* hitLightsource, float* refractionIndex)
 {
     float distance = 1.0;
-    float totalDistance = 0.0;
-    float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
+    float totalDistance = De(origin) * Rand(rand) * DeMultiplier;
+    float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize, false);
     float fogDist = -log(Rand(rand)) / (float)(FogDensity(hue));
-    fogDist = *isFog == 2 ? FLT_MAX : fogDist;
-    float maxRayDist = min((float)MaxRayDist, min(fogDist, sphereDist));
+    fogDist = *isFog == -1 ? FLT_MAX : fogDist;
+    float glassDist = RaySphereIntersection(origin, direction, (float3)(GlassPos), GlassSize, true) + 0.01;
+    float maxRayDist = min(min((float)MaxRayDist, fogDist), min(sphereDist, glassDist));
     for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
             distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
@@ -183,10 +190,19 @@ float Trace(float3 origin, float3 direction, float quality, float hue, ulong* ra
         *hitLightsource = 1;
     else
         *hitLightsource = 0;
-    if (totalDistance > fogDist)
+    if (totalDistance > min(fogDist, glassDist))
     {
-        *isFog = 1;
-        totalDistance = fogDist;
+        if (fogDist < glassDist)
+            *isFog = 1;
+        else
+        {
+            *isFog = 2;
+            if (length(origin - (float3)(GlassPos)) > GlassSize)
+                *refractionIndex = 1.0 / (float)GlassDensity;
+            else
+                *refractionIndex = ((float)GlassDensity);
+        }
+        totalDistance = min(fogDist, glassDist);
     }
     else
         *isFog = 0;
@@ -197,7 +213,7 @@ float SimpleTrace(float3 origin, float3 direction, float quality)
 {
     float distance = 1.0;
     float totalDistance = 0.0;
-    float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize);
+    float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize, false);
     float maxRayDist = min((float)MaxRayDist, sphereDist);
     int i;
     for (i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
@@ -238,8 +254,10 @@ float DirectLighting(float3 newRayPos, float hue, ulong* rand, float3* lightDir)
     *lightDir = normalize(light * LightSize + (float3)(LightPos) - newRayPos);
     if (dot(light, *lightDir) > 0)
         *lightDir = normalize(-light * LightSize + (float3)(LightPos) - newRayPos);
-    int isFogLight = 2, isHitLight;
-    float dist = Trace(newRayPos, *lightDir, QualityRestRay, hue, rand, &isFogLight, &isHitLight);
+    int isFogLight = -1, isHitLight;
+    float refractionIndex;
+    float dist = Trace(newRayPos, *lightDir, QualityRestRay, hue, rand,
+        &isFogLight, &isHitLight, &refractionIndex);
 
     if (isHitLight)
         return LightBrightness(hue) / (dist * dist); // clearly wrong, but I don't care
@@ -253,13 +271,15 @@ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hu
     float color = 1;
     float total = 0;
     int isFog = 0;
+    bool isQuality = true;
     for (int i = 0; i < NumRayBounces; i++)
     {
         int hitLightsource;
+        float refractionIndex = 0.0;
 
         float distanceTraveled = Trace(rayPos, rayDir,
-                i==0?QualityFirstRay*qualityMul:QualityRestRay,
-                hue, rand, &isFog, &hitLightsource);
+                isQuality?QualityFirstRay*qualityMul:QualityRestRay,
+                hue, rand, &isFog, &hitLightsource, &refractionIndex);
 
         if (hitLightsource && i == 0)
         {
@@ -276,16 +296,41 @@ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hu
         float3 newRayDir;
 
         float3 normal;
-        if (isFog)
+        if (isFog == 1)
         {
             newRayDir = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
             color *= FogColor(hue);
+            isQuality = false;
+        }
+        else if (refractionIndex != 0.0)
+        {
+            normal = normalize(newRayPos - (float3)(GlassPos));
+            if (dot(rayDir, normal) > 0)
+                normal = -normal;
+            float cosTheta = -dot(rayDir, normal);
+            float sin2Theta = refractionIndex * refractionIndex * (1 - cosTheta * cosTheta);
+            float oneMinusSin2Theta = 1 - sin2Theta;
+
+            if (oneMinusSin2Theta < 0) // || rand() < GlassReflectance
+            {
+                newRayDir = rayDir + 2 * cosTheta * normal;
+            }
+            else
+            {
+                newRayDir = refractionIndex * rayDir +
+                    (refractionIndex * cosTheta - sqrt(oneMinusSin2Theta)) * normal;
+            }
+            newRayPos += newRayDir * 0.01;
+            isQuality = true;
+            //if (i != 0)
+            //    i--;
         }
         else
         {
             normal = Normal(newRayPos);
             newRayDir = Cone(normal, 3.14 / 2, rand);
             color *= DeColor(newRayPos, hue);
+            isQuality = false;
         }
 
         float3 lightingRayDir;

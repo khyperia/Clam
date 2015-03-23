@@ -17,10 +17,13 @@
 #define SpecularHighlight(angle) Gauss(5, 0, 0.2, angle)
 #define LightBrightness(hue) Gauss(500, 0.1, 0.5, hue)
 #define AmbientBrightness(hue) Gauss(1, 0.75, 0.1, hue)
-#define LightPos 10,2,0
+#define LightPos 10
 #define LightSize 0.2
 #define FogDensity(hue) (hue * 0.1)
 #define FogColor(hue) Gauss(1, 0.5, 10.0, hue)
+#define GlassPos 2.5,1,1
+#define GlassSize 0.75
+#define GlassDensity 1.2
 
 #define MaxIters 32
 #define Bailout 128
@@ -29,7 +32,7 @@
 #define MaxRayDist 64
 #define MaxRaySteps 256
 #define DirectLightingMaxSteps 64
-#define NumRayBounces 2
+#define NumRayBounces 4
 #define QualityFirstRay 1
 #define QualityRestRay 64
 #define DirectLightProbability 0.4

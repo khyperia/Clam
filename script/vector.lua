@@ -3,9 +3,13 @@ require("table_save")
 function readAllFile(filename)
     filename = filename:gsub('~', os.getenv('HOME'))
     local f = io.open(filename, "rb")
-    local content = f:read("*all")
-    f:close()
-    return content
+    if f then
+        local content = f:read("*all")
+        f:close()
+        return content
+    else
+        return ""
+    end
 end
 
 vrpn_server = "Wand@tcp://" .. readAllFile("~/.vrpn-server");

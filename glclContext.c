@@ -359,7 +359,7 @@ int blitInterop(struct Interop interop, int width, int height)
     if (!screenMemList)
     {
         // TODO: Consider calling resizeInterop here
-        // This only happened ocasionally in the C++ version, though (due to restartability)
+        // This only happened occasionally in the C++ version, though (due to restartability)
         puts("Buffer 0 did not exist, cannot blit to screen");
         return -1;
     }
