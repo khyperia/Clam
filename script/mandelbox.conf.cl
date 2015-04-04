@@ -1,4 +1,4 @@
-#define Gauss(a, c, w, x) ((a) * exp(-(((x) - (c)) * ((x) - (c))) / (2 * (w) * (w))))
+#define Gauss(a, c, w, x) ((a) * exp(-(((x) - (c)) * ((x) - (c))) / (float)(2 * (w) * (w))))
 
 #define Transform4Dx 1,0,0,0
 #define Transform4Dy 0,1,0,0
@@ -16,10 +16,10 @@
 #define FovAbberation 0.01
 #define SpecularHighlight(angle) Gauss(5, 0, 0.2, angle)
 #define LightBrightness(hue) Gauss(500, 0.1, 0.5, hue)
-#define AmbientBrightness(hue) Gauss(1, 0.75, 0.1, hue)
+#define AmbientBrightness(hue) Gauss(10, 0.75, 0.5, hue)
 #define LightPos 10
 #define LightSize 0.2
-#define FogDensity(hue) (hue * 0.1)
+#define FogDensity(hue) (hue * 0.000001)
 #define FogColor(hue) Gauss(1, 0.5, 10.0, hue)
 #define GlassPos 2.5,1,1
 #define GlassSize 0.75
@@ -32,7 +32,7 @@
 #define MaxRayDist 64
 #define MaxRaySteps 256
 #define DirectLightingMaxSteps 64
-#define NumRayBounces 4
-#define QualityFirstRay 1
+#define NumRayBounces 3
+#define QualityFirstRay 4
 #define QualityRestRay 64
 #define DirectLightProbability 0.4

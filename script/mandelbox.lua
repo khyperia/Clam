@@ -37,6 +37,7 @@ mkbuffer(1, 0) -- RNG buffer
 function screenshot(bufferIndex, frame, width, height, numframes)
     mkbuffer(bufferIndex, width * height * 4 * 4)
     mkbuffer(bufferIndex + 1, width * height * 4 * 4)
+    local timeout = setsynctimeout(-1);
     for i=0,numframes do
         kernel("Main", width, height, tostring(bufferIndex), tostring(bufferIndex + 1),
             {math.floor(-width / 2)}, {math.floor(-height / 2)}, {width}, {height},
@@ -47,6 +48,7 @@ function screenshot(bufferIndex, frame, width, height, numframes)
         print((i / numframes * 100), "% done")
         softsync()
     end
+    setsynctimeout(timeout);
     dlbuffer(bufferIndex, width)
     rmbuffer(bufferIndex + 1)
     rmbuffer(bufferIndex)
@@ -119,11 +121,11 @@ function update(time)
     end
     if iskeydown("4") then
         unsetkey("4")
-        screenshot(2, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 2000)
+        screenshot(2, frame, math.pow(2, 4 + 6), math.pow(2, 4 + 6), 1000)
     end
     if iskeydown("5") then
         unsetkey("5")
-        screenshot(2, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 2000)
+        screenshot(2, frame, math.pow(2, 5 + 6), math.pow(2, 5 + 6), 1000)
     end
     if iskeydown("x") then
         unsetkey("x")

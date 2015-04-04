@@ -16,6 +16,23 @@ float3 Rotate(float3 u, float theta, float3 vec)
             );
 }
 
+// http://en.wikipedia.org/wiki/Stereographic_projection
+float3 RayDir(float3 forward, float3 up, float2 screenCoords, float fov)
+{
+    screenCoords *= -fov;
+    float len2 = dot(screenCoords, screenCoords);
+    float3 look = -(float3)(
+        2 * screenCoords.x / (len2 + 1),
+        2 * screenCoords.y / (len2 + 1),
+        (len2 - 1) / (len2 + 1));
+
+    float3 right = cross(forward, up);
+
+    return look.x * right + look.y * up + look.z * forward;
+}
+
+/*
+// http://en.wikipedia.org/wiki/Azimuthal_equidistant_projection
 float3 RayDir(float3 look, float3 up, float2 screenCoords, float fov)
 {
     float angle = atan2(screenCoords.y, -screenCoords.x);
@@ -26,6 +43,7 @@ float3 RayDir(float3 look, float3 up, float2 screenCoords, float fov)
 
     return direction;
 }
+*/
 
 float De(float3 z3d)
 {
@@ -126,9 +144,28 @@ float2 RandNormal(ulong* rand)
     return mul * (float2)(cos(angle), sin(angle));
 }
 
+float3 RandSphere(ulong* rand)
+{
+    float2 normal;
+    float rest;
+    do
+    {
+        normal = RandNormal(rand);
+        rest = RandNormal(rand).x;
+    } while (normal.x == 0 && normal.y == 0 && rest == 0);
+    return normalize((float3)(normal, rest));
+}
+
+float3 RandHemisphere(ulong* rand, float3 normal)
+{
+    float3 result = RandSphere(rand);
+    if (dot(result, normal) < 0)
+        result = -result;
+    return result;
+}
+
 void ApplyDof(float3* position, float3* lookat, float focalPlane, float hue, ulong* rand)
 {
-    //focalPlane *= exp((hue - 0.5) * ChromaticAbberation);
     float3 focalPosition = *position + *lookat * focalPlane;
     float3 xShift = cross((float3)(0, 0, 1), *lookat);
     float3 yShift = cross(*lookat, xShift);
@@ -172,15 +209,13 @@ float RaySphereIntersection(float3 rayOrigin, float3 rayDir,
 }
 
 float Trace(float3 origin, float3 direction, float quality, float hue, ulong* rand,
-        int* isFog, int* hitLightsource, float* refractionIndex)
+        int* isFog, int* hitLightsource)
 {
     float distance = 1.0;
     float totalDistance = De(origin) * Rand(rand) * DeMultiplier;
     float sphereDist = RaySphereIntersection(origin, direction, (float3)(LightPos), LightSize, false);
     float fogDist = -log(Rand(rand)) / (float)(FogDensity(hue));
-    fogDist = *isFog == -1 ? FLT_MAX : fogDist;
-    float glassDist = RaySphereIntersection(origin, direction, (float3)(GlassPos), GlassSize, true) + 0.01;
-    float maxRayDist = min(min((float)MaxRayDist, fogDist), min(sphereDist, glassDist));
+    float maxRayDist = min(min((float)MaxRayDist, fogDist), sphereDist);
     for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
             distance * quality > totalDistance; i++) {
         distance = De(origin + direction * totalDistance) * DeMultiplier;
@@ -190,20 +225,13 @@ float Trace(float3 origin, float3 direction, float quality, float hue, ulong* ra
         *hitLightsource = 1;
     else
         *hitLightsource = 0;
-    if (totalDistance > min(fogDist, glassDist))
+    if (totalDistance > fogDist)
     {
-        if (fogDist < glassDist)
-            *isFog = 1;
-        else
-        {
-            *isFog = 2;
-            if (length(origin - (float3)(GlassPos)) > GlassSize)
-                *refractionIndex = 1.0 / (float)GlassDensity;
-            else
-                *refractionIndex = ((float)GlassDensity);
-        }
-        totalDistance = min(fogDist, glassDist);
+        *isFog = 1;
+        totalDistance = fogDist;
     }
+    else if (totalDistance > MaxRayDist)
+        *isFog = 1;
     else
         *isFog = 0;
     return totalDistance;
@@ -225,15 +253,42 @@ float SimpleTrace(float3 origin, float3 direction, float quality)
     return (float)i / MaxRaySteps;
 }
 
-float3 Cone(float3 normal, float fov, ulong* rand)
+bool Reaches(float3 initial, float3 final)
 {
-    const float3 dir1 = normalize((float3)(1,1,1));
-    const float3 dir2 = normalize((float3)(-1,1,1));
-    float3 dir = dir1;
-    if (fabs(dot(normal, dir1)) > cos(0.2))
-        dir = dir2;
-    float3 up = cross(cross(normal, normalize(dir)), normal);
-    return RayDir(normal, up, RandCircle(rand), fov);
+    float3 direction = final - initial;
+    float lenDir = length(direction);
+    direction /= lenDir;
+    float totalDistance = 0;
+    float distance = FLT_MAX;
+    float threshHold = fabs(De(final)) * (DeMultiplier * 0.5);
+    for (int i = 0; i < MaxRaySteps && totalDistance < MaxRayDist &&
+                distance > threshHold; i++) {
+        distance = De(initial + direction * totalDistance) * DeMultiplier;
+        if (i == 0 && fabs(distance * 0.5) < threshHold)
+            threshHold = fabs(distance * 0.5);
+        totalDistance += distance;
+        if (totalDistance > lenDir)
+            return true;
+    }
+    return false;
+}
+
+float DirectLighting(float3 rayPos, float hue, ulong* rand, float3* lightDir)
+{
+    float3 lightToRay = normalize(rayPos - (float3)(LightPos));
+    float3 lightPos = (float3)(LightPos) + LightSize * RandHemisphere(rand, lightToRay);
+    *lightDir = normalize(lightPos - rayPos);
+    if (Reaches(rayPos, lightPos))
+    {
+        /*
+        float mul = LightSize / length(rayPos - lightPos);
+        mul = min(mul, 0.25);
+        mul = tan(mul);
+        return LightBrightness(hue) * mul;
+        */
+        return LightBrightness(hue) * 0.01;
+    }
+    return 0.0;
 }
 
 float BRDF(float3 normal, float3 incoming, float3 outgoing)
@@ -243,105 +298,58 @@ float BRDF(float3 normal, float3 incoming, float3 outgoing)
     return 1 + SpecularHighlight(angle);
 }
 
-float WeakeningFactor(float3 normal, float3 incoming)
-{
-    return dot(normal, incoming);
-}
-
-float DirectLighting(float3 newRayPos, float hue, ulong* rand, float3* lightDir)
-{
-    float3 light = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
-    *lightDir = normalize(light * LightSize + (float3)(LightPos) - newRayPos);
-    if (dot(light, *lightDir) > 0)
-        *lightDir = normalize(-light * LightSize + (float3)(LightPos) - newRayPos);
-    int isFogLight = -1, isHitLight;
-    float refractionIndex;
-    float dist = Trace(newRayPos, *lightDir, QualityRestRay, hue, rand,
-        &isFogLight, &isHitLight, &refractionIndex);
-
-    if (isHitLight)
-        return LightBrightness(hue) / (dist * dist); // clearly wrong, but I don't care
-    return 0;
-}
-
 float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hue, ulong* rand)
 {
-    // not entirely too sure why I need the 1 constant here
-    // that is, "why not another number? This one is arbitrary" (pun sort of intended)
-    float color = 1;
     float total = 0;
-    int isFog = 0;
-    bool isQuality = true;
-    for (int i = 0; i < NumRayBounces; i++)
+    float color = 1;
+    int isFog;
+    for (int i = 0; i < 2; i++)
     {
+        bool isQuality = i == 0;
+        float quality = isQuality?QualityFirstRay*qualityMul:QualityRestRay;
         int hitLightsource;
-        float refractionIndex = 0.0;
-
-        float distanceTraveled = Trace(rayPos, rayDir,
-                isQuality?QualityFirstRay*qualityMul:QualityRestRay,
-                hue, rand, &isFog, &hitLightsource, &refractionIndex);
-
-        if (hitLightsource && i == 0)
+        float distance = Trace(rayPos, rayDir, quality, hue, rand, &isFog, &hitLightsource);
+        if (hitLightsource)
         {
-            total += color * LightBrightness(hue);
+            //total += color * LightBrightness(hue);
             break;
         }
-        if (distanceTraveled >= MaxRayDist)
+        if (distance > MaxRayDist)
         {
-            isFog = 1; // TODO: Is this required?
+            isFog = 1;
+            //isFog = i != 0;
             break;
         }
 
-        float3 newRayPos = rayPos + rayDir * distanceTraveled;
+        float3 newRayPos = rayPos + rayDir * distance;
         float3 newRayDir;
 
         float3 normal;
-        if (isFog == 1)
+        if (isFog)
         {
-            newRayDir = normalize((float3)(RandNormal(rand), RandNormal(rand).x));
+            newRayDir = RandSphere(rand);
             color *= FogColor(hue);
-            isQuality = false;
-        }
-        else if (refractionIndex != 0.0)
-        {
-            normal = normalize(newRayPos - (float3)(GlassPos));
-            if (dot(rayDir, normal) > 0)
-                normal = -normal;
-            float cosTheta = -dot(rayDir, normal);
-            float sin2Theta = refractionIndex * refractionIndex * (1 - cosTheta * cosTheta);
-            float oneMinusSin2Theta = 1 - sin2Theta;
-
-            if (oneMinusSin2Theta < 0) // || rand() < GlassReflectance
-            {
-                newRayDir = rayDir + 2 * cosTheta * normal;
-            }
-            else
-            {
-                newRayDir = refractionIndex * rayDir +
-                    (refractionIndex * cosTheta - sqrt(oneMinusSin2Theta)) * normal;
-            }
-            newRayPos += newRayDir * 0.01;
-            isQuality = true;
-            //if (i != 0)
-            //    i--;
         }
         else
         {
             normal = Normal(newRayPos);
-            newRayDir = Cone(normal, 3.14 / 2, rand);
+            newRayDir = RandHemisphere(rand, normal);
             color *= DeColor(newRayPos, hue);
-            isQuality = false;
         }
 
         float3 lightingRayDir;
         float direct = DirectLighting(newRayPos, hue, rand, &lightingRayDir);
+        if (isnan(direct))
+        {
+            return -1.0;
+        }
 
         if (!isFog)
         {
             color *= BRDF(normal, newRayDir, -rayDir) *
-                WeakeningFactor(normal, newRayDir);
+                dot(normal, newRayDir);
             direct *= BRDF(normal, lightingRayDir, -rayDir)
-                * WeakeningFactor(normal, lightingRayDir);
+                * dot(normal, lightingRayDir);
         }
         total += color * direct;
 
@@ -349,7 +357,9 @@ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hu
         rayDir = newRayDir;
     }
     if (isFog)
-        total += color * AmbientBrightness(hue);
+    {
+        total += AmbientBrightness(hue);
+    }
     return total;
 }
 
@@ -433,14 +443,22 @@ __kernel void Main(__global float4* screen,
         float4 final;
 
         float4 old = screen[screenIndex];
-        if (frame != 0 && old.w + weight > 0)
-            final = (float4)((color * weight + old.xyz * old.w) / (old.w + weight), old.w + weight);
-        else if (!isnan(color.x) && !isnan(color.y) && !isnan(color.z) && !isnan(weight))
-            final = (float4)(color, weight);
-        else if (frame != 0)
-            final = old;
+        if (!isnan(color.x) && !isnan(color.y) && !isnan(color.z) && !isnan(weight))
+        {
+            if (frame != 0 && old.w + weight > 0)
+                final = (float4)((color * weight + old.xyz * old.w) / (old.w + weight), old.w + weight);
+            else
+                final = (float4)(color, weight);
+        }
         else
-            final = (float4)(0);
+        {
+            if (frame != 0)
+                final = old;
+            else
+                final = (float4)(0);
+        }
+        if (intensity == -1.0)
+            final.x += 100;
         screen[screenIndex] = final;
     }
     rngBuffer[screenIndex] = (uint2)((uint)(rand >> 32), (uint)rand);

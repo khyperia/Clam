@@ -6,13 +6,15 @@
 #include <lauxlib.h>
 #include <time.h>
 
+double sync_timeout = 20;
+
 void sync_waitmessage(lua_State* state)
 {
     time_t begin = clock();
     while (numWaitingSoftSync > 0)
     {
         LuaPrintErr(masterSocketRecv(sockets));
-        if ((clock() - begin) / CLOCKS_PER_SEC > 10)
+        if (sync_timeout > 0 && (double)(clock() - begin) / CLOCKS_PER_SEC > sync_timeout)
             luaL_error(state, "softsync() time out, call softsync() more often to make sure "
                     "the slaves stay in sync");
     }
@@ -39,6 +41,14 @@ int run_hardsync(lua_State* state)
     sync_sendmessage(state);
     sync_waitmessage(state);
     return 0;
+}
+
+int run_setsynctimeout(lua_State* state)
+{
+	double value = luaL_checknumber(state, 1);
+	lua_pushnumber(state, sync_timeout);
+	sync_timeout = value;
+	return 1;
 }
 
 // Creates a buffer with arg(1) id, and arg(2) size (in bytes)
@@ -158,6 +168,7 @@ int newLua(lua_State** state, const char* filename, char** args)
     lua_setglobal(*state, "__file__");
     lua_register(*state, "softsync", run_softsync);
     lua_register(*state, "hardsync", run_hardsync);
+    lua_register(*state, "setsynctimeout", run_setsynctimeout);
     lua_register(*state, "mkbuffer", run_mkbuffer);
     lua_register(*state, "rmbuffer", run_rmbuffer);
     lua_register(*state, "compile", run_compile);
