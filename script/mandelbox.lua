@@ -38,16 +38,25 @@ function screenshot(bufferIndex, frame, width, height, numframes)
     mkbuffer(bufferIndex, width * height * 4 * 4)
     mkbuffer(bufferIndex + 1, width * height * 4 * 4)
     local timeout = setsynctimeout(-1);
-    for i=0,numframes do
+    i = 0
+    while not iskeydown(" ") do
+        if iskeydown("p") then
+            unsetkey("p")
+            print("Downloading intermediate frame at ", i)
+            dlbuffer(bufferIndex, width)
+        end
         kernel("Main", width, height, tostring(bufferIndex), tostring(bufferIndex + 1),
             {math.floor(-width / 2)}, {math.floor(-height / 2)}, {width}, {height},
             frame.pos[1], frame.pos[2], frame.pos[3],
             frame.look[1], frame.look[2], frame.look[3],
             frame.up[1], frame.up[2], frame.up[3],
             frame.fov / width, frame.focalDistance, i)
-        print((i / numframes * 100), "% done")
+        print("frame", i)
+        i = i + 1
         softsync()
+        pumpevents() -- for iskeydown
     end
+    unsetkey(" ")
     setsynctimeout(timeout);
     dlbuffer(bufferIndex, width)
     rmbuffer(bufferIndex + 1)

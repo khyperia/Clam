@@ -6,4 +6,5 @@
 
 extern bool keyboard[UCHAR_MAX + 1];
 
+bool pumpEvents();
 extern TCPsocket* sockets;

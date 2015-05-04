@@ -334,7 +334,7 @@ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hu
         {
             normal = Normal(newRayPos);
             newRayDir = RandHemisphere(rand, normal);
-            color *= DeColor(newRayPos, hue);
+            color *= DeColor(newRayPos, hue) * Reflectivity;
         }
 
         float3 lightingRayDir;
@@ -358,7 +358,7 @@ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hu
     }
     if (isFog)
     {
-        total += AmbientBrightness(hue);
+        total += color * AmbientBrightness(hue);
     }
     return total;
 }

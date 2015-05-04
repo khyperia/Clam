@@ -78,6 +78,23 @@ int eventFilter(void UNUSED* userdata, SDL_Event* event)
     return event->type == SDL_QUIT || event->type == SDL_KEYUP || event->type == SDL_KEYDOWN;
 }
 
+bool pumpEvents()
+{
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_QUIT)
+            return true;
+        if (event.type == SDL_KEYUP || event.type == SDL_KEYDOWN)
+        {
+            SDL_Keycode keyCode = event.key.keysym.sym;
+            if (keyCode >= 0 && keyCode <= UCHAR_MAX)
+                keyboard[(unsigned char)keyCode] = event.type == SDL_KEYDOWN;
+        }
+    }
+    return false;
+}
+
 int main(int argc, char** argv)
 {
     if (PrintErr(atexit(doOnExit_master)))
@@ -109,20 +126,7 @@ int main(int argc, char** argv)
 
     while (true)
     {
-        SDL_Event event;
-        bool exit = false;
-        while (!exit && SDL_PollEvent(&event))
-        {
-            if (event.type == SDL_QUIT)
-                exit = true;
-            if (event.type == SDL_KEYUP || event.type == SDL_KEYDOWN)
-            {
-                SDL_Keycode keyCode = event.key.keysym.sym;
-                if (keyCode >= 0 && keyCode <= UCHAR_MAX)
-                    keyboard[(unsigned char)keyCode] = event.type == SDL_KEYDOWN;
-            }
-        }
-        if (exit)
+        if (pumpEvents())
             break;
 
         Uint32 current = SDL_GetTicks();

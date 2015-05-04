@@ -25,9 +25,16 @@ int run_unsetkey(lua_State* state)
     return 0;
 }
 
+int run_pumpevents(lua_State* state)
+{
+    pumpEvents();
+    return 0;
+}
+
 int luaopen_input(lua_State* state)
 {
     lua_register(state, "iskeydown", run_iskeydown);
     lua_register(state, "unsetkey", run_unsetkey);
+    lua_register(state, "pumpevents", run_pumpevents);
     return 0;
 }
