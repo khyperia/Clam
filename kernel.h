@@ -16,6 +16,11 @@ class Kernel
 
     virtual void RepeatKeypress(SDL_Keycode keycode, double time) = 0;
 
+protected:
+    void Serialize();
+
+    void TryDeserialize();
+
 public:
     cl::CommandQueue queue;
     cl::Context context;
@@ -27,7 +32,13 @@ public:
 
     virtual void RecvState(StateSync *input) = 0;
 
+    virtual void SaveWholeState(StateSync *output) const = 0;
+
+    virtual void LoadWholeState(StateSync *input) = 0;
+
     virtual void RenderInto(cl::Memory memory, size_t width, size_t height) = 0;
+
+    virtual std::string Name() = 0;
 
     void UserInput(SDL_Event event);
 

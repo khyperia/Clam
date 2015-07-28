@@ -6,14 +6,13 @@
 #define MinRadius2 0.25f
 #define ColorSharpness 1.0f
 #define Saturation 0.6f
-#define HueVariance 5.0f
+#define HueVariance 0.003f
 #define Reflectivity 1.0f
-#define ColorBias 0.0f,0.0f,0.0f
 #define DofAmount(hue) (hue * 0.01f)
 #define FovAbberation 0.01f
-#define SpecularHighlight(angle) Gauss(5, 0, 0.2f, angle)
-#define LightBrightness(hue) Gauss(500, 0.25f, 1.0f, hue)
-#define AmbientBrightness(hue) Gauss(1, 0.65f, 2.0f, hue)
+#define SpecularHighlight(angle) Gauss(1, 0, 0.2f, angle)
+#define LightBrightness(hue) Gauss(8, 0.25f, 0.5f, hue)
+#define AmbientBrightness(hue) Gauss(2, 0.65f, 0.25f, hue)
 #define LightPos 10
 #define LightSize 0.2f
 #define FogDensity(hue) (hue * 0.000001f)
@@ -21,17 +20,16 @@
 #define WhiteClamp 1
 #define BrightThresh 8
 
-#define MaxIters 16
-#define Bailout 64
+#define MaxIters 64
+#define Bailout 256
 #define DeMultiplier 0.95f
 #define RandSeedInitSteps 128
 #define MaxRayDist 16
 #define MaxRaySteps 128
-#define DirectLightingMaxSteps 32
-#define NumRayBounces 2
+#define DirectLightingMaxSteps 128
+#define NumRayBounces 3
 #define QualityFirstRay 2
 #define QualityRestRay 64
-#define DirectLightProbability 0.4f
 
 
 // http://en.wikipedia.org/wiki/Stereographic_projection
@@ -247,13 +245,7 @@ float DirectLighting(float3 rayPos, float hue, ulong* rand, float3* lightDir)
     *lightDir = normalize(lightPos - rayPos);
     if (Reaches(rayPos, lightPos))
     {
-        /*
-        float mul = LightSize / length(rayPos - lightPos);
-        mul = min(mul, 0.25f);
-        mul = tan(mul);
-        return LightBrightness(hue) * mul;
-        */
-        return LightBrightness(hue) * 0.01f;
+        return LightBrightness(hue);
     }
     return 0.0f;
 }

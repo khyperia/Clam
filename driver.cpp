@@ -16,7 +16,7 @@ struct RenderType
 
     virtual void Resize() = 0;
 
-    virtual bool Update(cl::CommandQueue &queue) = 0;
+    virtual bool Update(Kernel *kernel) = 0;
 };
 
 struct CpuRenderType : public RenderType
@@ -37,7 +37,7 @@ struct CpuRenderType : public RenderType
         renderBuffer = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(Uint8) * 4 * width * height);
     };
 
-    virtual bool Update(cl::CommandQueue &queue)
+    virtual bool Update(Kernel *kernel)
     {
         SDL_Surface *surface = SDL_GetWindowSurface(window);
         if (SDL_LockSurface(surface))
@@ -48,7 +48,7 @@ struct CpuRenderType : public RenderType
         {
             throw std::runtime_error("Window surface bytes/pixel != 4");
         }
-        queue.enqueueReadBuffer(renderBuffer, 1, 0, sizeof(Uint8) * 4 * width * height, surface->pixels);
+        kernel->queue.enqueueReadBuffer(renderBuffer, 1, 0, sizeof(Uint8) * 4 * width * height, surface->pixels);
         SDL_UnlockSurface(surface);
         SDL_UpdateWindowSurface(window);
         return true;
@@ -60,12 +60,34 @@ struct HeadlessRenderType : public RenderType
     cl::Context context;
     int numFrames;
 
-    HeadlessRenderType(cl::Context context, int numFrames) : context(context), numFrames(numFrames)
+    HeadlessRenderType(Kernel *kernel, int numFrames, bool *loadedIntermediate)
+            : context(kernel->context),
+              numFrames(numFrames)
     {
+        std::string filename = RenderstateFilename(kernel);
+        try
+        {
+            StateSync *sync = NewFileStateSync(filename.c_str(), true);
+            kernel->LoadWholeState(sync);
+            delete sync;
+            std::cout << "Loaded intermediate state from " << filename << std::endl;
+            *loadedIntermediate = true;
+        }
+        catch (const std::exception &ex)
+        {
+            std::cout << "Didn't load intermediate state from " << filename
+            << ": " << ex.what() << std::endl;
+            *loadedIntermediate = false;
+        }
     }
 
     ~HeadlessRenderType()
     {
+    }
+
+    std::string RenderstateFilename(Kernel *kernel)
+    {
+        return kernel->Name() + ".renderstate.clam3";;
     }
 
     virtual void Resize()
@@ -73,10 +95,18 @@ struct HeadlessRenderType : public RenderType
         renderBuffer = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(Uint8) * 4 * width * height);
     }
 
-    virtual bool Update(cl::CommandQueue &queue)
+    virtual bool Update(Kernel *kernel)
     {
         numFrames--;
         std::cout << numFrames << " frames left" << std::endl;
+        if (numFrames % 32 == 0)
+        {
+            std::string filename = RenderstateFilename(kernel);
+            StateSync *sync = NewFileStateSync(filename.c_str(), false);
+            kernel->SaveWholeState(sync);
+            delete sync;
+            std::cout << "Saved intermediate progress to " << filename << std::endl;
+        }
         if (numFrames == 0)
         {
             SDL_Surface *surface = SDL_CreateRGBSurface(0, width, height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
@@ -84,13 +114,14 @@ struct HeadlessRenderType : public RenderType
             {
                 throw std::runtime_error("Could not lock temp buffer surface");
             }
-            queue.enqueueReadBuffer(renderBuffer, 1, 0, sizeof(Uint8) * 4 * width * height, surface->pixels);
+            kernel->queue.enqueueReadBuffer(renderBuffer, 1, 0, sizeof(Uint8) * 4 * width * height, surface->pixels);
             SDL_UnlockSurface(surface);
             SDL_SaveBMP(surface, "image.bmp");
+            std::cout << "Saved image 'image.bmp'" << std::endl;
             SDL_FreeSurface(surface);
             return false;
         }
-        queue.finish();
+        kernel->queue.finish();
         return true;
     }
 };
@@ -131,11 +162,15 @@ Driver::Driver() : connection(), headlessWindowSize(0, 0)
         }
         else
         {
-            renderType = new HeadlessRenderType(kernel->context, headless);
-            std::cout << "Loading headless state" << std::endl;
-            StateSync *sync = NewFileStateSync("savedstate.clam3", "r");
-            kernel->RecvState(sync);
-            delete sync;
+            bool loadedItermediate = false;
+            renderType = new HeadlessRenderType(kernel, headless, &loadedItermediate);
+            if (!loadedItermediate)
+            {
+                std::cout << "Loading initial headless state" << std::endl;
+                StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
+                kernel->RecvState(sync);
+                delete sync;
+            }
         }
     }
     else
@@ -153,6 +188,10 @@ Driver::~Driver()
     if (renderType)
     {
         delete renderType;
+    }
+    if (kernel)
+    {
+        delete kernel;
     }
 }
 
@@ -183,5 +222,5 @@ bool Driver::RunFrame()
         renderType->Resize();
     }
     kernel->RenderInto(renderType->renderBuffer, (size_t)renderType->width, (size_t)renderType->height);
-    return renderType->Update(kernel->queue);
+    return renderType->Update(kernel);
 }

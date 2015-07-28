@@ -38,7 +38,7 @@ Connection::Connection()
             throw std::runtime_error("Failed to connect to " + connectTo);
         }
         socketSet = SDLNet_AllocSocketSet(1);
-        SDLNet_AddSocket(socketSet, (SDLNet_GenericSocket) socket);
+        SDLNet_AddSocket(socketSet, (SDLNet_GenericSocket)socket);
     }
     else
     {
@@ -73,7 +73,7 @@ Connection::~Connection()
 
 void Connection::Send(const void *data, size_t size)
 {
-    if (SDLNet_TCP_Send(socket, data, (int) size) != (int) size)
+    if (SDLNet_TCP_Send(socket, data, (int)size) != (int)size)
     {
         throw std::runtime_error("Send on socket failed");
     }
@@ -81,7 +81,7 @@ void Connection::Send(const void *data, size_t size)
 
 void Connection::Recv(void *data, size_t size)
 {
-    if (SDLNet_TCP_Recv(socket, data, (int) size) != (int) size)
+    if (SDLNet_TCP_Recv(socket, data, (int)size) != (int)size)
     {
         throw std::runtime_error("Recv on socket failed");
     }
@@ -121,25 +121,44 @@ void Connection::Sync(Kernel *kernel)
 class FileStateSync : public StateSync
 {
     FILE *file;
+    bool reading;
 
     void Send(const void *data, size_t size)
     {
+        if (reading)
+        {
+            throw std::runtime_error("Cannot Send a reading StateSync stream");
+        }
         fwrite(data, size, 1, file);
     }
 
     void Recv(void *data, size_t size)
     {
+        if (!reading)
+        {
+            throw std::runtime_error("Cannot Recv a writing StateSync stream");
+        }
         fread(data, size, 1, file);
     }
 
     ~FileStateSync()
     {
+        if (reading)
+        {
+            long current = ftell(file);
+            fseek(file, 0, SEEK_END);
+            long end = ftell(file);
+            if (current != end)
+            {
+                throw std::runtime_error("");
+            }
+        }
         fclose(file);
     };
 
 public:
-    FileStateSync(const char *filename, const char *mode)
-            : file(fopen(filename, mode))
+    FileStateSync(const char *filename, bool reading)
+            : file(fopen(filename, reading ? "rb" : "wb")), reading(reading)
     {
         if (!file)
         {
@@ -148,7 +167,7 @@ public:
     }
 };
 
-StateSync *NewFileStateSync(const char *filename, const char *mode)
+StateSync *NewFileStateSync(const char *filename, bool reading)
 {
-    return new FileStateSync(filename, mode);
+    return new FileStateSync(filename, reading);
 }

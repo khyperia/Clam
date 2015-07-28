@@ -15,6 +15,11 @@ struct Vector4
     {
     }
 
+    Vector4()
+            : x(0), y(0), z(0), w(0)
+    {
+    }
+
     T length2()
     {
         return x * x + y * y + z * z + w * w;
@@ -82,6 +87,11 @@ struct Vector3
 
     Vector3(T _x, T _y, T _z)
             : x(_x), y(_y), z(_z)
+    {
+    }
+
+    Vector3()
+            : x(0), y(0), z(0)
     {
     }
 
@@ -167,6 +177,11 @@ struct Vector2
 
     Vector2(T _x, T _y)
             : x(_x), y(_y)
+    {
+    }
+
+    Vector2()
+            : x(0), y(0)
     {
     }
 

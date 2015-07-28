@@ -23,11 +23,25 @@ public:
     }
 
     template<typename T>
+    void SendArr(const std::vector<T>& data)
+    {
+        Send(data.data(), data.size() * sizeof(T));
+    }
+
+    template<typename T>
     T Recv()
     {
         T *data = (T *) alloca(sizeof(T));
         Recv(data, sizeof(T));
         return *data;
+    }
+
+    template<typename T>
+    std::vector<T> RecvArr(size_t count)
+    {
+        std::vector<T> data(count);
+        Recv(data.data(), data.size() * sizeof(T));
+        return data;
     }
 
     template<typename T>
@@ -65,4 +79,4 @@ public:
     void Sync(Kernel *kernel);
 };
 
-StateSync *NewFileStateSync(const char *filename, const char *mode);
+StateSync *NewFileStateSync(const char *filename, bool reading);

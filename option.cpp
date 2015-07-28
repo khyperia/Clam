@@ -12,6 +12,7 @@ static std::string windowPos;
 static std::string kernelName;
 static std::string headless;
 static std::string renderOffset;
+static std::string dumpBinary;
 static bool throwExceptions;
 
 static void TryParseEnv(std::string &ref, const char *varname)
@@ -33,6 +34,7 @@ static void ParseEnvVar()
     TryParseEnv(kernelName, "CLAM3_KERNEL");
     TryParseEnv(headless, "CLAM3_HEADLESS");
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
+    TryParseEnv(dumpBinary, "CLAM3_DUMPBIN");
 }
 
 static void ParseArg(const std::string &option, const std::string &value)
@@ -68,6 +70,10 @@ static void ParseArg(const std::string &option, const std::string &value)
     else if (option == "--renderoffset" || option == "-r")
     {
         renderOffset = value;
+    }
+    else if (option == "--dumpbin")
+    {
+        dumpBinary = value;
     }
     else if (option == "--debug" && value == "throw")
     {
@@ -160,6 +166,11 @@ bool RenderOffset(int *shiftx, int *shifty)
         return false;
     }
     return true;
+}
+
+std::string DumpBinary()
+{
+    return dumpBinary;
 }
 
 bool ThrowExceptions()
