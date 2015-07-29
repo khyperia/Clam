@@ -175,12 +175,12 @@ void Kernel::TryDeserialize()
 
 static cl::Program CommonBuild(const cl::Context &context, const std::string &source)
 {
-    cl::Program program = cl::Program(context, source);
+    cl::Program program(context, source);
     bool success = false;
     try
     {
         cl_int result = program.build(
-                "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -cl-uniform-work-group-size -Werror",
+                "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror",
                 NULL, NULL);
         success = result == 0;
     }
@@ -212,8 +212,8 @@ static cl::Program CommonBuild(const cl::Context &context, const std::string &so
     return program;
 }
 
-extern unsigned char mandelbox_cl[];
-extern unsigned int mandelbox_cl_len;
+extern const unsigned char mandelbox[];
+extern const unsigned int mandelbox_len;
 
 class MandelboxKernel : public Kernel
 {
@@ -239,7 +239,7 @@ public:
         this->context = context;
         if (context())
         {
-            program = CommonBuild(context, std::string((char *)mandelbox_cl, mandelbox_cl_len));
+            program = CommonBuild(context, std::string((char *)mandelbox, mandelbox_len));
             kernelMain = cl::Kernel(program, "kern");
             std::vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
             if (devices.size() != 1)
@@ -355,8 +355,8 @@ public:
         kernelMain.setArg(index++, (float)(fov * 2 / (width + height)));
         kernelMain.setArg(index++, (float)focalDistance);
         kernelMain.setArg(index++, (float)frame++);
-        size_t localWidth = maxLocalSize;
-        size_t localHeight = 1;
+        size_t localWidth = (size_t)std::sqrt(maxLocalSize);
+        size_t localHeight = (size_t)std::sqrt(maxLocalSize);
         cl::NDRange localSize(localWidth, localHeight);
         cl::NDRange globalSize((width + localWidth - 1) / localWidth * localWidth,
                                (height + localHeight - 1) / localHeight * localHeight);

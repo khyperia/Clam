@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.6)
 
-project(Clam2 C CXX)
+project(Clam3 C CXX)
 
 set(SOURCEDIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
@@ -45,17 +45,20 @@ my_package(OpenCL)
 my_package(SDL2)
 my_package(SDL2_net)
 
+add_executable(embed util/embed.c)
+
 set(genfiles)
 include_directories("${CMAKE_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 file(GLOB clfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cl")
 foreach(filename ${clfiles})
     set(outfile "${CMAKE_BINARY_DIR}/generated/${filename}.c")
+    get_filename_component(varname ${filename} NAME_WE)
     add_custom_command(
         OUTPUT "${outfile}"
         DEPENDS ${filename}
         WORKING_DIRECTORY ${SOURCEDIR}
-        COMMAND xxd -i "${filename}" "${outfile}")
+        COMMAND embed "${filename}" "${outfile}" "${varname}")
     list(APPEND genfiles ${outfile})
 endforeach()
 

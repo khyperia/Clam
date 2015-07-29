@@ -1,13 +1,13 @@
 #include "option.h"
 #include "driver.h"
 #include <iostream>
+#include <CL/cl.hpp>
 
+#undef main
 int main(int argc, char **argv)
 {
-#if RELEASE
     try
     {
-#endif
         ParseCmdline(argc, argv);
         Driver driver;
         bool isCompute = IsCompute();
@@ -26,7 +26,16 @@ int main(int argc, char **argv)
                 }
             }
         }
-#if RELEASE
+    }
+    catch (const cl::Error &ex)
+    {
+        if (ThrowExceptions())
+        {
+            throw;
+        }
+        std::cout << "Fatal OpenCL exception: " << ex.err() << std::endl;
+        std::cout << ex.what() << std::endl;
+        return 1;
     }
     catch (const std::exception &ex)
     {
@@ -38,6 +47,5 @@ int main(int argc, char **argv)
         std::cout << ex.what() << std::endl;
         return 1;
     }
-#endif
     return 0;
 }

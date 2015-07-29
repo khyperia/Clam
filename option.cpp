@@ -149,7 +149,7 @@ int Headless()
     }
     catch (const std::exception &ex)
     {
-        std::cout << "Couldn't parse headless option, assuming no headless" << std::cout;
+        std::cout << "Couldn't parse headless option, assuming no headless" << std::endl;
         return -1;
     }
 }
