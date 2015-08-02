@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 int main(int argc, char** argv)
 {
@@ -34,7 +33,7 @@ int main(int argc, char** argv)
         column++;
         if (column >= 12)
         {
-            fprintf(output, "\n", (unsigned char)c);
+            fprintf(output, "\n");
             column = 0;
         }
     }

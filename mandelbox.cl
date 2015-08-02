@@ -6,7 +6,7 @@
 #define MinRadius2 0.25f
 #define ColorSharpness 1.0f
 #define Saturation 0.6f
-#define HueVariance 0.003f
+#define HueVariance 0.001f
 #define Reflectivity 1.0f
 #define DofAmount(hue) (hue * 0.01f)
 #define FovAbberation 0.01f

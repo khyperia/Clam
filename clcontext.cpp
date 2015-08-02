@@ -1,11 +1,49 @@
 #include "clcontext.h"
-#include "util.h"
 #include <SDL_video.h>
+#include <stdexcept>
+#include <sstream>
 
-static cl::Context CreateDevice(const cl::Platform &platform, const cl::Device &device, bool wireToDisplay)
+static cl::Platform GetPlatform(std::string platformName)
 {
+    std::vector<cl::Platform> platforms;
+    cl::Platform::get(&platforms);
+    if (platformName.empty())
+    {
+        if (platforms.size() == 0)
+        {
+            throw std::runtime_error("No OpenCL platform found");
+        }
+        else if (platforms.size() == 1)
+        {
+            return platforms[0];
+        }
+        else
+        {
+            std::ostringstream str;
+            str << "More than one default platforms exist. Available are:" << std::endl;
+            for (size_t i = 0; i < platforms.size(); i++)
+                str << platforms[i].getInfo<CL_PLATFORM_NAME>() << std::endl;
+            throw std::runtime_error(str.str());
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < platforms.size(); i++)
+        {
+            if (platforms[i].getInfo<CL_PLATFORM_NAME>() == platformName)
+            {
+                return platforms[i];
+            }
+        }
+        throw std::runtime_error("Could not find platform " + platformName);
+    }
+}
+
+cl::Context GetDevice(std::string platformName, bool wireToDisplay)
+{
+    cl::Platform platform = GetPlatform(platformName);
     cl_context_properties properties[] = {
-            CL_CONTEXT_PLATFORM, (cl_context_properties) platform(),
+            CL_CONTEXT_PLATFORM, (cl_context_properties)platform(),
             0, 0,
             0, 0,
             0, 0
@@ -16,7 +54,7 @@ static cl::Context CreateDevice(const cl::Platform &platform, const cl::Device &
                 "glXGetCurrentContext");
         cl_context_properties (*getCurrentDisplay)(void) = (cl_context_properties (*)(void)) SDL_GL_GetProcAddress(
                 "glXGetCurrentDisplay");
-        int index = 2;
+        int index = 0;
         if (getCurrentContext)
         {
             cl_context_properties currentContext = getCurrentContext();
@@ -36,36 +74,5 @@ static cl::Context CreateDevice(const cl::Platform &platform, const cl::Device &
             }
         }
     }
-    return cl::Context(device, properties);
-}
-
-cl::Context GetDevice(std::string platname, std::string devname, bool wireToDisplay)
-{
-    std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
-    std::ostringstream errmessage;
-    errmessage << "Could not find device \"" << platname << "\", \"" << devname << "\". Available devices are:\n";
-    for (size_t platformIdx = 0; platformIdx < platforms.size(); platformIdx++)
-    {
-        cl::Platform &platform = platforms[platformIdx];
-        std::string platformName = platform.getInfo<CL_PLATFORM_NAME>();
-        std::vector<cl::Device> devices;
-        if (platform.getDevices(CL_DEVICE_TYPE_ALL, &devices))
-        {
-            errmessage << "(note: Could not get devices for \"" << platformName << "\")\n";
-            continue;
-        }
-        for (size_t deviceIdx = 0; deviceIdx < devices.size(); deviceIdx++)
-        {
-            cl::Device &device = devices[deviceIdx];
-            std::string deviceName = device.getInfo<CL_DEVICE_NAME>();
-            if ((platname.empty() || platname == platformName) &&
-                devname == deviceName)
-            {
-                return CreateDevice(platform, device, wireToDisplay);
-            }
-            errmessage << "\"" << platformName << "\", \"" << deviceName << "\"\n";
-        }
-    }
-    throw std::runtime_error(errmessage.str());
+    return cl::Context(CL_DEVICE_TYPE_ALL, properties);
 }

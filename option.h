@@ -24,6 +24,4 @@ int Headless();
 
 bool RenderOffset(int *shiftx, int *shifty);
 
-bool ThrowExceptions();
-
 std::string DumpBinary();

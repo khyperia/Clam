@@ -1,7 +1,6 @@
 #include "option.h"
 #include "driver.h"
 #include <iostream>
-#include <CL/cl.hpp>
 
 #undef main
 int main(int argc, char **argv)
@@ -29,20 +28,12 @@ int main(int argc, char **argv)
     }
     catch (const cl::Error &ex)
     {
-        if (ThrowExceptions())
-        {
-            throw;
-        }
-        std::cout << "Fatal OpenCL exception: " << ex.err() << std::endl;
+        std::cout << "Fatal OpenCL exception (" << ex.err() << "):" << std::endl;
         std::cout << ex.what() << std::endl;
         return 1;
     }
     catch (const std::exception &ex)
     {
-        if (ThrowExceptions())
-        {
-            throw;
-        }
         std::cout << "Fatal exception:" << std::endl;
         std::cout << ex.what() << std::endl;
         return 1;

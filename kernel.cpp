@@ -208,6 +208,11 @@ static cl::Program CommonBuild(const cl::Context &context, const std::string &so
             output.write(binary[i], sizes[i]);
             std::cout << "Dumped binary " << outputName << std::endl;
         }
+        throw std::runtime_error("Dumped binary, now exiting");
+    }
+    else if (!success)
+    {
+        throw std::runtime_error("Failed to compile program");
     }
     return program;
 }
@@ -374,7 +379,7 @@ Kernel *MakeKernel()
     cl::Context context;
     if (IsCompute())
     {
-        context = GetDevice(PlatformName(), DeviceName(), false);
+        context = GetDevice(PlatformName(), false);
     }
     std::string name = KernelName();
     if (name == "mandelbox")

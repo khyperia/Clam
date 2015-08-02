@@ -2,4 +2,4 @@
 
 #include <CL/cl.hpp>
 
-cl::Context GetDevice(std::string platname, std::string devname, bool wireToDisplay);
+cl::Context GetDevice(std::string platformName, bool wireToDisplay);

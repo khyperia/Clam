@@ -13,7 +13,6 @@ static std::string kernelName;
 static std::string headless;
 static std::string renderOffset;
 static std::string dumpBinary;
-static bool throwExceptions;
 
 static void TryParseEnv(std::string &ref, const char *varname)
 {
@@ -75,9 +74,9 @@ static void ParseArg(const std::string &option, const std::string &value)
     {
         dumpBinary = value;
     }
-    else if (option == "--debug" && value == "throw")
+    else
     {
-        throwExceptions = true;
+        std::cout << "Unknown option " << option << std::endl;
     }
 }
 
@@ -90,7 +89,7 @@ void ParseCmdline(int argc, char **argv)
         i++;
         if (i >= argc)
         {
-            std::cout << "Option " << option << " needs a value";
+            std::cout << "Option " << option << " needs a value" << std::endl;
         }
         std::string value(argv[i]);
         ParseArg(option, value);
@@ -171,9 +170,4 @@ bool RenderOffset(int *shiftx, int *shifty)
 std::string DumpBinary()
 {
     return dumpBinary;
-}
-
-bool ThrowExceptions()
-{
-    return throwExceptions;
 }
