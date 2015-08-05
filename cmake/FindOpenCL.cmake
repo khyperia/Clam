@@ -1,5 +1,5 @@
 find_path(OPENCL_INCLUDE_DIRS
-    NAMES CL/cl.hpp
+    NAMES CL/cl.h
     )
 
 find_library(OPENCL_LIBRARIES

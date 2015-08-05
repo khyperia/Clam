@@ -6,7 +6,8 @@ class Kernel;
 #include <SDL.h>
 #include <SDL_net.h>
 #include <set>
-#include <CL/cl.hpp>
+#include <CL/cl.h>
+#include <bits/stringfwd.h>
 
 class Kernel
 {
@@ -22,8 +23,8 @@ protected:
     void TryDeserialize();
 
 public:
-    cl::CommandQueue queue;
-    cl::Context context;
+    cl_command_queue queue;
+    cl_context context;
 
     virtual ~Kernel()
     { };
@@ -36,7 +37,7 @@ public:
 
     virtual void LoadWholeState(StateSync *input) = 0;
 
-    virtual void RenderInto(cl::Memory memory, size_t width, size_t height) = 0;
+    virtual void RenderInto(cl_mem memory, size_t width, size_t height) = 0;
 
     virtual std::string Name() = 0;
 

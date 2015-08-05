@@ -8,14 +8,14 @@
 #define Saturation 0.6f
 #define HueVariance 0.001f
 #define Reflectivity 1.0f
-#define DofAmount(hue) (hue * 0.01f)
+#define DofAmount(hue) (hue * 0.005f)
 #define FovAbberation 0.01f
 #define SpecularHighlight(angle) Gauss(1, 0, 0.2f, angle)
-#define LightBrightness(hue) Gauss(8, 0.25f, 0.5f, hue)
+#define LightBrightness(hue) Gauss(16, 0.25f, 0.5f, hue)
 #define AmbientBrightness(hue) Gauss(2, 0.65f, 0.25f, hue)
 #define LightPos 10
 #define LightSize 0.2f
-#define FogDensity(hue) (hue * 0.000001f)
+#define FogDensity(hue) (hue * 0.7f + 0.5f)
 #define FogColor(hue) Gauss(1, 0.5f, 10.0f, hue)
 #define WhiteClamp 1
 #define BrightThresh 8
@@ -25,8 +25,7 @@
 #define DeMultiplier 0.95f
 #define RandSeedInitSteps 128
 #define MaxRayDist 16
-#define MaxRaySteps 128
-#define DirectLightingMaxSteps 128
+#define MaxRaySteps 256
 #define NumRayBounces 3
 #define QualityFirstRay 2
 #define QualityRestRay 64

@@ -1,10 +1,11 @@
 #include "driver.h"
 #include "option.h"
+#include "util.h"
 #include <iostream>
 
 struct RenderType
 {
-    cl::Buffer renderBuffer;
+    cl_mem renderBuffer;
     int width, height;
 
     RenderType() : renderBuffer(), width(-1), height(-1)
@@ -12,7 +13,12 @@ struct RenderType
     }
 
     virtual ~RenderType()
-    { };
+    {
+        if (renderBuffer)
+        {
+            HandleCl(clReleaseMemObject(renderBuffer));
+        }
+    };
 
     virtual void Resize() = 0;
 
@@ -21,10 +27,10 @@ struct RenderType
 
 struct CpuRenderType : public RenderType
 {
-    cl::Context context;
+    cl_context context;
     SDL_Window *window;
 
-    CpuRenderType(cl::Context context, SDL_Window *window) : RenderType(), context(context), window(window)
+    CpuRenderType(cl_context context, SDL_Window *window) : RenderType(), context(context), window(window)
     {
     }
 
@@ -34,7 +40,13 @@ struct CpuRenderType : public RenderType
 
     virtual void Resize()
     {
-        renderBuffer = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(Uint8) * 4 * width * height);
+        cl_int err;
+        if (renderBuffer)
+        {
+            HandleCl(clReleaseMemObject(renderBuffer));
+        }
+        renderBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(Uint8) * 4 * width * height, NULL, &err);
+        HandleCl(err);
     };
 
     virtual bool Update(Kernel *kernel)
@@ -48,7 +60,9 @@ struct CpuRenderType : public RenderType
         {
             throw std::runtime_error("Window surface bytes/pixel != 4");
         }
-        kernel->queue.enqueueReadBuffer(renderBuffer, 1, 0, sizeof(Uint8) * 4 * width * height, surface->pixels);
+        HandleCl(clEnqueueReadBuffer(kernel->queue, renderBuffer, 1, 0,
+                                     sizeof(Uint8) * 4 * width * height,
+                                     surface->pixels, 0, NULL, NULL));
         SDL_UnlockSurface(surface);
         SDL_UpdateWindowSurface(window);
         return true;
@@ -57,7 +71,7 @@ struct CpuRenderType : public RenderType
 
 struct HeadlessRenderType : public RenderType
 {
-    cl::Context context;
+    cl_context context;
     int numFrames;
 
     HeadlessRenderType(Kernel *kernel, int numFrames, bool *loadedIntermediate)
@@ -92,7 +106,13 @@ struct HeadlessRenderType : public RenderType
 
     virtual void Resize()
     {
-        renderBuffer = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(Uint8) * 4 * width * height);
+        cl_int err;
+        if (renderBuffer)
+        {
+            HandleCl(clReleaseMemObject(renderBuffer));
+        }
+        renderBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(Uint8) * 4 * width * height, NULL, &err);
+        HandleCl(err);
     }
 
     virtual bool Update(Kernel *kernel)
@@ -114,14 +134,16 @@ struct HeadlessRenderType : public RenderType
             {
                 throw std::runtime_error("Could not lock temp buffer surface");
             }
-            kernel->queue.enqueueReadBuffer(renderBuffer, 1, 0, sizeof(Uint8) * 4 * width * height, surface->pixels);
+            HandleCl(clEnqueueReadBuffer(kernel->queue, renderBuffer, 1, 0,
+                                         sizeof(Uint8) * 4 * width * height,
+                                         surface->pixels, 0, NULL, NULL));
             SDL_UnlockSurface(surface);
             SDL_SaveBMP(surface, "image.bmp");
             std::cout << "Saved image 'image.bmp'" << std::endl;
             SDL_FreeSurface(surface);
             return false;
         }
-        kernel->queue.finish();
+        HandleCl(clFinish(kernel->queue));
         return true;
     }
 };

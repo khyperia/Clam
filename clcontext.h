@@ -1,5 +1,6 @@
 #pragma once
 
-#include <CL/cl.hpp>
+#include <CL/cl.h>
+#include <string>
 
-cl::Context GetDevice(std::string platformName, bool wireToDisplay);
+cl_context GetDevice(std::string platformName, bool wireToDisplay);

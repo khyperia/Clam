@@ -107,19 +107,23 @@ static bool Common3dCamera(
 }
 
 template<typename T>
-std::vector<T> Download(const cl::CommandQueue &queue, const cl::Buffer &mem)
+std::vector<T> Download(cl_command_queue queue, cl_mem mem)
 {
-    size_t size = mem.getInfo<CL_MEM_SIZE>();
+    size_t size;
+    HandleCl(clGetMemObjectInfo(mem, CL_MEM_SIZE, sizeof(size), &size, NULL));
     std::vector<T> result(size / sizeof(T));
-    queue.enqueueReadBuffer(mem, 1, 0, size, result.data());
+    clEnqueueReadBuffer(queue, mem, 1, 0, size, result.data(), 0, NULL, NULL);
     return result;
 }
 
 template<typename T>
-cl::Buffer Upload(const cl::Context &context, std::vector<T> data)
+cl_mem Upload(cl_context context, std::vector<T> data)
 {
-    return cl::Buffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-                      data.size() * sizeof(T), data.data());
+    cl_int err;
+    cl_mem result = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+                                   data.size() * sizeof(T), data.data(), &err);
+    HandleCl(err);
+    return result;
 }
 
 void Kernel::UserInput(SDL_Event event)
@@ -173,47 +177,86 @@ void Kernel::TryDeserialize()
     }
 }
 
-static cl::Program CommonBuild(const cl::Context &context, const std::string &source)
+static std::vector<cl_device_id> GetContextDevices(cl_context context)
 {
-    cl::Program program(context, source);
-    bool success = false;
-    try
-    {
-        cl_int result = program.build(
-                "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror",
-                NULL, NULL);
-        success = result == 0;
-    }
-    catch (const std::exception &ex)
-    {
-        success = false;
-    }
+    size_t count;
+    HandleCl(clGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &count));
+    std::vector<cl_device_id> result(count / sizeof(cl_device_id));
+    HandleCl(clGetContextInfo(context, CL_CONTEXT_DEVICES, count, result.data(), NULL));
+    return result;
+}
 
-    std::vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
+static std::string DeviceName(cl_device_id device)
+{
+    size_t namesize;
+    HandleCl(clGetDeviceInfo(device, CL_DEVICE_NAME, 0, NULL, &namesize));
+    std::vector<char> result(namesize + 1);
+    HandleCl(clGetDeviceInfo(device, CL_DEVICE_NAME, namesize, result.data(), NULL));
+    for (size_t i = 0; i < result.size() - 1; i++)
+    {
+        if (result[i] == '\0')
+        {
+            result[i] = ' ';
+        }
+    }
+    return std::string(result.data());
+}
+
+static std::string BuildLog(cl_program program, cl_device_id device)
+{
+    size_t logsize;
+    HandleCl(clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &logsize));
+    std::vector<char> result(logsize + 1);
+    HandleCl(clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, logsize, result.data(), NULL));
+    return std::string(result.data(), logsize);
+}
+
+static void DumpBin(cl_program program, std::string filename)
+{
+    size_t bincount;
+    HandleCl(clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, 0, NULL, &bincount));
+    std::vector<size_t> sizes(bincount / sizeof(size_t));
+    HandleCl(clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, bincount, sizes.data(), NULL));
+    std::vector<char *> binaries(bincount / sizeof(size_t));
+    for (size_t i = 0; i < bincount / sizeof(size_t); i++)
+    {
+        binaries[i] = new char[sizes[i]];
+    }
+    HandleCl(clGetProgramInfo(program, CL_PROGRAM_BINARIES, bincount / sizeof(size_t) * sizeof(char*), binaries.data(), NULL));
+    for (size_t i = 0; i < bincount / sizeof(size_t); i++)
+    {
+        std::string outputName = i == 0 ? filename : filename + "." + tostring(i);
+        std::ofstream output(outputName.c_str());
+        output.write(binaries[i], sizes[i]);
+        delete[] binaries[i];
+        std::cout << "Dumped binary " << outputName << std::endl;
+    }
+}
+
+static cl_program CommonBuild(cl_context context, const std::string &source)
+{
+    const char *sourceStr = source.data();
+    cl_int err;
+    cl_program program = clCreateProgramWithSource(context, 1, &sourceStr, NULL, &err);
+    HandleCl(err);
+    err = clBuildProgram(program, 0, NULL,
+                         "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math -Werror",
+                         NULL, NULL);
+
+    std::vector<cl_device_id> devices = GetContextDevices(context);
     for (size_t i = 0; i < devices.size(); i++)
     {
-        std::cout << "-- Build log for device " << devices[i].getInfo<CL_DEVICE_NAME>() << ":" << std::endl;
-        std::cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[i]) << std::endl;
+        std::cout << "-- Build log for device " << DeviceName(devices[i]) << ":" << std::endl;
+        std::cout << BuildLog(program, devices[i]) << std::endl;
     }
-    std::cout << "-- End log. Compilation " << (success ? "succeeded" : "failed") << std::endl;
+    std::cout << "-- End log. Compilation " << (err == CL_SUCCESS ? "succeeded" : "failed") << std::endl;
     std::string dumpbin = DumpBinary();
-    if (!dumpbin.empty() && success)
+    if (!dumpbin.empty() && err == CL_SUCCESS)
     {
-        std::vector<size_t> sizes = program.getInfo<CL_PROGRAM_BINARY_SIZES>();
-        std::vector<char *> binary = program.getInfo<CL_PROGRAM_BINARIES>();
-        for (size_t i = 0; i < binary.size(); i++)
-        {
-            std::string outputName = i == 0 ? dumpbin : dumpbin + "." + tostring(i);
-            std::ofstream output(outputName.c_str());
-            output.write(binary[i], sizes[i]);
-            std::cout << "Dumped binary " << outputName << std::endl;
-        }
+        DumpBin(program, dumpbin);
         throw std::runtime_error("Dumped binary, now exiting");
     }
-    else if (!success)
-    {
-        throw std::runtime_error("Failed to compile program");
-    }
+    HandleCl(err);
     return program;
 }
 
@@ -222,10 +265,10 @@ extern const unsigned int mandelbox_len;
 
 class MandelboxKernel : public Kernel
 {
-    cl::Program program;
-    cl::Kernel kernelMain;
-    cl::Buffer rngMem;
-    cl::Buffer scratchMem;
+    cl_program program;
+    cl_kernel kernelMain;
+    cl_mem rngMem;
+    cl_mem scratchMem;
     Vector2<size_t> rngMemSize;
     size_t maxLocalSize;
     Vector3<double> pos;
@@ -237,31 +280,57 @@ class MandelboxKernel : public Kernel
     Vector2<int> renderOffset;
     bool useRenderOffset;
 public:
-    MandelboxKernel(cl::Context context)
+    MandelboxKernel(cl_context context)
             : rngMemSize(0, 0), pos(10, 0, 0), look(-1, 0, 0), up(0, 1, 0), focalDistance(8), fov(1),
               renderOffset(0, 0), useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y))
     {
         this->context = context;
-        if (context())
+        if (context)
         {
             program = CommonBuild(context, std::string((char *)mandelbox, mandelbox_len));
-            kernelMain = cl::Kernel(program, "kern");
-            std::vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
+            cl_int err;
+            kernelMain = clCreateKernel(program, "kern", &err);
+            HandleCl(err);
+
+            std::vector<cl_device_id> devices = GetContextDevices(context);
             if (devices.size() != 1)
             {
                 throw std::runtime_error("Mandelbox kernel only supports running on one device");
             }
-            queue = cl::CommandQueue(context, devices[0]);
-            maxLocalSize = queue.getInfo<CL_QUEUE_DEVICE>().getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+            queue = clCreateCommandQueue(context, devices[0], 0, &err);
+            HandleCl(err);
+
+            HandleCl(clGetDeviceInfo(devices[0], CL_DEVICE_MAX_WORK_GROUP_SIZE,
+                                     sizeof(maxLocalSize), &maxLocalSize, NULL));
             TryDeserialize();
         }
     }
 
     ~MandelboxKernel()
     {
-        if (context())
+        if (context)
         {
             Serialize();
+        }
+        if (queue)
+        {
+            HandleCl(clReleaseCommandQueue(queue));
+        }
+        if (kernelMain)
+        {
+            HandleCl(clReleaseKernel(kernelMain));
+        }
+        if (program)
+        {
+            HandleCl(clReleaseProgram(program));
+        }
+        if (scratchMem)
+        {
+            HandleCl(clReleaseMemObject(scratchMem));
+        }
+        if (rngMem)
+        {
+            HandleCl(clReleaseMemObject(rngMem));
         }
     };
 
@@ -330,42 +399,58 @@ public:
         rngMem = Upload(context, input->RecvArr<Vector4<float> >(count));
     }
 
-    void RenderInto(cl::Memory memory, size_t width, size_t height)
+    template<typename T>
+    void SetKernelArg(cl_kernel kernel, cl_uint index, const T &value)
+    {
+        clSetKernelArg(kernel, index, sizeof(value), &value);
+    }
+
+    void RenderInto(cl_mem memory, size_t width, size_t height)
     {
         if (width != rngMemSize.x || height != rngMemSize.y)
         {
-            rngMem = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(int) * 2 * width * height);
-            scratchMem = cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(float) * 4 * width * height);
+            if (rngMem)
+            {
+                HandleCl(clReleaseMemObject(rngMem));
+            }
+            if (scratchMem)
+            {
+                HandleCl(clReleaseMemObject(scratchMem));
+            }
+            cl_int err;
+            rngMem = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * 2 * width * height, NULL, &err);
+            HandleCl(err);
+            scratchMem = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * 4 * width * height, NULL, &err);
+            HandleCl(err);
+            frame = 0;
             std::cout << "Resized from " << rngMemSize.x << "x" << rngMemSize.y <<
             " to " << width << "x" << height << std::endl;
             rngMemSize = Vector2<size_t>(width, height);
         }
         cl_uint index = 0;
-        kernelMain.setArg(index++, memory);
-        kernelMain.setArg(index++, scratchMem);
-        kernelMain.setArg(index++, rngMem);
-        kernelMain.setArg(index++, useRenderOffset ? renderOffset.x : -(int)width / 2);
-        kernelMain.setArg(index++, useRenderOffset ? renderOffset.y : -(int)height / 2);
-        kernelMain.setArg(index++, (int)width);
-        kernelMain.setArg(index++, (int)height);
-        kernelMain.setArg(index++, (float)pos.x);
-        kernelMain.setArg(index++, (float)pos.y);
-        kernelMain.setArg(index++, (float)pos.z);
-        kernelMain.setArg(index++, (float)look.x);
-        kernelMain.setArg(index++, (float)look.y);
-        kernelMain.setArg(index++, (float)look.z);
-        kernelMain.setArg(index++, (float)up.x);
-        kernelMain.setArg(index++, (float)up.y);
-        kernelMain.setArg(index++, (float)up.z);
-        kernelMain.setArg(index++, (float)(fov * 2 / (width + height)));
-        kernelMain.setArg(index++, (float)focalDistance);
-        kernelMain.setArg(index++, (float)frame++);
-        size_t localWidth = (size_t)std::sqrt(maxLocalSize);
-        size_t localHeight = (size_t)std::sqrt(maxLocalSize);
-        cl::NDRange localSize(localWidth, localHeight);
-        cl::NDRange globalSize((width + localWidth - 1) / localWidth * localWidth,
-                               (height + localHeight - 1) / localHeight * localHeight);
-        queue.enqueueNDRangeKernel(kernelMain, cl::NDRange(0, 0), globalSize, localSize);
+        SetKernelArg(kernelMain, index++, memory);
+        SetKernelArg(kernelMain, index++, scratchMem);
+        SetKernelArg(kernelMain, index++, rngMem);
+        SetKernelArg(kernelMain, index++, useRenderOffset ? renderOffset.x : -(int)width / 2);
+        SetKernelArg(kernelMain, index++, useRenderOffset ? renderOffset.y : -(int)height / 2);
+        SetKernelArg(kernelMain, index++, (int)width);
+        SetKernelArg(kernelMain, index++, (int)height);
+        SetKernelArg(kernelMain, index++, (float)pos.x);
+        SetKernelArg(kernelMain, index++, (float)pos.y);
+        SetKernelArg(kernelMain, index++, (float)pos.z);
+        SetKernelArg(kernelMain, index++, (float)look.x);
+        SetKernelArg(kernelMain, index++, (float)look.y);
+        SetKernelArg(kernelMain, index++, (float)look.z);
+        SetKernelArg(kernelMain, index++, (float)up.x);
+        SetKernelArg(kernelMain, index++, (float)up.y);
+        SetKernelArg(kernelMain, index++, (float)up.z);
+        SetKernelArg(kernelMain, index++, (float)(fov * 2 / (width + height)));
+        SetKernelArg(kernelMain, index++, (float)focalDistance);
+        SetKernelArg(kernelMain, index++, (float)frame++);
+        size_t localSize[] = {(size_t)std::sqrt(maxLocalSize), (size_t)std::sqrt(maxLocalSize)};
+        size_t globalSize[] = {(width + localSize[0] - 1) / localSize[0] * localSize[0],
+                               (height + localSize[1] - 1) / localSize[1] * localSize[1]};
+        HandleCl(clEnqueueNDRangeKernel(queue, kernelMain, 2, NULL, globalSize, localSize, 0, NULL, NULL));
     }
 
     std::string Name()
@@ -376,7 +461,7 @@ public:
 
 Kernel *MakeKernel()
 {
-    cl::Context context;
+    cl_context context = 0;
     if (IsCompute())
     {
         context = GetDevice(PlatformName(), false);
