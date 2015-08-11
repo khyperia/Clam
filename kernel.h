@@ -3,11 +3,11 @@
 class Kernel;
 
 #include "network.h"
+#include "cumem.h"
 #include <SDL.h>
 #include <SDL_net.h>
 #include <set>
-#include <CL/cl.h>
-#include <bits/stringfwd.h>
+#include <cuda.h>
 
 class Kernel
 {
@@ -23,9 +23,6 @@ protected:
     void TryDeserialize();
 
 public:
-    cl_command_queue queue;
-    cl_context context;
-
     virtual ~Kernel()
     { };
 
@@ -37,7 +34,7 @@ public:
 
     virtual void LoadWholeState(StateSync *input) = 0;
 
-    virtual void RenderInto(cl_mem memory, size_t width, size_t height) = 0;
+    virtual void RenderInto(CuMem<int>& memory, size_t width, size_t height) = 0;
 
     virtual std::string Name() = 0;
 

@@ -1,16 +1,22 @@
 #pragma once
 
 #include <sstream>
-#include <CL/cl.h>
+#include <cuda.h>
+#include <iostream>
 
-#define HandleCl(x) HandleClImpl(x, #x, __FILE__, __LINE__)
+#define HandleCu(x) HandleCuImpl(x, #x, __FILE__, __LINE__)
 
-static inline void HandleClImpl(cl_int err, const char* expr, const char* file, const int line)
+static inline void HandleCuImpl(CUresult err, const char* expr, const char* file, const int line)
 {
-    if (err != CL_SUCCESS)
+    if (err != CUDA_SUCCESS)
     {
         std::ostringstream msg;
-        msg << "OpenCL Error: " << err << std::endl;
+        const char* errstr;
+        if (cuGetErrorString(err, &errstr) != CUDA_SUCCESS)
+        {
+            errstr = "Unknown error";
+        }
+        msg << "CUDA Error (" << err << "): " << errstr << std::endl;
         msg << file << "(" << line << "): " << expr;
         throw std::runtime_error(msg.str());
     }

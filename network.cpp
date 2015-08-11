@@ -1,6 +1,5 @@
 #include "network.h"
 #include "option.h"
-#include "util.h"
 
 Connection::Connection()
 {

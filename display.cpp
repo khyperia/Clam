@@ -19,13 +19,14 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
         flags |= SDL_WINDOW_OPENGL;
     }
     window = SDL_CreateWindow("Clam3", x, y, width, height, flags);
+    context = NULL;
     if (isCompute)
     {
-        context = SDL_GL_CreateContext(window);
+        //context = SDL_GL_CreateContext(window);
     }
     else
     {
-        context = NULL;
+        //context = NULL;
     }
     lastTicks = SDL_GetTicks();
 }

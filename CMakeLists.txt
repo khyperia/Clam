@@ -5,7 +5,7 @@ project(Clam3 C CXX)
 set(SOURCEDIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 
 if (${CMAKE_BUILD_TYPE} STREQUAL Debug)
     add_definitions(-DDEBUG)
@@ -15,6 +15,7 @@ endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra -Wno-deprecated-declarations")
+set(NVCC_FLAGS "-O3" "--compiler-options" "-Wall" "--use_fast_math" "-lineinfo")
 
 file(GLOB cppfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cpp")
 file(GLOB hfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.h")
@@ -41,7 +42,7 @@ macro(my_package pacname)
 endmacro()
 
 my_package(OpenGL)
-my_package(OpenCL)
+my_package(CUDA)
 my_package(SDL2)
 my_package(SDL2_net)
 
@@ -50,15 +51,20 @@ add_executable(embed util/embed.c)
 set(genfiles)
 include_directories("${CMAKE_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
-file(GLOB clfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cl")
+file(GLOB clfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cu")
 foreach(filename ${clfiles})
+    set(ptxfile "${CMAKE_BINARY_DIR}/generated/${filename}.ptx")
+    add_custom_command(
+        OUTPUT "${ptxfile}"
+        DEPENDS ${filename}
+        WORKING_DIRECTORY ${SOURCEDIR}
+        COMMAND nvcc --ptx ${NVCC_FLAGS} "${filename}" -o "${ptxfile}")
     set(outfile "${CMAKE_BINARY_DIR}/generated/${filename}.c")
     get_filename_component(varname ${filename} NAME_WE)
     add_custom_command(
         OUTPUT "${outfile}"
-        DEPENDS ${filename}
-        WORKING_DIRECTORY ${SOURCEDIR}
-        COMMAND embed "${filename}" "${outfile}" "${varname}")
+        DEPENDS ${ptxfile}
+        COMMAND embed "${ptxfile}" "${outfile}" "${varname}")
     list(APPEND genfiles ${outfile})
 endforeach()
 
@@ -66,6 +72,6 @@ add_executable(clam3 ${sources} ${genfiles})
 
 target_link_libraries(clam3
     ${OPENGL_LIBRARIES}
-    ${OPENCL_LIBRARIES}
+    cuda
     ${SDL2_LIBRARIES}
     ${SDL2_NET_LIBRARIES})

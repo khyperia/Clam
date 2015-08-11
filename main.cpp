@@ -5,8 +5,8 @@
 #undef main
 int main(int argc, char **argv)
 {
-    try
-    {
+    //try
+    //{
         ParseCmdline(argc, argv);
         Driver driver;
         bool isCompute = IsCompute();
@@ -25,6 +25,7 @@ int main(int argc, char **argv)
                 }
             }
         }
+    /*
     }
     catch (const std::exception &ex)
     {
@@ -32,5 +33,6 @@ int main(int argc, char **argv)
         std::cout << ex.what() << std::endl;
         return 1;
     }
+     */
     return 0;
 }

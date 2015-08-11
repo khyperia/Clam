@@ -4,15 +4,12 @@
 #include <iostream>
 #include <stdio.h>
 
-static std::string platform;
-static std::string device;
 static std::string masterIp;
 static std::string hostBindPort;
 static std::string windowPos;
 static std::string kernelName;
 static std::string headless;
 static std::string renderOffset;
-static std::string dumpBinary;
 
 static void TryParseEnv(std::string &ref, const char *varname)
 {
@@ -25,28 +22,17 @@ static void TryParseEnv(std::string &ref, const char *varname)
 
 static void ParseEnvVar()
 {
-    TryParseEnv(platform, "CLAM3_PLATFORM");
-    TryParseEnv(device, "CLAM3_DEVICE");
     TryParseEnv(masterIp, "CLAM3_CONNECT");
     TryParseEnv(hostBindPort, "CLAM3_HOST");
     TryParseEnv(windowPos, "CLAM3_WINDOWPOS");
     TryParseEnv(kernelName, "CLAM3_KERNEL");
     TryParseEnv(headless, "CLAM3_HEADLESS");
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
-    TryParseEnv(dumpBinary, "CLAM3_DUMPBIN");
 }
 
 static void ParseArg(const std::string &option, const std::string &value)
 {
-    if (option == "--platform" || option == "-p")
-    {
-        platform = value;
-    }
-    else if (option == "--device" || option == "-d")
-    {
-        device = value;
-    }
-    else if (option == "--connect" || option == "-c")
+    if (option == "--connect" || option == "-c")
     {
         masterIp = value;
     }
@@ -70,10 +56,6 @@ static void ParseArg(const std::string &option, const std::string &value)
     {
         renderOffset = value;
     }
-    else if (option == "--dumpbin")
-    {
-        dumpBinary = value;
-    }
     else
     {
         std::cout << "Unknown option " << option << std::endl;
@@ -94,16 +76,6 @@ void ParseCmdline(int argc, char **argv)
         std::string value(argv[i]);
         ParseArg(option, value);
     }
-}
-
-std::string PlatformName()
-{
-    return platform;
-}
-
-std::string DeviceName()
-{
-    return device;
 }
 
 std::string MasterIp()
@@ -165,9 +137,4 @@ bool RenderOffset(int *shiftx, int *shifty)
         return false;
     }
     return true;
-}
-
-std::string DumpBinary()
-{
-    return dumpBinary;
 }
