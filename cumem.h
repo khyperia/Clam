@@ -20,6 +20,10 @@ public:
         HandleCu(cuMemAlloc(&ptr, count * sizeof(T)));
     }
 
+    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), refcount(NULL), count(count)
+    {
+    }
+
     CuMem(const CuMem &x) :
             ptr(x.ptr),
             refcount(x.refcount),

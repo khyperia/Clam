@@ -9,6 +9,7 @@ static std::string hostBindPort;
 static std::string windowPos;
 static std::string kernelName;
 static std::string headless;
+static std::string renderType;
 static std::string renderOffset;
 
 static void TryParseEnv(std::string &ref, const char *varname)
@@ -27,6 +28,7 @@ static void ParseEnvVar()
     TryParseEnv(windowPos, "CLAM3_WINDOWPOS");
     TryParseEnv(kernelName, "CLAM3_KERNEL");
     TryParseEnv(headless, "CLAM3_HEADLESS");
+    TryParseEnv(renderType, "CLAM3_RENDERTYPE");
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
 }
 
@@ -51,6 +53,10 @@ static void ParseArg(const std::string &option, const std::string &value)
     else if (option == "--headless")
     {
         headless = value;
+    }
+    else if (option == "--rendertype")
+    {
+        renderType = value;
     }
     else if (option == "--renderoffset" || option == "-r")
     {
@@ -123,6 +129,11 @@ int Headless()
         std::cout << "Couldn't parse headless option, assuming no headless" << std::endl;
         return -1;
     }
+}
+
+std::string RenderTypeVal()
+{
+    return renderType;
 }
 
 bool RenderOffset(int *shiftx, int *shifty)

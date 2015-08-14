@@ -6,11 +6,8 @@
 #include <SDL.h>
 #include <stdexcept>
 
-struct RenderType;
-
 class DisplayWindow
 {
-    SDL_GLContext context;
     Uint32 lastTicks;
     bool isUserInput;
 
@@ -19,12 +16,18 @@ class DisplayWindow
         throw std::runtime_error("DisplayWindow class should not be moved");
     }
 
+    DisplayWindow &operator=(const DisplayWindow &)
+    {
+        throw std::runtime_error("DisplayWindow class should not be moved");
+    }
+
 public:
     SDL_Window *window;
+    SDL_GLContext context;
 
     DisplayWindow(int x, int y, int width, int height);
 
     ~DisplayWindow();
 
-    bool UserInput(Kernel* kernel);
+    bool UserInput(Kernel *kernel);
 };

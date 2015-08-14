@@ -346,17 +346,6 @@ public:
 Kernel *MakeKernel()
 {
     bool isCompute = IsCompute();
-    static bool hasInit = false;
-    if (isCompute && !hasInit)
-    {
-        hasInit = true;
-        HandleCu(cuInit(0));
-        CUdevice device;
-        HandleCu(cuDeviceGet(&device, 0));
-        CUcontext context;
-        HandleCu(cuCtxCreate(&context, 0, device));
-        HandleCu(cuCtxSetCurrent(context));
-    }
     std::string name = KernelName();
     if (name == "mandelbox")
     {

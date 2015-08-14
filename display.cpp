@@ -1,16 +1,26 @@
 #include "display.h"
 #include "option.h"
 
+struct SdlInitClass
+{
+    SdlInitClass()
+    {
+        if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO))
+        {
+            throw std::runtime_error(SDL_GetError());
+        }
+    }
+
+    ~SdlInitClass()
+    {
+        SDL_Quit();
+    }
+} sdlInitInstance;
+
 DisplayWindow::DisplayWindow(int x, int y, int width, int height)
 {
     bool isCompute = IsCompute();
     isUserInput = IsUserInput();
-    static bool init = false;
-    if (!init)
-    {
-        SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
-        init = true;
-    }
     // TODO: SDL_WINDOW_FULLSCREEN
     Uint32 flags;
     flags = SDL_WINDOW_RESIZABLE;
@@ -22,11 +32,15 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
     context = NULL;
     if (isCompute)
     {
-        //context = SDL_GL_CreateContext(window);
+        context = SDL_GL_CreateContext(window);
+        if (!context)
+        {
+            throw std::runtime_error("Could not create OpenGL context");
+        }
     }
     else
     {
-        //context = NULL;
+        context = NULL;
     }
     lastTicks = SDL_GetTicks();
 }
@@ -34,13 +48,16 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
 DisplayWindow::~DisplayWindow()
 {
     if (context)
+    {
         SDL_GL_DeleteContext(context);
+    }
     if (window)
+    {
         SDL_DestroyWindow(window);
-    SDL_Quit();
+    }
 }
 
-bool DisplayWindow::UserInput(Kernel* kernel)
+bool DisplayWindow::UserInput(Kernel *kernel)
 {
     SDL_Event event;
     while (SDL_PollEvent(&event))

@@ -1,38 +1,29 @@
 #include "option.h"
 #include "driver.h"
-#include <iostream>
 
+#ifdef main
 #undef main
+#endif
+
 int main(int argc, char **argv)
 {
-    //try
-    //{
-        ParseCmdline(argc, argv);
-        Driver driver;
-        bool isCompute = IsCompute();
-        Uint32 ticks = SDL_GetTicks();
-        while (driver.RunFrame())
+    ParseCmdline(argc, argv);
+    Driver driver;
+    bool isCompute = IsCompute();
+    Uint32 ticks = SDL_GetTicks();
+    while (driver.RunFrame())
+    {
+        if (!isCompute)
         {
-            if (!isCompute)
+            Uint32 newTicks = SDL_GetTicks();
+            Uint32 wait = newTicks - ticks;
+            ticks = newTicks;
+            const Uint32 delay = 1000 / 60;
+            if (wait < delay)
             {
-                Uint32 newTicks = SDL_GetTicks();
-                Uint32 wait = newTicks - ticks;
-                ticks = newTicks;
-                const Uint32 delay = 1000 / 60;
-                if (wait < delay)
-                {
-                    SDL_Delay(delay - wait);
-                }
+                SDL_Delay(delay - wait);
             }
         }
-    /*
     }
-    catch (const std::exception &ex)
-    {
-        std::cout << "Fatal exception:" << std::endl;
-        std::cout << ex.what() << std::endl;
-        return 1;
-    }
-     */
     return 0;
 }
