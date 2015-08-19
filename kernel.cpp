@@ -1,6 +1,7 @@
 #include "kernel.h"
 #include "option.h"
 #include "vector.h"
+#include "mandelbox.h"
 #include <fstream>
 
 static void CommonOneTimeKeypress(Kernel *kern, SDL_Keycode keycode)
@@ -107,7 +108,7 @@ void Kernel::UserInput(SDL_Event event)
 {
     if (event.type == SDL_KEYDOWN)
     {
-        if (pressedKeys.find(event.key.keysym.sym) == pressedKeys.end())
+        //if (pressedKeys.find(event.key.keysym.sym) == pressedKeys.end())
         {
             OneTimeKeypress(event.key.keysym.sym);
         }
@@ -129,31 +130,6 @@ void Kernel::Integrate(double time)
     }
 }
 
-void Kernel::Serialize()
-{
-    std::string filename = Name() + ".autosave.clam3";
-    StateSync *sync = NewFileStateSync(filename.c_str(), false);
-    this->SaveWholeState(sync);
-    delete sync;
-    std::cout << "Saved progress to " << filename << std::endl;
-}
-
-void Kernel::TryDeserialize()
-{
-    std::string filename = Name() + ".autosave.clam3";
-    try
-    {
-        StateSync *sync = NewFileStateSync(filename.c_str(), true);
-        this->LoadWholeState(sync);
-        delete sync;
-        std::cout << "Loaded progress from " << filename << std::endl;
-    }
-    catch (const std::exception &err)
-    {
-        std::cout << "Failed to load progress from " << filename << std::endl;
-    }
-}
-
 static CUmodule CommonBuild(const std::string &source)
 {
     CUmodule result;
@@ -164,6 +140,120 @@ static CUmodule CommonBuild(const std::string &source)
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
+struct MandelboxState
+{
+    Vector3<double> pos;
+    Vector3<double> look;
+    Vector3<double> up;
+    double focalDistance;
+    double fov;
+    MandelboxCfg cfg;
+
+    MandelboxState() : pos(10, 0, 0), look(-1, 0, 0), up(0, 1, 0), focalDistance(8), fov(1), cfg(MandelboxDefault())
+    {
+    }
+
+    bool operator==(const MandelboxState &right)
+    {
+        return memcmp(this, &right, sizeof(MandelboxState)) == 0;
+    }
+
+    bool operator!=(const MandelboxState &right)
+    {
+        return memcmp(this, &right, sizeof(MandelboxState)) != 0;
+    }
+};
+
+template<typename T, typename Tscalar>
+T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
+{
+    Tscalar t2 = t * t;
+    Tscalar t3 = t2 * t;
+
+    return (((Tscalar)2 * p1) +
+            (-p0 + p2) * t +
+            ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
+            (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2;
+}
+
+class MandelboxAnimation
+{
+    std::vector<MandelboxState> keyframes;
+
+public:
+    void AddKeyframe(MandelboxState state)
+    {
+        keyframes.push_back(state);
+    }
+
+    void Clear()
+    {
+        keyframes.clear();
+    }
+
+    void Send(StateSync *sync)
+    {
+        sync->Send(keyframes.size());
+        sync->SendArr(keyframes);
+    }
+
+    void Recv(StateSync *sync)
+    {
+        size_t size = sync->Recv<size_t>();
+        keyframes = sync->RecvArr<MandelboxState>(size);
+    }
+
+    MandelboxState Interpolate(double time, bool loop)
+    {
+        time *= keyframes.size() - 1;
+        size_t itime = (size_t)time;
+        double t = time - itime;
+        MandelboxState p0 = keyframes[itime == 0 ? (loop ? keyframes.size() - 1 : (size_t)0) : itime - 1];
+        MandelboxState p1 = keyframes[itime];
+        MandelboxState p2 = keyframes[itime + 1];
+        MandelboxState p3 = keyframes[itime == keyframes.size() - 2 ? (loop ? 0 : itime + 1) : itime + 2];
+        MandelboxState result;
+#define InterpDo(ts, x) result.x = CatmullRom(p0.x, p1.x, p2.x, p3.x, (ts)t)
+        InterpDo(double, pos);
+        InterpDo(double, look);
+        InterpDo(double, up);
+        InterpDo(double, focalDistance);
+        InterpDo(double, fov);
+        InterpDo(float, cfg.Scale);
+        InterpDo(float, cfg.FoldingLimit);
+        InterpDo(float, cfg.FixedRadius2);
+        InterpDo(float, cfg.MinRadius2);
+        InterpDo(float, cfg.InitRotation);
+        InterpDo(float, cfg.DeRotation);
+        InterpDo(float, cfg.ColorSharpness);
+        InterpDo(float, cfg.Saturation);
+        InterpDo(float, cfg.HueVariance);
+        InterpDo(float, cfg.Reflectivity);
+        InterpDo(float, cfg.DofAmount);
+        InterpDo(float, cfg.FovAbberation);
+        InterpDo(float, cfg.LightPosX);
+        InterpDo(float, cfg.LightPosY);
+        InterpDo(float, cfg.LightPosZ);
+        InterpDo(float, cfg.LightSize);
+        InterpDo(float, cfg.ColorBiasR);
+        InterpDo(float, cfg.ColorBiasG);
+        InterpDo(float, cfg.ColorBiasB);
+        InterpDo(float, cfg.WhiteClamp);
+        InterpDo(float, cfg.BrightThresh);
+        InterpDo(float, cfg.SpecularHighlightAmount);
+        InterpDo(float, cfg.SpecularHighlightSize);
+        InterpDo(float, cfg.FogDensity);
+        InterpDo(float, cfg.LightBrightnessAmount);
+        InterpDo(float, cfg.LightBrightnessCenter);
+        InterpDo(float, cfg.LightBrightnessWidth);
+        InterpDo(float, cfg.AmbientBrightnessAmount);
+        InterpDo(float, cfg.AmbientBrightnessCenter);
+        InterpDo(float, cfg.AmbientBrightnessWidth);
+#undef InterpDo
+        return result;
+    }
+};
+
 class MandelboxKernel : public Kernel
 {
     CUmodule program;
@@ -172,25 +262,30 @@ class MandelboxKernel : public Kernel
     CuMem<Vector4<float> > scratchMem;
     Vector2<size_t> rngMemSize;
     size_t maxLocalSize;
-    Vector3<double> pos;
-    Vector3<double> look;
-    Vector3<double> up;
-    double focalDistance;
-    double fov;
+    MandelboxState state;
     int frame;
+    MandelboxAnimation animation;
     Vector2<int> renderOffset;
     bool useRenderOffset;
+    int menuPos;
+    CUdeviceptr cuMandelboxCfg;
 public:
     MandelboxKernel(bool isCompute)
-            : rngMemSize(0, 0), pos(10, 0, 0), look(-1, 0, 0), up(0, 1, 0), focalDistance(8), fov(1),
+            : rngMemSize(0, 0), state(),
               renderOffset(0, 0), useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y))
     {
         if (isCompute)
         {
-            program = CommonBuild(std::string((char *)mandelbox, mandelbox_len));
+            program = CommonBuild(std::string((const char *)mandelbox, mandelbox_len));
             HandleCu(cuModuleGetFunction(&kernelMain, program, "kern"));
+            size_t cfgSize;
+            HandleCu(cuModuleGetGlobal(&cuMandelboxCfg, &cfgSize, program, "MandelboxCfgArr"));
+            if (cfgSize != sizeof(MandelboxCfg))
+            {
+                throw std::runtime_error("MandelboxCfg CPU and GPU sizes don't agree");
+            }
             maxLocalSize = 32;
-            TryDeserialize();
+            UpdateCfg();
         }
         else
         {
@@ -198,38 +293,86 @@ public:
             kernelMain = 0;
             maxLocalSize = 0;
         }
+        try
+        {
+            StateSync *sync = NewFileStateSync(AnimationName().c_str(), true);
+            animation.Recv(sync);
+            delete sync;
+        }
+        catch (const std::exception &ex)
+        {
+            std::cout << "Didn't read animation state: " << ex.what() << std::endl;
+        }
     }
 
     ~MandelboxKernel()
     {
-        if (kernelMain)
-        {
-            Serialize();
-        }
-        if (kernelMain)
-        {
-            // free kernelMain
-        }
         if (program)
         {
             HandleCu(cuModuleUnload(program));
         }
     };
 
+    void UpdateCfg()
+    {
+        if (cuMandelboxCfg)
+        {
+            HandleCu(cuMemcpyHtoD(cuMandelboxCfg, &state.cfg, sizeof(MandelboxCfg)));
+        }
+    }
+
+    void SaveAnimation()
+    {
+        StateSync *sync = NewFileStateSync(AnimationName().c_str(), false);
+        animation.Send(sync);
+        delete sync;
+    }
+
     void OneTimeKeypress(SDL_Keycode keycode)
     {
-        CommonOneTimeKeypress(this, keycode);
+        if (keycode == SDLK_UP)
+        {
+            menuPos--;
+        }
+        else if (keycode == SDLK_DOWN)
+        {
+            menuPos++;
+        }
+        else if (keycode == SDLK_v)
+        {
+            std::cout << "Saved keyframe" << std::endl;
+            animation.AddKeyframe(state);
+            SaveAnimation();
+        }
+        else if (keycode == SDLK_b)
+        {
+            std::cout << "Cleared keyframes" << std::endl;
+            animation.Clear();
+            SaveAnimation();
+        }
+        else
+        {
+            CommonOneTimeKeypress(this, keycode);
+        }
     }
 
     void FixParams()
     {
-        look = look.normalized();
-        up = cross(cross(look, up), look).normalized();
+        state.look = state.look.normalized();
+        state.up = cross(cross(state.look, state.up), state.look).normalized();
     }
 
     void RepeatKeypress(SDL_Keycode keycode, double time)
     {
-        if (Common3dCamera(pos, look, up, focalDistance, fov, keycode, time))
+        if (keycode == SDLK_LEFT)
+        {
+            MenuMod((float)-time);
+        }
+        else if (keycode == SDLK_RIGHT)
+        {
+            MenuMod((float)time);
+        }
+        else if (Common3dCamera(state.pos, state.look, state.up, state.focalDistance, state.fov, keycode, time))
         {
             frame = 0;
             FixParams();
@@ -238,25 +381,17 @@ public:
 
     void SendState(StateSync *output) const
     {
-        output->Send(pos);
-        output->Send(look);
-        output->Send(up);
-        output->Send(focalDistance);
-        output->Send(fov);
+        output->Send(state);
     }
 
     void RecvState(StateSync *input)
     {
-        bool changed = false;
-        changed |= input->RecvChanged(pos);
-        changed |= input->RecvChanged(look);
-        changed |= input->RecvChanged(up);
-        changed |= input->RecvChanged(focalDistance);
-        changed |= input->RecvChanged(fov);
+        bool changed = input->RecvChanged(state);
         if (changed)
         {
             frame = 0;
             FixParams();
+            UpdateCfg();
         }
     }
 
@@ -281,7 +416,7 @@ public:
         rngMem = CuMem<Vector2<int> >::Upload(input->RecvArr<Vector2<int> >(count));
     }
 
-    void RenderInto(CuMem<int>& memory, size_t width, size_t height)
+    void RenderInto(CuMem<int> &memory, size_t width, size_t height)
     {
         if (width != rngMemSize.x || height != rngMemSize.y)
         {
@@ -296,19 +431,19 @@ public:
         int renderOffsetY = useRenderOffset ? renderOffset.y : -(int)height / 2;
         int mywidth = (int)width;
         int myheight = (int)height;
-        float posx = (float)pos.x;
-        float posy = (float)pos.y;
-        float posz = (float)pos.z;
-        float lookx = (float)look.x;
-        float looky = (float)look.y;
-        float lookz = (float)look.z;
-        float upx = (float)up.x;
-        float upy = (float)up.y;
-        float upz = (float)up.z;
-        float myFov = (float)(fov * 2 / (width + height));
-        float myFocalDistance = (float)focalDistance;
+        float posx = (float)state.pos.x;
+        float posy = (float)state.pos.y;
+        float posz = (float)state.pos.z;
+        float lookx = (float)state.look.x;
+        float looky = (float)state.look.y;
+        float lookz = (float)state.look.z;
+        float upx = (float)state.up.x;
+        float upy = (float)state.up.y;
+        float upz = (float)state.up.z;
+        float myFov = (float)(state.fov * 2 / (width + height));
+        float myFocalDistance = (float)state.focalDistance;
         float myFrame = (float)frame++;
-        void* args[] =
+        void *args[] =
                 {
                         &memory(),
                         &scratchMem(),
@@ -337,9 +472,204 @@ public:
         HandleCu(cuLaunchKernel(kernelMain, gridX, gridY, 1, blockX, blockY, 1, 0, NULL, args, NULL));
     }
 
+    virtual void SetTime(float time)
+    {
+        state = animation.Interpolate(time, false);
+        frame = 0;
+        FixParams();
+        UpdateCfg();
+    }
+
+    void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int index, float value,
+                  const char *name)
+    {
+        std::ostringstream result;
+        result << (menuPos == index ? "* " : "  ") << name << " : " << value << "\n";
+        if (masterSurf)
+        {
+            SDL_Color color = {255, 0, 0, 0};
+            SDL_Surface *surf = TTF_RenderText_Blended(font, result.str().c_str(), color);
+            SDL_Rect rect;
+            rect.x = 0;
+            rect.y = height;
+            rect.w = maxWidth;
+            rect.h = 5;
+            SDL_BlitSurface(surf, NULL, masterSurf, &rect);
+            SDL_FreeSurface(surf);
+        }
+        int thisWidth, thisHeight;
+        TTF_SizeText(font, result.str().c_str(), &thisWidth, &thisHeight);
+        if (thisWidth > maxWidth)
+        {
+            maxWidth = thisWidth;
+        }
+        height += thisHeight;
+    }
+
+    void MenuMod(float delta)
+    {
+        switch (menuPos)
+        {
+            case 0:
+                state.cfg.Scale += delta * 0.25f;
+                break;
+            case 1:
+                state.cfg.FoldingLimit += delta * 0.25f;
+                break;
+            case 2:
+                state.cfg.FixedRadius2 += delta * 0.25f;
+                break;
+            case 3:
+                state.cfg.MinRadius2 += delta * 0.25f;
+                break;
+            case 4:
+                state.cfg.InitRotation += delta * 0.25f;
+                break;
+            case 5:
+                state.cfg.DeRotation += delta * 0.25f;
+                break;
+            case 6:
+                state.cfg.ColorSharpness += delta * 1.0f;
+                break;
+            case 7:
+                state.cfg.Saturation += delta * 1.0f;
+                break;
+            case 8:
+                state.cfg.HueVariance += delta * 0.1f;
+                break;
+            case 9:
+                state.cfg.Reflectivity += delta * 0.25f;
+                break;
+            case 10:
+                state.cfg.DofAmount += delta * 0.01f;
+                break;
+            case 11:
+                state.cfg.FovAbberation += delta * 0.1f;
+                break;
+            case 12:
+                state.cfg.LightPosX += delta * 0.5f;
+                break;
+            case 13:
+                state.cfg.LightPosY += delta * 0.5f;
+                break;
+            case 14:
+                state.cfg.LightPosZ += delta * 0.5f;
+                break;
+            case 15:
+                state.cfg.LightSize += delta * 0.01f;
+                break;
+            case 16:
+                state.cfg.ColorBiasR += delta * 0.25f;
+                break;
+            case 17:
+                state.cfg.ColorBiasG += delta * 0.25f;
+                break;
+            case 18:
+                state.cfg.ColorBiasB += delta * 0.25f;
+                break;
+            case 19:
+                state.cfg.WhiteClamp += delta;
+                break;
+            case 20:
+                state.cfg.BrightThresh += delta * 0.1f;
+                break;
+            case 21:
+                state.cfg.SpecularHighlightAmount += delta * 0.25f;
+                break;
+            case 22:
+                state.cfg.SpecularHighlightSize += delta * 0.01f;
+                break;
+            case 23:
+                state.cfg.FogDensity += delta * 0.01f;
+                break;
+            case 24:
+                state.cfg.LightBrightnessAmount += delta * 10.0f;
+                break;
+            case 25:
+                state.cfg.LightBrightnessCenter += delta * 0.25f;
+                break;
+            case 26:
+                state.cfg.LightBrightnessWidth += delta * 0.25f;
+                break;
+            case 27:
+                state.cfg.AmbientBrightnessAmount += delta * 0.1f;
+                break;
+            case 28:
+                state.cfg.AmbientBrightnessCenter += delta * 0.25f;
+                break;
+            case 29:
+                state.cfg.AmbientBrightnessWidth += delta * 0.25f;
+                break;
+            default:
+                return;
+        }
+        UpdateCfg();
+        frame = 0;
+    }
+
+    void Menu(TTF_Font *font, SDL_Surface *m, int &w, int &h)
+    {
+        int i = 0;
+        MenuItem(font, m, w, h, i++, state.cfg.Scale, "Scale");
+        MenuItem(font, m, w, h, i++, state.cfg.FoldingLimit, "FoldingLimit");
+        MenuItem(font, m, w, h, i++, state.cfg.FixedRadius2, "FixedRadius2");
+        MenuItem(font, m, w, h, i++, state.cfg.MinRadius2, "MinRadius2");
+        MenuItem(font, m, w, h, i++, state.cfg.InitRotation, "InitRotation");
+        MenuItem(font, m, w, h, i++, state.cfg.DeRotation, "DeRotation");
+        MenuItem(font, m, w, h, i++, state.cfg.ColorSharpness, "ColorSharpness");
+        MenuItem(font, m, w, h, i++, state.cfg.Saturation, "Saturation");
+        MenuItem(font, m, w, h, i++, state.cfg.HueVariance, "HueVariance");
+        MenuItem(font, m, w, h, i++, state.cfg.Reflectivity, "Reflectivity");
+        MenuItem(font, m, w, h, i++, state.cfg.DofAmount, "DofAmount");
+        MenuItem(font, m, w, h, i++, state.cfg.FovAbberation, "FovAbberation");
+        MenuItem(font, m, w, h, i++, state.cfg.LightPosX, "LightPosX");
+        MenuItem(font, m, w, h, i++, state.cfg.LightPosY, "LightPosY");
+        MenuItem(font, m, w, h, i++, state.cfg.LightPosZ, "LightPosZ");
+        MenuItem(font, m, w, h, i++, state.cfg.LightSize, "LightSize");
+        MenuItem(font, m, w, h, i++, state.cfg.ColorBiasR, "ColorBiasR");
+        MenuItem(font, m, w, h, i++, state.cfg.ColorBiasG, "ColorBiasG");
+        MenuItem(font, m, w, h, i++, state.cfg.ColorBiasB, "ColorBiasB");
+        MenuItem(font, m, w, h, i++, state.cfg.WhiteClamp, "WhiteClamp");
+        MenuItem(font, m, w, h, i++, state.cfg.BrightThresh, "BrightThresh");
+        MenuItem(font, m, w, h, i++, state.cfg.SpecularHighlightAmount, "SpecularHighlightAmount");
+        MenuItem(font, m, w, h, i++, state.cfg.SpecularHighlightSize, "SpecularHighlightSize");
+        MenuItem(font, m, w, h, i++, state.cfg.FogDensity, "FogDensity");
+        MenuItem(font, m, w, h, i++, state.cfg.LightBrightnessAmount, "LightBrightnessAmount");
+        MenuItem(font, m, w, h, i++, state.cfg.LightBrightnessCenter, "LightBrightnessCenter");
+        MenuItem(font, m, w, h, i++, state.cfg.LightBrightnessWidth, "LightBrightnessWidth");
+        MenuItem(font, m, w, h, i++, state.cfg.AmbientBrightnessAmount, "AmbientBrightnessAmount");
+        MenuItem(font, m, w, h, i++, state.cfg.AmbientBrightnessCenter, "AmbientBrightnessCenter");
+        MenuItem(font, m, w, h, i++, state.cfg.AmbientBrightnessWidth, "AmbientBrightnessWidth");
+        if (menuPos < 0)
+        {
+            menuPos = i - 1;
+        }
+        else if (menuPos >= i)
+        {
+            menuPos = 0;
+        }
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *font)
+    {
+        int maxWidth = 0;
+        int height = 0;
+        Menu(font, NULL, maxWidth, height);
+        SDL_Surface *master = SDL_CreateRGBSurface(SDL_SWSURFACE, maxWidth, height, 32, 255 << 16, 255 << 8, 255,
+                                                   (Uint32)255 << 24);
+        height = 0;
+        Menu(font, master, maxWidth, height);
+        return master;
+    }
+
     std::string Name()
     {
         return "mandelbox";
+    }
+
+    std::string AnimationName()
+    {
+        return Name() + ".animation.clam3";
     }
 };
 
@@ -351,12 +681,13 @@ Kernel *MakeKernel()
     {
         return new MandelboxKernel(isCompute);
     }
+    else if (name.empty())
+    {
+        std::cout << "Kernel not specified, defaulting to mandelbox" << std::endl;
+        return new MandelboxKernel(isCompute);
+    }
     else
     {
-        if (name.empty())
-        {
-            throw std::runtime_error("Must specify a kernel");
-        }
         throw std::runtime_error("Unknown kernel name " + name);
     }
 }

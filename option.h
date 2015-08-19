@@ -16,7 +16,7 @@ std::string WindowPos();
 
 std::string KernelName();
 
-int Headless();
+int Headless(int *numTimes);
 
 std::string RenderTypeVal();
 

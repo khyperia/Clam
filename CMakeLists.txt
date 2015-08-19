@@ -11,7 +11,7 @@ if (${CMAKE_BUILD_TYPE} STREQUAL Debug)
     add_definitions(-DDEBUG)
 else()
     add_definitions(-DRELEASE)
-endif()
+endif ()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra -Wno-deprecated-declarations")
@@ -22,14 +22,14 @@ file(GLOB hfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.h")
 set(sources ${cppfiles} ${hfiles})
 
 set(CMAKE_LIBRARY_PATH
-    "/home/echauck/SDL2/lib"
-    "/home/echauck/SDL2_net/lib"
-    ${CMAKE_LIBRARY_PATH})
+        "/home/echauck/SDL2/lib"
+        "/home/echauck/SDL2_net/lib"
+        ${CMAKE_LIBRARY_PATH})
 set(CMAKE_INCLUDE_PATH
-    "/home/echauck/SDL2/include"
-    "/home/echauck/SDL2_net/include"
-    "/opt/intel/opencl-sdk/include"
-    ${CMAKE_INCLUDE_PATH})
+        "/home/echauck/SDL2/include"
+        "/home/echauck/SDL2_net/include"
+        "/opt/intel/opencl-sdk/include"
+        ${CMAKE_INCLUDE_PATH})
 
 add_definitions(-D__CL_ENABLE_EXCEPTIONS)
 
@@ -38,13 +38,14 @@ macro(my_package pacname)
     string(TOUPPER ${pacname} pacname_upper)
     if (${pacname_upper}_FOUND)
         include_directories(${${pacname_upper}_INCLUDE_DIRS})
-    endif()
+    endif ()
 endmacro()
 
 my_package(OpenGL)
 my_package(CUDA)
 my_package(SDL2)
 my_package(SDL2_net)
+my_package(SDL2_ttf)
 
 add_executable(embed util/embed.c)
 
@@ -52,26 +53,27 @@ set(genfiles)
 include_directories("${CMAKE_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 file(GLOB clfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cu")
-foreach(filename ${clfiles})
+foreach (filename ${clfiles})
     set(ptxfile "${CMAKE_BINARY_DIR}/generated/${filename}.ptx")
     add_custom_command(
-        OUTPUT "${ptxfile}"
-        DEPENDS ${filename}
-        WORKING_DIRECTORY ${SOURCEDIR}
-        COMMAND nvcc --ptx ${NVCC_FLAGS} "${filename}" -o "${ptxfile}")
+            OUTPUT "${ptxfile}"
+            DEPENDS ${filename}
+            WORKING_DIRECTORY ${SOURCEDIR}
+            COMMAND nvcc --ptx ${NVCC_FLAGS} "${filename}" -o "${ptxfile}")
     set(outfile "${CMAKE_BINARY_DIR}/generated/${filename}.c")
     get_filename_component(varname ${filename} NAME_WE)
     add_custom_command(
-        OUTPUT "${outfile}"
-        DEPENDS ${ptxfile}
-        COMMAND embed "${ptxfile}" "${outfile}" "${varname}")
+            OUTPUT "${outfile}"
+            DEPENDS ${ptxfile}
+            COMMAND embed "${ptxfile}" "${outfile}" "${varname}")
     list(APPEND genfiles ${outfile})
-endforeach()
+endforeach ()
 
 add_executable(clam3 ${sources} ${genfiles})
 
 target_link_libraries(clam3
-    ${OPENGL_LIBRARIES}
-    cuda
-    ${SDL2_LIBRARIES}
-    ${SDL2_NET_LIBRARIES})
+        ${OPENGL_LIBRARIES}
+        cuda
+        ${SDL2_LIBRARIES}
+        ${SDL2_NET_LIBRARIES}
+        ${SDL2_TTF_LIBRARIES})

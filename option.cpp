@@ -114,21 +114,21 @@ std::string KernelName()
     return kernelName;
 }
 
-int Headless()
+int Headless(int *numTimes)
 {
     if (headless.empty())
     {
         return -1;
     }
-    try
+    int headlessCount = 0;
+    int numScanned = sscanf(headless.c_str(), "%d,%d", &headlessCount, numTimes);
+    if (numScanned < 2)
     {
-        return fromstring<int>(headless);
+        *numTimes = 0;
     }
-    catch (const std::exception &ex)
-    {
-        std::cout << "Couldn't parse headless option, assuming no headless" << std::endl;
+    if (numScanned == 0)
         return -1;
-    }
+    return headlessCount;
 }
 
 std::string RenderTypeVal()

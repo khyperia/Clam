@@ -49,6 +49,12 @@ Vector4<T> operator-(const Vector4<T> &l, const Vector4<T> &r)
 }
 
 template<typename T>
+Vector4<T> operator-(const Vector4<T> &a)
+{
+    return Vector4<T>(-a.x, -a.y, -a.z, -a.w);
+}
+
+template<typename T>
 Vector4<T> operator*(const Vector4<T> &l, const T &r)
 {
     return Vector4<T>(l.x * r, l.y * r, l.z * r, l.w * r);
@@ -121,6 +127,12 @@ template<typename T>
 Vector3<T> operator-(const Vector3<T> &l, const Vector3<T> &r)
 {
     return Vector3<T>(l.x - r.x, l.y - r.y, l.z - r.z);
+}
+
+template<typename T>
+Vector3<T> operator-(const Vector3<T> &a)
+{
+    return Vector3<T>(-a.x, -a.y, -a.z);
 }
 
 template<typename T>
@@ -211,6 +223,12 @@ template<typename T>
 Vector2<T> operator-(const Vector2<T> &l, const Vector2<T> &r)
 {
     return Vector2<T>(l.x - r.x, l.y - r.y);
+}
+
+template<typename T>
+Vector2<T> operator-(const Vector2<T> &a)
+{
+    return Vector2<T>(-a.x, -a.y);
 }
 
 template<typename T>

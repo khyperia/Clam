@@ -23,7 +23,7 @@ public:
     }
 
     template<typename T>
-    void SendArr(const std::vector<T>& data)
+    void SendArr(const std::vector<T> &data)
     {
         Send(data.data(), data.size() * sizeof(T));
     }
@@ -31,7 +31,7 @@ public:
     template<typename T>
     T Recv()
     {
-        T *data = (T *) alloca(sizeof(T));
+        T *data = (T *)alloca(sizeof(T));
         Recv(data, sizeof(T));
         return *data;
     }

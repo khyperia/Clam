@@ -6,6 +6,7 @@ class Kernel;
 #include "cumem.h"
 #include <SDL.h>
 #include <SDL_net.h>
+#include <SDL_ttf.h>
 #include <set>
 #include <cuda.h>
 
@@ -16,11 +17,6 @@ class Kernel
     virtual void OneTimeKeypress(SDL_Keycode keycode) = 0;
 
     virtual void RepeatKeypress(SDL_Keycode keycode, double time) = 0;
-
-protected:
-    void Serialize();
-
-    void TryDeserialize();
 
 public:
     virtual ~Kernel()
@@ -34,7 +30,11 @@ public:
 
     virtual void LoadWholeState(StateSync *input) = 0;
 
-    virtual void RenderInto(CuMem<int>& memory, size_t width, size_t height) = 0;
+    virtual void RenderInto(CuMem<int> &memory, size_t width, size_t height) = 0;
+
+    virtual void SetTime(float time) = 0;
+
+    virtual SDL_Surface *Configure(TTF_Font *font) = 0;
 
     virtual std::string Name() = 0;
 

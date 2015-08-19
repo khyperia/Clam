@@ -4,6 +4,7 @@
 #include "network.h"
 #include "vector.h"
 #include <SDL.h>
+#include <SDL_ttf.h>
 #include <stdexcept>
 
 class DisplayWindow
@@ -24,6 +25,7 @@ class DisplayWindow
 public:
     SDL_Window *window;
     SDL_GLContext context;
+    TTF_Font *font;
 
     DisplayWindow(int x, int y, int width, int height);
 

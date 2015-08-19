@@ -29,7 +29,7 @@ struct RenderType
 
     virtual CuMem<int> &GetBuffer() = 0;
 
-    virtual bool Update(Kernel *kernel) = 0;
+    virtual bool Update(Kernel *kernel, TTF_Font *font) = 0;
 };
 
 struct CpuRenderType : public RenderType
@@ -55,7 +55,7 @@ struct CpuRenderType : public RenderType
         return renderBuffer;
     }
 
-    virtual bool Update(Kernel *)
+    virtual bool Update(Kernel *kern, TTF_Font *font)
     {
         SDL_Surface *surface = SDL_GetWindowSurface(window);
         if (SDL_LockSurface(surface))
@@ -68,6 +68,9 @@ struct CpuRenderType : public RenderType
         }
         renderBuffer.CopyTo((int *)surface->pixels);
         SDL_UnlockSurface(surface);
+        SDL_Surface *conf = kern->Configure(font);
+        SDL_BlitSurface(conf, NULL, surface, NULL);
+        SDL_FreeSurface(conf);
         SDL_UpdateWindowSurface(window);
         return true;
     };
@@ -92,6 +95,8 @@ struct GpuRenderType : public RenderType
             renderBuffer()
     {
         glEnable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
@@ -124,15 +129,6 @@ struct GpuRenderType : public RenderType
         }
     }
 
-    void HandleGl()
-    {
-        GLenum err = glGetError();
-        if (err != GL_NO_ERROR)
-        {
-            throw std::runtime_error(std::string("OpenGL error: ") + (const char *)glGetString(err));
-        }
-    }
-
     virtual void Resize()
     {
         glViewport(0, 0, width, height);
@@ -140,7 +136,7 @@ struct GpuRenderType : public RenderType
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, bufferID);
         glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_COPY);
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -167,13 +163,19 @@ struct GpuRenderType : public RenderType
         return renderBuffer;
     }
 
-    virtual bool Update(Kernel *)
+    virtual bool Update(Kernel *kern, TTF_Font *font)
     {
         HandleCu(cuCtxSynchronize());
 
+        HandleGl();
+
         glBindTexture(GL_TEXTURE_2D, textureID);
+        HandleGl();
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, bufferID);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        HandleGl();
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+        HandleGl();
 
         glBegin(GL_QUADS);
         glTexCoord2f(0, 1);
@@ -186,6 +188,41 @@ struct GpuRenderType : public RenderType
         glVertex3f(1, -1, 0);
         glEnd();
 
+        HandleGl();
+
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+        SDL_Surface *text = kern->Configure(font);
+        SDL_LockSurface(text);
+        GLuint tex;
+        glGenTextures(1, &tex);
+        HandleGl();
+        glBindTexture(GL_TEXTURE_2D, tex);
+        HandleGl();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        HandleGl();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, text->w, text->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, text->pixels);
+        HandleGl();
+        SDL_UnlockSurface(text);
+        SDL_FreeSurface(text);
+        HandleGl();
+        float maxx = (float)text->w / width * 2 - 1;
+        float maxy = (float)text->h / height * 2 - 1;
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0);
+        glVertex3f(-1, 1, 0.1f);
+        glTexCoord2f(1, 0);
+        glVertex3f(maxx, 1, 0.1f);
+        glTexCoord2f(1, 1);
+        glVertex3f(maxx, -maxy, 0.1f);
+        glTexCoord2f(0, 1);
+        glVertex3f(-1, -maxy, 0.1f);
+        glEnd();
+        HandleGl();
+        glDeleteTextures(1, &tex);
+        HandleGl();
+
         SDL_GL_SwapWindow(window);
 
         HandleGl();
@@ -197,9 +234,12 @@ struct HeadlessRenderType : public RenderType
 {
     CuMem<int> renderBuffer;
     int numFrames;
+    int currentFrame;
+    int numTimes;
+    int currentTime;
 
-    HeadlessRenderType(Kernel *kernel, int numFrames, bool *loadedIntermediate)
-            : numFrames(numFrames)
+    HeadlessRenderType(Kernel *kernel, int numFrames, int numTimes, bool *loadedIntermediate)
+            : numFrames(numFrames), currentFrame(numFrames), numTimes(numTimes), currentTime(0)
     {
         std::string filename = RenderstateFilename(kernel);
         try
@@ -216,6 +256,10 @@ struct HeadlessRenderType : public RenderType
             << ": " << ex.what() << std::endl;
             *loadedIntermediate = false;
         }
+        if (numTimes > 0)
+        {
+            kernel->SetTime(0);
+        }
     }
 
     ~HeadlessRenderType()
@@ -224,7 +268,15 @@ struct HeadlessRenderType : public RenderType
 
     std::string RenderstateFilename(Kernel *kernel)
     {
-        return kernel->Name() + ".renderstate.clam3";;
+        std::ostringstream builder;
+        builder << kernel->Name();
+        int shiftx, shifty;
+        if (RenderOffset(&shiftx, &shifty))
+        {
+            builder << "." << shiftx << "x" << shifty;
+        }
+        builder << ".renderstate.clam3";
+        return builder.str();
     }
 
     virtual void Resize()
@@ -237,11 +289,14 @@ struct HeadlessRenderType : public RenderType
         return renderBuffer;
     }
 
-    virtual bool Update(Kernel *kernel)
+    virtual bool Update(Kernel *kernel, TTF_Font *)
     {
-        numFrames--;
-        std::cout << numFrames << " frames left" << std::endl;
-        if (numFrames % 32 == 0)
+        currentFrame--;
+        if (numTimes == 0)
+        {
+            std::cout << currentFrame << " frames left" << std::endl;
+        }
+        if (currentFrame % 32 == 0 && numTimes == 0)
         {
             std::string filename = RenderstateFilename(kernel);
             StateSync *sync = NewFileStateSync(filename.c_str(), false);
@@ -249,7 +304,7 @@ struct HeadlessRenderType : public RenderType
             delete sync;
             std::cout << "Saved intermediate progress to " << filename << std::endl;
         }
-        if (numFrames == 0)
+        if (currentFrame == 0)
         {
             SDL_Surface *surface = SDL_CreateRGBSurface(0, width, height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
             if (SDL_LockSurface(surface))
@@ -258,10 +313,18 @@ struct HeadlessRenderType : public RenderType
             }
             renderBuffer.CopyTo((int *)surface->pixels);
             SDL_UnlockSurface(surface);
-            SDL_SaveBMP(surface, "image.bmp");
-            std::cout << "Saved image 'image.bmp'" << std::endl;
+            std::string filename = RenderstateFilename(kernel);
+            filename += "." + tostring(currentTime) + ".bmp";
+            SDL_SaveBMP(surface, filename.c_str());
+            std::cout << "Saved image '" << filename << "'" << std::endl;
             SDL_FreeSurface(surface);
-            return false;
+            if (currentTime == numTimes)
+            {
+                return false;
+            }
+            currentTime++;
+            kernel->SetTime((float)currentTime / numTimes);
+            currentFrame = numFrames;
         }
         return true;
     }
@@ -270,7 +333,8 @@ struct HeadlessRenderType : public RenderType
 Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
 {
     bool isCompute = IsCompute();
-    int headless = Headless();
+    int numHeadlessTimes;
+    int headless = Headless(&numHeadlessTimes);
 
     std::string winpos = WindowPos();
     if (winpos.empty())
@@ -316,13 +380,13 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
             HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
             std::cout << "Using device: " << name << std::endl;
         }
-        if (isGpuRenderer)
+        if (headless <= 0 && isGpuRenderer)
         {
-            HandleCu(cuGLCtxCreate(&cuContext, 0, cuDevice));
+            HandleCu(cuGLCtxCreate(&cuContext, CU_CTX_SCHED_YIELD, cuDevice));
         }
         else
         {
-            HandleCu(cuCtxCreate(&cuContext, 0, cuDevice));
+            HandleCu(cuCtxCreate(&cuContext, CU_CTX_SCHED_YIELD, cuDevice));
         }
         HandleCu(cuCtxSetCurrent(cuContext));
     }
@@ -344,8 +408,8 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
         else
         {
             bool loadedItermediate = false;
-            renderType = new HeadlessRenderType(kernel, headless, &loadedItermediate);
-            if (!loadedItermediate)
+            renderType = new HeadlessRenderType(kernel, headless, numHeadlessTimes, &loadedItermediate);
+            if (!loadedItermediate && IsUserInput())
             {
                 std::cout << "Loading initial headless state" << std::endl;
                 StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
@@ -407,5 +471,6 @@ bool Driver::RunFrame()
         renderType->Resize();
     }
     kernel->RenderInto(renderType->GetBuffer(), (size_t)renderType->width, (size_t)renderType->height);
-    return renderType->Update(kernel);
+    bool cont = renderType->Update(kernel, window ? window->font : NULL);
+    return cont;
 }
