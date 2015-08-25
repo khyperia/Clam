@@ -197,7 +197,7 @@ __device__ float Trace(float3 origin, float3 direction, float quality, float hue
     float totalDistance = De(origin) * DeMultiplier * Rand(rand);
     const float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
     float sphereDist = RaySphereIntersection(origin, direction, lightPos, cfg.LightSize, false);
-    float fogDist = -log2(Rand(rand)) / (float)(cfg.FogDensity * hue);
+    float fogDist = -log2(Rand(rand)) / (float)(cfg.FogDensity /* * hue */);
     float maxRayDist = min(min((float)MaxRayDist, fogDist), sphereDist);
     for (int i = 0; i < MaxRaySteps && totalDistance < maxRayDist &&
             distance * quality > totalDistance; i++) {
@@ -342,6 +342,11 @@ __device__ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMu
 
         rayPos = newRayPos;
         rayDir = newRayDir;
+
+        if (isFog)
+        {
+            break;
+        }
     }
     if (isFog)
     {

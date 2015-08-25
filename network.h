@@ -64,7 +64,7 @@ class Connection : public StateSync
     bool socketIsHost;
     std::vector<Connection *> clients;
 
-    Connection(TCPsocket forward) : socket(forward)
+    Connection(TCPsocket forward) : socket(forward), socketSet(NULL)
     { };
 public:
 
@@ -76,7 +76,7 @@ public:
 
     void Recv(void *data, size_t size);
 
-    void Sync(Kernel *kernel);
+    bool Sync(Kernel *kernel);
 };
 
 StateSync *NewFileStateSync(const char *filename, bool reading);

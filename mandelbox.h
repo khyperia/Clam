@@ -51,7 +51,7 @@ struct MandelboxCfg
 MandelboxCfg MandelboxDefault()
 {
     MandelboxCfg x;
-    x.Scale = -2.5f;
+    x.Scale = -1.5f;
     x.FoldingLimit = 1.0f;
     x.FixedRadius2 = 1.0f;
     x.MinRadius2 = 0.25f;
@@ -75,7 +75,7 @@ MandelboxCfg MandelboxDefault()
     x.LightPosY = 3;
     x.LightPosZ = 3;
     x.LightSize = 0.1f;
-    x.FogDensity = 0.00000001f;
+    x.FogDensity = 0.0001f;
     x.ColorBiasR = 0;
     x.ColorBiasG = 0;
     x.ColorBiasB = 0;
@@ -91,5 +91,5 @@ MandelboxCfg MandelboxDefault()
 #define MaxRayDist 16
 #define MaxRaySteps 256
 #define NumRayBounces 3
-#define QualityFirstRay 4
+#define QualityFirstRay 2
 #define QualityRestRay 64

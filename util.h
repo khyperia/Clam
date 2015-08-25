@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sstream>
+#include <stdexcept>
 #include <cuda.h>
 #include <iostream>
 #include <GL/gl.h>
@@ -13,7 +14,7 @@ static inline void HandleCuImpl(CUresult err, const char* expr, const char* file
     {
         std::ostringstream msg;
         const char* errstr;
-        if (cuGetErrorString(err, &errstr) != CUDA_SUCCESS)
+        //if (cuGetErrorString(err, &errstr) != CUDA_SUCCESS)
         {
             errstr = "Unknown error";
         }

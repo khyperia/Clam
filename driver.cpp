@@ -2,7 +2,6 @@
 
 #include "driver.h"
 #include "option.h"
-#include <GL/gl.h>
 #include <cudaGL.h>
 
 struct CudaInitClass
@@ -68,9 +67,12 @@ struct CpuRenderType : public RenderType
         }
         renderBuffer.CopyTo((int *)surface->pixels);
         SDL_UnlockSurface(surface);
-        SDL_Surface *conf = kern->Configure(font);
-        SDL_BlitSurface(conf, NULL, surface, NULL);
-        SDL_FreeSurface(conf);
+        if (IsUserInput())
+        {
+            SDL_Surface *conf = kern->Configure(font);
+            SDL_BlitSurface(conf, NULL, surface, NULL);
+            SDL_FreeSurface(conf);
+        }
         SDL_UpdateWindowSurface(window);
         return true;
     };
@@ -82,6 +84,7 @@ struct GpuRenderType : public RenderType
     SDL_GLContext context;
     GLuint bufferID;
     GLuint textureID;
+    GLuint textID;
     CUgraphicsResource resourceCuda;
     CuMem<int> renderBuffer;
 
@@ -109,7 +112,7 @@ struct GpuRenderType : public RenderType
 
         glGenBuffers(1, &bufferID);
         glGenTextures(1, &textureID);
-
+        glGenTextures(1, &textID);
         HandleGl();
     }
 
@@ -126,6 +129,10 @@ struct GpuRenderType : public RenderType
         if (textureID)
         {
             glDeleteTextures(1, &textureID);
+        }
+        if (textID)
+        {
+            glDeleteTextures(1, &textID);
         }
     }
 
@@ -192,36 +199,34 @@ struct GpuRenderType : public RenderType
 
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-        SDL_Surface *text = kern->Configure(font);
-        SDL_LockSurface(text);
-        GLuint tex;
-        glGenTextures(1, &tex);
-        HandleGl();
-        glBindTexture(GL_TEXTURE_2D, tex);
-        HandleGl();
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-        HandleGl();
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, text->w, text->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, text->pixels);
-        HandleGl();
-        SDL_UnlockSurface(text);
-        SDL_FreeSurface(text);
-        HandleGl();
-        float maxx = (float)text->w / width * 2 - 1;
-        float maxy = (float)text->h / height * 2 - 1;
-        glBegin(GL_QUADS);
-        glTexCoord2f(0, 0);
-        glVertex3f(-1, 1, 0.1f);
-        glTexCoord2f(1, 0);
-        glVertex3f(maxx, 1, 0.1f);
-        glTexCoord2f(1, 1);
-        glVertex3f(maxx, -maxy, 0.1f);
-        glTexCoord2f(0, 1);
-        glVertex3f(-1, -maxy, 0.1f);
-        glEnd();
-        HandleGl();
-        glDeleteTextures(1, &tex);
-        HandleGl();
+        if (IsUserInput())
+        {
+            SDL_Surface *text = kern->Configure(font);
+            SDL_LockSurface(text);
+            glBindTexture(GL_TEXTURE_2D, textID);
+            HandleGl();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+            HandleGl();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, text->w, text->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, text->pixels);
+            HandleGl();
+            SDL_UnlockSurface(text);
+            SDL_FreeSurface(text);
+            HandleGl();
+            float maxx = (float)text->w / width * 2 - 1;
+            float maxy = (float)text->h / height * 2 - 1;
+            glBegin(GL_QUADS);
+            glTexCoord2f(0, 0);
+            glVertex3f(-1, 1, 0.1f);
+            glTexCoord2f(1, 0);
+            glVertex3f(maxx, 1, 0.1f);
+            glTexCoord2f(1, 1);
+            glVertex3f(maxx, -maxy, 0.1f);
+            glTexCoord2f(0, 1);
+            glVertex3f(-1, -maxy, 0.1f);
+            glEnd();
+            HandleGl();
+        }
 
         SDL_GL_SwapWindow(window);
 
@@ -323,7 +328,9 @@ struct HeadlessRenderType : public RenderType
                 return false;
             }
             currentTime++;
-            kernel->SetTime((float)currentTime / numTimes);
+            float time = (float)currentTime / numTimes;
+            //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
+            kernel->SetTime(time);
             currentFrame = numFrames;
         }
         return true;
@@ -453,7 +460,10 @@ bool Driver::RunFrame()
             return false;
         }
     }
-    connection.Sync(kernel);
+    if (connection.Sync(kernel))
+    {
+        return false;
+    }
     int newWidth, newHeight;
     if (window)
     {
@@ -464,13 +474,29 @@ bool Driver::RunFrame()
         newWidth = headlessWindowSize.x;
         newHeight = headlessWindowSize.y;
     }
-    if (newWidth != renderType->width || newHeight != renderType->height)
+    if (renderType)
     {
-        renderType->width = newWidth;
-        renderType->height = newHeight;
-        renderType->Resize();
+        if (newWidth != renderType->width || newHeight != renderType->height)
+        {
+            renderType->width = newWidth;
+            renderType->height = newHeight;
+            renderType->Resize();
+        }
+        kernel->RenderInto(renderType->GetBuffer(), (size_t)renderType->width, (size_t)renderType->height);
+        bool cont = renderType->Update(kernel, window ? window->font : NULL);
+        return cont;
     }
-    kernel->RenderInto(renderType->GetBuffer(), (size_t)renderType->width, (size_t)renderType->height);
-    bool cont = renderType->Update(kernel, window ? window->font : NULL);
-    return cont;
+    else
+    {
+        if (IsUserInput() && window != NULL)
+        {
+            SDL_Surface *conf = kernel->Configure(window->font);
+            SDL_Surface *surface = SDL_GetWindowSurface(window->window);
+            SDL_FillRect(surface, NULL, 0);
+            SDL_BlitSurface(conf, NULL, surface, NULL);
+            SDL_FreeSurface(conf);
+            SDL_UpdateWindowSurface(window->window);
+        }
+        return true;
+    }
 }

@@ -72,25 +72,30 @@ Connection::~Connection()
 
 void Connection::Send(const void *data, size_t size)
 {
-    if (SDLNet_TCP_Send(socket, data, (int)size) != (int)size)
+    int sentSize = SDLNet_TCP_Send(socket, data, (int)size);
+    if (sentSize != (int)size)
     {
-        throw std::runtime_error("Send on socket failed");
+        throw std::runtime_error("Send on socket failed (attempted "
+                                 + tostring(size) + ", actual " + tostring(sentSize) + ")");
     }
 }
 
 void Connection::Recv(void *data, size_t size)
 {
-    if (SDLNet_TCP_Recv(socket, data, (int)size) != (int)size)
+    int recvSize = SDLNet_TCP_Recv(socket, data, (int)size);
+    if (recvSize != (int)size)
     {
-        throw std::runtime_error("Recv on socket failed");
+        throw std::runtime_error("Recv on socket failed (attempted "
+                                 + tostring(size) + ", actual " + tostring(recvSize) + ")");
     }
 }
 
-void Connection::Sync(Kernel *kernel)
+// Returns true on failure
+bool Connection::Sync(Kernel *kernel)
 {
     if (socket == NULL)
     {
-        return;
+        return false;
     }
     if (socketIsHost)
     {
@@ -105,16 +110,35 @@ void Connection::Sync(Kernel *kernel)
         }
         for (size_t i = 0; i < clients.size(); i++)
         {
-            kernel->SendState(clients[i]);
+            try
+            {
+                kernel->SendState(clients[i]);
+            }
+            catch (const std::runtime_error &e)
+            {
+                std::cout << "Sending state failed:" << std::endl;
+                std::cout << e.what() << std::endl;
+                return true;
+            }
         }
     }
     else
     {
         while (SDLNet_CheckSockets(socketSet, 0) == 1)
         {
-            kernel->RecvState(this);
+            try
+            {
+                kernel->RecvState(this);
+            }
+            catch (const std::runtime_error &e)
+            {
+                std::cout << "Receiving state failed:" << std::endl;
+                std::cout << e.what() << std::endl;
+                return true;
+            }
         }
     }
+    return false;
 }
 
 class FileStateSync : public StateSync

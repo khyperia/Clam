@@ -390,7 +390,7 @@ public:
         if (changed)
         {
             frame = 0;
-            FixParams();
+            //FixParams();
             UpdateCfg();
         }
     }
@@ -532,7 +532,7 @@ public:
                 state.cfg.ColorSharpness += delta * 1.0f;
                 break;
             case 7:
-                state.cfg.Saturation += delta * 1.0f;
+                state.cfg.Saturation += delta * 0.2f;
                 break;
             case 8:
                 state.cfg.HueVariance += delta * 0.1f;
@@ -544,7 +544,7 @@ public:
                 state.cfg.DofAmount += delta * 0.01f;
                 break;
             case 11:
-                state.cfg.FovAbberation += delta * 0.1f;
+                state.cfg.FovAbberation *= delta * 0.1f + 1.0f;
                 break;
             case 12:
                 state.cfg.LightPosX += delta * 0.5f;
@@ -556,7 +556,7 @@ public:
                 state.cfg.LightPosZ += delta * 0.5f;
                 break;
             case 15:
-                state.cfg.LightSize += delta * 0.01f;
+                state.cfg.LightSize *= delta * 0.1f + 1;
                 break;
             case 16:
                 state.cfg.ColorBiasR += delta * 0.25f;
@@ -568,7 +568,7 @@ public:
                 state.cfg.ColorBiasB += delta * 0.25f;
                 break;
             case 19:
-                state.cfg.WhiteClamp += delta;
+                state.cfg.WhiteClamp = state.cfg.WhiteClamp == 0.0f ? 1.0f : 0.0f;
                 break;
             case 20:
                 state.cfg.BrightThresh += delta * 0.1f;
@@ -580,10 +580,10 @@ public:
                 state.cfg.SpecularHighlightSize += delta * 0.01f;
                 break;
             case 23:
-                state.cfg.FogDensity += delta * 0.01f;
+                state.cfg.FogDensity *= delta * 1.0f + 1;
                 break;
             case 24:
-                state.cfg.LightBrightnessAmount += delta * 10.0f;
+                state.cfg.LightBrightnessAmount *= delta * 0.5f + 1;
                 break;
             case 25:
                 state.cfg.LightBrightnessCenter += delta * 0.25f;
@@ -592,7 +592,7 @@ public:
                 state.cfg.LightBrightnessWidth += delta * 0.25f;
                 break;
             case 27:
-                state.cfg.AmbientBrightnessAmount += delta * 0.1f;
+                state.cfg.AmbientBrightnessAmount *= delta * 0.5f + 1;
                 break;
             case 28:
                 state.cfg.AmbientBrightnessCenter += delta * 0.25f;
