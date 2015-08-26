@@ -1,24 +1,115 @@
 #include "kernel.h"
+#include "kernelStructs.h"
 #include "option.h"
-#include "vector.h"
 #include "mandelbox.h"
 #include <fstream>
 
-static void CommonOneTimeKeypress(Kernel *kern, SDL_Keycode keycode)
+class KernelModuleBase
+{
+protected:
+    virtual void Resize() = 0;
+
+public:
+    virtual ~KernelModuleBase()
+    {
+    }
+
+    virtual bool Update(int w, int h) = 0;
+
+    virtual bool OneTimeKeypress(SDL_Keycode keycode) = 0;
+
+    virtual bool RepeatKeypress(SDL_Keycode keycode, double time) = 0;
+
+    virtual void SendState(StateSync *output, bool everything) const = 0;
+
+    virtual bool RecvState(StateSync *input, bool everything) = 0;
+
+    virtual SDL_Surface *Configure(TTF_Font *font) const = 0;
+};
+
+template<typename T>
+class KernelModule : public KernelModuleBase
+{
+private:
+    T oldCpuVar;
+protected:
+    T value;
+    CUdeviceptr gpuVar;
+    CUmodule module;
+    int width;
+    int height;
+
+    KernelModule(CUmodule module, const char *varname) : module(module), width(-1), height(-1)
+    {
+        if (module)
+        {
+            size_t gpuVarSize;
+            HandleCu(cuModuleGetGlobal(&gpuVar, &gpuVarSize, module, varname));
+            if (sizeof(T) != gpuVarSize)
+            {
+                throw std::runtime_error(
+                        std::string(varname) + " size did not match actual size " + tostring(gpuVarSize));
+            }
+        }
+    }
+
+public:
+    virtual ~KernelModule()
+    {
+    }
+
+    virtual bool Update(int w, int h)
+    {
+        bool changed = width != w || height != h;
+        if (changed)
+        {
+            width = w;
+            height = h;
+            Resize();
+        }
+        if (memcmp(&oldCpuVar, &value, sizeof(T)))
+        {
+            if (gpuVar)
+            {
+                HandleCu(cuMemcpyHtoD(gpuVar, &value, sizeof(T)));
+            }
+            oldCpuVar = value;
+        }
+        return changed;
+    }
+};
+
+template<typename T, typename Tscalar>
+T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
+{
+    Tscalar t2 = t * t;
+    Tscalar t3 = t2 * t;
+
+    return (((Tscalar)2 * p1) +
+            (-p0 + p2) * t +
+            ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
+            (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2;
+}
+
+void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
 {
     if (keycode == SDLK_t)
     {
         std::cout << "Saving state" << std::endl;
-        StateSync *sync = NewFileStateSync((kern->Name() + ".clam3").c_str(), false);
-        kern->SendState(sync);
+        StateSync *sync = NewFileStateSync((Name() + ".clam3").c_str(), false);
+        SendState(sync, false);
         delete sync;
     }
     else if (keycode == SDLK_y)
     {
         std::cout << "Loading state" << std::endl;
-        StateSync *sync = NewFileStateSync((kern->Name() + ".clam3").c_str(), true);
-        kern->RecvState(sync);
+        StateSync *sync = NewFileStateSync((Name() + ".clam3").c_str(), true);
+        RecvState(sync, false);
         delete sync;
+    }
+    else if (keycode == SDLK_x)
+    {
+        frame = frame == -1 ? 0 : -1;
     }
 }
 
@@ -104,14 +195,533 @@ static bool Common3dCamera(
     return true;
 }
 
+class Module3dCamera : public KernelModule<GpuCameraSettings>
+{
+    Vector3<double> pos;
+    Vector3<double> look;
+    Vector3<double> up;
+    double focalDistance;
+    double fov;
+
+public:
+    Module3dCamera(CUmodule module) :
+            KernelModule(module, "CameraArr"),
+            pos(10, 0, 0),
+            look(-1, 0, 0),
+            up(0, 1, 0),
+            focalDistance(8),
+            fov(1)
+    {
+        ApplyParams();
+    }
+
+    virtual void Resize()
+    {
+        ApplyParams();
+    }
+
+    virtual bool OneTimeKeypress(SDL_Keycode)
+    {
+        return false;
+    }
+
+    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
+    {
+        if (Common3dCamera(pos, look, up, focalDistance, fov, keycode, time))
+        {
+            ApplyParams();
+            return true;
+        }
+        return false;
+    }
+
+    void ApplyParams()
+    {
+        look = look.normalized();
+        up = cross(cross(look, up), look).normalized();
+        value.posX = (float)pos.x;
+        value.posY = (float)pos.y;
+        value.posZ = (float)pos.z;
+        value.lookX = (float)look.x;
+        value.lookY = (float)look.y;
+        value.lookZ = (float)look.z;
+        value.upX = (float)up.x;
+        value.upY = (float)up.y;
+        value.upZ = (float)up.z;
+        value.fov = (float)fov;
+        value.focalDistance = (float)focalDistance;
+    }
+
+    virtual void SendState(StateSync *output, bool) const
+    {
+        output->Send(pos);
+        output->Send(look);
+        output->Send(up);
+        output->Send(fov);
+        output->Send(focalDistance);
+    }
+
+    virtual bool RecvState(StateSync *input, bool)
+    {
+        bool changed = false;
+        changed |= input->RecvChanged(pos);
+        changed |= input->RecvChanged(look);
+        changed |= input->RecvChanged(up);
+        changed |= input->RecvChanged(fov);
+        changed |= input->RecvChanged(focalDistance);
+        return changed;
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *) const
+    {
+        return NULL;
+    }
+};
+
+class ModuleBuffer : public KernelModule<CUdeviceptr>
+{
+    int elementSize;
+
+public:
+    ModuleBuffer(CUmodule module, const char *varname, int elementSize) :
+            KernelModule(module, varname),
+            elementSize(elementSize)
+    {
+        value = 0;
+    }
+
+    ~ModuleBuffer()
+    {
+        if (value)
+        {
+            HandleCu(cuMemFree(value));
+        }
+    }
+
+    virtual void Resize()
+    {
+        if (value)
+        {
+            HandleCu(cuMemFree(value));
+        }
+        HandleCu(cuMemAlloc(&value, (size_t)elementSize * width * height));
+    }
+
+    virtual bool OneTimeKeypress(SDL_Keycode)
+    {
+        return false;
+    }
+
+    virtual bool RepeatKeypress(SDL_Keycode, double)
+    {
+        return false;
+    }
+
+    virtual void SendState(StateSync *output, bool everything) const
+    {
+        if (everything)
+        {
+            size_t size = (size_t)elementSize * width * height;
+            output->Send(size);
+            output->SendArr(CuMem<char>(value, size).Download());
+        }
+    }
+
+    virtual bool RecvState(StateSync *input, bool everything)
+    {
+        if (everything)
+        {
+            size_t size = input->Recv<size_t>();
+            size_t existingSize = (size_t)elementSize * width * height;
+            if (existingSize != size)
+            {
+                std::cout << "Not uploading state buffer due to mismatched sizes" << std::endl;
+                input->RecvArr<char>(size);
+                return false;
+            }
+            else
+            {
+                CuMem<char>(value, size).Upload(input->RecvArr<char>(size));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *) const
+    {
+        return NULL;
+    }
+};
+
+class ModuleMandelbox : public KernelModule<MandelboxCfg>
+{
+    int menuPos;
+
+public:
+    ModuleMandelbox(CUmodule module) :
+            KernelModule(module, "MandelboxCfgArr")
+    {
+        value = MandelboxDefault();
+    }
+
+    virtual void Resize()
+    {
+    }
+
+    virtual bool OneTimeKeypress(SDL_Keycode keycode)
+    {
+        if (keycode == SDLK_UP)
+        {
+            menuPos--;
+        }
+        else if (keycode == SDLK_DOWN)
+        {
+            menuPos++;
+        }
+        else if (keycode == SDLK_LEFT)
+        {
+            MenuModI(-1);
+        }
+        else if (keycode == SDLK_RIGHT)
+        {
+            MenuModI(1);
+        }
+        const int max = 39;
+        if (menuPos < 0)
+        {
+            menuPos = max - 1;
+        }
+        else if (menuPos >= max)
+        {
+            menuPos = 0;
+        }
+        return false;
+    }
+
+    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
+    {
+        if (keycode == SDLK_LEFT)
+        {
+            MenuMod((float)-time);
+        }
+        else if (keycode == SDLK_RIGHT)
+        {
+            MenuMod((float)time);
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+
+    virtual void SendState(StateSync *output, bool) const
+    {
+        output->Send(value);
+    }
+
+    virtual bool RecvState(StateSync *input, bool)
+    {
+        return input->RecvChanged(value);
+    }
+
+    void MenuModI(int delta)
+    {
+        switch (menuPos)
+        {
+            case 19:
+                value.WhiteClamp = value.WhiteClamp == 0.0f ? 1.0f : 0.0f;
+                break;
+            case 30:
+                value.MaxIters += delta;
+                break;
+            case 33:
+                value.RandSeedInitSteps += delta;
+                break;
+            case 35:
+                value.MaxRaySteps += delta;
+                break;
+            case 36:
+                value.NumRayBounces += delta;
+                break;
+            default:
+                return;
+        }
+    }
+
+    void MenuMod(float delta)
+    {
+        switch (menuPos)
+        {
+            case 0:
+                value.Scale += delta * 0.25f;
+                break;
+            case 1:
+                value.FoldingLimit += delta * 0.25f;
+                break;
+            case 2:
+                value.FixedRadius2 += delta * 0.25f;
+                break;
+            case 3:
+                value.MinRadius2 += delta * 0.25f;
+                break;
+            case 4:
+                value.InitRotation += delta * 0.25f;
+                break;
+            case 5:
+                value.DeRotation += delta * 0.25f;
+                break;
+            case 6:
+                value.ColorSharpness += delta * 1.0f;
+                break;
+            case 7:
+                value.Saturation += delta * 0.2f;
+                break;
+            case 8:
+                value.HueVariance += delta * 0.1f;
+                break;
+            case 9:
+                value.Reflectivity += delta * 0.25f;
+                break;
+            case 10:
+                value.DofAmount += delta * 0.01f;
+                break;
+            case 11:
+                value.FovAbberation *= delta * 0.1f + 1.0f;
+                break;
+            case 12:
+                value.LightPosX += delta * 0.5f;
+                break;
+            case 13:
+                value.LightPosY += delta * 0.5f;
+                break;
+            case 14:
+                value.LightPosZ += delta * 0.5f;
+                break;
+            case 15:
+                value.LightSize *= delta * 0.1f + 1;
+                break;
+            case 16:
+                value.ColorBiasR += delta * 0.25f;
+                break;
+            case 17:
+                value.ColorBiasG += delta * 0.25f;
+                break;
+            case 18:
+                value.ColorBiasB += delta * 0.25f;
+                break;
+            case 20:
+                value.BrightThresh += delta * 0.1f;
+                break;
+            case 21:
+                value.SpecularHighlightAmount += delta * 0.25f;
+                break;
+            case 22:
+                value.SpecularHighlightSize += delta * 0.01f;
+                break;
+            case 23:
+                value.FogDensity *= delta * 1.0f + 1;
+                break;
+            case 24:
+                value.LightBrightnessAmount *= delta * 0.5f + 1;
+                break;
+            case 25:
+                value.LightBrightnessCenter += delta * 0.25f;
+                break;
+            case 26:
+                value.LightBrightnessWidth += delta * 0.25f;
+                break;
+            case 27:
+                value.AmbientBrightnessAmount *= delta * 0.5f + 1;
+                break;
+            case 28:
+                value.AmbientBrightnessCenter += delta * 0.25f;
+                break;
+            case 29:
+                value.AmbientBrightnessWidth += delta * 0.25f;
+                break;
+            case 31:
+                value.Bailout *= delta * 0.5f + 1;
+                break;
+            case 32:
+                value.DeMultiplier += delta * 0.125f;
+                break;
+            case 34:
+                value.MaxRayDist *= delta * 1.0f + 1;
+                break;
+            case 37:
+                value.QualityFirstRay *= delta * 0.5f + 1;
+                break;
+            case 38:
+                value.QualityRestRay *= delta * 0.5f + 1;
+                break;
+            default:
+                return;
+        }
+        value.FogDensity = fabsf(value.FogDensity);
+    }
+
+    void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int index, float value,
+                  const char *name) const
+    {
+        std::ostringstream result;
+        result << (menuPos == index ? "* " : "  ") << name << " : " << value << "\n";
+        if (masterSurf)
+        {
+            SDL_Color color = {255, 0, 0, 0};
+            SDL_Surface *surf = TTF_RenderText_Blended(font, result.str().c_str(), color);
+            SDL_Rect rect;
+            rect.x = 0;
+            rect.y = height;
+            rect.w = maxWidth;
+            rect.h = 5;
+            SDL_BlitSurface(surf, NULL, masterSurf, &rect);
+            SDL_FreeSurface(surf);
+        }
+        int thisWidth, thisHeight;
+        TTF_SizeText(font, result.str().c_str(), &thisWidth, &thisHeight);
+        if (thisWidth > maxWidth)
+        {
+            maxWidth = thisWidth;
+        }
+        height += thisHeight;
+    }
+
+    void Menu(TTF_Font *font, SDL_Surface *m, int &w, int &h) const
+    {
+        int i = 0;
+        MenuItem(font, m, w, h, i++, value.Scale, "Scale");
+        MenuItem(font, m, w, h, i++, value.FoldingLimit, "FoldingLimit");
+        MenuItem(font, m, w, h, i++, value.FixedRadius2, "FixedRadius2");
+        MenuItem(font, m, w, h, i++, value.MinRadius2, "MinRadius2");
+        MenuItem(font, m, w, h, i++, value.InitRotation, "InitRotation");
+        MenuItem(font, m, w, h, i++, value.DeRotation, "DeRotation");
+        MenuItem(font, m, w, h, i++, value.ColorSharpness, "ColorSharpness");
+        MenuItem(font, m, w, h, i++, value.Saturation, "Saturation");
+        MenuItem(font, m, w, h, i++, value.HueVariance, "HueVariance");
+        MenuItem(font, m, w, h, i++, value.Reflectivity, "Reflectivity");
+        MenuItem(font, m, w, h, i++, value.DofAmount, "DofAmount");
+        MenuItem(font, m, w, h, i++, value.FovAbberation, "FovAbberation");
+        MenuItem(font, m, w, h, i++, value.LightPosX, "LightPosX");
+        MenuItem(font, m, w, h, i++, value.LightPosY, "LightPosY");
+        MenuItem(font, m, w, h, i++, value.LightPosZ, "LightPosZ");
+        MenuItem(font, m, w, h, i++, value.LightSize, "LightSize");
+        MenuItem(font, m, w, h, i++, value.ColorBiasR, "ColorBiasR");
+        MenuItem(font, m, w, h, i++, value.ColorBiasG, "ColorBiasG");
+        MenuItem(font, m, w, h, i++, value.ColorBiasB, "ColorBiasB");
+        MenuItem(font, m, w, h, i++, value.WhiteClamp, "WhiteClamp");
+        MenuItem(font, m, w, h, i++, value.BrightThresh, "BrightThresh");
+        MenuItem(font, m, w, h, i++, value.SpecularHighlightAmount, "SpecularHighlightAmount");
+        MenuItem(font, m, w, h, i++, value.SpecularHighlightSize, "SpecularHighlightSize");
+        MenuItem(font, m, w, h, i++, value.FogDensity, "FogDensity");
+        MenuItem(font, m, w, h, i++, value.LightBrightnessAmount, "LightBrightnessAmount");
+        MenuItem(font, m, w, h, i++, value.LightBrightnessCenter, "LightBrightnessCenter");
+        MenuItem(font, m, w, h, i++, value.LightBrightnessWidth, "LightBrightnessWidth");
+        MenuItem(font, m, w, h, i++, value.AmbientBrightnessAmount, "AmbientBrightnessAmount");
+        MenuItem(font, m, w, h, i++, value.AmbientBrightnessCenter, "AmbientBrightnessCenter");
+        MenuItem(font, m, w, h, i++, value.AmbientBrightnessWidth, "AmbientBrightnessWidth");
+        MenuItem(font, m, w, h, i++, value.MaxIters, "MaxIters");
+        MenuItem(font, m, w, h, i++, value.Bailout, "Bailout");
+        MenuItem(font, m, w, h, i++, value.DeMultiplier, "DeMultiplier");
+        MenuItem(font, m, w, h, i++, value.RandSeedInitSteps, "RandSeedInitSteps");
+        MenuItem(font, m, w, h, i++, value.MaxRayDist, "MaxRayDist");
+        MenuItem(font, m, w, h, i++, value.MaxRaySteps, "MaxRaySteps");
+        MenuItem(font, m, w, h, i++, value.NumRayBounces, "NumRayBounces");
+        MenuItem(font, m, w, h, i++, value.QualityFirstRay, "QualityFirstRay");
+        MenuItem(font, m, w, h, i++, value.QualityRestRay, "QualityRestRay");
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *font) const
+    {
+        int maxWidth = 0;
+        int height = 0;
+        Menu(font, NULL, maxWidth, height);
+        SDL_Surface *master = SDL_CreateRGBSurface(SDL_SWSURFACE, maxWidth, height, 32, 255 << 16, 255 << 8, 255,
+                                                   (Uint32)255 << 24);
+        height = 0;
+        Menu(font, master, maxWidth, height);
+        return master;
+    }
+};
+
+extern const unsigned char mandelbox[];
+extern const unsigned int mandelbox_len;
+
+Kernel::Kernel(std::string name) :
+        name(name),
+        useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)),
+        frame(-1),
+        maxLocalSize(32)
+{
+    bool isCompute = IsCompute();
+    if (name.empty())
+    {
+        name = "mandelbox";
+        this->name = name;
+    }
+    if (name == "mandelbox")
+    {
+        if (isCompute)
+        {
+            HandleCu(cuModuleLoadData(&cuModule, std::string((const char *)mandelbox, mandelbox_len).c_str()));
+        }
+        else
+        {
+            cuModule = NULL;
+        }
+        modules.push_back(new Module3dCamera(cuModule));
+        modules.push_back(new ModuleMandelbox(cuModule));
+        modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", sizeof(float) * 4));
+        modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
+    }
+    else
+    {
+        throw std::runtime_error("Unknown kernel name " + name);
+    }
+    if (cuModule)
+    {
+        HandleCu(cuModuleGetFunction(&kernelMain, cuModule, "kern"));
+    }
+}
+
+Kernel::~Kernel()
+{
+    if (cuModule)
+    {
+        HandleCu(cuModuleUnload(cuModule));
+    }
+    for (size_t i = 0; i < modules.size(); i++)
+    {
+        delete modules[i];
+    }
+}
+
+static void ResetFrame(int& frame)
+{
+    if (frame != -1)
+    {
+        frame = 0;
+    }
+}
+
+std::string Kernel::Name()
+{
+    return name;
+}
+
 void Kernel::UserInput(SDL_Event event)
 {
     if (event.type == SDL_KEYDOWN)
     {
-        //if (pressedKeys.find(event.key.keysym.sym) == pressedKeys.end())
+        for (size_t i = 0; i < modules.size(); i++)
         {
-            OneTimeKeypress(event.key.keysym.sym);
+            if (modules[i]->OneTimeKeypress(event.key.keysym.sym))
+            {
+                ResetFrame(frame);
+            }
         }
+        CommonOneTimeKeypress(event.key.keysym.sym);
         pressedKeys.insert(event.key.keysym.sym);
     }
     else if (event.type == SDL_KEYUP)
@@ -126,56 +736,126 @@ void Kernel::Integrate(double time)
          iter != pressedKeys.end();
          iter++)
     {
-        RepeatKeypress(*iter, time);
+        for (size_t i = 0; i < modules.size(); i++)
+        {
+            if (modules[i]->RepeatKeypress(*iter, time))
+            {
+                ResetFrame(frame);
+            }
+        }
     }
 }
 
-static CUmodule CommonBuild(const std::string &source)
+void Kernel::SendState(StateSync *output, bool everything) const
 {
-    CUmodule result;
-    HandleCu(cuModuleLoadData(&result, source.c_str()));
-    return result;
+    for (size_t i = 0; i < modules.size(); i++)
+    {
+        modules[i]->SendState(output, everything);
+    }
 }
 
-extern const unsigned char mandelbox[];
-extern const unsigned int mandelbox_len;
-
-struct MandelboxState
+void Kernel::RecvState(StateSync *input, bool everything)
 {
-    Vector3<double> pos;
-    Vector3<double> look;
-    Vector3<double> up;
-    double focalDistance;
-    double fov;
-    MandelboxCfg cfg;
-
-    MandelboxState() : pos(10, 0, 0), look(-1, 0, 0), up(0, 1, 0), focalDistance(8), fov(1), cfg(MandelboxDefault())
+    for (size_t i = 0; i < modules.size(); i++)
     {
+        if (modules[i]->RecvState(input, everything))
+        {
+            ResetFrame(frame);
+        }
     }
-
-    bool operator==(const MandelboxState &right)
-    {
-        return memcmp(this, &right, sizeof(MandelboxState)) == 0;
-    }
-
-    bool operator!=(const MandelboxState &right)
-    {
-        return memcmp(this, &right, sizeof(MandelboxState)) != 0;
-    }
-};
-
-template<typename T, typename Tscalar>
-T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
-{
-    Tscalar t2 = t * t;
-    Tscalar t3 = t2 * t;
-
-    return (((Tscalar)2 * p1) +
-            (-p0 + p2) * t +
-            ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
-            (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2;
 }
 
+SDL_Surface *Kernel::Configure(TTF_Font *font)
+{
+    std::vector<SDL_Surface *> surfs;
+    for (size_t i = 0; i < modules.size(); i++)
+    {
+        SDL_Surface *surf = modules[i]->Configure(font);
+        if (surf)
+        {
+            surfs.push_back(surf);
+        }
+    }
+    if (surfs.size() == 0)
+    {
+        return NULL;
+    }
+    if (surfs.size() == 1)
+    {
+        return surfs[0];
+    }
+    int height = 0;
+    int width = 0;
+    for (size_t i = 0; i < surfs.size(); i++)
+    {
+        height += surfs[i]->h;
+        if (surfs[i]->w > width)
+        {
+            width = surfs[i]->w;
+        }
+    }
+    SDL_Surface *wholeSurf = SDL_CreateRGBSurface(
+            0, width, height,
+            surfs[0]->format->BitsPerPixel,
+            surfs[0]->format->Rmask,
+            surfs[0]->format->Gmask,
+            surfs[0]->format->Bmask,
+            surfs[0]->format->Amask);
+    height = 0;
+    for (size_t i = 0; i < surfs.size(); i++)
+    {
+        SDL_Rect dest;
+        dest.x = 0;
+        dest.y = height;
+        dest.w = surfs[i]->w;
+        dest.h = surfs[i]->h;
+        SDL_BlitSurface(surfs[i], NULL, wholeSurf, &dest);
+        height += surfs[i]->h;
+        SDL_FreeSurface(surfs[i]);
+    }
+    return wholeSurf;
+}
+
+void Kernel::SetTime(float time)
+{
+    std::cout << "SetTime not implemented: " << time << std::endl;
+}
+
+void Kernel::RenderInto(CuMem<int> &memory, size_t width, size_t height)
+{
+    //std::cout << "Resized from " << rngMemSize.x << "x" << rngMemSize.y <<
+    //" to " << width << "x" << height << std::endl;
+    for (size_t i = 0; i < modules.size(); i++)
+    {
+        if (modules[i]->Update((int)width, (int)height))
+        {
+            ResetFrame(frame);
+        }
+    }
+    int renderOffsetX = useRenderOffset ? renderOffset.x : -(int)width / 2;
+    int renderOffsetY = useRenderOffset ? renderOffset.y : -(int)height / 2;
+    int mywidth = (int)width;
+    int myheight = (int)height;
+    int myFrame = frame;
+    if (frame != -1)
+        frame++;
+    void *args[] =
+            {
+                    &memory(),
+                    &renderOffsetX,
+                    &renderOffsetY,
+                    &mywidth,
+                    &myheight,
+                    &myFrame
+            };
+    unsigned int blockX = (unsigned int)maxLocalSize;
+    unsigned int blockY = (unsigned int)maxLocalSize;
+    unsigned int gridX = (unsigned int)(width + blockX - 1) / blockX;
+    unsigned int gridY = (unsigned int)(height + blockY - 1) / blockY;
+    HandleCu(cuLaunchKernel(kernelMain, gridX, gridY, 1, blockX, blockY, 1, 0, NULL, args, NULL));
+}
+
+/*
 class MandelboxAnimation
 {
     std::vector<MandelboxState> keyframes;
@@ -254,45 +934,8 @@ public:
     }
 };
 
-class MandelboxKernel : public Kernel
-{
-    CUmodule program;
-    CUfunction kernelMain;
-    CuMem<Vector2<int> > rngMem;
-    CuMem<Vector4<float> > scratchMem;
-    Vector2<size_t> rngMemSize;
-    size_t maxLocalSize;
-    MandelboxState state;
-    int frame;
-    MandelboxAnimation animation;
-    Vector2<int> renderOffset;
-    bool useRenderOffset;
-    int menuPos;
-    CUdeviceptr cuMandelboxCfg;
-public:
-    MandelboxKernel(bool isCompute)
-            : rngMemSize(0, 0), state(),
-              renderOffset(0, 0), useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y))
+    void SaveAnimation()
     {
-        if (isCompute)
-        {
-            program = CommonBuild(std::string((const char *)mandelbox, mandelbox_len));
-            HandleCu(cuModuleGetFunction(&kernelMain, program, "kern"));
-            size_t cfgSize;
-            HandleCu(cuModuleGetGlobal(&cuMandelboxCfg, &cfgSize, program, "MandelboxCfgArr"));
-            if (cfgSize != sizeof(MandelboxCfg))
-            {
-                throw std::runtime_error("MandelboxCfg CPU and GPU sizes don't agree");
-            }
-            maxLocalSize = 32;
-            UpdateCfg();
-        }
-        else
-        {
-            program = 0;
-            kernelMain = 0;
-            maxLocalSize = 0;
-        }
         try
         {
             StateSync *sync = NewFileStateSync(AnimationName().c_str(), true);
@@ -303,26 +946,7 @@ public:
         {
             std::cout << "Didn't read animation state: " << ex.what() << std::endl;
         }
-    }
-
-    ~MandelboxKernel()
-    {
-        if (program)
-        {
-            HandleCu(cuModuleUnload(program));
-        }
-    };
-
-    void UpdateCfg()
-    {
-        if (cuMandelboxCfg)
-        {
-            HandleCu(cuMemcpyHtoD(cuMandelboxCfg, &state.cfg, sizeof(MandelboxCfg)));
-        }
-    }
-
-    void SaveAnimation()
-    {
+        // ---
         StateSync *sync = NewFileStateSync(AnimationName().c_str(), false);
         animation.Send(sync);
         delete sync;
@@ -330,15 +954,7 @@ public:
 
     void OneTimeKeypress(SDL_Keycode keycode)
     {
-        if (keycode == SDLK_UP)
-        {
-            menuPos--;
-        }
-        else if (keycode == SDLK_DOWN)
-        {
-            menuPos++;
-        }
-        else if (keycode == SDLK_v)
+        if (keycode == SDLK_v)
         {
             std::cout << "Saved keyframe" << std::endl;
             animation.AddKeyframe(state);
@@ -355,339 +971,4 @@ public:
             CommonOneTimeKeypress(this, keycode);
         }
     }
-
-    void FixParams()
-    {
-        state.look = state.look.normalized();
-        state.up = cross(cross(state.look, state.up), state.look).normalized();
-    }
-
-    void RepeatKeypress(SDL_Keycode keycode, double time)
-    {
-        if (keycode == SDLK_LEFT)
-        {
-            MenuMod((float)-time);
-        }
-        else if (keycode == SDLK_RIGHT)
-        {
-            MenuMod((float)time);
-        }
-        else if (Common3dCamera(state.pos, state.look, state.up, state.focalDistance, state.fov, keycode, time))
-        {
-            frame = 0;
-            FixParams();
-        }
-    }
-
-    void SendState(StateSync *output) const
-    {
-        output->Send(state);
-    }
-
-    void RecvState(StateSync *input)
-    {
-        bool changed = input->RecvChanged(state);
-        if (changed)
-        {
-            frame = 0;
-            //FixParams();
-            UpdateCfg();
-        }
-    }
-
-    void SaveWholeState(StateSync *output) const
-    {
-        SendState(output);
-        output->Send(frame);
-        output->Send(rngMemSize.x);
-        output->Send(rngMemSize.y);
-        output->SendArr(scratchMem.Download());
-        output->SendArr(rngMem.Download());
-    }
-
-    void LoadWholeState(StateSync *input)
-    {
-        RecvState(input);
-        frame = input->Recv<int>();
-        rngMemSize.x = input->Recv<size_t>();
-        rngMemSize.y = input->Recv<size_t>();
-        size_t count = rngMemSize.x * rngMemSize.y;
-        scratchMem = CuMem<Vector4<float> >::Upload(input->RecvArr<Vector4<float> >(count));
-        rngMem = CuMem<Vector2<int> >::Upload(input->RecvArr<Vector2<int> >(count));
-    }
-
-    void RenderInto(CuMem<int> &memory, size_t width, size_t height)
-    {
-        if (width != rngMemSize.x || height != rngMemSize.y)
-        {
-            rngMem = CuMem<Vector2<int> >(width * height);
-            scratchMem = CuMem<Vector4<float> >(width * height);
-            frame = 0;
-            std::cout << "Resized from " << rngMemSize.x << "x" << rngMemSize.y <<
-            " to " << width << "x" << height << std::endl;
-            rngMemSize = Vector2<size_t>(width, height);
-        }
-        int renderOffsetX = useRenderOffset ? renderOffset.x : -(int)width / 2;
-        int renderOffsetY = useRenderOffset ? renderOffset.y : -(int)height / 2;
-        int mywidth = (int)width;
-        int myheight = (int)height;
-        float posx = (float)state.pos.x;
-        float posy = (float)state.pos.y;
-        float posz = (float)state.pos.z;
-        float lookx = (float)state.look.x;
-        float looky = (float)state.look.y;
-        float lookz = (float)state.look.z;
-        float upx = (float)state.up.x;
-        float upy = (float)state.up.y;
-        float upz = (float)state.up.z;
-        float myFov = (float)(state.fov * 2 / (width + height));
-        float myFocalDistance = (float)state.focalDistance;
-        float myFrame = (float)frame++;
-        void *args[] =
-                {
-                        &memory(),
-                        &scratchMem(),
-                        &rngMem(),
-                        &renderOffsetX,
-                        &renderOffsetY,
-                        &mywidth,
-                        &myheight,
-                        &posx,
-                        &posy,
-                        &posz,
-                        &lookx,
-                        &looky,
-                        &lookz,
-                        &upx,
-                        &upy,
-                        &upz,
-                        &myFov,
-                        &myFocalDistance,
-                        &myFrame
-                };
-        unsigned int blockX = (unsigned int)maxLocalSize;
-        unsigned int blockY = (unsigned int)maxLocalSize;
-        unsigned int gridX = (unsigned int)(width + blockX - 1) / blockX;
-        unsigned int gridY = (unsigned int)(height + blockY - 1) / blockY;
-        HandleCu(cuLaunchKernel(kernelMain, gridX, gridY, 1, blockX, blockY, 1, 0, NULL, args, NULL));
-    }
-
-    virtual void SetTime(float time)
-    {
-        state = animation.Interpolate(time, false);
-        frame = 0;
-        FixParams();
-        UpdateCfg();
-    }
-
-    void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int index, float value,
-                  const char *name)
-    {
-        std::ostringstream result;
-        result << (menuPos == index ? "* " : "  ") << name << " : " << value << "\n";
-        if (masterSurf)
-        {
-            SDL_Color color = {255, 0, 0, 0};
-            SDL_Surface *surf = TTF_RenderText_Blended(font, result.str().c_str(), color);
-            SDL_Rect rect;
-            rect.x = 0;
-            rect.y = height;
-            rect.w = maxWidth;
-            rect.h = 5;
-            SDL_BlitSurface(surf, NULL, masterSurf, &rect);
-            SDL_FreeSurface(surf);
-        }
-        int thisWidth, thisHeight;
-        TTF_SizeText(font, result.str().c_str(), &thisWidth, &thisHeight);
-        if (thisWidth > maxWidth)
-        {
-            maxWidth = thisWidth;
-        }
-        height += thisHeight;
-    }
-
-    void MenuMod(float delta)
-    {
-        switch (menuPos)
-        {
-            case 0:
-                state.cfg.Scale += delta * 0.25f;
-                break;
-            case 1:
-                state.cfg.FoldingLimit += delta * 0.25f;
-                break;
-            case 2:
-                state.cfg.FixedRadius2 += delta * 0.25f;
-                break;
-            case 3:
-                state.cfg.MinRadius2 += delta * 0.25f;
-                break;
-            case 4:
-                state.cfg.InitRotation += delta * 0.25f;
-                break;
-            case 5:
-                state.cfg.DeRotation += delta * 0.25f;
-                break;
-            case 6:
-                state.cfg.ColorSharpness += delta * 1.0f;
-                break;
-            case 7:
-                state.cfg.Saturation += delta * 0.2f;
-                break;
-            case 8:
-                state.cfg.HueVariance += delta * 0.1f;
-                break;
-            case 9:
-                state.cfg.Reflectivity += delta * 0.25f;
-                break;
-            case 10:
-                state.cfg.DofAmount += delta * 0.01f;
-                break;
-            case 11:
-                state.cfg.FovAbberation *= delta * 0.1f + 1.0f;
-                break;
-            case 12:
-                state.cfg.LightPosX += delta * 0.5f;
-                break;
-            case 13:
-                state.cfg.LightPosY += delta * 0.5f;
-                break;
-            case 14:
-                state.cfg.LightPosZ += delta * 0.5f;
-                break;
-            case 15:
-                state.cfg.LightSize *= delta * 0.1f + 1;
-                break;
-            case 16:
-                state.cfg.ColorBiasR += delta * 0.25f;
-                break;
-            case 17:
-                state.cfg.ColorBiasG += delta * 0.25f;
-                break;
-            case 18:
-                state.cfg.ColorBiasB += delta * 0.25f;
-                break;
-            case 19:
-                state.cfg.WhiteClamp = state.cfg.WhiteClamp == 0.0f ? 1.0f : 0.0f;
-                break;
-            case 20:
-                state.cfg.BrightThresh += delta * 0.1f;
-                break;
-            case 21:
-                state.cfg.SpecularHighlightAmount += delta * 0.25f;
-                break;
-            case 22:
-                state.cfg.SpecularHighlightSize += delta * 0.01f;
-                break;
-            case 23:
-                state.cfg.FogDensity *= delta * 1.0f + 1;
-                break;
-            case 24:
-                state.cfg.LightBrightnessAmount *= delta * 0.5f + 1;
-                break;
-            case 25:
-                state.cfg.LightBrightnessCenter += delta * 0.25f;
-                break;
-            case 26:
-                state.cfg.LightBrightnessWidth += delta * 0.25f;
-                break;
-            case 27:
-                state.cfg.AmbientBrightnessAmount *= delta * 0.5f + 1;
-                break;
-            case 28:
-                state.cfg.AmbientBrightnessCenter += delta * 0.25f;
-                break;
-            case 29:
-                state.cfg.AmbientBrightnessWidth += delta * 0.25f;
-                break;
-            default:
-                return;
-        }
-        UpdateCfg();
-        frame = 0;
-    }
-
-    void Menu(TTF_Font *font, SDL_Surface *m, int &w, int &h)
-    {
-        int i = 0;
-        MenuItem(font, m, w, h, i++, state.cfg.Scale, "Scale");
-        MenuItem(font, m, w, h, i++, state.cfg.FoldingLimit, "FoldingLimit");
-        MenuItem(font, m, w, h, i++, state.cfg.FixedRadius2, "FixedRadius2");
-        MenuItem(font, m, w, h, i++, state.cfg.MinRadius2, "MinRadius2");
-        MenuItem(font, m, w, h, i++, state.cfg.InitRotation, "InitRotation");
-        MenuItem(font, m, w, h, i++, state.cfg.DeRotation, "DeRotation");
-        MenuItem(font, m, w, h, i++, state.cfg.ColorSharpness, "ColorSharpness");
-        MenuItem(font, m, w, h, i++, state.cfg.Saturation, "Saturation");
-        MenuItem(font, m, w, h, i++, state.cfg.HueVariance, "HueVariance");
-        MenuItem(font, m, w, h, i++, state.cfg.Reflectivity, "Reflectivity");
-        MenuItem(font, m, w, h, i++, state.cfg.DofAmount, "DofAmount");
-        MenuItem(font, m, w, h, i++, state.cfg.FovAbberation, "FovAbberation");
-        MenuItem(font, m, w, h, i++, state.cfg.LightPosX, "LightPosX");
-        MenuItem(font, m, w, h, i++, state.cfg.LightPosY, "LightPosY");
-        MenuItem(font, m, w, h, i++, state.cfg.LightPosZ, "LightPosZ");
-        MenuItem(font, m, w, h, i++, state.cfg.LightSize, "LightSize");
-        MenuItem(font, m, w, h, i++, state.cfg.ColorBiasR, "ColorBiasR");
-        MenuItem(font, m, w, h, i++, state.cfg.ColorBiasG, "ColorBiasG");
-        MenuItem(font, m, w, h, i++, state.cfg.ColorBiasB, "ColorBiasB");
-        MenuItem(font, m, w, h, i++, state.cfg.WhiteClamp, "WhiteClamp");
-        MenuItem(font, m, w, h, i++, state.cfg.BrightThresh, "BrightThresh");
-        MenuItem(font, m, w, h, i++, state.cfg.SpecularHighlightAmount, "SpecularHighlightAmount");
-        MenuItem(font, m, w, h, i++, state.cfg.SpecularHighlightSize, "SpecularHighlightSize");
-        MenuItem(font, m, w, h, i++, state.cfg.FogDensity, "FogDensity");
-        MenuItem(font, m, w, h, i++, state.cfg.LightBrightnessAmount, "LightBrightnessAmount");
-        MenuItem(font, m, w, h, i++, state.cfg.LightBrightnessCenter, "LightBrightnessCenter");
-        MenuItem(font, m, w, h, i++, state.cfg.LightBrightnessWidth, "LightBrightnessWidth");
-        MenuItem(font, m, w, h, i++, state.cfg.AmbientBrightnessAmount, "AmbientBrightnessAmount");
-        MenuItem(font, m, w, h, i++, state.cfg.AmbientBrightnessCenter, "AmbientBrightnessCenter");
-        MenuItem(font, m, w, h, i++, state.cfg.AmbientBrightnessWidth, "AmbientBrightnessWidth");
-        if (menuPos < 0)
-        {
-            menuPos = i - 1;
-        }
-        else if (menuPos >= i)
-        {
-            menuPos = 0;
-        }
-    }
-
-    virtual SDL_Surface *Configure(TTF_Font *font)
-    {
-        int maxWidth = 0;
-        int height = 0;
-        Menu(font, NULL, maxWidth, height);
-        SDL_Surface *master = SDL_CreateRGBSurface(SDL_SWSURFACE, maxWidth, height, 32, 255 << 16, 255 << 8, 255,
-                                                   (Uint32)255 << 24);
-        height = 0;
-        Menu(font, master, maxWidth, height);
-        return master;
-    }
-
-    std::string Name()
-    {
-        return "mandelbox";
-    }
-
-    std::string AnimationName()
-    {
-        return Name() + ".animation.clam3";
-    }
-};
-
-Kernel *MakeKernel()
-{
-    bool isCompute = IsCompute();
-    std::string name = KernelName();
-    if (name == "mandelbox")
-    {
-        return new MandelboxKernel(isCompute);
-    }
-    else if (name.empty())
-    {
-        std::cout << "Kernel not specified, defaulting to mandelbox" << std::endl;
-        return new MandelboxKernel(isCompute);
-    }
-    else
-    {
-        throw std::runtime_error("Unknown kernel name " + name);
-    }
-}
+*/

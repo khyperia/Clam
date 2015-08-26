@@ -73,7 +73,7 @@ public:
 
     void CopyTo(T *cpu) const
     {
-        if (!refcount)
+        if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
         }
@@ -82,7 +82,7 @@ public:
 
     void CopyFrom(const T *cpu) const
     {
-        if (!refcount)
+        if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
         }

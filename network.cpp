@@ -112,7 +112,7 @@ bool Connection::Sync(Kernel *kernel)
         {
             try
             {
-                kernel->SendState(clients[i]);
+                kernel->SendState(clients[i], false);
             }
             catch (const std::runtime_error &e)
             {
@@ -128,7 +128,7 @@ bool Connection::Sync(Kernel *kernel)
         {
             try
             {
-                kernel->RecvState(this);
+                kernel->RecvState(this, false);
             }
             catch (const std::runtime_error &e)
             {

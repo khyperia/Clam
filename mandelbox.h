@@ -1,3 +1,5 @@
+#pragma once
+
 struct MandelboxCfg
 {
     float Scale;
@@ -37,12 +39,22 @@ struct MandelboxCfg
     float AmbientBrightnessCenter;
     float AmbientBrightnessWidth;
 
-    bool operator==(const MandelboxCfg& right)
+    int MaxIters;
+    float Bailout;
+    float DeMultiplier;
+    int RandSeedInitSteps;
+    float MaxRayDist;
+    int MaxRaySteps;
+    int NumRayBounces;
+    float QualityFirstRay;
+    float QualityRestRay;
+
+    bool operator==(const MandelboxCfg &right)
     {
         return memcmp(this, &right, sizeof(MandelboxCfg)) == 0;
     }
 
-    bool operator!=(const MandelboxCfg& right)
+    bool operator!=(const MandelboxCfg &right)
     {
         return memcmp(this, &right, sizeof(MandelboxCfg)) != 0;
     }
@@ -81,15 +93,14 @@ MandelboxCfg MandelboxDefault()
     x.ColorBiasB = 0;
     x.WhiteClamp = 0;
     x.BrightThresh = 8;
+    x.MaxIters = 64;
+    x.Bailout = 256;
+    x.DeMultiplier = 0.95f;
+    x.RandSeedInitSteps = 128;
+    x.MaxRayDist = 16;
+    x.MaxRaySteps = 256;
+    x.NumRayBounces = 3;
+    x.QualityFirstRay = 2;
+    x.QualityRestRay = 64;
     return x;
 }
-
-#define MaxIters 64
-#define Bailout 256
-#define DeMultiplier 0.95f
-#define RandSeedInitSteps 128
-#define MaxRayDist 16
-#define MaxRaySteps 256
-#define NumRayBounces 3
-#define QualityFirstRay 2
-#define QualityRestRay 64

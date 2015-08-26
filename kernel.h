@@ -4,43 +4,53 @@ class Kernel;
 
 #include "network.h"
 #include "cumem.h"
+#include "vector.h"
 #include <SDL.h>
 #include <SDL_net.h>
 #include <SDL_ttf.h>
 #include <set>
 #include <cuda.h>
 
+class KernelModuleBase;
+
 class Kernel
 {
+    std::string name;
+
     std::set<SDL_Keycode> pressedKeys;
 
-    virtual void OneTimeKeypress(SDL_Keycode keycode) = 0;
+    std::vector<KernelModuleBase *> modules;
 
-    virtual void RepeatKeypress(SDL_Keycode keycode, double time) = 0;
+    CUmodule cuModule;
+    CUfunction kernelMain;
+
+    Vector2<int> renderOffset;
+    bool useRenderOffset;
+
+    int frame;
+
+    size_t maxLocalSize;
+
+    void CommonOneTimeKeypress(SDL_Keycode keycode);
 
 public:
-    virtual ~Kernel()
-    { };
+    Kernel(std::string name);
 
-    virtual void SendState(StateSync *output) const = 0;
+    ~Kernel();
 
-    virtual void RecvState(StateSync *input) = 0;
+    void SendState(StateSync *output, bool everything) const;
 
-    virtual void SaveWholeState(StateSync *output) const = 0;
+    void RecvState(StateSync *input, bool everything);
 
-    virtual void LoadWholeState(StateSync *input) = 0;
+    void RenderInto(CuMem<int> &memory, size_t width, size_t height);
 
-    virtual void RenderInto(CuMem<int> &memory, size_t width, size_t height) = 0;
+    void SetTime(float time);
 
-    virtual void SetTime(float time) = 0;
+    SDL_Surface *Configure(TTF_Font *font);
 
-    virtual SDL_Surface *Configure(TTF_Font *font) = 0;
-
-    virtual std::string Name() = 0;
+    std::string Name();
 
     void UserInput(SDL_Event event);
 
     void Integrate(double time);
 };
-
-Kernel *MakeKernel();

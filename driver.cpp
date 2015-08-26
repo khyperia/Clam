@@ -250,7 +250,7 @@ struct HeadlessRenderType : public RenderType
         try
         {
             StateSync *sync = NewFileStateSync(filename.c_str(), true);
-            kernel->LoadWholeState(sync);
+            kernel->RecvState(sync, true);
             delete sync;
             std::cout << "Loaded intermediate state from " << filename << std::endl;
             *loadedIntermediate = true;
@@ -305,7 +305,7 @@ struct HeadlessRenderType : public RenderType
         {
             std::string filename = RenderstateFilename(kernel);
             StateSync *sync = NewFileStateSync(filename.c_str(), false);
-            kernel->SaveWholeState(sync);
+            kernel->SendState(sync, true);
             delete sync;
             std::cout << "Saved intermediate progress to " << filename << std::endl;
         }
@@ -398,7 +398,7 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
         HandleCu(cuCtxSetCurrent(cuContext));
     }
 
-    kernel = MakeKernel();
+    kernel = new Kernel(KernelName());
     if (isCompute)
     {
         if (headless <= 0)
@@ -420,7 +420,7 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
             {
                 std::cout << "Loading initial headless state" << std::endl;
                 StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
-                kernel->RecvState(sync);
+                kernel->RecvState(sync, false);
                 delete sync;
             }
         }

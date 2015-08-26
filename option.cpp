@@ -78,6 +78,7 @@ void ParseCmdline(int argc, char **argv)
         if (i >= argc)
         {
             std::cout << "Option " << option << " needs a value" << std::endl;
+            continue;
         }
         std::string value(argv[i]);
         ParseArg(option, value);

@@ -7,12 +7,6 @@ set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-if (${CMAKE_BUILD_TYPE} STREQUAL Debug)
-    add_definitions(-DDEBUG)
-else()
-    add_definitions(-DRELEASE)
-endif ()
-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra -Wno-deprecated-declarations")
 set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-Wall;--use_fast_math;-lineinfo")
