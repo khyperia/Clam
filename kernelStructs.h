@@ -24,3 +24,20 @@ struct GpuCameraSettings
         return memcmp(this, &right, sizeof(GpuCameraSettings)) != 0;
     }
 };
+
+struct Gpu2dCameraSettings
+{
+    float posX;
+    float posY;
+    float zoom;
+
+    bool operator==(const Gpu2dCameraSettings& right)
+    {
+        return memcmp(this, &right, sizeof(Gpu2dCameraSettings)) == 0;
+    }
+
+    bool operator!=(const Gpu2dCameraSettings& right)
+    {
+        return memcmp(this, &right, sizeof(Gpu2dCameraSettings)) != 0;
+    }
+};

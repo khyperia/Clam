@@ -2,6 +2,7 @@
 #include "kernelStructs.h"
 #include "option.h"
 #include "mandelbox.h"
+#include "vrpn_help.h"
 #include <fstream>
 
 class KernelModuleBase
@@ -53,6 +54,8 @@ protected:
         }
     }
 
+    virtual void Update() = 0;
+
 public:
     virtual ~KernelModule()
     {
@@ -67,6 +70,7 @@ public:
             height = h;
             Resize();
         }
+        Update();
         if (memcmp(&oldCpuVar, &value, sizeof(T)))
         {
             if (gpuVar)
@@ -195,6 +199,127 @@ static bool Common3dCamera(
     return true;
 }
 
+class Module2dCamera : public KernelModule<Gpu2dCameraSettings>
+{
+    Vector2<double> pos;
+    double zoom;
+    VrpnHelp *vrpn;
+
+public:
+    Module2dCamera(CUmodule module) :
+            KernelModule(module, "CameraArr"),
+            pos(0, 0),
+            zoom(1),
+            vrpn(NULL)
+    {
+        ApplyParams();
+    }
+
+    ~Module2dCamera()
+    {
+        if (vrpn)
+        {
+            delete vrpn;
+        }
+    }
+
+    virtual void Resize()
+    {
+        ApplyParams();
+    }
+
+    virtual bool OneTimeKeypress(SDL_Keycode keycode)
+    {
+        if (keycode == SDLK_BACKSLASH)
+        {
+            if (vrpn)
+            {
+                std::cout << "Disabling VRPN" << std::endl;
+                delete vrpn;
+                vrpn = NULL;
+            }
+            else
+            {
+                std::cout << "Enabling VRPN" << std::endl;
+                vrpn = new VrpnHelp();
+            }
+        }
+        return false;
+    }
+
+    virtual void Update()
+    {
+        if (IsUserInput() && vrpn)
+        {
+            vrpn->MainLoop();
+            pos.x = vrpn->pos.x;
+            pos.y = (vrpn->pos.z - 1.5) * -2;
+            zoom = exp(vrpn->pos.y * -2);
+        }
+    }
+
+    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
+    {
+        const float movespeed = 0.5f;
+        if (keycode == SDLK_w)
+        {
+            pos.y -= zoom * time * movespeed;
+        }
+        else if (keycode == SDLK_s)
+        {
+            pos.y += zoom * time * movespeed;
+        }
+        else if (keycode == SDLK_a)
+        {
+            pos.x -= zoom * time * movespeed;
+        }
+        else if (keycode == SDLK_d)
+        {
+            pos.x += zoom * time * movespeed;
+        }
+        else if (keycode == SDLK_i)
+        {
+            zoom /= 1 + time;
+        }
+        else if (keycode == SDLK_k)
+        {
+            zoom *= 1 + time;
+        }
+        else
+        {
+            return false;
+        }
+        ApplyParams();
+        return true;
+    }
+
+    void ApplyParams()
+    {
+        value.posX = (float)pos.x;
+        value.posY = (float)pos.y;
+        value.zoom = (float)zoom;
+    }
+
+    virtual void SendState(StateSync *output, bool) const
+    {
+        output->Send(pos);
+        output->Send(zoom);
+    }
+
+    virtual bool RecvState(StateSync *input, bool)
+    {
+        bool changed = false;
+        changed |= input->RecvChanged(pos);
+        changed |= input->RecvChanged(zoom);
+        return changed;
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *) const
+    {
+        return NULL;
+    }
+};
+
 class Module3dCamera : public KernelModule<GpuCameraSettings>
 {
     Vector3<double> pos;
@@ -202,6 +327,7 @@ class Module3dCamera : public KernelModule<GpuCameraSettings>
     Vector3<double> up;
     double focalDistance;
     double fov;
+    VrpnHelp *vrpn;
 
 public:
     Module3dCamera(CUmodule module) :
@@ -210,9 +336,18 @@ public:
             look(-1, 0, 0),
             up(0, 1, 0),
             focalDistance(8),
-            fov(1)
+            fov(1),
+            vrpn(NULL)
     {
         ApplyParams();
+    }
+
+    ~Module3dCamera()
+    {
+        if (vrpn)
+        {
+            delete vrpn;
+        }
     }
 
     virtual void Resize()
@@ -220,9 +355,34 @@ public:
         ApplyParams();
     }
 
-    virtual bool OneTimeKeypress(SDL_Keycode)
+    virtual bool OneTimeKeypress(SDL_Keycode keycode)
     {
+        if (keycode == SDLK_BACKSLASH)
+        {
+            if (vrpn)
+            {
+                std::cout << "Disabling VRPN" << std::endl;
+                delete vrpn;
+                vrpn = NULL;
+            }
+            else
+            {
+                std::cout << "Enabling VRPN" << std::endl;
+                vrpn = new VrpnHelp();
+            }
+        }
         return false;
+    }
+
+    virtual void Update()
+    {
+        if (IsUserInput() && vrpn)
+        {
+            vrpn->MainLoop();
+            pos = vrpn->pos;
+            look = vrpn->look;
+            up = vrpn->up;
+        }
     }
 
     virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
@@ -298,6 +458,10 @@ public:
         }
     }
 
+    virtual void Update()
+    {
+    }
+
     virtual void Resize()
     {
         if (value)
@@ -363,6 +527,10 @@ public:
             KernelModule(module, "MandelboxCfgArr")
     {
         value = MandelboxDefault();
+    }
+
+    virtual void Update()
+    {
     }
 
     virtual void Resize()
@@ -648,6 +816,9 @@ public:
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
+extern const unsigned char mandelbrot[];
+extern const unsigned int mandelbrot_len;
+
 Kernel::Kernel(std::string name) :
         name(name),
         useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)),
@@ -675,6 +846,18 @@ Kernel::Kernel(std::string name) :
         modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", sizeof(float) * 4));
         modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
     }
+    else if (name == "mandelbrot")
+    {
+        if (isCompute)
+        {
+            HandleCu(cuModuleLoadData(&cuModule, std::string((const char *)mandelbrot, mandelbrot_len).c_str()));
+        }
+        else
+        {
+            cuModule = NULL;
+        }
+        modules.push_back(new Module2dCamera(cuModule));
+    }
     else
     {
         throw std::runtime_error("Unknown kernel name " + name);
@@ -697,7 +880,7 @@ Kernel::~Kernel()
     }
 }
 
-static void ResetFrame(int& frame)
+static void ResetFrame(int &frame)
 {
     if (frame != -1)
     {
@@ -838,7 +1021,9 @@ void Kernel::RenderInto(CuMem<int> &memory, size_t width, size_t height)
     int myheight = (int)height;
     int myFrame = frame;
     if (frame != -1)
+    {
         frame++;
+    }
     void *args[] =
             {
                     &memory(),

@@ -20,6 +20,8 @@ set(CMAKE_LIBRARY_PATH
         "/home/echauck/SDL2/lib"
         "/home/echauck/SDL2_net/lib"
         "/home/echauck/SDL2_ttf/lib"
+        "/home/kuhl/public-vrlab/vrpn/build"
+        "${CMAKE_SOURCE_DIR}/../vrpn/build"
         "/opt/cuda/lib"
         ${CMAKE_LIBRARY_PATH})
 set(CMAKE_INCLUDE_PATH
@@ -27,13 +29,19 @@ set(CMAKE_INCLUDE_PATH
         "/home/echauck/SDL2_net/include"
         "/home/echauck/SDL2_ttf/include"
         "/opt/intel/opencl-sdk/include"
+        "/home/kuhl/public-vrlab/vrpn"
+        "${CMAKE_SOURCE_DIR}/../vrpn"
         "/opt/cuda/include"
         ${CMAKE_INCLUDE_PATH})
 
-add_definitions(-D__CL_ENABLE_EXCEPTIONS)
-
 macro(my_package pacname)
     find_package(${pacname} REQUIRED)
+    string(TOUPPER ${pacname} pacname_upper)
+    include_directories(${${pacname_upper}_INCLUDE_DIRS})
+endmacro()
+
+macro(my_package_noreq pacname)
+    find_package(${pacname})
     string(TOUPPER ${pacname} pacname_upper)
     if (${pacname_upper}_FOUND)
         include_directories(${${pacname_upper}_INCLUDE_DIRS})
@@ -45,6 +53,11 @@ my_package(CUDA)
 my_package(SDL2)
 my_package(SDL2_net)
 my_package(SDL2_ttf)
+my_package_noreq(VRPN)
+
+if (VRPN_FOUND)
+    add_definitions(-DHAVE_VRPN)
+endif()
 
 add_executable(embed util/embed.c)
 
@@ -79,3 +92,9 @@ target_link_libraries(clam3
         ${SDL2_LIBRARIES}
         ${SDL2_NET_LIBRARIES}
         ${SDL2_TTF_LIBRARIES})
+
+if (VRPN_FOUND)
+    target_link_libraries(clam3
+            pthread
+            ${VRPN_LIBRARIES})
+endif ()

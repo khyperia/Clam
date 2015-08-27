@@ -70,8 +70,11 @@ struct CpuRenderType : public RenderType
         if (IsUserInput())
         {
             SDL_Surface *conf = kern->Configure(font);
-            SDL_BlitSurface(conf, NULL, surface, NULL);
-            SDL_FreeSurface(conf);
+            if (conf)
+            {
+                SDL_BlitSurface(conf, NULL, surface, NULL);
+                SDL_FreeSurface(conf);
+            }
         }
         SDL_UpdateWindowSurface(window);
         return true;
@@ -202,30 +205,33 @@ struct GpuRenderType : public RenderType
         if (IsUserInput())
         {
             SDL_Surface *text = kern->Configure(font);
-            SDL_LockSurface(text);
-            glBindTexture(GL_TEXTURE_2D, textID);
-            HandleGl();
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-            HandleGl();
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, text->w, text->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, text->pixels);
-            HandleGl();
-            SDL_UnlockSurface(text);
-            SDL_FreeSurface(text);
-            HandleGl();
-            float maxx = (float)text->w / width * 2 - 1;
-            float maxy = (float)text->h / height * 2 - 1;
-            glBegin(GL_QUADS);
-            glTexCoord2f(0, 0);
-            glVertex3f(-1, 1, 0.1f);
-            glTexCoord2f(1, 0);
-            glVertex3f(maxx, 1, 0.1f);
-            glTexCoord2f(1, 1);
-            glVertex3f(maxx, -maxy, 0.1f);
-            glTexCoord2f(0, 1);
-            glVertex3f(-1, -maxy, 0.1f);
-            glEnd();
-            HandleGl();
+            if (text)
+            {
+                SDL_LockSurface(text);
+                glBindTexture(GL_TEXTURE_2D, textID);
+                HandleGl();
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+                HandleGl();
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, text->w, text->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, text->pixels);
+                HandleGl();
+                SDL_UnlockSurface(text);
+                SDL_FreeSurface(text);
+                HandleGl();
+                float maxx = (float)text->w / width * 2 - 1;
+                float maxy = (float)text->h / height * 2 - 1;
+                glBegin(GL_QUADS);
+                glTexCoord2f(0, 0);
+                glVertex3f(-1, 1, 0.1f);
+                glTexCoord2f(1, 0);
+                glVertex3f(maxx, 1, 0.1f);
+                glTexCoord2f(1, 1);
+                glVertex3f(maxx, -maxy, 0.1f);
+                glTexCoord2f(0, 1);
+                glVertex3f(-1, -maxy, 0.1f);
+                glEnd();
+                HandleGl();
+            }
         }
 
         SDL_GL_SwapWindow(window);
@@ -491,11 +497,14 @@ bool Driver::RunFrame()
         if (IsUserInput() && window != NULL)
         {
             SDL_Surface *conf = kernel->Configure(window->font);
-            SDL_Surface *surface = SDL_GetWindowSurface(window->window);
-            SDL_FillRect(surface, NULL, 0);
-            SDL_BlitSurface(conf, NULL, surface, NULL);
-            SDL_FreeSurface(conf);
-            SDL_UpdateWindowSurface(window->window);
+            if (conf)
+            {
+                SDL_Surface *surface = SDL_GetWindowSurface(window->window);
+                SDL_FillRect(surface, NULL, 0);
+                SDL_BlitSurface(conf, NULL, surface, NULL);
+                SDL_FreeSurface(conf);
+                SDL_UpdateWindowSurface(window->window);
+            }
         }
         return true;
     }
