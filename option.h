@@ -18,8 +18,6 @@ std::string KernelName();
 
 int Headless(int *numTimes);
 
-std::string RenderTypeVal();
-
 bool RenderOffset(int *shiftx, int *shifty);
 
 std::string VrpnName();

@@ -33,6 +33,10 @@ class Kernel
 
     void CommonOneTimeKeypress(SDL_Keycode keycode);
 
+    CuMem<int> gpuBuffer;
+    size_t oldWidth;
+    size_t oldHeight;
+
 public:
     Kernel(std::string name);
 
@@ -42,7 +46,7 @@ public:
 
     void RecvState(StateSync *input, bool everything);
 
-    void RenderInto(CuMem<int> &memory, size_t width, size_t height);
+    void RenderInto(int *memory, size_t width, size_t height);
 
     void SetTime(float time);
 

@@ -8,7 +8,7 @@ set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra -Wno-deprecated-declarations")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra")
 set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-Wall;--use_fast_math;-lineinfo")
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
@@ -48,7 +48,6 @@ macro(my_package_noreq pacname)
     endif ()
 endmacro()
 
-my_package(OpenGL)
 my_package(CUDA)
 my_package(SDL2)
 my_package(SDL2_net)
@@ -66,15 +65,9 @@ file(COPY util/ivs.sh DESTINATION .)
 set(genfiles)
 include_directories("${CMAKE_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
-file(GLOB clfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cu")
-foreach (filename ${clfiles})
+file(GLOB cufiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cu")
+foreach (filename ${cufiles})
     cuda_compile_ptx(ptxfile "${filename}")
-    #set(ptxfile "${CMAKE_BINARY_DIR}/generated/${filename}.ptx")
-    #add_custom_command(
-    #        OUTPUT "${ptxfile}"
-    #        DEPENDS ${filename}
-    #        WORKING_DIRECTORY ${SOURCEDIR}
-    #        COMMAND nvcc --ptx ${NVCC_FLAGS} "${filename}" -o "${ptxfile}")
     set(outfile "${CMAKE_BINARY_DIR}/generated/${filename}.c")
     get_filename_component(varname ${filename} NAME_WE)
     add_custom_command(
@@ -87,7 +80,6 @@ endforeach ()
 add_executable(clam3 ${sources} ${genfiles})
 
 target_link_libraries(clam3
-        ${OPENGL_LIBRARIES}
         cuda
         ${SDL2_LIBRARIES}
         ${SDL2_NET_LIBRARIES}

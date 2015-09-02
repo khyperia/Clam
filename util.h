@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <cuda.h>
 #include <iostream>
-#include <GL/gl.h>
 
 #define HandleCu(x) HandleCuImpl(x, #x, __FILE__, __LINE__)
 
@@ -39,18 +38,4 @@ static T fromstring(const std::string &value)
     T result;
     stream >> result;
     return result;
-}
-
-static inline void HandleGl()
-{
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        const GLubyte *str = glGetString(err);
-        if (str == NULL)
-        {
-            throw std::runtime_error("OpenGL error no string: " + tostring(err));
-        }
-        throw std::runtime_error(std::string("OpenGL error: ") + (const char *)str);
-    }
 }

@@ -24,7 +24,6 @@ class DisplayWindow
 
 public:
     SDL_Window *window;
-    SDL_GLContext context;
     TTF_Font *font;
 
     DisplayWindow(int x, int y, int width, int height);

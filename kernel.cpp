@@ -823,7 +823,9 @@ Kernel::Kernel(std::string name) :
         name(name),
         useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)),
         frame(-1),
-        maxLocalSize(32)
+        maxLocalSize(32),
+        oldWidth(0),
+        oldHeight(0)
 {
     bool isCompute = IsCompute();
     if (name.empty())
@@ -1004,10 +1006,16 @@ void Kernel::SetTime(float time)
     std::cout << "SetTime not implemented: " << time << std::endl;
 }
 
-void Kernel::RenderInto(CuMem<int> &memory, size_t width, size_t height)
+void Kernel::RenderInto(int *memory, size_t width, size_t height)
 {
-    //std::cout << "Resized from " << rngMemSize.x << "x" << rngMemSize.y <<
-    //" to " << width << "x" << height << std::endl;
+    if (width != oldWidth || height != oldHeight)
+    {
+        std::cout << "Resized from " << oldWidth << "x" << oldHeight <<
+            " to " << width << "x" << height << std::endl;
+        oldWidth = width;
+        oldHeight = height;
+        gpuBuffer = CuMem<int>(width * height);
+    }
     for (size_t i = 0; i < modules.size(); i++)
     {
         if (modules[i]->Update((int)width, (int)height))
@@ -1026,7 +1034,7 @@ void Kernel::RenderInto(CuMem<int> &memory, size_t width, size_t height)
     }
     void *args[] =
             {
-                    &memory(),
+                    &gpuBuffer(),
                     &renderOffsetX,
                     &renderOffsetY,
                     &mywidth,
@@ -1038,6 +1046,10 @@ void Kernel::RenderInto(CuMem<int> &memory, size_t width, size_t height)
     unsigned int gridX = (unsigned int)(width + blockX - 1) / blockX;
     unsigned int gridY = (unsigned int)(height + blockY - 1) / blockY;
     HandleCu(cuLaunchKernel(kernelMain, gridX, gridY, 1, blockX, blockY, 1, 0, NULL, args, NULL));
+    if (memory)
+    {
+        gpuBuffer.CopyTo(memory);
+    }
 }
 
 /*
