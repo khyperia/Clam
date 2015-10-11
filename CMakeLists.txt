@@ -56,11 +56,16 @@ my_package_noreq(VRPN)
 
 if (VRPN_FOUND)
     add_definitions(-DHAVE_VRPN)
-endif()
+endif ()
 
 add_executable(embed util/embed.c)
 
-file(COPY util/ivs.sh DESTINATION .)
+add_custom_target(shfiles)
+file(GLOB shfiles "${SOURCEDIR}/util/*.sh")
+foreach (shfile ${shfiles})
+    add_custom_command(TARGET shfiles PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy ${shfile} ${CMAKE_BINARY_DIR})
+endforeach ()
 
 set(genfiles)
 include_directories("${CMAKE_BINARY_DIR}/generated")
@@ -78,6 +83,7 @@ foreach (filename ${cufiles})
 endforeach ()
 
 add_executable(clam3 ${sources} ${genfiles})
+add_dependencies(clam3 shfiles)
 
 target_link_libraries(clam3
         cuda

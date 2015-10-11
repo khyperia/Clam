@@ -529,7 +529,7 @@ extern "C" __global__ void kern(
     {
         float dist = SimpleTrace(pos, rayDir, 1 / fov);
         dist = sqrt(dist);
-        BufferScratch[screenIndex] = final = make_float4(dist);
+        BufferScratch[screenIndex] = final = make_float4(dist, dist, dist, 100);
     }
     else
     {

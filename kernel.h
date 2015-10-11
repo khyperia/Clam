@@ -50,6 +50,8 @@ public:
 
     void SetTime(float time);
 
+    void SetFramed(bool framed);
+
     SDL_Surface *Configure(TTF_Font *font);
 
     std::string Name();

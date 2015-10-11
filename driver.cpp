@@ -70,28 +70,9 @@ struct HeadlessRenderType : public RenderType
     int numTimes;
     int currentTime;
 
-    HeadlessRenderType(Kernel *kernel, int numFrames, int numTimes, bool *loadedIntermediate)
+    HeadlessRenderType(int numFrames, int numTimes)
             : numFrames(numFrames), currentFrame(numFrames), numTimes(numTimes), currentTime(0)
     {
-        std::string filename = RenderstateFilename(kernel);
-        try
-        {
-            StateSync *sync = NewFileStateSync(filename.c_str(), true);
-            kernel->RecvState(sync, true);
-            delete sync;
-            std::cout << "Loaded intermediate state from " << filename << std::endl;
-            *loadedIntermediate = true;
-        }
-        catch (const std::exception &ex)
-        {
-            std::cout << "Didn't load intermediate state from " << filename
-            << ": " << ex.what() << std::endl;
-            *loadedIntermediate = false;
-        }
-        if (numTimes > 0)
-        {
-            kernel->SetTime(0);
-        }
     }
 
     ~HeadlessRenderType()
@@ -113,6 +94,32 @@ struct HeadlessRenderType : public RenderType
 
     virtual bool Update(Kernel *kernel, TTF_Font *)
     {
+        if (currentTime == 0 && currentFrame == numFrames)
+        {
+            std::cout << "Flush/loading initial state" << std::endl;
+            kernel->RenderInto(NULL, width, height);
+            std::string filename = RenderstateFilename(kernel);
+            try
+            {
+                StateSync *sync = NewFileStateSync(filename.c_str(), true);
+                kernel->RecvState(sync, true);
+                delete sync;
+                std::cout << "Loaded intermediate state from " << filename << std::endl;
+            }
+            catch (const std::exception &ex)
+            {
+                std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what() << std::endl
+                << "Trying initial headless state instead" << std::endl;
+                StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
+                kernel->RecvState(sync, false);
+                kernel->SetFramed(true);
+                delete sync;
+            }
+            if (numTimes > 0)
+            {
+                kernel->SetTime(0);
+            }
+        }
         currentFrame--;
         if (numTimes == 0)
         {
@@ -204,15 +211,7 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
         }
         else
         {
-            bool loadedItermediate = false;
-            renderType = new HeadlessRenderType(kernel, headless, numHeadlessTimes, &loadedItermediate);
-            if (!loadedItermediate && IsUserInput())
-            {
-                std::cout << "Loading initial headless state" << std::endl;
-                StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
-                kernel->RecvState(sync, false);
-                delete sync;
-            }
+            renderType = new HeadlessRenderType(headless, numHeadlessTimes);
         }
     }
     else

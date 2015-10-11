@@ -207,7 +207,7 @@ class Module2dCamera : public KernelModule<Gpu2dCameraSettings>
 
 public:
     Module2dCamera(CUmodule module) :
-            KernelModule(module, "CameraArr"),
+            KernelModule<Gpu2dCameraSettings>(module, "CameraArr"),
             pos(0, 0),
             zoom(1),
             vrpn(NULL)
@@ -331,7 +331,7 @@ class Module3dCamera : public KernelModule<GpuCameraSettings>
 
 public:
     Module3dCamera(CUmodule module) :
-            KernelModule(module, "CameraArr"),
+            KernelModule<GpuCameraSettings>(module, "CameraArr"),
             pos(10, 0, 0),
             look(-1, 0, 0),
             up(0, 1, 0),
@@ -429,6 +429,10 @@ public:
         changed |= input->RecvChanged(up);
         changed |= input->RecvChanged(fov);
         changed |= input->RecvChanged(focalDistance);
+        if (changed)
+        {
+            ApplyParams();
+        }
         return changed;
     }
 
@@ -444,7 +448,7 @@ class ModuleBuffer : public KernelModule<CUdeviceptr>
 
 public:
     ModuleBuffer(CUmodule module, const char *varname, int elementSize) :
-            KernelModule(module, varname),
+            KernelModule<CUdeviceptr>(module, varname),
             elementSize(elementSize)
     {
         value = 0;
@@ -499,13 +503,15 @@ public:
             size_t existingSize = (size_t)elementSize * width * height;
             if (existingSize != size)
             {
-                std::cout << "Not uploading state buffer due to mismatched sizes" << std::endl;
+                std::cout << "Not uploading state buffer due to mismatched sizes: current "
+                << existingSize << "(" << elementSize << " * " << width << " * " << height
+                << "), new " << size << std::endl;
                 input->RecvArr<char>(size);
                 return false;
             }
             else
             {
-                CuMem<char>(value, size).Upload(input->RecvArr<char>(size));
+                CuMem<char>(value, size).CopyFrom(input->RecvArr<char>(size).data());
                 return true;
             }
         }
@@ -524,7 +530,7 @@ class ModuleMandelbox : public KernelModule<MandelboxCfg>
 
 public:
     ModuleMandelbox(CUmodule module) :
-            KernelModule(module, "MandelboxCfgArr")
+            KernelModule<MandelboxCfg>(module, "MandelboxCfgArr")
     {
         value = MandelboxDefault();
     }
@@ -933,6 +939,10 @@ void Kernel::Integrate(double time)
 
 void Kernel::SendState(StateSync *output, bool everything) const
 {
+    if (everything)
+    {
+        output->Send(frame);
+    }
     for (size_t i = 0; i < modules.size(); i++)
     {
         modules[i]->SendState(output, everything);
@@ -941,11 +951,23 @@ void Kernel::SendState(StateSync *output, bool everything) const
 
 void Kernel::RecvState(StateSync *input, bool everything)
 {
+    int loadedFrame = 0;
+    if (everything)
+    {
+        loadedFrame = input->Recv<int>();
+    }
     for (size_t i = 0; i < modules.size(); i++)
     {
         if (modules[i]->RecvState(input, everything))
         {
-            ResetFrame(frame);
+            if (everything)
+            {
+                frame = loadedFrame;
+            }
+            else
+            {
+                ResetFrame(frame);
+            }
         }
     }
 }
@@ -1006,12 +1028,17 @@ void Kernel::SetTime(float time)
     std::cout << "SetTime not implemented: " << time << std::endl;
 }
 
+void Kernel::SetFramed(bool framed)
+{
+    frame = framed ? 0 : -1;
+}
+
 void Kernel::RenderInto(int *memory, size_t width, size_t height)
 {
     if (width != oldWidth || height != oldHeight)
     {
         std::cout << "Resized from " << oldWidth << "x" << oldHeight <<
-            " to " << width << "x" << height << std::endl;
+        " to " << width << "x" << height << std::endl;
         oldWidth = width;
         oldHeight = height;
         gpuBuffer = CuMem<int>(width * height);
