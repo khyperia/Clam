@@ -11,6 +11,7 @@ static std::string kernelName;
 static std::string headless;
 static std::string renderOffset;
 static std::string vrpn;
+static std::string font;
 
 static void TryParseEnv(std::string &ref, const char *varname)
 {
@@ -30,6 +31,7 @@ static void ParseEnvVar()
     TryParseEnv(headless, "CLAM3_HEADLESS");
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
     TryParseEnv(vrpn, "CLAM3_VRPN");
+    TryParseEnv(font, "CLAM3_FONT");
 }
 
 static void ParseArg(const std::string &option, const std::string &value)
@@ -61,6 +63,10 @@ static void ParseArg(const std::string &option, const std::string &value)
     else if (option == "--vrpn")
     {
         vrpn = value;
+    }
+    else if (option == "--font")
+    {
+        font = value;
     }
     else
     {
@@ -149,4 +155,9 @@ bool RenderOffset(int *shiftx, int *shifty)
 std::string VrpnName()
 {
     return vrpn;
+}
+
+std::string FontName()
+{
+    return font;
 }

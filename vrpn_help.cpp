@@ -79,7 +79,7 @@ VrpnHelp::~VrpnHelp()
 
 void VrpnHelp::MainLoop()
 {
-    bool printed = false;
+    static bool printed = false;
     if (!printed)
     {
         printed = true;

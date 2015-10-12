@@ -82,11 +82,18 @@ void Connection::Send(const void *data, size_t size)
 
 void Connection::Recv(void *data, size_t size)
 {
-    int recvSize = SDLNet_TCP_Recv(socket, data, (int)size);
-    if (recvSize != (int)size)
+    size_t sizeTotal = 0;
+    while (sizeTotal < size)
     {
-        throw std::runtime_error("Recv on socket failed (attempted "
-                                 + tostring(size) + ", actual " + tostring(recvSize) + ")");
+        int recvSize = SDLNet_TCP_Recv(socket, data, (int)size);
+        if (recvSize <= 0)
+        {
+            std::string reason = recvSize ? "unknown error" : "closed by remote";
+            throw std::runtime_error("Recv on socket failed " + reason +
+                                     "(attempted " + tostring(size) +
+                                     ", actual " + tostring(sizeTotal) + ")");
+        }
+        sizeTotal += (size_t)recvSize;
     }
 }
 

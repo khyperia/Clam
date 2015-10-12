@@ -21,3 +21,5 @@ int Headless(int *numTimes);
 bool RenderOffset(int *shiftx, int *shifty);
 
 std::string VrpnName();
+
+std::string FontName();

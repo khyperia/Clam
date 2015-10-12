@@ -943,6 +943,10 @@ void Kernel::SendState(StateSync *output, bool everything) const
     {
         output->Send(frame);
     }
+    else
+    {
+        output->Send(frame == -1 ? -1 : 0);
+    }
     for (size_t i = 0; i < modules.size(); i++)
     {
         modules[i]->SendState(output, everything);
@@ -955,6 +959,17 @@ void Kernel::RecvState(StateSync *input, bool everything)
     if (everything)
     {
         loadedFrame = input->Recv<int>();
+    }
+    else
+    {
+        if (input->Recv<int>() == -1)
+        {
+            frame = -1;
+        }
+        else if (frame == -1)
+        {
+            frame = 0;
+        }
     }
     for (size_t i = 0; i < modules.size(); i++)
     {

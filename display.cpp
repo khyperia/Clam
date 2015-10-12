@@ -30,10 +30,10 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
     flags = SDL_WINDOW_RESIZABLE;
     window = SDL_CreateWindow("Clam3", x, y, width, height, flags);
     // TODO: $CLAM3_FONT
-    font = TTF_OpenFont("/usr/share/fonts/TTF/Inconsolata-Regular.ttf", 14);
+    font = TTF_OpenFont(FontName().c_str(), 14);
     if (!font)
     {
-        throw std::runtime_error("Could not open font /usr/share/fonts/TTF/Inconsolata-Regular.ttf");
+        throw std::runtime_error("Could not open font " + FontName());
     }
     lastTicks = SDL_GetTicks();
 }

@@ -1,24 +1,19 @@
 #!/usr/bin/env bash
 
-PRELUDE="
 set -o errexit
 set -o nounset
-"
-${PRELUDE}
 
 SOURCE_LOC=".."
-IVS_USER="${USER}"
+IVS_USER="${IVS_USER:-$USER}"
 IVS_HOSTNAME="ivs.research.mtu.edu"
 IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam3"
-SLAVE_IPS=("tile-0-0" "tile-0-1" "tile-0-2" "tile-0-3" "tile-0-4" "tile-0-5" "tile-0-6" "tile-0-7")
-SLAVE_PORT=11235
 HOST_PORT=23457
-SCREENWIDTH=5760
-SCREENHEIGHT=1080
-MAX_SCREENCOORDS_X=2
-MAX_SCREENCOORDS_Y=4
 CUDA_TOOLKIT_ROOT_DIR=/opt/cuda
 export CLAM3_KERNEL=mandelbox
+if [ -e $HOME/.vrpn-server ]
+then
+    export CLAM3_VRPN=$(<$HOME/.vrpn-server)
+fi
 
 # Prints a very readable bold message that stands out
 function printMessage()
