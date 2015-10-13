@@ -36,6 +36,9 @@ void VRPN_CALLBACK HandleTracker(void *_this_untyped, const vrpn_TRACKERCB info)
     _this->pos.z = info.pos[2];
     _this->look = mul_quat_vec(info.quat, Vector3<double>(1, 0, 0));
     _this->up = mul_quat_vec(info.quat, Vector3<double>(0, 1, 0));
+    _this->pos.y = -_this->pos.y;
+    _this->look.y = -_this->look.y;
+    _this->up.y = -_this->up.y;
 }
 
 VrpnHelp::VrpnHelp() : con(NULL), pos(0, 0, 0), look(1, 0, 0), up(0, 1, 0)

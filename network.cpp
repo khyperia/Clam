@@ -85,7 +85,7 @@ void Connection::Recv(void *data, size_t size)
     size_t sizeTotal = 0;
     while (sizeTotal < size)
     {
-        int recvSize = SDLNet_TCP_Recv(socket, data, (int)size);
+        int recvSize = SDLNet_TCP_Recv(socket, data, (int)(size - sizeTotal));
         if (recvSize <= 0)
         {
             std::string reason = recvSize ? "unknown error" : "closed by remote";

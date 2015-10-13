@@ -1,5 +1,6 @@
 #include "kernel.h"
 #include "kernelStructs.h"
+#include "driver.h"
 #include "option.h"
 #include "mandelbox.h"
 #include "vrpn_help.h"
@@ -40,7 +41,7 @@ protected:
     int width;
     int height;
 
-    KernelModule(CUmodule module, const char *varname) : module(module), width(-1), height(-1)
+    KernelModule(CUmodule module, const char *varname) : gpuVar(0), module(module), width(-1), height(-1)
     {
         if (module)
         {
@@ -252,9 +253,10 @@ public:
         if (IsUserInput() && vrpn)
         {
             vrpn->MainLoop();
-            pos.x = vrpn->pos.x;
-            pos.y = (vrpn->pos.z - 1.5) * -2;
-            zoom = exp(vrpn->pos.y * -2);
+            pos.x = vrpn->pos.x * 1;
+            pos.y = (vrpn->pos.z - 1.5) * -1;
+            zoom = exp(vrpn->pos.y);
+            ApplyParams();
         }
     }
 
@@ -311,6 +313,7 @@ public:
         bool changed = false;
         changed |= input->RecvChanged(pos);
         changed |= input->RecvChanged(zoom);
+        ApplyParams();
         return changed;
     }
 
@@ -382,6 +385,7 @@ public:
             pos = vrpn->pos;
             look = vrpn->look;
             up = vrpn->up;
+            ApplyParams();
         }
     }
 
@@ -833,11 +837,15 @@ Kernel::Kernel(std::string name) :
         oldWidth(0),
         oldHeight(0)
 {
-    bool isCompute = IsCompute();
     if (name.empty())
     {
         name = "mandelbox";
         this->name = name;
+    }
+    bool isCompute = IsCompute();
+    if (isCompute && !cudaSuccessfulInit)
+    {
+        throw std::runtime_error("CUDA device init failure and in compute mode");
     }
     if (name == "mandelbox")
     {
@@ -979,10 +987,6 @@ void Kernel::RecvState(StateSync *input, bool everything)
             {
                 frame = loadedFrame;
             }
-            else
-            {
-                ResetFrame(frame);
-            }
         }
     }
 }
@@ -1046,6 +1050,17 @@ void Kernel::SetTime(float time)
 void Kernel::SetFramed(bool framed)
 {
     frame = framed ? 0 : -1;
+}
+
+void Kernel::UpdateNoRender()
+{
+    for (size_t i = 0; i < modules.size(); i++)
+    {
+        if (modules[i]->Update(-1, -1))
+        {
+            ResetFrame(frame);
+        }
+    }
 }
 
 void Kernel::RenderInto(int *memory, size_t width, size_t height)

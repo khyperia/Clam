@@ -1,11 +1,21 @@
 #include "driver.h"
 #include "option.h"
 
+bool cudaSuccessfulInit = false;
+
 struct CudaInitClass
 {
     CudaInitClass()
     {
-        HandleCu(cuInit(0));
+        CUresult result = cuInit(0);
+        if (result == CUDA_SUCCESS)
+        {
+            cudaSuccessfulInit = true;
+        }
+        else
+        {
+            std::cout << "cuInit failed" << std::endl;
+        }
     }
 } cudaInitInstance;
 
@@ -192,6 +202,10 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
 
     if (isCompute)
     {
+        if (!cudaSuccessfulInit)
+        {
+            throw std::runtime_error("CUDA device init failure and in compute mode");
+        }
         HandleCu(cuDeviceGet(&cuDevice, 0));
         {
             char name[128];
@@ -279,6 +293,7 @@ bool Driver::RunFrame()
     }
     else
     {
+        kernel->UpdateNoRender();
         if (IsUserInput() && window != NULL)
         {
             SDL_Surface *conf = kernel->Configure(window->font);

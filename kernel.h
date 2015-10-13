@@ -46,6 +46,8 @@ public:
 
     void RecvState(StateSync *input, bool everything);
 
+    void UpdateNoRender();
+
     void RenderInto(int *memory, size_t width, size_t height);
 
     void SetTime(float time);

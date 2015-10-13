@@ -3,6 +3,8 @@
 #include "display.h"
 #include "kernel.h"
 
+extern bool cudaSuccessfulInit;
+
 struct RenderType;
 
 class Driver
