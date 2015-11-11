@@ -23,7 +23,7 @@ struct MandelboxCfg
     float ColorBiasR;
     float ColorBiasG;
     float ColorBiasB;
-    float WhiteClamp;
+    int WhiteClamp;
     float BrightThresh;
 
     float SpecularHighlightAmount;
@@ -71,7 +71,7 @@ MandelboxCfg MandelboxDefault()
     x.DeRotation = 0;
     x.ColorSharpness = 1.0f;
     x.Saturation = 0.5f;
-    x.HueVariance = 0.01f;
+    x.HueVariance = 1.0f;
     x.Reflectivity = 1.0f;
     x.DofAmount = 0.005f;
     x.FovAbberation = 0.01f;
@@ -94,7 +94,7 @@ MandelboxCfg MandelboxDefault()
     x.WhiteClamp = 0;
     x.BrightThresh = 8;
     x.MaxIters = 64;
-    x.Bailout = 256;
+    x.Bailout = 1024;
     x.DeMultiplier = 0.95f;
     x.RandSeedInitSteps = 128;
     x.MaxRayDist = 16;

@@ -11,7 +11,11 @@ class Kernel;
 #include <set>
 #include <cuda.h>
 
+class SettingModuleBase;
+
 class KernelModuleBase;
+
+class SettingAnimation;
 
 class Kernel
 {
@@ -19,6 +23,7 @@ class Kernel
 
     std::set<SDL_Keycode> pressedKeys;
 
+    std::vector<SettingModuleBase *> settings;
     std::vector<KernelModuleBase *> modules;
 
     CUmodule cuModule;
@@ -32,6 +37,8 @@ class Kernel
     size_t maxLocalSize;
 
     void CommonOneTimeKeypress(SDL_Keycode keycode);
+
+    SettingAnimation *animation;
 
     CuMem<int> gpuBuffer;
     size_t oldWidth;
@@ -50,7 +57,9 @@ public:
 
     void RenderInto(int *memory, size_t width, size_t height);
 
-    void SetTime(float time);
+    void LoadAnimation();
+
+    void SetTime(double time, bool wrap);
 
     void SetFramed(bool framed);
 

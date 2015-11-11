@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.6)
 
 project(Clam3 C CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS "ON")
+
 set(SOURCEDIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
@@ -45,6 +47,9 @@ macro(my_package_noreq pacname)
     string(TOUPPER ${pacname} pacname_upper)
     if (${pacname_upper}_FOUND)
         include_directories(${${pacname_upper}_INCLUDE_DIRS})
+        add_definitions(-DHAVE_${pacname_upper})
+    else ()
+        message(WARNING "${pacname} not found!")
     endif ()
 endmacro()
 
@@ -54,17 +59,13 @@ my_package(SDL2_net)
 my_package(SDL2_ttf)
 my_package_noreq(VRPN)
 
-if (VRPN_FOUND)
-    add_definitions(-DHAVE_VRPN)
-endif ()
-
 add_executable(embed util/embed.c)
 
 add_custom_target(shfiles)
 file(GLOB shfiles "${SOURCEDIR}/util/*.sh")
 foreach (shfile ${shfiles})
-    add_custom_command(TARGET shfiles PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${shfile} ${CMAKE_BINARY_DIR})
+    add_custom_command(TARGET shfiles POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy ${shfile} ${CMAKE_BINARY_DIR})
 endforeach ()
 
 set(genfiles)

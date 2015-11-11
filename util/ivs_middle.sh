@@ -30,7 +30,7 @@ ORIGINAL_HOST=$(cut -d' ' -f1 <<< "${SSH_CLIENT}")
 for SLAVE in ${SLAVE_IPS[*]}
 do
   echo " --- Connecting to ${SLAVE}"
-  ssh -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"${ORIGINAL_HOST}:${NCAT_PORT}\"" &
+  ssh -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"${ORIGINAL_HOST}:${HOST_PORT}\"" &
   sleep 1
 done
 

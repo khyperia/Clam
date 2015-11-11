@@ -1,9 +1,6 @@
 #include "kernel.h"
-#include "kernelStructs.h"
+#include "settingsModule.h"
 #include "driver.h"
-#include "option.h"
-#include "mandelbox.h"
-#include "vrpn_help.h"
 #include <fstream>
 
 class KernelModuleBase
@@ -84,17 +81,57 @@ public:
     }
 };
 
-template<typename T, typename Tscalar>
-T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
+template<typename T>
+class KernelSettingsModule : public KernelModule<T>
 {
-    Tscalar t2 = t * t;
-    Tscalar t3 = t2 * t;
+    SettingModule<T> *setting;
 
-    return (((Tscalar)2 * p1) +
-            (-p0 + p2) * t +
-            ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
-            (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2;
-}
+public:
+    KernelSettingsModule(CUmodule module, SettingModule<T> *setting) :
+            KernelModule<T>(module, setting->VarName()),
+            setting(setting)
+    {
+    }
+
+    ~KernelSettingsModule()
+    {
+    }
+
+    virtual void Resize()
+    {
+    }
+
+    virtual void Update()
+    {
+        setting->Update();
+        setting->Apply(this->value);
+    }
+
+    virtual bool OneTimeKeypress(SDL_Keycode keycode)
+    {
+        return setting->OneTimeKeypress(keycode);
+    }
+
+    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
+    {
+        return setting->RepeatKeypress(keycode, time);
+    }
+
+    virtual void SendState(StateSync *output, bool everything) const
+    {
+        setting->SendState(output, everything);
+    }
+
+    virtual bool RecvState(StateSync *input, bool everything)
+    {
+        return setting->RecvState(input, everything);
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *font) const
+    {
+        return setting->Configure(font);
+    }
+};
 
 void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
 {
@@ -112,339 +149,45 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
         RecvState(sync, false);
         delete sync;
     }
+    else if (keycode == SDLK_v)
+    {
+        if (!animation)
+        {
+            try
+            {
+                StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
+                animation = new SettingAnimation(sync, settings);
+                delete sync;
+                std::cout << "Loaded previous animation" << std::endl;
+            }
+            catch (const std::exception &e)
+            {
+                animation = new SettingAnimation(NULL, settings);
+                std::cout << "Created new animation" << std::endl;
+            }
+        }
+        animation->AddKeyframe(settings);
+        StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
+        animation->WriteKeyframes(sync);
+        delete sync;
+        std::cout << "Added keyframe" << std::endl;
+    }
+    else if (keycode == SDLK_b)
+    {
+        if (animation)
+        {
+            animation->keyframes.clear();
+            StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
+            animation->WriteKeyframes(sync);
+            delete sync;
+        }
+        std::cout << "Cleared keyframes" << std::endl;
+    }
     else if (keycode == SDLK_x)
     {
         frame = frame == -1 ? 0 : -1;
     }
 }
-
-static bool Common3dCamera(
-        Vector3<double> &pos,
-        Vector3<double> &look,
-        Vector3<double> &up,
-        double &focalDistance,
-        double &fov,
-        SDL_Keycode keycode,
-        double time)
-{
-    const double speed = 0.5;
-    time *= speed;
-    if (keycode == SDLK_w)
-    {
-        pos = pos + look * (time * focalDistance);
-    }
-    else if (keycode == SDLK_s)
-    {
-        pos = pos + look * (-time * focalDistance);
-    }
-    else if (keycode == SDLK_a)
-    {
-        pos = pos + cross(up, look) * (time * focalDistance);
-    }
-    else if (keycode == SDLK_d)
-    {
-        pos = pos + cross(look, up) * (time * focalDistance);
-    }
-    else if (keycode == SDLK_z)
-    {
-        pos = pos + up * (time * focalDistance);
-    }
-    else if (keycode == SDLK_SPACE)
-    {
-        pos = pos + up * (-time * focalDistance);
-    }
-    else if (keycode == SDLK_r)
-    {
-        focalDistance *= 1 + time * std::sqrt(fov);
-    }
-    else if (keycode == SDLK_f)
-    {
-        focalDistance /= 1 + time * std::sqrt(fov);
-    }
-    else if (keycode == SDLK_u || keycode == SDLK_q)
-    {
-        up = rotate(up, look, time);
-    }
-    else if (keycode == SDLK_o || keycode == SDLK_e)
-    {
-        up = rotate(up, look, -time);
-    }
-    else if (keycode == SDLK_j)
-    {
-        look = rotate(look, up, time * fov);
-    }
-    else if (keycode == SDLK_l)
-    {
-        look = rotate(look, up, -time * fov);
-    }
-    else if (keycode == SDLK_i)
-    {
-        look = rotate(look, cross(up, look), time * fov);
-    }
-    else if (keycode == SDLK_k)
-    {
-        look = rotate(look, cross(look, up), time * fov);
-    }
-    else if (keycode == SDLK_n)
-    {
-        fov *= 1 + time;
-    }
-    else if (keycode == SDLK_m)
-    {
-        fov /= 1 + time;
-    }
-    else
-    {
-        return false;
-    }
-    return true;
-}
-
-class Module2dCamera : public KernelModule<Gpu2dCameraSettings>
-{
-    Vector2<double> pos;
-    double zoom;
-    VrpnHelp *vrpn;
-
-public:
-    Module2dCamera(CUmodule module) :
-            KernelModule<Gpu2dCameraSettings>(module, "CameraArr"),
-            pos(0, 0),
-            zoom(1),
-            vrpn(NULL)
-    {
-        ApplyParams();
-    }
-
-    ~Module2dCamera()
-    {
-        if (vrpn)
-        {
-            delete vrpn;
-        }
-    }
-
-    virtual void Resize()
-    {
-        ApplyParams();
-    }
-
-    virtual bool OneTimeKeypress(SDL_Keycode keycode)
-    {
-        if (keycode == SDLK_BACKSLASH)
-        {
-            if (vrpn)
-            {
-                std::cout << "Disabling VRPN" << std::endl;
-                delete vrpn;
-                vrpn = NULL;
-            }
-            else
-            {
-                std::cout << "Enabling VRPN" << std::endl;
-                vrpn = new VrpnHelp();
-            }
-        }
-        return false;
-    }
-
-    virtual void Update()
-    {
-        if (IsUserInput() && vrpn)
-        {
-            vrpn->MainLoop();
-            pos.x = vrpn->pos.x * 1;
-            pos.y = (vrpn->pos.z - 1.5) * -1;
-            zoom = exp(vrpn->pos.y);
-            ApplyParams();
-        }
-    }
-
-    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
-    {
-        const float movespeed = 0.5f;
-        if (keycode == SDLK_w)
-        {
-            pos.y -= zoom * time * movespeed;
-        }
-        else if (keycode == SDLK_s)
-        {
-            pos.y += zoom * time * movespeed;
-        }
-        else if (keycode == SDLK_a)
-        {
-            pos.x -= zoom * time * movespeed;
-        }
-        else if (keycode == SDLK_d)
-        {
-            pos.x += zoom * time * movespeed;
-        }
-        else if (keycode == SDLK_i)
-        {
-            zoom /= 1 + time;
-        }
-        else if (keycode == SDLK_k)
-        {
-            zoom *= 1 + time;
-        }
-        else
-        {
-            return false;
-        }
-        ApplyParams();
-        return true;
-    }
-
-    void ApplyParams()
-    {
-        value.posX = (float)pos.x;
-        value.posY = (float)pos.y;
-        value.zoom = (float)zoom;
-    }
-
-    virtual void SendState(StateSync *output, bool) const
-    {
-        output->Send(pos);
-        output->Send(zoom);
-    }
-
-    virtual bool RecvState(StateSync *input, bool)
-    {
-        bool changed = false;
-        changed |= input->RecvChanged(pos);
-        changed |= input->RecvChanged(zoom);
-        ApplyParams();
-        return changed;
-    }
-
-    virtual SDL_Surface *Configure(TTF_Font *) const
-    {
-        return NULL;
-    }
-};
-
-class Module3dCamera : public KernelModule<GpuCameraSettings>
-{
-    Vector3<double> pos;
-    Vector3<double> look;
-    Vector3<double> up;
-    double focalDistance;
-    double fov;
-    VrpnHelp *vrpn;
-
-public:
-    Module3dCamera(CUmodule module) :
-            KernelModule<GpuCameraSettings>(module, "CameraArr"),
-            pos(10, 0, 0),
-            look(-1, 0, 0),
-            up(0, 1, 0),
-            focalDistance(8),
-            fov(1),
-            vrpn(NULL)
-    {
-        ApplyParams();
-    }
-
-    ~Module3dCamera()
-    {
-        if (vrpn)
-        {
-            delete vrpn;
-        }
-    }
-
-    virtual void Resize()
-    {
-        ApplyParams();
-    }
-
-    virtual bool OneTimeKeypress(SDL_Keycode keycode)
-    {
-        if (keycode == SDLK_BACKSLASH)
-        {
-            if (vrpn)
-            {
-                std::cout << "Disabling VRPN" << std::endl;
-                delete vrpn;
-                vrpn = NULL;
-            }
-            else
-            {
-                std::cout << "Enabling VRPN" << std::endl;
-                vrpn = new VrpnHelp();
-            }
-        }
-        return false;
-    }
-
-    virtual void Update()
-    {
-        if (IsUserInput() && vrpn)
-        {
-            vrpn->MainLoop();
-            pos = vrpn->pos;
-            look = vrpn->look;
-            up = vrpn->up;
-            ApplyParams();
-        }
-    }
-
-    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
-    {
-        if (Common3dCamera(pos, look, up, focalDistance, fov, keycode, time))
-        {
-            ApplyParams();
-            return true;
-        }
-        return false;
-    }
-
-    void ApplyParams()
-    {
-        look = look.normalized();
-        up = cross(cross(look, up), look).normalized();
-        value.posX = (float)pos.x;
-        value.posY = (float)pos.y;
-        value.posZ = (float)pos.z;
-        value.lookX = (float)look.x;
-        value.lookY = (float)look.y;
-        value.lookZ = (float)look.z;
-        value.upX = (float)up.x;
-        value.upY = (float)up.y;
-        value.upZ = (float)up.z;
-        value.fov = (float)fov;
-        value.focalDistance = (float)focalDistance;
-    }
-
-    virtual void SendState(StateSync *output, bool) const
-    {
-        output->Send(pos);
-        output->Send(look);
-        output->Send(up);
-        output->Send(fov);
-        output->Send(focalDistance);
-    }
-
-    virtual bool RecvState(StateSync *input, bool)
-    {
-        bool changed = false;
-        changed |= input->RecvChanged(pos);
-        changed |= input->RecvChanged(look);
-        changed |= input->RecvChanged(up);
-        changed |= input->RecvChanged(fov);
-        changed |= input->RecvChanged(focalDistance);
-        if (changed)
-        {
-            ApplyParams();
-        }
-        return changed;
-    }
-
-    virtual SDL_Surface *Configure(TTF_Font *) const
-    {
-        return NULL;
-    }
-};
 
 class ModuleBuffer : public KernelModule<CUdeviceptr>
 {
@@ -528,301 +271,6 @@ public:
     }
 };
 
-class ModuleMandelbox : public KernelModule<MandelboxCfg>
-{
-    int menuPos;
-
-public:
-    ModuleMandelbox(CUmodule module) :
-            KernelModule<MandelboxCfg>(module, "MandelboxCfgArr")
-    {
-        value = MandelboxDefault();
-    }
-
-    virtual void Update()
-    {
-    }
-
-    virtual void Resize()
-    {
-    }
-
-    virtual bool OneTimeKeypress(SDL_Keycode keycode)
-    {
-        if (keycode == SDLK_UP)
-        {
-            menuPos--;
-        }
-        else if (keycode == SDLK_DOWN)
-        {
-            menuPos++;
-        }
-        else if (keycode == SDLK_LEFT)
-        {
-            MenuModI(-1);
-        }
-        else if (keycode == SDLK_RIGHT)
-        {
-            MenuModI(1);
-        }
-        const int max = 39;
-        if (menuPos < 0)
-        {
-            menuPos = max - 1;
-        }
-        else if (menuPos >= max)
-        {
-            menuPos = 0;
-        }
-        return false;
-    }
-
-    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
-    {
-        if (keycode == SDLK_LEFT)
-        {
-            MenuMod((float)-time);
-        }
-        else if (keycode == SDLK_RIGHT)
-        {
-            MenuMod((float)time);
-        }
-        else
-        {
-            return false;
-        }
-        return true;
-    }
-
-    virtual void SendState(StateSync *output, bool) const
-    {
-        output->Send(value);
-    }
-
-    virtual bool RecvState(StateSync *input, bool)
-    {
-        return input->RecvChanged(value);
-    }
-
-    void MenuModI(int delta)
-    {
-        switch (menuPos)
-        {
-            case 19:
-                value.WhiteClamp = value.WhiteClamp == 0.0f ? 1.0f : 0.0f;
-                break;
-            case 30:
-                value.MaxIters += delta;
-                break;
-            case 33:
-                value.RandSeedInitSteps += delta;
-                break;
-            case 35:
-                value.MaxRaySteps += delta;
-                break;
-            case 36:
-                value.NumRayBounces += delta;
-                break;
-            default:
-                return;
-        }
-    }
-
-    void MenuMod(float delta)
-    {
-        switch (menuPos)
-        {
-            case 0:
-                value.Scale += delta * 0.25f;
-                break;
-            case 1:
-                value.FoldingLimit += delta * 0.25f;
-                break;
-            case 2:
-                value.FixedRadius2 += delta * 0.25f;
-                break;
-            case 3:
-                value.MinRadius2 += delta * 0.25f;
-                break;
-            case 4:
-                value.InitRotation += delta * 0.25f;
-                break;
-            case 5:
-                value.DeRotation += delta * 0.25f;
-                break;
-            case 6:
-                value.ColorSharpness += delta * 1.0f;
-                break;
-            case 7:
-                value.Saturation += delta * 0.2f;
-                break;
-            case 8:
-                value.HueVariance += delta * 0.1f;
-                break;
-            case 9:
-                value.Reflectivity += delta * 0.25f;
-                break;
-            case 10:
-                value.DofAmount += delta * 0.01f;
-                break;
-            case 11:
-                value.FovAbberation *= delta * 0.1f + 1.0f;
-                break;
-            case 12:
-                value.LightPosX += delta * 0.5f;
-                break;
-            case 13:
-                value.LightPosY += delta * 0.5f;
-                break;
-            case 14:
-                value.LightPosZ += delta * 0.5f;
-                break;
-            case 15:
-                value.LightSize *= delta * 0.1f + 1;
-                break;
-            case 16:
-                value.ColorBiasR += delta * 0.25f;
-                break;
-            case 17:
-                value.ColorBiasG += delta * 0.25f;
-                break;
-            case 18:
-                value.ColorBiasB += delta * 0.25f;
-                break;
-            case 20:
-                value.BrightThresh += delta * 0.1f;
-                break;
-            case 21:
-                value.SpecularHighlightAmount += delta * 0.25f;
-                break;
-            case 22:
-                value.SpecularHighlightSize += delta * 0.01f;
-                break;
-            case 23:
-                value.FogDensity *= delta * 1.0f + 1;
-                break;
-            case 24:
-                value.LightBrightnessAmount *= delta * 0.5f + 1;
-                break;
-            case 25:
-                value.LightBrightnessCenter += delta * 0.25f;
-                break;
-            case 26:
-                value.LightBrightnessWidth += delta * 0.25f;
-                break;
-            case 27:
-                value.AmbientBrightnessAmount *= delta * 0.5f + 1;
-                break;
-            case 28:
-                value.AmbientBrightnessCenter += delta * 0.25f;
-                break;
-            case 29:
-                value.AmbientBrightnessWidth += delta * 0.25f;
-                break;
-            case 31:
-                value.Bailout *= delta * 0.5f + 1;
-                break;
-            case 32:
-                value.DeMultiplier += delta * 0.125f;
-                break;
-            case 34:
-                value.MaxRayDist *= delta * 1.0f + 1;
-                break;
-            case 37:
-                value.QualityFirstRay *= delta * 0.5f + 1;
-                break;
-            case 38:
-                value.QualityRestRay *= delta * 0.5f + 1;
-                break;
-            default:
-                return;
-        }
-        value.FogDensity = fabsf(value.FogDensity);
-    }
-
-    void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int index, float value,
-                  const char *name) const
-    {
-        std::ostringstream result;
-        result << (menuPos == index ? "* " : "  ") << name << " : " << value << "\n";
-        if (masterSurf)
-        {
-            SDL_Color color = {255, 0, 0, 0};
-            SDL_Surface *surf = TTF_RenderText_Blended(font, result.str().c_str(), color);
-            SDL_Rect rect;
-            rect.x = 0;
-            rect.y = height;
-            rect.w = maxWidth;
-            rect.h = 5;
-            SDL_BlitSurface(surf, NULL, masterSurf, &rect);
-            SDL_FreeSurface(surf);
-        }
-        int thisWidth, thisHeight;
-        TTF_SizeText(font, result.str().c_str(), &thisWidth, &thisHeight);
-        if (thisWidth > maxWidth)
-        {
-            maxWidth = thisWidth;
-        }
-        height += thisHeight;
-    }
-
-    void Menu(TTF_Font *font, SDL_Surface *m, int &w, int &h) const
-    {
-        int i = 0;
-        MenuItem(font, m, w, h, i++, value.Scale, "Scale");
-        MenuItem(font, m, w, h, i++, value.FoldingLimit, "FoldingLimit");
-        MenuItem(font, m, w, h, i++, value.FixedRadius2, "FixedRadius2");
-        MenuItem(font, m, w, h, i++, value.MinRadius2, "MinRadius2");
-        MenuItem(font, m, w, h, i++, value.InitRotation, "InitRotation");
-        MenuItem(font, m, w, h, i++, value.DeRotation, "DeRotation");
-        MenuItem(font, m, w, h, i++, value.ColorSharpness, "ColorSharpness");
-        MenuItem(font, m, w, h, i++, value.Saturation, "Saturation");
-        MenuItem(font, m, w, h, i++, value.HueVariance, "HueVariance");
-        MenuItem(font, m, w, h, i++, value.Reflectivity, "Reflectivity");
-        MenuItem(font, m, w, h, i++, value.DofAmount, "DofAmount");
-        MenuItem(font, m, w, h, i++, value.FovAbberation, "FovAbberation");
-        MenuItem(font, m, w, h, i++, value.LightPosX, "LightPosX");
-        MenuItem(font, m, w, h, i++, value.LightPosY, "LightPosY");
-        MenuItem(font, m, w, h, i++, value.LightPosZ, "LightPosZ");
-        MenuItem(font, m, w, h, i++, value.LightSize, "LightSize");
-        MenuItem(font, m, w, h, i++, value.ColorBiasR, "ColorBiasR");
-        MenuItem(font, m, w, h, i++, value.ColorBiasG, "ColorBiasG");
-        MenuItem(font, m, w, h, i++, value.ColorBiasB, "ColorBiasB");
-        MenuItem(font, m, w, h, i++, value.WhiteClamp, "WhiteClamp");
-        MenuItem(font, m, w, h, i++, value.BrightThresh, "BrightThresh");
-        MenuItem(font, m, w, h, i++, value.SpecularHighlightAmount, "SpecularHighlightAmount");
-        MenuItem(font, m, w, h, i++, value.SpecularHighlightSize, "SpecularHighlightSize");
-        MenuItem(font, m, w, h, i++, value.FogDensity, "FogDensity");
-        MenuItem(font, m, w, h, i++, value.LightBrightnessAmount, "LightBrightnessAmount");
-        MenuItem(font, m, w, h, i++, value.LightBrightnessCenter, "LightBrightnessCenter");
-        MenuItem(font, m, w, h, i++, value.LightBrightnessWidth, "LightBrightnessWidth");
-        MenuItem(font, m, w, h, i++, value.AmbientBrightnessAmount, "AmbientBrightnessAmount");
-        MenuItem(font, m, w, h, i++, value.AmbientBrightnessCenter, "AmbientBrightnessCenter");
-        MenuItem(font, m, w, h, i++, value.AmbientBrightnessWidth, "AmbientBrightnessWidth");
-        MenuItem(font, m, w, h, i++, value.MaxIters, "MaxIters");
-        MenuItem(font, m, w, h, i++, value.Bailout, "Bailout");
-        MenuItem(font, m, w, h, i++, value.DeMultiplier, "DeMultiplier");
-        MenuItem(font, m, w, h, i++, value.RandSeedInitSteps, "RandSeedInitSteps");
-        MenuItem(font, m, w, h, i++, value.MaxRayDist, "MaxRayDist");
-        MenuItem(font, m, w, h, i++, value.MaxRaySteps, "MaxRaySteps");
-        MenuItem(font, m, w, h, i++, value.NumRayBounces, "NumRayBounces");
-        MenuItem(font, m, w, h, i++, value.QualityFirstRay, "QualityFirstRay");
-        MenuItem(font, m, w, h, i++, value.QualityRestRay, "QualityRestRay");
-    }
-
-    virtual SDL_Surface *Configure(TTF_Font *font) const
-    {
-        int maxWidth = 0;
-        int height = 0;
-        Menu(font, NULL, maxWidth, height);
-        SDL_Surface *master = SDL_CreateRGBSurface(SDL_SWSURFACE, maxWidth, height, 32, 255 << 16, 255 << 8, 255,
-                                                   (Uint32)255 << 24);
-        height = 0;
-        Menu(font, master, maxWidth, height);
-        return master;
-    }
-};
-
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
@@ -834,6 +282,7 @@ Kernel::Kernel(std::string name) :
         useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)),
         frame(-1),
         maxLocalSize(32),
+        animation(NULL),
         oldWidth(0),
         oldHeight(0)
 {
@@ -857,8 +306,12 @@ Kernel::Kernel(std::string name) :
         {
             cuModule = NULL;
         }
-        modules.push_back(new Module3dCamera(cuModule));
-        modules.push_back(new ModuleMandelbox(cuModule));
+        Module3dCameraSettings *camera = new Module3dCameraSettings();
+        ModuleMandelboxSettings *mbox = new ModuleMandelboxSettings();
+        settings.push_back(camera);
+        settings.push_back(mbox);
+        modules.push_back(new KernelSettingsModule<GpuCameraSettings>(cuModule, camera));
+        modules.push_back(new KernelSettingsModule<MandelboxCfg>(cuModule, mbox));
         modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", sizeof(float) * 4));
         modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
     }
@@ -872,7 +325,9 @@ Kernel::Kernel(std::string name) :
         {
             cuModule = NULL;
         }
-        modules.push_back(new Module2dCamera(cuModule));
+        Module2dCameraSettings *camera = new Module2dCameraSettings();
+        settings.push_back(camera);
+        modules.push_back(new KernelSettingsModule<Gpu2dCameraSettings>(cuModule, camera));
     }
     else
     {
@@ -893,6 +348,14 @@ Kernel::~Kernel()
     for (size_t i = 0; i < modules.size(); i++)
     {
         delete modules[i];
+    }
+    for (size_t i = 0; i < settings.size(); i++)
+    {
+        delete settings[i];
+    }
+    if (animation)
+    {
+        delete animation;
     }
 }
 
@@ -1042,9 +505,25 @@ SDL_Surface *Kernel::Configure(TTF_Font *font)
     return wholeSurf;
 }
 
-void Kernel::SetTime(float time)
+void Kernel::LoadAnimation()
 {
-    std::cout << "SetTime not implemented: " << time << std::endl;
+    if (animation)
+    {
+        delete animation;
+    }
+    StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
+    animation = new SettingAnimation(sync, settings);
+    delete sync;
+}
+
+void Kernel::SetTime(double time, bool wrap)
+{
+    if (!animation)
+    {
+        std::cout << "No animation keyframes loaded" << std::endl;
+        return;
+    }
+    animation->Animate(settings, time, wrap);
 }
 
 void Kernel::SetFramed(bool framed)

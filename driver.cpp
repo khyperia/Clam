@@ -108,35 +108,41 @@ struct HeadlessRenderType : public RenderType
         {
             std::cout << "Flush/loading initial state" << std::endl;
             kernel->RenderInto(NULL, width, height);
-            std::string filename = RenderstateFilename(kernel);
-            try
+            if (numTimes > 1)
             {
-                StateSync *sync = NewFileStateSync(filename.c_str(), true);
-                kernel->RecvState(sync, true);
-                delete sync;
-                std::cout << "Loaded intermediate state from " << filename << std::endl;
-            }
-            catch (const std::exception &ex)
-            {
-                std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what() << std::endl
-                << "Trying initial headless state instead" << std::endl;
-                StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
-                kernel->RecvState(sync, false);
+                std::cout << "Loading animation keyframes" << std::endl;
+                kernel->LoadAnimation();
+                kernel->SetTime(0, false);
                 kernel->SetFramed(true);
-                delete sync;
             }
-            if (numTimes > 0)
+            else
             {
-                kernel->SetTime(0);
+                std::string filename = RenderstateFilename(kernel);
+                try
+                {
+                    StateSync *sync = NewFileStateSync(filename.c_str(), true);
+                    kernel->RecvState(sync, true);
+                    delete sync;
+                    std::cout << "Loaded intermediate state from " << filename << std::endl;
+                }
+                catch (const std::exception &ex)
+                {
+                    std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what() << std::endl
+                    << "Trying initial headless state instead" << std::endl;
+                    StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
+                    kernel->RecvState(sync, false);
+                    kernel->SetFramed(true);
+                    delete sync;
+                }
             }
         }
         currentFrame--;
-        if (numTimes == 0)
+        if (numTimes <= 1)
         {
             std::cout << currentFrame << " frames left" << std::endl;
         }
         kernel->RenderInto(NULL, width, height);
-        if (currentFrame % 32 == 0 && numTimes == 0)
+        if (currentFrame % 32 == 0 && numTimes <= 1)
         {
             std::string filename = RenderstateFilename(kernel);
             StateSync *sync = NewFileStateSync(filename.c_str(), false);
@@ -158,14 +164,15 @@ struct HeadlessRenderType : public RenderType
             SDL_SaveBMP(surface, filename.c_str());
             std::cout << "Saved image '" << filename << "'" << std::endl;
             SDL_FreeSurface(surface);
-            if (currentTime == numTimes)
+            currentTime++;
+            if (currentTime >= numTimes)
             {
                 return false;
             }
-            currentTime++;
-            float time = (float)currentTime / numTimes;
+            double time = (double)currentTime / numTimes;
             //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
-            kernel->SetTime(time);
+            kernel->SetTime(time, false);
+            kernel->SetFramed(true);
             currentFrame = numFrames;
         }
         return true;

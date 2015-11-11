@@ -17,6 +17,11 @@ __constant__ float4* BufferScratchArr[1];
 __constant__ uint2* BufferRandArr[1];
 #define BufferRand (BufferRandArr[0])
 
+__device__ inline float3 xyz(float4 val)
+{
+    return make_float3(val.x, val.y, val.z);
+}
+
 // http://en.wikipedia.org/wiki/Stereographic_projection
 __device__ float3 RayDir(float3 forward, float3 up, float2 screenCoords, float fov) {
     screenCoords *= -fov;
@@ -29,17 +34,110 @@ __device__ float3 RayDir(float3 forward, float3 up, float2 screenCoords, float f
     return look.x * right + look.y * up + look.z * forward;
 }
 
-__device__ float3 Rotate(float3 a, float angle)
+__device__ inline float3 Rotate(float3 v, float3 axis, float angle)
 {
-    return make_float3(
-        cos(angle) * a.x - sin(angle) * a.y,
-        sin(angle) * a.x + cos(angle) * a.y,
-        a.z
-    );
+    float cosa = cos(angle);
+    float sina = sin(angle);
+    return cosa * v + sina * cross(axis, v) + (1 - cosa) * dot(axis, v) * axis;
+}
+
+__device__ inline float4 Mandelbulb(float4 z, const float Power)
+{
+    const float r = length(xyz(z));
+
+    // convert to polar coordinates
+    float theta = asin(z.z / r);
+    float phi = atan2(z.y, z.x);
+    float dr = powf(r, Power - 1.0) * Power * z.w + 1.0;
+
+    // scale and rotate the point
+    float zr = pow(r, Power);
+    theta = theta * Power;
+    phi = phi * Power;
+
+    // convert back to cartesian coordinates
+    float3 z3 = zr * make_float3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
+    return make_float4(z3, dr);
+}
+
+__device__ inline float4 Boxfold(float4 z, const float FoldingLimit)
+{
+    float3 znew = xyz(z);
+    znew = clamp(znew, -FoldingLimit, FoldingLimit) * 2.0f - znew;
+    return make_float4(znew.x, znew.y, znew.z, z.w);
+}
+
+__device__ inline float4 Spherefold(float4 z, const float MinRadius2, const float FixedRadius2)
+{
+    float3 znew = xyz(z);
+    z *= FixedRadius2 / clamp(dot(znew, znew), MinRadius2, FixedRadius2);
+    return z;
+}
+
+__device__ inline float4 TScale(float4 z, const float Scale)
+{
+    return z * make_float4(Scale, Scale, Scale, fabs(Scale));
+}
+
+__device__ inline float4 TOffset(float4 z, float3 offset)
+{
+    return z + make_float4(offset.x, offset.y, offset.z, 1.0f);
+}
+
+__device__ inline float4 TRotate(float4 v, float3 axis, float angle)
+{
+    return make_float4(Rotate(xyz(v), axis, angle), v.w);
+}
+
+__device__ inline float4 Mandelbox(float4 z, float3 offset,
+        const float FoldingLimit,
+        const float MinRadius2, const float FixedRadius2,
+        const float Scale)
+{
+    z = Boxfold(z, FoldingLimit);
+    z = Spherefold(z, MinRadius2, FixedRadius2);
+    z = TScale(z, Scale);
+    z = TOffset(z, offset);
+    return z;
+}
+
+/*
+__device__ inline float4 DeIter(float4 z,
+        float3 offset,
+        const float FoldingLimit,
+        const float MinRadius2, const float FixedRadius2,
+        const float Scale,
+        const float Rotation)
+{
+    z = Mandelbox(z, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale);
+    const float3 rotVec = normalize(make_float3(1, 1, 1));
+    z = TRotate(z, rotVec, Rotation);
+    return z;
+}
+*/
+
+__device__ inline float4 DeIter(float4 z, int i,
+        float3 offset,
+        const float FoldingLimit,
+        const float MinRadius2, const float FixedRadius2,
+        const float Scale,
+        const float Rotation)
+{
+    if (i % 2)
+    {
+        z = Mandelbox(z, offset, FoldingLimit, MinRadius2, FixedRadius2, -1);
+    }
+    else
+    {
+        z = Boxfold(z, FoldingLimit);
+        z = Mandelbulb(z, 2);
+    }
+    z = TRotate(z, normalize(make_float3(1, 1, 1)), Rotation);
+    return z;
 }
 
 __device__ float De(float3 offset) {
-    offset = Rotate(offset, cfg.InitRotation);
+    offset = Rotate(offset, make_float3(0, 0, 1), cfg.InitRotation);
     float4 z = make_float4(offset, 1.0f);
     const float FoldingLimit = cfg.FoldingLimit;
     const float MinRadius2 = cfg.MinRadius2;
@@ -49,30 +147,19 @@ __device__ float De(float3 offset) {
     const int MaxIters = cfg.MaxIters;
     const float Bailout = cfg.Bailout;
     for (int n = 0; n < MaxIters; n++) {
-        float3 znew = make_float3(z.x, z.y, z.z);
-        znew = clamp(znew, -FoldingLimit, FoldingLimit) * 2.0f - znew;
-        z = make_float4(znew.x, znew.y, znew.z, z.w);
+        z = DeIter(z, n, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale, DeRotation);
 
-        float len2 = dot(znew, znew);
-        if (len2 > Bailout)
+        float3 z3 = xyz(z);
+        if (dot(z3, z3) > Bailout)
             break;
-        z *= FixedRadius2 / clamp(len2, MinRadius2, FixedRadius2);
-
-        z = make_float4(Scale, Scale, Scale, fabs(Scale)) * z
-                + make_float4(offset.x, offset.y, offset.z, 1.0f);
-
-        float3 zRot = make_float3(z.x, z.y, z.z);
-        zRot = Rotate(zRot, DeRotation);
-        z = make_float4(zRot.x, zRot.y, zRot.z, z.w);
     }
-    float3 zxyz = make_float3(z.x, z.y, z.z);
-    return length(zxyz) / z.w;
+    return length(xyz(z)) / z.w;
 }
 
 __device__ float DeColor(float3 offset, float lightHue) {
-    offset = Rotate(offset, cfg.InitRotation);
-    float3 z = offset;
-    int hue = 0;
+    offset = Rotate(offset, make_float3(0, 0, 1), cfg.InitRotation);
+    float4 z = make_float4(offset, 1.0f);
+    float hue = 0;
     const float FoldingLimit = cfg.FoldingLimit;
     const float MinRadius2 = cfg.MinRadius2;
     const float FixedRadius2 = cfg.FixedRadius2;
@@ -81,29 +168,15 @@ __device__ float DeColor(float3 offset, float lightHue) {
     const int MaxIters = cfg.MaxIters;
     const float Bailout = cfg.Bailout;
     for (int n = 0; n < MaxIters && dot(z, z) < Bailout; n++) {
-        float3 zold = z;
-        z = clamp(z, -FoldingLimit, FoldingLimit) * 2.0f - z;
-        if (dot(zold - z, zold - z) > 0.0001f)
-            hue += 7;
-        else
-            hue += 1;
+        float4 oldz = z;
+        z = DeIter(z, n, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale, DeRotation);
 
-        float len2 = dot(z, z);
-        if (len2 > Bailout)
-            break;
-        float temp = FixedRadius2 / clamp(len2, MinRadius2, FixedRadius2);
-        z *= temp;
-        if (len2 < MinRadius2)
-            hue += 0;
-        else if (len2 < FixedRadius2)
-            hue += 2;
-        else
-            hue += 5;
-
-        z = Scale * z + offset;
-
-        z = Rotate(z, DeRotation);
+        float4 dz = z - oldz;
+        float3 z3 = xyz(dz);
+        float len2 = dot(z3, z3);
+        hue += log2(len2);
     }
+
     float fullValue = lightHue - hue * cfg.HueVariance;
     fullValue *= 3.14159f;
     fullValue = cos(fullValue);
@@ -112,85 +185,6 @@ __device__ float DeColor(float3 offset, float lightHue) {
     fullValue = 1 - (1 - fullValue) * cfg.Saturation;
     return fullValue;
 }
-
-/*
-__device__ float De(float3 pos) {
-    float3 z = pos;
-    float dr = 1.0f;
-    float r = 0.0f;
-    const float Power = cfg.Scale;
-    const int MaxIters = cfg.MaxIters;
-    const float Bailout = cfg.Bailout;
-    for (int i = 0; i < MaxIters; i++) {
-        r = length(z);
-        if (r > Bailout) break;
-
-        // convert to polar coordinates
-        float theta = asin(z.z / r);
-        float phi = atan2(z.y, z.x);
-        dr = powf(r, Power - 1.0) * Power * dr + 1.0;
-
-        // scale and rotate the point
-        float zr = pow(r, Power);
-        theta = theta * Power;
-        phi = phi * Power;
-
-        // convert back to cartesian coordinates
-        z = zr * make_float3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
-        z += pos;
-    }
-    float distance = 0.5f * log(r) * r / dr;
-    //distance = fabs(distance);
-    if (pos.y > 0 && pos.z > 0)
-    {
-        float minPos = min(pos.y, pos.z);
-        distance = max(distance, minPos);
-    }
-    return distance;
-}
-
-__device__ float DeColor(float3 pos, float lightHue) {
-    float3 z = pos;
-    float dr = 1.0f;
-    float r = 0.0f;
-    const float Power = cfg.Scale;
-    const int MaxIters = cfg.MaxIters;
-    const float Bailout = cfg.Bailout;
-    float hue = 0;
-    for (int i = 0; i < MaxIters; i++) {
-        r = length(z);
-        if (r > Bailout) break;
-
-        // convert to polar coordinates
-        float theta = asin(z.z / r);
-        float phi = atan2(z.y, z.x);
-        dr = powf(r, Power - 1.0) * Power * dr + 1.0;
-
-        hue += theta + phi;
-
-        // scale and rotate the point
-        float zr = pow(r, Power);
-        theta = theta * Power;
-        phi = phi * Power;
-
-        // convert back to cartesian coordinates
-        z = zr * make_float3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
-        z += pos;
-    }
-    float distance = 0.5f * log(r) * r / dr;
-    if (pos.y > 0 && pos.z > 0 && min(pos.y, pos.z) > distance)
-    {
-        hue = length(z) / cfg.HueVariance;
-    }
-    float fullValue = lightHue - hue * cfg.HueVariance;
-    fullValue *= 3.14159f;
-    fullValue = cos(fullValue);
-    fullValue *= fullValue;
-    fullValue = pow(fullValue, cfg.ColorSharpness);
-    fullValue = 1 - (1 - fullValue) * cfg.Saturation;
-    return fullValue;
-}
-*/
 
 __device__ uint MWC64X(ulong *state)
 {
@@ -201,7 +195,7 @@ __device__ uint MWC64X(ulong *state)
 
 __device__ float Rand(ulong* seed)
 {
-    return (float)MWC64X(seed) / UINT_MAX;
+    return (float)MWC64X(seed) / 4294967296.0f;
 }
 
 __device__ float2 RandCircle(ulong* rand)
@@ -518,6 +512,7 @@ extern "C" __global__ void kern(
     float hue = Rand(&rand);
 
     float2 screenCoords = make_float2((float)(x + screenX), (float)(y + screenY));
+    screenCoords += make_float2(Rand(&rand) - 0.5f, Rand(&rand) - 0.5f);
     float fov = Camera.fov * 2 / (width + height);
     fov *= exp((hue - 0.5f) * cfg.FovAbberation);
     float3 rayDir = RayDir(look, up, screenCoords, fov);

@@ -32,7 +32,7 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
     std::string fontname = FontName();
     if (fontname.empty())
     {
-        fontname = "/usr/share/fonts/TTF/Inconsolata-Regular.ttf";
+        fontname = "/usr/share/fonts/OTF/Inconsolata.otf";
     }
     font = TTF_OpenFont(fontname.c_str(), 14);
     if (!font)

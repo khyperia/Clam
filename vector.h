@@ -20,17 +20,17 @@ struct Vector4
     {
     }
 
-    T length2()
+    T length2() const
     {
         return x * x + y * y + z * z + w * w;
     }
 
-    T length()
+    T length() const
     {
         return std::sqrt(length2());
     }
 
-    Vector4<T> normalized()
+    Vector4<T> normalized() const
     {
         return *this / length();
     }
@@ -101,17 +101,17 @@ struct Vector3
     {
     }
 
-    T length2()
+    T length2() const
     {
         return x * x + y * y + z * z;
     }
 
-    T length()
+    T length() const
     {
         return std::sqrt(length2());
     }
 
-    Vector3<T> normalized()
+    Vector3<T> normalized() const
     {
         return *this / length();
     }
@@ -197,17 +197,17 @@ struct Vector2
     {
     }
 
-    T length2()
+    T length2() const
     {
         return x * x + y * y;
     }
 
-    T length()
+    T length() const
     {
         return std::sqrt(length2());
     }
 
-    Vector2<T> normalized()
+    Vector2<T> normalized() const
     {
         return *this / length();
     }

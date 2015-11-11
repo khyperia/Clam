@@ -14,6 +14,10 @@ if [ -e $HOME/.vrpn-server ]
 then
     export CLAM3_VRPN=$(<$HOME/.vrpn-server)
 fi
+if [ -e /usr/share/fonts/dejavu/DejaVuLGCSansMono.ttf ]
+then
+    export CLAM3_FONT=/usr/share/fonts/dejavu/DejaVuLGCSansMono.ttf
+fi
 
 # Prints a very readable bold message that stands out
 function printMessage()
