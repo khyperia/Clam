@@ -38,7 +38,8 @@ protected:
     int width;
     int height;
 
-    KernelModule(CUmodule module, const char *varname) : gpuVar(0), module(module), width(-1), height(-1)
+    KernelModule(CUmodule module, const char *varname) :
+            oldCpuVar(), value(), gpuVar(0), module(module), width(-1), height(-1)
     {
         if (module)
         {
@@ -176,7 +177,7 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
     {
         if (animation)
         {
-            animation->keyframes.clear();
+            animation->ClearKeyframes();
             StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
             animation->WriteKeyframes(sync);
             delete sync;
@@ -587,121 +588,3 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
         gpuBuffer.CopyTo(memory);
     }
 }
-
-/*
-class MandelboxAnimation
-{
-    std::vector<MandelboxState> keyframes;
-
-public:
-    void AddKeyframe(MandelboxState state)
-    {
-        keyframes.push_back(state);
-    }
-
-    void Clear()
-    {
-        keyframes.clear();
-    }
-
-    void Send(StateSync *sync)
-    {
-        sync->Send(keyframes.size());
-        sync->SendArr(keyframes);
-    }
-
-    void Recv(StateSync *sync)
-    {
-        size_t size = sync->Recv<size_t>();
-        keyframes = sync->RecvArr<MandelboxState>(size);
-    }
-
-    MandelboxState Interpolate(double time, bool loop)
-    {
-        time *= keyframes.size() - 1;
-        size_t itime = (size_t)time;
-        double t = time - itime;
-        MandelboxState p0 = keyframes[itime == 0 ? (loop ? keyframes.size() - 1 : (size_t)0) : itime - 1];
-        MandelboxState p1 = keyframes[itime];
-        MandelboxState p2 = keyframes[itime + 1];
-        MandelboxState p3 = keyframes[itime == keyframes.size() - 2 ? (loop ? 0 : itime + 1) : itime + 2];
-        MandelboxState result;
-#define InterpDo(ts, x) result.x = CatmullRom(p0.x, p1.x, p2.x, p3.x, (ts)t)
-        InterpDo(double, pos);
-        InterpDo(double, look);
-        InterpDo(double, up);
-        InterpDo(double, focalDistance);
-        InterpDo(double, fov);
-        InterpDo(float, cfg.Scale);
-        InterpDo(float, cfg.FoldingLimit);
-        InterpDo(float, cfg.FixedRadius2);
-        InterpDo(float, cfg.MinRadius2);
-        InterpDo(float, cfg.InitRotation);
-        InterpDo(float, cfg.DeRotation);
-        InterpDo(float, cfg.ColorSharpness);
-        InterpDo(float, cfg.Saturation);
-        InterpDo(float, cfg.HueVariance);
-        InterpDo(float, cfg.Reflectivity);
-        InterpDo(float, cfg.DofAmount);
-        InterpDo(float, cfg.FovAbberation);
-        InterpDo(float, cfg.LightPosX);
-        InterpDo(float, cfg.LightPosY);
-        InterpDo(float, cfg.LightPosZ);
-        InterpDo(float, cfg.LightSize);
-        InterpDo(float, cfg.ColorBiasR);
-        InterpDo(float, cfg.ColorBiasG);
-        InterpDo(float, cfg.ColorBiasB);
-        InterpDo(float, cfg.WhiteClamp);
-        InterpDo(float, cfg.BrightThresh);
-        InterpDo(float, cfg.SpecularHighlightAmount);
-        InterpDo(float, cfg.SpecularHighlightSize);
-        InterpDo(float, cfg.FogDensity);
-        InterpDo(float, cfg.LightBrightnessAmount);
-        InterpDo(float, cfg.LightBrightnessCenter);
-        InterpDo(float, cfg.LightBrightnessWidth);
-        InterpDo(float, cfg.AmbientBrightnessAmount);
-        InterpDo(float, cfg.AmbientBrightnessCenter);
-        InterpDo(float, cfg.AmbientBrightnessWidth);
-#undef InterpDo
-        return result;
-    }
-};
-
-    void SaveAnimation()
-    {
-        try
-        {
-            StateSync *sync = NewFileStateSync(AnimationName().c_str(), true);
-            animation.Recv(sync);
-            delete sync;
-        }
-        catch (const std::exception &ex)
-        {
-            std::cout << "Didn't read animation state: " << ex.what() << std::endl;
-        }
-        // ---
-        StateSync *sync = NewFileStateSync(AnimationName().c_str(), false);
-        animation.Send(sync);
-        delete sync;
-    }
-
-    void OneTimeKeypress(SDL_Keycode keycode)
-    {
-        if (keycode == SDLK_v)
-        {
-            std::cout << "Saved keyframe" << std::endl;
-            animation.AddKeyframe(state);
-            SaveAnimation();
-        }
-        else if (keycode == SDLK_b)
-        {
-            std::cout << "Cleared keyframes" << std::endl;
-            animation.Clear();
-            SaveAnimation();
-        }
-        else
-        {
-            CommonOneTimeKeypress(this, keycode);
-        }
-    }
-*/

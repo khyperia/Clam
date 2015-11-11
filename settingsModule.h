@@ -43,10 +43,11 @@ struct SettingModule : public SettingModuleBase
     virtual void Apply(T &value) const = 0;
 };
 
-struct SettingAnimation
+class SettingAnimation
 {
     std::vector<std::vector<SettingModuleBase *> > keyframes;
 
+public:
     SettingAnimation(StateSync *sync, const std::vector<SettingModuleBase *> &moduleSetup)
             : keyframes()
     {
@@ -67,6 +68,11 @@ struct SettingAnimation
 
     ~SettingAnimation()
     {
+        ClearKeyframes();
+    }
+
+    void ClearKeyframes()
+    {
         for (size_t i = 0; i < keyframes.size(); i++)
         {
             for (size_t j = 0; j < keyframes[i].size(); j++)
@@ -74,6 +80,7 @@ struct SettingAnimation
                 delete keyframes[i][j];
             }
         }
+        keyframes.clear();
     }
 
     void WriteKeyframes(StateSync *sync)
@@ -565,6 +572,7 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
 
     ModuleMandelboxSettings()
     {
+        menuPos = 0;
         editValue = MandelboxDefault();
 #define MkNv(t, x, d) nameValues.push_back(new TypedNameValue<t>(#x, editValue.x, d))
         MkNv(float, Scale, 0.25f);

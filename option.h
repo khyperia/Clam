@@ -23,3 +23,5 @@ bool RenderOffset(int *shiftx, int *shifty);
 std::string VrpnName();
 
 std::string FontName();
+
+int CudaDeviceNum();

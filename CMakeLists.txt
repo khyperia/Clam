@@ -30,7 +30,6 @@ set(CMAKE_INCLUDE_PATH
         "/home/echauck/SDL2/include"
         "/home/echauck/SDL2_net/include"
         "/home/echauck/SDL2_ttf/include"
-        "/opt/intel/opencl-sdk/include"
         "/home/kuhl/public-vrlab/vrpn"
         "${CMAKE_SOURCE_DIR}/../vrpn"
         "/opt/cuda/include"

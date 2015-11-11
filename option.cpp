@@ -12,6 +12,7 @@ static std::string headless;
 static std::string renderOffset;
 static std::string vrpn;
 static std::string font;
+static std::string cudaDeviceNum;
 
 static void TryParseEnv(std::string &ref, const char *varname)
 {
@@ -32,6 +33,7 @@ static void ParseEnvVar()
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
     TryParseEnv(vrpn, "CLAM3_VRPN");
     TryParseEnv(font, "CLAM3_FONT");
+    TryParseEnv(cudaDeviceNum, "CLAM3_DEVICE");
 }
 
 static void ParseArg(const std::string &option, const std::string &value)
@@ -67,6 +69,10 @@ static void ParseArg(const std::string &option, const std::string &value)
     else if (option == "--font")
     {
         font = value;
+    }
+    else if (option == "--device")
+    {
+        cudaDeviceNum = value;
     }
     else
     {
@@ -160,4 +166,19 @@ std::string VrpnName()
 std::string FontName()
 {
     return font;
+}
+
+int CudaDeviceNum()
+{
+    if (cudaDeviceNum.empty())
+    {
+        return 0;
+    }
+    int num;
+    if (sscanf(cudaDeviceNum.c_str(), "%d", &num) != 1)
+    {
+        std::cout << "Couldn't parse cuda device number, assuming 0" << std::endl;
+        num = 0;
+    }
+    return num;
 }

@@ -211,13 +211,25 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
     {
         if (!cudaSuccessfulInit)
         {
-            throw std::runtime_error("CUDA device init failure and in compute mode");
+            throw std::runtime_error("CUDA device init failure while in compute mode");
         }
-        HandleCu(cuDeviceGet(&cuDevice, 0));
+        int deviceNum = CudaDeviceNum();
+        int maxDev = 0;
+        HandleCu(cuDeviceGetCount(&maxDev));
+        if (maxDev <= 0)
+        {
+            throw std::runtime_error("cuDeviceGetCount returned zero, is an NVIDIA GPU present on the system?");
+        }
+        if (deviceNum < 0 || deviceNum >= maxDev)
+        {
+            throw std::runtime_error("Invalid device number " + tostring(deviceNum) + ": must be less than "
+                                     + tostring(maxDev));
+        }
+        HandleCu(cuDeviceGet(&cuDevice, deviceNum));
         {
             char name[128];
             HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
-            std::cout << "Using device: " << name << std::endl;
+            std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << std::endl;
         }
         HandleCu(cuCtxCreate(&cuContext, CU_CTX_SCHED_YIELD, cuDevice));
         HandleCu(cuCtxSetCurrent(cuContext));

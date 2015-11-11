@@ -37,7 +37,7 @@ sleep 1
 
 printMessage "SSHing to ${IVS_HOSTNAME}"
 
-ssh -t -t ${IVS_USER}@${IVS_HOSTNAME} "cd ${IVS_TEMP_DIR}/util; ./ivs_middle.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"${HOST_PORT}\""
+ssh -R ${HOST_PORT}:localhost:${HOST_PORT} -t -t ${IVS_USER}@${IVS_HOSTNAME} "cd ${IVS_TEMP_DIR}/util; ./ivs_middle.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"${HOST_PORT}\""
 
 printMessage "SSH exited, waiting for host to exit"
 
