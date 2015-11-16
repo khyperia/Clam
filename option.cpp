@@ -1,7 +1,5 @@
 #include "option.h"
 #include "util.h"
-#include <stdlib.h>
-#include <iostream>
 #include <stdio.h>
 
 static std::string masterIp;
@@ -76,7 +74,7 @@ static void ParseArg(const std::string &option, const std::string &value)
     }
     else
     {
-        std::cout << "Unknown option " << option << std::endl;
+        std::cout << "Unknown option " << option << "\n";
     }
 }
 
@@ -89,7 +87,7 @@ void ParseCmdline(int argc, char **argv)
         i++;
         if (i >= argc)
         {
-            std::cout << "Option " << option << " needs a value" << std::endl;
+            std::cout << "Option " << option << " needs a value\n";
             continue;
         }
         std::string value(argv[i]);
@@ -152,7 +150,7 @@ bool RenderOffset(int *shiftx, int *shifty)
     }
     if (sscanf(renderOffset.c_str(), "%dx%d", shiftx, shifty) != 2)
     {
-        std::cout << "Couldn't parse render offset, assuming no offset" << std::endl;
+        std::cout << "Couldn't parse render offset, assuming no offset\n";
         return false;
     }
     return true;
@@ -177,7 +175,7 @@ int CudaDeviceNum()
     int num;
     if (sscanf(cudaDeviceNum.c_str(), "%d", &num) != 1)
     {
-        std::cout << "Couldn't parse cuda device number, assuming 0" << std::endl;
+        std::cout << "Couldn't parse cuda device number, assuming 0\n";
         num = 0;
     }
     return num;

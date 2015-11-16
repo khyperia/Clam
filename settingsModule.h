@@ -56,6 +56,7 @@ public:
             return;
         }
         int length = sync->Recv<int>();
+        std::cout << "Length " << length << "\n";
         for (int i = 0; i < length; i++)
         {
             for (size_t mod = 0; mod < moduleSetup.size(); mod++)
@@ -63,6 +64,7 @@ public:
                 moduleSetup[mod]->RecvState(sync, false);
             }
             AddKeyframe(moduleSetup);
+            std::cout << "Added keyframe\n";
         }
     }
 
@@ -107,6 +109,10 @@ public:
 
     void Animate(std::vector<SettingModuleBase *> &currentState, double time, bool wrap)
     {
+        if (keyframes.size() < 2)
+        {
+            throw new std::runtime_error("Not enough keyframes for animation");
+        }
         time *= keyframes.size() - 1;
         size_t index = (size_t)time;
         time -= index;
@@ -115,11 +121,122 @@ public:
         const std::vector<SettingModuleBase *> &one = keyframes[index];
         const std::vector<SettingModuleBase *> &two = keyframes[index + 1];
         const std::vector<SettingModuleBase *> &three = keyframes
-            [index + 1 == sizem1 ? (wrap ? 0 : sizem1) : index + 2];
+        [index + 1 == sizem1 ? (wrap ? 0 : sizem1) : index + 2];
         for (size_t i = 0; i < currentState.size(); i++)
         {
             currentState[i]->Animate(zero[i], one[i], two[i], three[i], time);
         }
+    }
+};
+
+struct ModuleJuliaBrotSettings : public SettingModule<JuliaBrotSettings>
+{
+    Vector2<double> juliaPos;
+    int juliaEnabled;
+    double moveSpeed;
+
+    ModuleJuliaBrotSettings() : juliaPos(0.5, 0.5), juliaEnabled(0), moveSpeed(0.5)
+    {
+    }
+
+    virtual const char *VarName() const
+    {
+        return "JuliaArr";
+    }
+
+    virtual SettingModuleBase *Clone() const
+    {
+        ModuleJuliaBrotSettings *result = new ModuleJuliaBrotSettings();
+        result->juliaPos = juliaPos;
+        result->juliaEnabled = juliaEnabled;
+        return result;
+    }
+
+    virtual void Update()
+    {
+    }
+
+    virtual bool OneTimeKeypress(SDL_Keycode keycode)
+    {
+        if (keycode == SDLK_u || keycode == SDLK_o)
+        {
+            juliaEnabled = !juliaEnabled;
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+
+    virtual bool RepeatKeypress(SDL_Keycode keycode, double time)
+    {
+        if (juliaEnabled && keycode == SDLK_i)
+        {
+            juliaPos.y -= time * moveSpeed;
+        }
+        else if (juliaEnabled && keycode == SDLK_k)
+        {
+            juliaPos.y += time * moveSpeed;
+        }
+        else if (juliaEnabled && keycode == SDLK_j)
+        {
+            juliaPos.x -= time * moveSpeed;
+        }
+        else if (juliaEnabled && keycode == SDLK_l)
+        {
+            juliaPos.x += time * moveSpeed;
+        }
+        else if (juliaEnabled && keycode == SDLK_n)
+        {
+            moveSpeed *= 1 + time;
+        }
+        else if (juliaEnabled && keycode == SDLK_m)
+        {
+            moveSpeed /= 1 + time;
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+
+    virtual void SendState(StateSync *output, bool) const
+    {
+        output->Send(juliaPos);
+        output->Send(juliaEnabled);
+    }
+
+    virtual bool RecvState(StateSync *input, bool)
+    {
+        bool changed = false;
+        changed |= input->RecvChanged(juliaPos);
+        changed |= input->RecvChanged(juliaEnabled);
+        return changed;
+    }
+
+    virtual void Apply(JuliaBrotSettings &value) const
+    {
+        value.juliaX = (float)juliaPos.x;
+        value.juliaY = (float)juliaPos.y;
+        value.juliaEnabled = juliaEnabled;
+    }
+
+    virtual void Animate(SettingModuleBase *zeroBase, SettingModuleBase *oneBase,
+                         SettingModuleBase *twoBase, SettingModuleBase *threeBase, double time)
+    {
+        ModuleJuliaBrotSettings *zero = dynamic_cast<ModuleJuliaBrotSettings *>(zeroBase);
+        ModuleJuliaBrotSettings *one = dynamic_cast<ModuleJuliaBrotSettings *>(oneBase);
+        ModuleJuliaBrotSettings *two = dynamic_cast<ModuleJuliaBrotSettings *>(twoBase);
+        ModuleJuliaBrotSettings *three = dynamic_cast<ModuleJuliaBrotSettings *>(threeBase);
+        juliaPos = CatmullRom(zero->juliaPos, one->juliaPos, two->juliaPos, three->juliaPos, time);
+        juliaEnabled = one->juliaEnabled;
+    }
+
+    virtual SDL_Surface *Configure(TTF_Font *) const
+    {
+        return NULL;
     }
 };
 
@@ -174,13 +291,13 @@ struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
         {
             if (vrpn)
             {
-                std::cout << "Disabling VRPN" << std::endl;
+                std::cout << "Disabling VRPN\n";
                 delete vrpn;
                 vrpn = NULL;
             }
             else
             {
-                std::cout << "Enabling VRPN" << std::endl;
+                std::cout << "Enabling VRPN\n";
                 vrpn = new VrpnHelp();
             }
         }
@@ -206,11 +323,11 @@ struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
         {
             pos.x += zoom * time * movespeed;
         }
-        else if (keycode == SDLK_i)
+        else if (keycode == SDLK_r)
         {
             zoom /= 1 + time;
         }
-        else if (keycode == SDLK_k)
+        else if (keycode == SDLK_f)
         {
             zoom *= 1 + time;
         }
@@ -319,13 +436,13 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
         {
             if (vrpn)
             {
-                std::cout << "Disabling VRPN" << std::endl;
+                std::cout << "Disabling VRPN\n";
                 delete vrpn;
                 vrpn = NULL;
             }
             else
             {
-                std::cout << "Enabling VRPN" << std::endl;
+                std::cout << "Enabling VRPN\n";
                 vrpn = new VrpnHelp();
             }
         }
@@ -579,7 +696,6 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         MkNv(float, FoldingLimit, 0.25f);
         MkNv(float, FixedRadius2, 0.25f);
         MkNv(float, MinRadius2, 0.25f);
-        MkNv(float, InitRotation, 0.25f);
         MkNv(float, DeRotation, 0.25f);
         MkNv(float, ColorSharpness, 1);
         MkNv(float, Saturation, 0.2f);

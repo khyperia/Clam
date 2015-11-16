@@ -89,8 +89,8 @@ void Connection::Recv(void *data, size_t size)
         if (recvSize <= 0)
         {
             std::string reason = recvSize ? "unknown error" : "closed by remote";
-            throw std::runtime_error("Recv on socket failed " + reason +
-                                     "(attempted " + tostring(size) +
+            throw std::runtime_error("Recv on socket failed: " + reason +
+                                     " (attempted " + tostring(size) +
                                      ", actual " + tostring(sizeTotal) + ")");
         }
         sizeTotal += (size_t)recvSize;
@@ -123,8 +123,7 @@ bool Connection::Sync(Kernel *kernel)
             }
             catch (const std::runtime_error &e)
             {
-                std::cout << "Sending state failed:" << std::endl;
-                std::cout << e.what() << std::endl;
+                std::cout << "Sending state failed:\n" << e.what() << "\n";
                 return true;
             }
         }
@@ -139,8 +138,7 @@ bool Connection::Sync(Kernel *kernel)
             }
             catch (const std::runtime_error &e)
             {
-                std::cout << "Receiving state failed:" << std::endl;
-                std::cout << e.what() << std::endl;
+                std::cout << "Receiving state failed:\n" << e.what() << "\n";
                 return true;
             }
         }
@@ -180,7 +178,7 @@ class FileStateSync : public StateSync
             long end = ftell(file);
             if (current != end)
             {
-                throw std::runtime_error("");
+                throw std::runtime_error("Not at end of file when closing FileStateSync");
             }
         }
         fclose(file);

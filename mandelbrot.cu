@@ -15,9 +15,12 @@
 __constant__ Gpu2dCameraSettings CameraArr[1];
 #define Camera (CameraArr[0])
 
-__device__ float3 Mandelbrot(float2 z)
+__constant__ JuliaBrotSettings JuliaArr[1];
+#define Julia (JuliaArr[0])
+
+__device__ static float3 Mandelbrot(float2 z)
 {
-    float2 c = z;
+    float2 c = Julia.juliaEnabled ? make_float2(Julia.juliaX, Julia.juliaY) : z;
     int i = 0;
     while (i < MaxIters && z.x * z.x + z.y * z.y < Bailout)
     {
@@ -26,7 +29,7 @@ __device__ float3 Mandelbrot(float2 z)
     }
     if (i == MaxIters)
     {
-        return make_float3(0, 0, 0);
+        return make_float3(54 / 255.0f, 70 / 255.0f, 93 / 255.0f);
     }
     float mu = i + 1 - log2(log(sqrtf(z.x * z.x + z.y * z.y)));
     float x = mu * ColorVariance;
@@ -39,7 +42,7 @@ __device__ float3 Mandelbrot(float2 z)
     return make_float3(r, g, b);
 }
 
-__device__ uint PackPixel(float3 pixel)
+__device__ static uint PackPixel(float3 pixel)
 {
     pixel.x *= 255;
     pixel.y *= 255;

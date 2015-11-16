@@ -41,3 +41,20 @@ struct Gpu2dCameraSettings
         return memcmp(this, &right, sizeof(Gpu2dCameraSettings)) != 0;
     }
 };
+
+struct JuliaBrotSettings
+{
+    float juliaX;
+    float juliaY;
+    int juliaEnabled;
+
+    bool operator==(const JuliaBrotSettings& right)
+    {
+        return memcmp(this, &right, sizeof(JuliaBrotSettings)) == 0;
+    }
+
+    bool operator!=(const JuliaBrotSettings& right)
+    {
+        return memcmp(this, &right, sizeof(JuliaBrotSettings)) != 0;
+    }
+};

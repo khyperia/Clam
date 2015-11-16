@@ -138,14 +138,14 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
 {
     if (keycode == SDLK_t)
     {
-        std::cout << "Saving state" << std::endl;
+        std::cout << "Saving state\n";
         StateSync *sync = NewFileStateSync((Name() + ".clam3").c_str(), false);
         SendState(sync, false);
         delete sync;
     }
     else if (keycode == SDLK_y)
     {
-        std::cout << "Loading state" << std::endl;
+        std::cout << "Loading state\n";
         StateSync *sync = NewFileStateSync((Name() + ".clam3").c_str(), true);
         RecvState(sync, false);
         delete sync;
@@ -159,19 +159,19 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
                 StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
                 animation = new SettingAnimation(sync, settings);
                 delete sync;
-                std::cout << "Loaded previous animation" << std::endl;
+                std::cout << "Loaded previous animation\n";
             }
             catch (const std::exception &e)
             {
                 animation = new SettingAnimation(NULL, settings);
-                std::cout << "Created new animation" << std::endl;
+                std::cout << "Created new animation\n";
             }
         }
         animation->AddKeyframe(settings);
         StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
         animation->WriteKeyframes(sync);
         delete sync;
-        std::cout << "Added keyframe" << std::endl;
+        std::cout << "Added keyframe\n";
     }
     else if (keycode == SDLK_b)
     {
@@ -182,7 +182,7 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
             animation->WriteKeyframes(sync);
             delete sync;
         }
-        std::cout << "Cleared keyframes" << std::endl;
+        std::cout << "Cleared keyframes\n";
     }
     else if (keycode == SDLK_x)
     {
@@ -253,7 +253,7 @@ public:
             {
                 std::cout << "Not uploading state buffer due to mismatched sizes: current "
                 << existingSize << "(" << elementSize << " * " << width << " * " << height
-                << "), new " << size << std::endl;
+                << "), new " << size << "\n";
                 input->RecvArr<char>(size);
                 return false;
             }
@@ -327,8 +327,11 @@ Kernel::Kernel(std::string name) :
             cuModule = NULL;
         }
         Module2dCameraSettings *camera = new Module2dCameraSettings();
+        ModuleJuliaBrotSettings *julia = new ModuleJuliaBrotSettings();
         settings.push_back(camera);
+        settings.push_back(julia);
         modules.push_back(new KernelSettingsModule<Gpu2dCameraSettings>(cuModule, camera));
+        modules.push_back(new KernelSettingsModule<JuliaBrotSettings>(cuModule, julia));
     }
     else
     {
@@ -521,7 +524,7 @@ void Kernel::SetTime(double time, bool wrap)
 {
     if (!animation)
     {
-        std::cout << "No animation keyframes loaded" << std::endl;
+        std::cout << "No animation keyframes loaded\n";
         return;
     }
     animation->Animate(settings, time, wrap);
@@ -547,8 +550,11 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
 {
     if (width != oldWidth || height != oldHeight)
     {
-        std::cout << "Resized from " << oldWidth << "x" << oldHeight <<
-        " to " << width << "x" << height << std::endl;
+        if (oldWidth != 0 || oldHeight != 0)
+        {
+            std::cout << "Resized from " << oldWidth << "x" << oldHeight <<
+                " to " << width << "x" << height << "\n";
+        }
         oldWidth = width;
         oldHeight = height;
         gpuBuffer = CuMem<int>(width * height);

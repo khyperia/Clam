@@ -8,15 +8,18 @@ IVS_USER="${IVS_USER:-$USER}"
 IVS_HOSTNAME="ivs.research.mtu.edu"
 IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam3"
 HOST_PORT=23457
-CUDA_TOOLKIT_ROOT_DIR=/opt/cuda
+VRPN_OBJECT=Wand
+FONT_ATTEMPT=/usr/share/fonts/dejavu/DejaVuLGCSansMono.ttf
 export CLAM3_KERNEL=mandelbox
 if [ -e $HOME/.vrpn-server ]
 then
-    export CLAM3_VRPN=$(<$HOME/.vrpn-server)
+    export CLAM3_VRPN=${VRPN_OBJECT}@$(<$HOME/.vrpn-server)
 fi
-if [ -e /usr/share/fonts/dejavu/DejaVuLGCSansMono.ttf ]
+if [ -e ${FONT_ATTEMPT} ]
 then
-    export CLAM3_FONT=/usr/share/fonts/dejavu/DejaVuLGCSansMono.ttf
+    export CLAM3_FONT=${FONT_ATTEMPT}
+else
+    printMessage "${FONT_ATTEMPT} not found, will probably crash. Fix ivs.sh FONT_ATTEMPT to point at a ttf font."
 fi
 
 # Prints a very readable bold message that stands out

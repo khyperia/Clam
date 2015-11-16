@@ -17,8 +17,7 @@ static inline void HandleCuImpl(CUresult err, const char* expr, const char* file
         {
             errstr = "Unknown error";
         }
-        msg << "CUDA Error (" << err << "): " << errstr << std::endl;
-        msg << file << "(" << line << "): " << expr;
+        msg << "CUDA Error (" << err << "): " << errstr << "\n" << file << "(" << line << "): " << expr;
         throw std::runtime_error(msg.str());
     }
 }

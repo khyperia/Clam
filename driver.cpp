@@ -14,7 +14,7 @@ struct CudaInitClass
         }
         else
         {
-            std::cout << "cuInit failed" << std::endl;
+            std::cout << "cuInit failed\n";
         }
     }
 } cudaInitInstance;
@@ -106,11 +106,11 @@ struct HeadlessRenderType : public RenderType
     {
         if (currentTime == 0 && currentFrame == numFrames)
         {
-            std::cout << "Flush/loading initial state" << std::endl;
+            std::cout << "Flush/loading initial state\n";
             kernel->RenderInto(NULL, width, height);
             if (numTimes > 1)
             {
-                std::cout << "Loading animation keyframes" << std::endl;
+                std::cout << "Loading animation keyframes\n";
                 kernel->LoadAnimation();
                 kernel->SetTime(0, false);
                 kernel->SetFramed(true);
@@ -123,12 +123,12 @@ struct HeadlessRenderType : public RenderType
                     StateSync *sync = NewFileStateSync(filename.c_str(), true);
                     kernel->RecvState(sync, true);
                     delete sync;
-                    std::cout << "Loaded intermediate state from " << filename << std::endl;
+                    std::cout << "Loaded intermediate state from " << filename << "\n";
                 }
                 catch (const std::exception &ex)
                 {
-                    std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what() << std::endl
-                    << "Trying initial headless state instead" << std::endl;
+                    std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what()
+                    << "\nTrying initial headless state instead\n";
                     StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
                     kernel->RecvState(sync, false);
                     kernel->SetFramed(true);
@@ -139,7 +139,7 @@ struct HeadlessRenderType : public RenderType
         currentFrame--;
         if (numTimes <= 1)
         {
-            std::cout << currentFrame << " frames left" << std::endl;
+            std::cout << currentFrame << " frames left\n";
         }
         kernel->RenderInto(NULL, width, height);
         if (currentFrame % 32 == 0 && numTimes <= 1)
@@ -148,7 +148,7 @@ struct HeadlessRenderType : public RenderType
             StateSync *sync = NewFileStateSync(filename.c_str(), false);
             kernel->SendState(sync, true);
             delete sync;
-            std::cout << "Saved intermediate progress to " << filename << std::endl;
+            std::cout << "Saved intermediate progress to " << filename << "\n";
         }
         if (currentFrame == 0)
         {
@@ -162,7 +162,7 @@ struct HeadlessRenderType : public RenderType
             std::string filename = RenderstateFilename(kernel);
             filename += "." + tostring(currentTime) + ".bmp";
             SDL_SaveBMP(surface, filename.c_str());
-            std::cout << "Saved image '" << filename << "'" << std::endl;
+            std::cout << "Saved image '" << filename << "'\n";
             SDL_FreeSurface(surface);
             currentTime++;
             if (currentTime >= numTimes)
@@ -229,7 +229,7 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
         {
             char name[128];
             HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
-            std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << std::endl;
+            std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << "\n";
         }
         HandleCu(cuCtxCreate(&cuContext, CU_CTX_SCHED_YIELD, cuDevice));
         HandleCu(cuCtxSetCurrent(cuContext));

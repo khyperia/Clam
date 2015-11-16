@@ -6,7 +6,6 @@ struct MandelboxCfg
     float FoldingLimit;
     float FixedRadius2;
     float MinRadius2;
-    float InitRotation;
     float DeRotation;
     float ColorSharpness;
     float Saturation;
@@ -63,11 +62,10 @@ struct MandelboxCfg
 MandelboxCfg MandelboxDefault()
 {
     MandelboxCfg x;
-    x.Scale = -1.5f;
+    x.Scale = -2.0f;
     x.FoldingLimit = 1.0f;
     x.FixedRadius2 = 1.0f;
     x.MinRadius2 = 0.25f;
-    x.InitRotation = 0;
     x.DeRotation = 0;
     x.ColorSharpness = 1.0f;
     x.Saturation = 0.5f;

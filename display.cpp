@@ -34,10 +34,17 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
     {
         fontname = "/usr/share/fonts/OTF/Inconsolata.otf";
     }
-    font = TTF_OpenFont(fontname.c_str(), 14);
-    if (!font)
+    if (IsUserInput())
     {
-        throw std::runtime_error("Could not open font " + fontname + " (specify with $CLAM3_FONT)");
+        font = TTF_OpenFont(fontname.c_str(), 14);
+        if (!font)
+        {
+            throw std::runtime_error("Could not open font " + fontname + " (specify with $CLAM3_FONT)");
+        }
+    }
+    else
+    {
+        font = NULL;
     }
     lastTicks = SDL_GetTicks();
 }

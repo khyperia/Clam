@@ -9,8 +9,13 @@ export CLAM3_CONNECT=$3
 export CLAM3_DEVICE=$4
 SCREENWIDTH=1920
 SCREENHEIGHT=1080
-MAX_SCREENCOORDS_X=2
+MAX_SCREENCOORDS_X=4
 MAX_SCREENCOORDS_Y=4
+# Render slaves no longer need a font (duh), but here's a valid font on IVS anyway.
+#if [ -e /usr/share/fonts/dejavu-lgc/DejaVuLGCSansMono.ttf ]
+#then
+#    export CLAM3_FONT=/usr/share/fonts/dejavu-lgc/DejaVuLGCSansMono.ttf
+#fi
 
 # Prints a very readable bold message that stands out
 function printMessage()
@@ -25,114 +30,100 @@ case ${SLAVE}_${CLAM3_DEVICE} in
         WIN_X=0
         WIN_Y=0
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-3_1)
-        WIN_X=2
+        WIN_X=1
         WIN_Y=0
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-2_0)
         WIN_X=0
         WIN_Y=1
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-2_1)
-        WIN_X=2
+        WIN_X=1
         WIN_Y=1
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-1_0)
         WIN_X=0
         WIN_Y=2
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-1_1)
-        WIN_X=2
+        WIN_X=1
         WIN_Y=2
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-0_0)
         WIN_X=0
         WIN_Y=3
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-0_1)
-        WIN_X=2
+        WIN_X=1
         WIN_Y=3
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-7_0)
-        WIN_X=4
+        WIN_X=2
         WIN_Y=0
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-7_1)
         WIN_X=3
         WIN_Y=0
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-6_0)
-        WIN_X=4
+        WIN_X=2
         WIN_Y=1
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-6_1)
         WIN_X=3
         WIN_Y=1
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-5_0)
-        WIN_X=4
+        WIN_X=2
         WIN_Y=2
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-5_1)
         WIN_X=3
         WIN_Y=2
         LOC_X=1
-        WIN_W=1
         ;;
         
     tile-0-4_0)
-        WIN_X=4
+        WIN_X=2
         WIN_Y=3
         LOC_X=0
-        WIN_W=2
         ;;
     tile-0-4_1)
         WIN_X=3
         WIN_Y=3
         LOC_X=1
-        WIN_W=1
         ;;
     *)
         printMessage "Unknown tile location for ${SLAVE}_${CLAM3_DEVICE}"
         ;;
 esac
-renderposX=$(bc <<< "$SCREENWIDTH * ${WIN_W} * (${WIN_X} - $MAX_SCREENCOORDS_X / 2)")
+# use `bc -l` for decimal math (not needed with current numbers)
+renderposX=$(bc <<< "$SCREENWIDTH * (${WIN_X} - $MAX_SCREENCOORDS_X / 2)")
 renderposY=$(bc <<< "$SCREENHEIGHT * (${WIN_Y} - $MAX_SCREENCOORDS_Y / 2)")
+winwidth=$(bc <<< "$SCREENWIDTH * 3 / 2")
 winposX=$(bc <<< "$SCREENWIDTH * ${LOC_X}")
 export CLAM3_RENDEROFFSET=${renderposX}x${renderposY}
-export CLAM3_WINDOWPOS=${SCREENWIDTH}x${SCREENHEIGHT}+${winposX}+0
+export CLAM3_WINDOWPOS=${winwidth}x${SCREENHEIGHT}+${winposX}+0
 export DISPLAY=:0
 printMessage "Booting ${SLAVE} render process: run ${CLAM3_KERNEL} on GPU${CLAM3_DEVICE} at ${SCREENWIDTH}x${SCREENHEIGHT}+${renderposX}+${renderposY} connect ${CLAM3_CONNECT}"
 ./clam3
