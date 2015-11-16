@@ -18,7 +18,7 @@ __constant__ Gpu2dCameraSettings CameraArr[1];
 __constant__ JuliaBrotSettings JuliaArr[1];
 #define Julia (JuliaArr[0])
 
-__device__ static float3 Mandelbrot(float2 z)
+static __device__ float3 Mandelbrot(float2 z)
 {
     float2 c = Julia.juliaEnabled ? make_float2(Julia.juliaX, Julia.juliaY) : z;
     int i = 0;
@@ -42,24 +42,28 @@ __device__ static float3 Mandelbrot(float2 z)
     return make_float3(r, g, b);
 }
 
-__device__ static uint PackPixel(float3 pixel)
+static __device__ uint PackPixel(float3 pixel)
 {
     pixel.x *= 255;
     pixel.y *= 255;
     pixel.z *= 255;
-    if (pixel.x < 0) pixel.x = 0;
-    if (pixel.x > 255) pixel.x = 255;
-    if (pixel.y < 0) pixel.y = 0;
-    if (pixel.y > 255) pixel.y = 255;
-    if (pixel.z < 0) pixel.z = 0;
-    if (pixel.z > 255) pixel.z = 255;
+    if (pixel.x < 0)
+        pixel.x = 0;
+    if (pixel.x > 255)
+        pixel.x = 255;
+    if (pixel.y < 0)
+        pixel.y = 0;
+    if (pixel.y > 255)
+        pixel.y = 255;
+    if (pixel.z < 0)
+        pixel.z = 0;
+    if (pixel.z > 255)
+        pixel.z = 255;
     return (255 << 24) | ((int)pixel.x << 16) | ((int)pixel.y << 8) | ((int)pixel.z);
 }
 
-extern "C" __global__ void kern(
-        uint* __restrict__ screenPixels,
-        int screenX, int screenY, int width, int height,
-        int frame)
+extern "C" __global__ void kern(uint* __restrict__ screenPixels, int screenX, int screenY,
+        int width, int height, int frame)
 {
     int x = blockDim.x * blockIdx.x + threadIdx.x;
     int y = blockDim.y * blockIdx.y + threadIdx.y;
