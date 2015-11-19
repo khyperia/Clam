@@ -137,13 +137,14 @@ struct HeadlessRenderType : public RenderType
             }
         }
         currentFrame--;
-        if (numTimes <= 1)
-        {
-            std::cout << currentFrame << " frames left\n";
-        }
         kernel->RenderInto(NULL, width, height);
-        if (currentFrame % 32 == 0 && numTimes <= 1)
+        const int saveInterval = 5;
+        if (currentFrame % (1 << saveInterval) == 0 && numTimes <= 1)
         {
+            if (numTimes <= 1)
+            {
+                std::cout << currentFrame << " frames left\n";
+            }
             std::string filename = RenderstateFilename(kernel);
             StateSync *sync = NewFileStateSync(filename.c_str(), false);
             kernel->SendState(sync, true);
@@ -173,7 +174,7 @@ struct HeadlessRenderType : public RenderType
             //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
             kernel->SetTime(time, false);
             kernel->SetFramed(true);
-            currentFrame = numFrames;
+            currentFrame = currentTime;
         }
         return true;
     }

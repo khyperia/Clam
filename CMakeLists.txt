@@ -11,7 +11,7 @@ set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra")
-set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-Wall;--use_fast_math;-lineinfo")
+set(CUDA_NVCC_FLAGS "--std=c++11;-O3;--compiler-options;-Wall;--use_fast_math;-lineinfo")
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
 file(GLOB cppfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cpp")

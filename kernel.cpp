@@ -206,7 +206,10 @@ public:
     {
         if (value)
         {
-            HandleCu(cuMemFree(value));
+            if (cuMemFree(value) != CUDA_SUCCESS)
+            {
+                std::cout << "Could not free CUDA memory\n";
+            }
         }
     }
 
@@ -275,6 +278,9 @@ public:
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
+extern const unsigned char mandelbox2[];
+extern const unsigned int mandelbox2_len;
+
 extern const unsigned char mandelbrot[];
 extern const unsigned int mandelbrot_len;
 
@@ -282,7 +288,7 @@ Kernel::Kernel(std::string name) :
         name(name),
         useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)),
         frame(-1),
-        maxLocalSize(32),
+        maxLocalSize(16),
         animation(NULL),
         oldWidth(0),
         oldHeight(0)
@@ -316,6 +322,25 @@ Kernel::Kernel(std::string name) :
         modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", sizeof(float) * 4));
         modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
     }
+    else if (name == "mandelbox2")
+    {
+        if (isCompute)
+        {
+            HandleCu(cuModuleLoadData(&cuModule, std::string((const char *)mandelbox2, mandelbox2_len).c_str()));
+        }
+        else
+        {
+            cuModule = NULL;
+        }
+        Module3dCameraSettings *camera = new Module3dCameraSettings();
+        ModuleMandelboxSettings *mbox = new ModuleMandelboxSettings();
+        settings.push_back(camera);
+        settings.push_back(mbox);
+        modules.push_back(new KernelSettingsModule<GpuCameraSettings>(cuModule, camera));
+        modules.push_back(new KernelSettingsModule<MandelboxCfg>(cuModule, mbox));
+        modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", Mandelbox2StateSize));
+        modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
+    }
     else if (name == "mandelbrot")
     {
         if (isCompute)
@@ -347,7 +372,10 @@ Kernel::~Kernel()
 {
     if (cuModule)
     {
-        HandleCu(cuModuleUnload(cuModule));
+        if (cuModuleUnload(cuModule) != CUDA_SUCCESS)
+        {
+            std::cout << "Failed to unload kernel module\n";
+        }
     }
     for (size_t i = 0; i < modules.size(); i++)
     {
@@ -553,7 +581,7 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
         if (oldWidth != 0 || oldHeight != 0)
         {
             std::cout << "Resized from " << oldWidth << "x" << oldHeight <<
-                " to " << width << "x" << height << "\n";
+            " to " << width << "x" << height << "\n";
         }
         oldWidth = width;
         oldHeight = height;

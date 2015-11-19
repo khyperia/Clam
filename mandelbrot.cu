@@ -31,7 +31,7 @@ static __device__ float3 Mandelbrot(float2 z)
     {
         return make_float3(54 / 255.0f, 70 / 255.0f, 93 / 255.0f);
     }
-    float mu = i + 1 - log2(log(sqrtf(z.x * z.x + z.y * z.y)));
+    float mu = i - log2(log(z.x * z.x + z.y * z.y));
     float x = mu * ColorVariance;
     float r = sinf(x * MultipR + OffsetR) * 0.5f + 0.5f;
     float g = sinf(x * MultipG + OffsetG) * 0.5f + 0.5f;

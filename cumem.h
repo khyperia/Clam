@@ -52,7 +52,10 @@ public:
         if (refcount && !--*refcount)
         {
             delete refcount;
-            HandleCu(cuMemFree(ptr));
+            if (cuMemFree(ptr) != CUDA_SUCCESS)
+            {
+                std::cout << "Could not free CuMem\n";
+            }
         }
     }
 

@@ -11,19 +11,26 @@ int main(int argc, char **argv)
     Driver driver;
     bool isCompute = IsCompute();
     Uint32 ticks = SDL_GetTicks();
-    while (driver.RunFrame())
+    try
     {
-        if (!isCompute)
+        while (driver.RunFrame())
         {
-            Uint32 newTicks = SDL_GetTicks();
-            Uint32 wait = newTicks - ticks;
-            ticks = newTicks;
-            const Uint32 delay = 1000 / 60;
-            if (wait < delay)
+            if (!isCompute)
             {
-                SDL_Delay(delay - wait);
+                Uint32 newTicks = SDL_GetTicks();
+                Uint32 wait = newTicks - ticks;
+                ticks = newTicks;
+                const Uint32 delay = 1000 / 60;
+                if (wait < delay)
+                {
+                    SDL_Delay(delay - wait);
+                }
             }
         }
+    }
+    catch (const std::exception &ex)
+    {
+        std::cout << "Fatal exception:\n" << ex.what() << "\n";
     }
     return 0;
 }

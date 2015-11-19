@@ -1,5 +1,7 @@
 #pragma once
 
+#define Mandelbox2StateSize (22*sizeof(float))
+
 struct MandelboxCfg
 {
     float Scale;
