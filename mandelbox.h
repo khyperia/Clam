@@ -49,6 +49,7 @@ struct MandelboxCfg
     int NumRayBounces;
     float QualityFirstRay;
     float QualityRestRay;
+    int ItersPerKernel;
 
     bool operator==(const MandelboxCfg &right)
     {
@@ -76,7 +77,7 @@ MandelboxCfg MandelboxDefault()
     x.DofAmount = 0.005f;
     x.FovAbberation = 0.01f;
     x.SpecularHighlightAmount = 1.0f;
-    x.SpecularHighlightSize = 0.1f;
+    x.SpecularHighlightSize = 0.5f;
     x.LightBrightnessAmount = 100;
     x.LightBrightnessCenter = 0.25f;
     x.LightBrightnessWidth = 0.5f;
@@ -102,5 +103,6 @@ MandelboxCfg MandelboxDefault()
     x.NumRayBounces = 3;
     x.QualityFirstRay = 2;
     x.QualityRestRay = 64;
+    x.ItersPerKernel = 5;
     return x;
 }

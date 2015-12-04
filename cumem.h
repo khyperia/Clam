@@ -8,55 +8,58 @@ template<typename T>
 class CuMem
 {
     CUdeviceptr ptr;
-    int *refcount;
     size_t count;
-public:
-    CuMem() : ptr(0), refcount(NULL), count(0)
-    {
-    }
 
-    CuMem(size_t count) : refcount(new int(1)), count(count)
+    CuMem &operator=(const CuMem &rhs)
     {
-        HandleCu(cuMemAlloc(&ptr, count * sizeof(T)));
-    }
-
-    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), refcount(NULL), count(count)
-    {
-    }
-
-    CuMem(const CuMem &x) :
-            ptr(x.ptr),
-            refcount(x.refcount),
-            count(x.count)
-    {
-        if (refcount)
-        {
-            ++*refcount;
-        }
-    }
-
-    CuMem& operator=(const CuMem& rhs)
-    {
-        ptr = rhs.ptr;
-        refcount = rhs.refcount;
-        count = rhs.count;
-        if (refcount)
-        {
-            ++*refcount;
-        }
         return *this;
     }
 
-    ~CuMem()
+    CuMem(const CuMem &x)
     {
-        if (refcount && !--*refcount)
+    }
+
+    void Alloc()
+    {
+        HandleCu(cuMemAlloc(&ptr, bytesize()));
+    }
+
+    void Free()
+    {
+        if (ptr)
         {
-            delete refcount;
             if (cuMemFree(ptr) != CUDA_SUCCESS)
             {
                 std::cout << "Could not free CuMem\n";
             }
+            ptr = 0;
         }
+    }
+
+public:
+    CuMem() : ptr(0), count(0)
+    {
+    }
+
+    CuMem(size_t count) : count(count)
+    {
+        Alloc();
+    }
+
+    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), count(count)
+    {
+    }
+
+    ~CuMem()
+    {
+        Free();
+    }
+
+    void Realloc(size_t newCount)
+    {
+        Free();
+        count = newCount;
+        Alloc();
     }
 
     CUdeviceptr &operator()()

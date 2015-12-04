@@ -713,7 +713,7 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         MkNv(int, WhiteClamp, 0);
         MkNv(float, BrightThresh, 0.1f);
         MkNv(float, SpecularHighlightAmount, 0.25f);
-        MkNv(float, SpecularHighlightSize, 0.01f);
+        MkNv(float, SpecularHighlightSize, -0.25f);
         MkNv(float, FogDensity, -0.5f);
         MkNv(float, LightBrightnessAmount, -0.5f);
         MkNv(float, LightBrightnessCenter, 0.25f);
@@ -730,7 +730,8 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         MkNv(int, NumRayBounces, 0);
         MkNv(float, QualityFirstRay, -0.5f);
         MkNv(float, QualityRestRay, -0.5f);
-#undef MkNf
+        MkNv(int, ItersPerKernel, 0);
+#undef MkNv
     }
 
     ~ModuleMandelboxSettings()
@@ -780,7 +781,7 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         {
             menuPos = sizeMinusOne;
         }
-        if (menuPos >= sizeMinusOne)
+        if (menuPos > sizeMinusOne)
         {
             menuPos = 0;
         }

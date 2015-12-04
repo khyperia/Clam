@@ -585,7 +585,7 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
         }
         oldWidth = width;
         oldHeight = height;
-        gpuBuffer = CuMem<int>(width * height);
+        gpuBuffer.Realloc(width * height);
     }
     for (size_t i = 0; i < modules.size(); i++)
     {
