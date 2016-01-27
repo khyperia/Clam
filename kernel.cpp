@@ -175,13 +175,14 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
     }
     else if (keycode == SDLK_b)
     {
-        if (animation)
+        if (!animation)
         {
-            animation->ClearKeyframes();
-            StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
-            animation->WriteKeyframes(sync);
-            delete sync;
+            animation = new SettingAnimation(NULL, settings);
         }
+        animation->ClearKeyframes();
+        StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
+        animation->WriteKeyframes(sync);
+        delete sync;
         std::cout << "Cleared keyframes\n";
     }
     else if (keycode == SDLK_x)
@@ -278,9 +279,6 @@ public:
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
-extern const unsigned char mandelbox2[];
-extern const unsigned int mandelbox2_len;
-
 extern const unsigned char mandelbrot[];
 extern const unsigned int mandelbrot_len;
 
@@ -319,26 +317,7 @@ Kernel::Kernel(std::string name) :
         settings.push_back(mbox);
         modules.push_back(new KernelSettingsModule<GpuCameraSettings>(cuModule, camera));
         modules.push_back(new KernelSettingsModule<MandelboxCfg>(cuModule, mbox));
-        modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", sizeof(float) * 4));
-        modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
-    }
-    else if (name == "mandelbox2")
-    {
-        if (isCompute)
-        {
-            HandleCu(cuModuleLoadData(&cuModule, std::string((const char *)mandelbox2, mandelbox2_len).c_str()));
-        }
-        else
-        {
-            cuModule = NULL;
-        }
-        Module3dCameraSettings *camera = new Module3dCameraSettings();
-        ModuleMandelboxSettings *mbox = new ModuleMandelboxSettings();
-        settings.push_back(camera);
-        settings.push_back(mbox);
-        modules.push_back(new KernelSettingsModule<GpuCameraSettings>(cuModule, camera));
-        modules.push_back(new KernelSettingsModule<MandelboxCfg>(cuModule, mbox));
-        modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", Mandelbox2StateSize));
+        modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", MandelboxStateSize));
         modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2));
     }
     else if (name == "mandelbrot")

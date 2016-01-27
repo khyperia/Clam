@@ -174,7 +174,7 @@ struct HeadlessRenderType : public RenderType
             //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
             kernel->SetTime(time, false);
             kernel->SetFramed(true);
-            currentFrame = currentTime;
+            currentFrame = numFrames;
         }
         return true;
     }

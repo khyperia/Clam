@@ -1,6 +1,8 @@
 #pragma once
 
-#define Mandelbox2StateSize (22*sizeof(float))
+#include <string.h>
+
+#define MandelboxStateSize (22*sizeof(float))
 
 struct MandelboxCfg
 {
@@ -9,10 +11,6 @@ struct MandelboxCfg
     float FixedRadius2;
     float MinRadius2;
     float DeRotation;
-    float ColorSharpness;
-    float Saturation;
-    float HueVariance;
-    float Reflectivity;
     float DofAmount;
     float FovAbberation;
 
@@ -21,24 +19,15 @@ struct MandelboxCfg
     float LightPosZ;
     float LightSize;
 
-    float ColorBiasR;
-    float ColorBiasG;
-    float ColorBiasB;
     int WhiteClamp;
-    float BrightThresh;
 
-    float SpecularHighlightAmount;
-    float SpecularHighlightSize;
+    float LightBrightnessHue;
+    float LightBrightnessSat;
+    float LightBrightnessVal;
 
-    float FogDensity;
-
-    float LightBrightnessAmount;
-    float LightBrightnessCenter;
-    float LightBrightnessWidth;
-
-    float AmbientBrightnessAmount;
-    float AmbientBrightnessCenter;
-    float AmbientBrightnessWidth;
+    float AmbientBrightnessHue;
+    float AmbientBrightnessSat;
+    float AmbientBrightnessVal;
 
     int MaxIters;
     float Bailout;
@@ -70,30 +59,19 @@ MandelboxCfg MandelboxDefault()
     x.FixedRadius2 = 1.0f;
     x.MinRadius2 = 0.25f;
     x.DeRotation = 0;
-    x.ColorSharpness = 1.0f;
-    x.Saturation = 0.5f;
-    x.HueVariance = 1.0f;
-    x.Reflectivity = 1.0f;
     x.DofAmount = 0.005f;
     x.FovAbberation = 0.01f;
-    x.SpecularHighlightAmount = 1.0f;
-    x.SpecularHighlightSize = 0.5f;
-    x.LightBrightnessAmount = 100;
-    x.LightBrightnessCenter = 0.25f;
-    x.LightBrightnessWidth = 0.5f;
-    x.AmbientBrightnessAmount = 4;
-    x.AmbientBrightnessCenter = 0.75f;
-    x.AmbientBrightnessWidth = 0.25f;
+    x.LightBrightnessHue = 0.0f;
+    x.LightBrightnessSat = 0.5f;
+    x.LightBrightnessVal = 8.0f;
+    x.AmbientBrightnessHue = 0.55f;
+    x.AmbientBrightnessSat = 0.25f;
+    x.AmbientBrightnessVal = 1.0f;
     x.LightPosX = 3;
     x.LightPosY = 3;
     x.LightPosZ = 3;
-    x.LightSize = 0.1f;
-    x.FogDensity = 0.0001f;
-    x.ColorBiasR = 0;
-    x.ColorBiasG = 0;
-    x.ColorBiasB = 0;
+    x.LightSize = 1.0f;
     x.WhiteClamp = 0;
-    x.BrightThresh = 8;
     x.MaxIters = 64;
     x.Bailout = 1024;
     x.DeMultiplier = 0.95f;
@@ -103,6 +81,6 @@ MandelboxCfg MandelboxDefault()
     x.NumRayBounces = 3;
     x.QualityFirstRay = 2;
     x.QualityRestRay = 64;
-    x.ItersPerKernel = 5;
+    x.ItersPerKernel = 8;
     return x;
 }

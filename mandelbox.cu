@@ -3,13 +3,38 @@
 #include "kernelStructs.h"
 #include "mandelbox.h"
 
+struct MandelboxState
+{
+    float4 color;
+    float4 lightColor;
+    float3 position;
+    float3 direction;
+    float3 normal;
+    int state;
+    int traceIter;
+    float totalDistance;
+};
+
+void Test()
+{
+//    static_assert(sizeof(MandelboxState) != MandelboxStateSize, "Bad static assert");
+}
+
+#define PREVIEW_STATE -1
+#define INIT_STATE 0
+#define TRACE_STATE 1
+#define NORMAL_STATE 2
+#define FINISH_STATE 3
+
+static const float NORMAL_DELTA = FLT_EPSILON * 8;
+
 __constant__ MandelboxCfg MandelboxCfgArr[1];
 #define cfg (MandelboxCfgArr[0])
 
 __constant__ GpuCameraSettings CameraArr[1];
 #define Camera (CameraArr[0])
 
-__constant__ float4* BufferScratchArr[1];
+__constant__ MandelboxState* BufferScratchArr[1];
 #define BufferScratch (BufferScratchArr[0])
 
 __constant__ uint2* BufferRandArr[1];
@@ -33,138 +58,6 @@ static __device__ float length2(float2 v)
 static __device__ float length2(float3 v)
 {
     return dot(v, v);
-}
-
-// http://en.wikipedia.org/wiki/Stereographic_projection
-static __device__ float3 RayDir(float3 forward, float3 up, float2 screenCoords, float fov)
-{
-    screenCoords *= -fov;
-    float len2 = length2(screenCoords);
-    float3 look = make_float3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
-
-    float3 right = cross(forward, up);
-
-    return look.x * right + look.y * up + look.z * forward;
-}
-
-static __device__ float3 Rotate(float3 v, float3 axis, float angle)
-{
-    float sina = sin(angle);
-    float cosa = cos(angle);
-    return cosa * v + sina * cross(axis, v) + (1 - cosa) * dot(axis, v) * axis;
-}
-
-static __device__ float4 Mandelbulb(float4 z, const float Power)
-{
-    const float r = length(xyz(z));
-
-    // convert to polar coordinates
-    float theta = asin(z.z / r);
-    float phi = atan2(z.y, z.x);
-    float dr = powf(r, Power - 1.0) * Power * z.w + 1.0;
-
-    // scale and rotate the point
-    float zr = pow(r, Power);
-    theta = theta * Power;
-    phi = phi * Power;
-
-    // convert back to cartesian coordinates
-    float3 z3 = zr * make_float3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
-    return make_float4(z3, dr);
-}
-
-static __device__ float4 Boxfold(float4 z, const float FoldingLimit)
-{
-    float3 znew = xyz(z);
-    znew = clamp(znew, -FoldingLimit, FoldingLimit) * 2.0f - znew;
-    return make_float4(znew.x, znew.y, znew.z, z.w);
-}
-
-static __device__ float4 Spherefold(float4 z, const float MinRadius2, const float FixedRadius2)
-{
-    z *= FixedRadius2 / clamp(length2(xyz(z)), MinRadius2, FixedRadius2);
-    return z;
-}
-
-static __device__ float4 TScale(float4 z, const float Scale)
-{
-    return z * make_float4(Scale, Scale, Scale, fabs(Scale));
-}
-
-static __device__ float4 TOffset(float4 z, float3 offset)
-{
-    return z + make_float4(offset.x, offset.y, offset.z, 1.0f);
-}
-
-static __device__ float4 TRotate(float4 v, float3 axis, float angle)
-{
-    return make_float4(Rotate(xyz(v), axis, angle), v.w);
-}
-
-static __device__ float4 Mandelbox(float4 z, float3 offset, const float FoldingLimit,
-        const float MinRadius2, const float FixedRadius2, const float Scale)
-{
-    z = Boxfold(z, FoldingLimit);
-    z = Spherefold(z, MinRadius2, FixedRadius2);
-    z = TScale(z, Scale);
-    z = TOffset(z, offset);
-    return z;
-}
-
-static __device__ float4 DeIter(float4 z, int i, float3 offset, const float FoldingLimit,
-        const float MinRadius2, const float FixedRadius2, const float Scale, const float Rotation)
-{
-    z = Mandelbox(z, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale);
-    const float3 rotVec = normalize(make_float3(1, 1, 1));
-    z = TRotate(z, rotVec, Rotation);
-    return z;
-}
-
-static __device__ float De(float3 offset)
-{
-    float4 z = make_float4(offset, 1.0f);
-    const float FoldingLimit = cfg.FoldingLimit;
-    const float MinRadius2 = cfg.MinRadius2;
-    const float FixedRadius2 = cfg.FixedRadius2;
-    const float Scale = cfg.Scale;
-    const float DeRotation = cfg.DeRotation;
-    const int MaxIters = cfg.MaxIters;
-    const float Bailout = cfg.Bailout;
-    int n = 0;
-    do
-    {
-        z = DeIter(z, n, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale, DeRotation);
-    } while (length2(xyz(z)) < Bailout && ++n < MaxIters);
-    return length(xyz(z)) / z.w;
-}
-
-static __device__ float DeColor(float3 offset, float lightHue)
-{
-    float4 z = make_float4(offset, 1.0f);
-    float hue = 0;
-    const float FoldingLimit = cfg.FoldingLimit;
-    const float MinRadius2 = cfg.MinRadius2;
-    const float FixedRadius2 = cfg.FixedRadius2;
-    const float Scale = cfg.Scale;
-    const float DeRotation = cfg.DeRotation;
-    const int MaxIters = cfg.MaxIters;
-    const float Bailout = cfg.Bailout;
-    int n = 0;
-    do
-    {
-        float4 oldz = z;
-        z = DeIter(z, n, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale, DeRotation);
-
-        hue += log2(length2(xyz(z) - xyz(oldz)));
-    } while (++n < MaxIters && length2(xyz(z)) < Bailout);
-
-    float fullValue = lightHue - hue * cfg.HueVariance;
-    fullValue *= 3.14159f;
-    fullValue = cos(fullValue);
-    fullValue *= fullValue;
-    fullValue = pow(fullValue, cfg.ColorSharpness);
-    fullValue = 1 - (1 - fullValue) * cfg.Saturation;
-    return fullValue;
 }
 
 static __device__ uint MWC64X(ulong *state)
@@ -206,7 +99,7 @@ static __device__ float3 RandSphere(ulong* rand)
     return normalize(make_float3(normal.x, normal.y, rest));
 }
 
-static __device__ float3 RandHemisphere(ulong* rand, float3 normal)
+static __device__ float3 RandHemisphere(ulong *rand, float3 normal)
 {
     float3 result = RandSphere(rand);
     if (dot(result, normal) < 0)
@@ -214,8 +107,40 @@ static __device__ float3 RandHemisphere(ulong* rand, float3 normal)
     return result;
 }
 
-static __device__ void ApplyDof(float3* position, float3* lookat, float focalPlane, float hue,
-        ulong* rand)
+static __device__ ulong GetRand(int x, int y, int width, int frame)
+{
+    ulong rand;
+    uint2 randBuffer = BufferRand[y * width + x];
+    rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
+    rand += y * width + x;
+    if (frame < 1)
+    {
+        for (int i = 0; (float)i / cfg.RandSeedInitSteps - 1 < Rand(&rand) * cfg.RandSeedInitSteps;
+                i++)
+        {
+        }
+    }
+    return rand;
+}
+
+static __device__ void SetRand(int x, int y, int width, ulong rand)
+{
+    BufferRand[y * width + x] = make_uint2((uint)(rand >> 32), (uint)rand);
+}
+
+// http://en.wikipedia.org/wiki/Stereographic_projection
+static __device__ float3 RayDir(float3 forward, float3 up, float2 screenCoords, float fov)
+{
+    screenCoords *= -fov;
+    float len2 = length2(screenCoords);
+    float3 look = make_float3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+
+    float3 right = cross(forward, up);
+
+    return look.x * right + look.y * up + look.z * forward;
+}
+
+static __device__ void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
 {
     float3 focalPosition = *position + *lookat * focalPlane;
     float3 xShift = cross(make_float3(0, 0, 1), *lookat);
@@ -226,240 +151,215 @@ static __device__ void ApplyDof(float3* position, float3* lookat, float focalPla
     *position = focalPosition - *lookat * focalPlane;
 }
 
-static __device__ float3 Normal(float3 pos)
+static __device__ void GetCamera(float3 *origin, float3 *direction, int x, int y, int screenX,
+        int screenY, int width, int height, ulong *rand)
 {
-    const float delta = FLT_EPSILON * 2;
-    float dppn = De(pos + make_float3(delta, delta, -delta));
-    float dpnp = De(pos + make_float3(delta, -delta, delta));
-    float dnpp = De(pos + make_float3(-delta, delta, delta));
-    float dnnn = De(pos + make_float3(-delta, -delta, -delta));
-
-    return normalize(
-            make_float3((dppn + dpnp) - (dnpp + dnnn), (dppn + dnpp) - (dpnp + dnnn),
-                    (dpnp + dnpp) - (dppn + dnnn)));
+    *origin = make_float3(Camera.posX, Camera.posY, Camera.posZ);
+    float3 look = make_float3(Camera.lookX, Camera.lookY, Camera.lookZ);
+    float3 up = make_float3(Camera.upX, Camera.upY, Camera.upZ);
+    float2 screenCoords = make_float2((float)(x + screenX), (float)(y + screenY));
+    screenCoords += make_float2(Rand(rand) - 0.5f, Rand(rand) - 0.5f);
+    float fov = Camera.fov * 2 / (width + height);
+    //fov *= exp((*hue - 0.5f) * cfg.FovAbberation);
+    *direction = RayDir(look, up, screenCoords, fov);
+    ApplyDof(origin, direction, Camera.focalDistance, rand);
 }
 
-static __device__ float RaySphereIntersection(float3 rayOrigin, float3 rayDir, float3 sphereCenter,
-        float sphereSize, bool canBePast)
+static __device__ float3 HueToRGB(float hue, float saturation, float value)
 {
-    float3 omC = rayOrigin - sphereCenter;
-    float lDotOmC = dot(rayDir, omC);
-    float underSqrt = lDotOmC * lDotOmC - dot(omC, omC) + sphereSize * sphereSize;
-    if (underSqrt < 0)
-        return FLT_MAX;
-    float theSqrt = sqrt(underSqrt);
-    float dist = -lDotOmC - theSqrt;
-    if (dist > 0)
-        return dist;
-    dist = -lDotOmC + theSqrt;
-    if (canBePast && dist > 0)
-        return dist;
-    return FLT_MAX;
-}
-
-static __device__ float Trace(float3 origin, float3 direction, float quality, float hue,
-        ulong* rand, int* isFog, int* hitLightsource)
-{
-    float distance = 1.0f;
-    float totalDistance = De(origin) * cfg.DeMultiplier * Rand(rand);
-    const float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY,
-    cfg.LightPosZ);
-    float sphereDist = RaySphereIntersection(origin, direction, lightPos,
-    cfg.LightSize, false);
-    float fogDist = -log2(Rand(rand)) / (float)(cfg.FogDensity /* * hue */);
-    float maxRayDist = min(min((float) cfg.MaxRayDist, fogDist), sphereDist);
-    int i = 0;
-    do
-    {
-        distance = De(origin + direction * totalDistance) * cfg.DeMultiplier;
-        totalDistance += distance;
-    } while (++i < cfg.MaxRaySteps && totalDistance < maxRayDist
-            && distance * quality > totalDistance);
-    if (totalDistance > sphereDist)
-        *hitLightsource = 1;
-    else
-        *hitLightsource = 0;
-    if (totalDistance > fogDist)
-    {
-        *isFog = 1;
-        totalDistance = fogDist;
-    }
-    else if (totalDistance > cfg.MaxRayDist)
-        *isFog = 1;
-    else
-        *isFog = 0;
-    return totalDistance;
-}
-
-static __device__ float SimpleTrace(float3 origin, float3 direction, float quality)
-{
-    float distance = 1.0f;
-    float totalDistance = 0.0f;
-    const float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY,
-    cfg.LightPosZ);
-    float sphereDist = RaySphereIntersection(origin, direction, lightPos,
-    cfg.LightSize, false);
-    float maxRayDist = min((float) cfg.MaxRayDist, sphereDist);
-    int i = 0;
-    do
-    {
-        distance = De(origin + direction * totalDistance) * cfg.DeMultiplier;
-        totalDistance += distance;
-    } while (++i < cfg.MaxRaySteps && totalDistance < maxRayDist
-            && distance * quality > totalDistance);
-    return (float)(i - 1) / cfg.MaxRaySteps;
-}
-
-static __device__ bool Reaches(float3 initial, float3 final)
-{
-    float3 direction = final - initial;
-    float lenDir = length(direction);
-    direction /= lenDir;
-    float totalDistance = 0;
-    float distance = FLT_MAX;
-    float threshHold = fabs(De(final)) * (cfg.DeMultiplier * 0.5f);
-    int i = 0;
-    do
-    {
-        distance = De(initial + direction * totalDistance) * cfg.DeMultiplier;
-        if (i == 0 && fabs(distance * 0.5f) < threshHold)
-            threshHold = fabs(distance * 0.5f);
-        totalDistance += distance;
-        if (totalDistance > lenDir)
-            return true;
-    } while (++i < cfg.MaxRaySteps && totalDistance < cfg.MaxRayDist && distance > threshHold);
-    return false;
-}
-
-static __device__ float LightBrightness(float hue)
-{
-    return Gauss(cfg.LightBrightnessAmount, cfg.LightBrightnessCenter,
-    cfg.LightBrightnessWidth, hue);
-}
-
-static __device__ float AmbientBrightness(float hue)
-{
-    return Gauss(cfg.AmbientBrightnessAmount, cfg.AmbientBrightnessCenter,
-    cfg.AmbientBrightnessWidth, hue);
-}
-
-static __device__ float DirectLighting(float3 rayPos, float hue, ulong* rand, float3* lightDir)
-{
-    const float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY,
-    cfg.LightPosZ);
-    float3 lightToRay = normalize(rayPos - lightPos);
-    float3 movedLightPos = lightPos + cfg.LightSize * RandHemisphere(rand, lightToRay);
-    *lightDir = normalize(movedLightPos - rayPos);
-    if (Reaches(rayPos, movedLightPos))
-    {
-        float div = length2(rayPos - movedLightPos);
-        return LightBrightness(hue) / div;
-    }
-    return 0.0f;
-}
-
-static __device__ float BRDF(float3 normal, float3 incoming, float3 outgoing)
-{
-    float3 halfV = normalize(incoming + outgoing);
-    float angle = acos(dot(normal, halfV));
-    return 1 + Gauss(cfg.SpecularHighlightAmount, 0, cfg.SpecularHighlightSize, angle);
-}
-
-static __device__ float RenderingEquation(float3 rayPos, float3 rayDir, float qualityMul, float hue,
-        ulong* rand)
-{
-    float total = 0;
-    float color = 1;
-    int isFog;
-    int i = 0;
-    do
-    {
-        float quality = i == 0 ? cfg.QualityFirstRay * qualityMul : cfg.QualityRestRay;
-        int hitLightsource;
-        float distance = Trace(rayPos, rayDir, quality, hue, rand, &isFog, &hitLightsource);
-        if (hitLightsource)
-        {
-            if (i == 0)
-            {
-                total += color * LightBrightness(hue);
-            }
-            break;
-        }
-        if (distance > cfg.MaxRayDist)
-        {
-            isFog = 1;
-            break;
-        }
-
-        float3 newRayPos = rayPos + rayDir * distance;
-        float3 newRayDir;
-
-        float3 normal;
-        if (isFog)
-        {
-            newRayDir = RandSphere(rand);
-            //color *= FogColor(hue);
-        }
-        else
-        {
-            normal = Normal(newRayPos);
-            newRayDir = RandHemisphere(rand, normal);
-            color *= DeColor(newRayPos, hue) * cfg.Reflectivity;
-        }
-
-        float3 lightingRayDir;
-        float direct = DirectLighting(newRayPos, hue, rand, &lightingRayDir);
-
-        if (!isFog)
-        {
-            color *= BRDF(normal, newRayDir, -rayDir) * dot(normal, newRayDir);
-            direct *= BRDF(normal, lightingRayDir, -rayDir) * dot(normal, lightingRayDir);
-        }
-        total += color * direct;
-
-        rayPos = newRayPos;
-        rayDir = newRayDir;
-
-        if (isFog)
-        {
-            break;
-        }
-    } while (++i < cfg.NumRayBounces);
-    if (isFog)
-    {
-        total += color * AmbientBrightness(hue);
-    }
-    return total;
-}
-
-static __device__ float3 HueToRGB(float hue, float value)
-{
-    hue *= 4;
+    hue *= 3;
     float frac = fmod(hue, 1.0f);
     float3 color;
     switch ((int)hue)
     {
     case 0:
-        color = make_float3(frac, 0, 0);
-        break;
-    case 1:
         color = make_float3(1 - frac, frac, 0);
         break;
-    case 2:
+    case 1:
         color = make_float3(0, 1 - frac, frac);
         break;
-    case 3:
-        color = make_float3(0, 0, 1 - frac);
+    case 2:
+        color = make_float3(frac, 0, 1 - frac);
         break;
     default:
-        color = make_float3(value);
+        color = make_float3(1);
         break;
     }
     color.x = sqrtf(color.x);
     color.y = sqrtf(color.y);
     color.z = sqrtf(color.z);
-    color *= value;
+    saturation = value * (1 - saturation);
+    color = color * (value - saturation) + saturation;
     return color;
+}
+
+static __device__ float3 LightBrightness()
+{
+    return HueToRGB(
+        cfg.LightBrightnessHue,
+        cfg.LightBrightnessSat,
+        cfg.LightBrightnessVal
+        );
+}
+
+static __device__ float3 AmbientBrightness()
+{
+    return HueToRGB(
+        cfg.AmbientBrightnessHue,
+        cfg.AmbientBrightnessSat,
+        cfg.AmbientBrightnessVal
+        );
+}
+
+static __device__ float3 Rotate(float3 v, float3 axis, float angle)
+{
+    float sina = sin(angle);
+    float cosa = cos(angle);
+    return cosa * v + sina * cross(axis, v) + (1 - cosa) * dot(axis, v) * axis;
+}
+
+static __device__ float4 Mandelbulb(float4 z, const float Power)
+{
+    const float r = length(xyz(z));
+
+    // convert to polar coordinates
+    float theta = asin(z.z / r);
+    float phi = atan2(z.y, z.x);
+    float dr = powf(r, Power - 1.0) * Power * z.w + 1.0;
+
+    // scale and rotate the point
+    float zr = pow(r, Power);
+    theta = theta * Power;
+    phi = phi * Power;
+
+    // convert back to cartesian coordinates
+    float3 z3 = zr * make_float3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
+    return make_float4(z3, dr);
+}
+
+static __device__ float4 Boxfold(float4 z, const float FoldingLimit)
+{
+    float3 znew = xyz(z);
+    znew = clamp(znew, -FoldingLimit, FoldingLimit) * 2.0f - znew;
+    return make_float4(znew, z.w);
+}
+
+static __device__ float4 Spherefold(float4 z, const float MinRadius2, const float FixedRadius2)
+{
+    z *= FixedRadius2 / clamp(length2(xyz(z)), MinRadius2, FixedRadius2);
+    return z;
+}
+
+static __device__ float4 TScale(float4 z, const float Scale)
+{
+    return z * make_float4(Scale, Scale, Scale, fabs(Scale));
+}
+
+static __device__ float4 TOffset(float4 z, float3 offset)
+{
+    return z + make_float4(offset, 1.0f);
+}
+
+static __device__ float4 TRotate(float4 v, float3 axis, float angle)
+{
+    return make_float4(Rotate(xyz(v), axis, angle), v.w);
+}
+
+static __device__ float4 Mandelbox(float4 z, float3 offset, const float FoldingLimit,
+        const float MinRadius2, const float FixedRadius2, const float Scale)
+{
+    z = Boxfold(z, FoldingLimit);
+    z = Spherefold(z, MinRadius2, FixedRadius2);
+    z = TScale(z, Scale);
+    z = TOffset(z, offset);
+    return z;
+}
+
+static __device__ float4 DeIter(float4 z, int i, float3 offset, const float FoldingLimit,
+        const float MinRadius2, const float FixedRadius2, const float Scale, const float Rotation)
+{
+    z = Mandelbox(z, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale);
+    //const float3 rotVec = normalize(make_float3(1, 1, 1));
+    //z = TRotate(z, rotVec, Rotation);
+    return z;
+}
+
+static __device__ float De(float3 offset, float3 *lighting)
+{
+    float4 z = make_float4(offset, 1.0f);
+    const float FoldingLimit = cfg.FoldingLimit;
+    const float MinRadius2 = cfg.MinRadius2;
+    const float FixedRadius2 = cfg.FixedRadius2;
+    const float Scale = cfg.Scale;
+    const float DeRotation = cfg.DeRotation;
+    const float Bailout = cfg.Bailout;
+    int n = cfg.MaxIters;
+    do
+    {
+        z = DeIter(z, n, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale, DeRotation);
+    } while (length2(xyz(z)) < Bailout && --n);
+    float distance = length(xyz(z)) / z.w;
+    const float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
+    float lightDistance = length(lightPos - offset) - cfg.LightSize;
+    if (lightDistance < distance)
+    {
+        if (lightDistance < cfg.LightSize * 0.1f)
+        {
+            *lighting = LightBrightness();
+        }
+        else
+        {
+            *lighting = make_float3(0);
+        }
+        return lightDistance;
+    }
+    else
+    {
+        *lighting = make_float3(0);
+        return distance;
+    }
+}
+
+static __device__ float3 NewRayDir(float3 position, float3 normal, float3 oldRayDir,
+        float *probability, ulong *rand)
+{
+    float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
+    lightPos += RandSphere(rand) * cfg.LightSize;
+    float3 lightDir = lightPos - position;
+    float dist = length(lightDir);
+    lightDir /= dist;
+    float prob = 1 / sqrtf((cfg.LightSize * cfg.LightSize) / (dist * dist) + 1);
+    if (Rand(rand) > 0.5f && dot(lightDir, normal) > 0)
+    {
+        *probability *= 1 - prob;
+        return lightDir;
+    }
+    *probability *= prob;
+    return RandHemisphere(rand, normal);
+}
+
+static __device__ float BRDF(float3 normal, float3 incoming, float3 outgoing)
+{
+    return 1;
+    //float3 halfV = normalize(incoming + outgoing);
+    //float angle = acos(dot(normal, halfV));
+    //return Gauss(1, 0, cfg.SpecularHighlightSize, angle);
+}
+
+static __device__ float SimpleTrace(float3 origin, float3 direction, float width, int height)
+{
+    const float quality = (width + height) / (2 * Camera.fov);
+    float distance = 1.0f;
+    float totalDistance = 0.0f;
+    int i = 0;
+    do
+    {
+        float3 lighting;
+        distance = De(origin + direction * totalDistance, &lighting) * cfg.DeMultiplier;
+        totalDistance += distance;
+    } while (++i < cfg.MaxRaySteps && totalDistance < cfg.MaxRayDist
+            && distance * quality > totalDistance);
+    return (float)(i - 1) / cfg.MaxRaySteps;
 }
 
 static __device__ uint PackPixel(float4 pixel)
@@ -474,6 +374,130 @@ static __device__ uint PackPixel(float4 pixel)
     return (255 << 24) | ((int)pixel.x << 16) | ((int)pixel.y << 8) | ((int)pixel.z);
 }
 
+static __device__ void Finish(MandelboxState *state, int x, int y, int width)
+{
+    float4 finalColor = state->lightColor;
+    if (isnan(finalColor.x) || isnan(finalColor.x) || isnan(finalColor.x))
+    {
+        finalColor = make_float4(1.0f, -1.0f, 1.0f, 1.0f) * 1000000000000.0f;
+    }
+    float4 oldColor = state->color;
+    float3 result = (xyz(finalColor) * finalColor.w + xyz(oldColor) * oldColor.w)
+            / (oldColor.w + finalColor.w);
+    state->color = make_float4(result, oldColor.w + finalColor.w);
+}
+
+static __device__ int PreviewState(MandelboxState *state, uint* __restrict__ screenPixels, int x,
+        int y, int screenX, int screenY, int width, int height, ulong *rand)
+{
+    GetCamera(&state->position, &state->direction, x, y, screenX, screenY, width, height, rand);
+    float value = SimpleTrace(state->position, state->direction, width, height);
+    value = sqrtf(value);
+    screenPixels[y * width + x] = PackPixel(make_float4(value));
+    return PREVIEW_STATE;
+}
+
+static __device__ int InitState(MandelboxState *state, int x, int y, int screenX, int screenY,
+        int width, int height, ulong *rand)
+{
+    GetCamera(&state->position, &state->direction, x, y, screenX, screenY, width, height, rand);
+    state->lightColor = make_float4(1);
+    state->totalDistance = 0;
+    state->traceIter = 0;
+    return TRACE_STATE;
+}
+
+static __device__ int TraceState(MandelboxState *state, float distance, float3 lighting, int width,
+        int height)
+{
+    state->totalDistance += distance;
+    float3 oldPos = state->position;
+    state->position += state->direction * distance;
+    const float quality = state->traceIter == 0 ?
+    cfg.QualityFirstRay * ((width + height) / (2 * Camera.fov)) :
+                                                  cfg.QualityRestRay;
+    if ((oldPos.x == state->position.x && oldPos.y == state->position.y
+            && oldPos.z == state->position.z) || state->totalDistance > cfg.MaxRayDist
+            || distance * quality < state->totalDistance)
+    {
+        state->position = state->position + make_float3(-NORMAL_DELTA, NORMAL_DELTA, NORMAL_DELTA);
+        state->normal = make_float3(0, 0, 0);
+        if (state->totalDistance > cfg.MaxRayDist)
+        {
+            lighting += AmbientBrightness();
+        }
+        if (length2(lighting) > 0)
+        {
+            float3 newColor = xyz(state->lightColor) * lighting;
+            state->lightColor = make_float4(newColor, state->lightColor.w);
+            return FINISH_STATE;
+        }
+        return NORMAL_STATE;
+    }
+    return TRACE_STATE;
+}
+
+static __device__ int NormalState(MandelboxState *state, float distance, ulong *rand)
+{
+    if (state->normal.x == 0)
+    {
+        state->normal.x = distance;
+        state->position = state->position
+                + (make_float3(NORMAL_DELTA, -NORMAL_DELTA, NORMAL_DELTA)
+                        - make_float3(-NORMAL_DELTA, NORMAL_DELTA, NORMAL_DELTA));
+    }
+    else if (state->normal.y == 0)
+    {
+        state->normal.y = distance;
+        state->position = state->position
+                + (make_float3(NORMAL_DELTA, NORMAL_DELTA, -NORMAL_DELTA)
+                        - make_float3(NORMAL_DELTA, -NORMAL_DELTA, NORMAL_DELTA));
+    }
+    else if (state->normal.z == 0)
+    {
+        state->normal.z = distance;
+        state->position = state->position
+                + (make_float3(-NORMAL_DELTA, -NORMAL_DELTA, -NORMAL_DELTA)
+                        - make_float3(NORMAL_DELTA, NORMAL_DELTA, -NORMAL_DELTA));
+    }
+    else
+    {
+        float dnpp = state->normal.x;
+        float dpnp = state->normal.y;
+        float dppn = state->normal.z;
+        float dnnn = distance;
+
+        state->normal = normalize(
+                make_float3((dppn + dpnp) - (dnpp + dnnn), (dppn + dnpp) - (dpnp + dnnn),
+                        (dpnp + dnpp) - (dppn + dnnn)));
+        state->position = state->position
+                - make_float3(-NORMAL_DELTA, -NORMAL_DELTA, -NORMAL_DELTA);
+        float3 oldRayDir = state->direction;
+        state->direction = NewRayDir(state->position, state->normal, oldRayDir,
+                &state->lightColor.w, rand);
+        float3 newLightColor = xyz(state->lightColor);
+        newLightColor *= BRDF(state->normal, state->direction, -oldRayDir)
+                * dot(state->normal, state->direction);
+        state->lightColor = make_float4(newLightColor, state->lightColor.w);
+        state->totalDistance = 0;
+        if (++state->traceIter > cfg.NumRayBounces)
+        {
+            state->position = make_float3(cfg.Bailout + 1);
+            return FINISH_STATE;
+        }
+        return TRACE_STATE;
+    }
+    return NORMAL_STATE;
+}
+
+static __device__ int FinishState(MandelboxState *state, uint* __restrict__ screenPixels, int x,
+        int y, int width)
+{
+    Finish(state, x, y, width);
+    screenPixels[y * width + x] = PackPixel(state->color);
+    return INIT_STATE;
+}
+
 extern "C" __global__ void kern(uint* __restrict__ screenPixels, int screenX, int screenY,
         int width, int height, int frame)
 {
@@ -482,70 +506,49 @@ extern "C" __global__ void kern(uint* __restrict__ screenPixels, int screenX, in
     if (x >= width || y >= height)
         return;
 
-    float3 pos = make_float3(Camera.posX, Camera.posY, Camera.posZ);
-    float3 look = make_float3(Camera.lookX, Camera.lookY, Camera.lookZ);
-    float3 up = make_float3(Camera.upX, Camera.upY, Camera.upZ);
+    ulong rand = GetRand(x, y, width, frame);
 
-    ulong rand;
-    uint2 randBuffer = BufferRand[y * width + x];
-    rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
-    rand += y * width + x;
-    if (frame < 1)
+    MandelboxState state = BufferScratch[y * width + x];
+    if (frame == -1)
     {
-        for (int i = 0; (float)i / cfg.RandSeedInitSteps - 1 < Rand(&rand) * cfg.RandSeedInitSteps;
-                i++)
-        {
-        }
+        state.state = PREVIEW_STATE;
+        state.position = make_float3(cfg.Bailout + 1);
+        state.color = make_float4(0);
+    }
+    else if (frame == 0)
+    {
+        state.state = INIT_STATE;
+        state.position = make_float3(cfg.Bailout + 1);
+        state.color = make_float4(0);
+        screenPixels[y * width + x] = 255u << 24;
     }
 
-    float hue = Rand(&rand);
-
-    float2 screenCoords = make_float2((float)(x + screenX), (float)(y + screenY));
-    screenCoords += make_float2(Rand(&rand) - 0.5f, Rand(&rand) - 0.5f);
-    float fov = Camera.fov * 2 / (width + height);
-    fov *= exp((hue - 0.5f) * cfg.FovAbberation);
-    float3 rayDir = RayDir(look, up, screenCoords, fov);
-    ApplyDof(&pos, &rayDir, Camera.focalDistance, hue, &rand);
-    int screenIndex = y * width + x;
-
-    float4 final;
-    if (frame < 0)
+    int i = state.state == PREVIEW_STATE ? 1 : max(1 << cfg.ItersPerKernel, 1);
+    do
     {
-        float dist = SimpleTrace(pos, rayDir, 1 / fov);
-        dist = sqrt(dist);
-        BufferScratch[screenIndex] = final = make_float4(dist, dist, dist, 100);
-    }
-    else
-    {
-        const float weight = 1;
-        float intensity = RenderingEquation(pos, rayDir, 1 / fov, hue, &rand);
-        if (!cfg.BrightThresh)
+        float3 lighting;
+        float de = De(state.position, &lighting) * cfg.DeMultiplier;
+        switch (state.state)
         {
-            intensity = fmin(intensity, cfg.BrightThresh);
+        case PREVIEW_STATE:
+            state.state = PreviewState(&state, screenPixels, x, y, screenX, screenY, width, height,
+                    &rand);
+            break;
+        case INIT_STATE:
+            state.state = InitState(&state, x, y, screenX, screenY, width, height, &rand);
+            break;
+        case TRACE_STATE:
+            state.state = TraceState(&state, de, lighting, width, height);
+            break;
+        case NORMAL_STATE:
+            state.state = NormalState(&state, de, &rand);
+            break;
+        case FINISH_STATE:
+            state.state = FinishState(&state, screenPixels, x, y, width);
+            break;
         }
-        float3 color = HueToRGB(hue, intensity)
-                + make_float3(cfg.ColorBiasR, cfg.ColorBiasG, cfg.ColorBiasB);
+    } while (--i);
 
-        float4 old = BufferScratch[screenIndex];
-        float3 oldxyz = make_float3(old.x, old.y, old.z);
-        float3 diff = oldxyz - color;
-        if (!isnan(color.x) && !isnan(color.y) && !isnan(color.z) && !isnan(weight))
-        {
-            if (frame != 0 && old.w + weight > 0)
-                final = make_float4((color * weight + oldxyz * old.w) / (old.w + weight),
-                        old.w + weight);
-            else
-                final = make_float4(color, weight);
-        }
-        else
-        {
-            if (frame != 0)
-                final = old;
-            else
-                final = make_float4(0);
-        }
-        BufferScratch[screenIndex] = final;
-    }
-    screenPixels[screenIndex] = PackPixel(final);
-    BufferRand[screenIndex] = make_uint2((uint)(rand >> 32), (uint)rand);
+    BufferScratch[y * width + x] = state;
+    SetRand(x, y, width, rand);
 }

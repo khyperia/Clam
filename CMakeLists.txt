@@ -24,6 +24,7 @@ set(CMAKE_LIBRARY_PATH
         "/home/echauck/SDL2_ttf/lib"
         "/home/kuhl/public-vrlab/vrpn/build"
         "${CMAKE_SOURCE_DIR}/../vrpn/build"
+        "${CMAKE_SOURCE_DIR}/../../prog/vrpn/build"
         "/opt/cuda/lib"
         ${CMAKE_LIBRARY_PATH})
 set(CMAKE_INCLUDE_PATH
@@ -32,6 +33,7 @@ set(CMAKE_INCLUDE_PATH
         "/home/echauck/SDL2_ttf/include"
         "/home/kuhl/public-vrlab/vrpn"
         "${CMAKE_SOURCE_DIR}/../vrpn"
+        "${CMAKE_SOURCE_DIR}/../../prog/vrpn"
         "/opt/cuda/include"
         ${CMAKE_INCLUDE_PATH})
 

@@ -3,6 +3,12 @@
 set -o errexit
 set -o nounset
 
+# Prints a very readable bold message that stands out
+function printMessage()
+{
+    echo "$(tput sgr 0)$(tput bold)== ${BASH_SOURCE} ===> $(tput setaf 1)$@$(tput sgr 0)"
+}
+
 SOURCE_LOC=".."
 IVS_USER="${IVS_USER:-$USER}"
 IVS_HOSTNAME="ivs.research.mtu.edu"
@@ -21,12 +27,6 @@ then
 else
     printMessage "${FONT_ATTEMPT} not found, will probably crash. Fix ivs.sh FONT_ATTEMPT to point at a ttf font."
 fi
-
-# Prints a very readable bold message that stands out
-function printMessage()
-{
-    echo "$(tput sgr 0)$(tput bold)== ${BASH_SOURCE} ===> $(tput setaf 1)$@$(tput sgr 0)"
-}
 
 printMessage "Copying sources to ${IVS_HOSTNAME}"
 

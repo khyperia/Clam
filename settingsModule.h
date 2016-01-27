@@ -627,7 +627,7 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
             {
                 if (!oneTime)
                 {
-                    value *= (T)time * -incType + (T)1.0;
+                    value *= std::exp((T)time * -incType);
                 }
             }
             else if (incType > 0)
@@ -697,30 +697,19 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         MkNv(float, FixedRadius2, 0.25f);
         MkNv(float, MinRadius2, 0.25f);
         MkNv(float, DeRotation, 0.25f);
-        MkNv(float, ColorSharpness, 1);
-        MkNv(float, Saturation, 0.2f);
-        MkNv(float, HueVariance, -0.5f);
-        MkNv(float, Reflectivity, 0.25f);
         MkNv(float, DofAmount, 0.01f);
         MkNv(float, FovAbberation, -0.1f);
         MkNv(float, LightPosX, 0.5f);
         MkNv(float, LightPosY, 0.5f);
         MkNv(float, LightPosZ, 0.5f);
         MkNv(float, LightSize, -0.2f);
-        MkNv(float, ColorBiasR, 0.25f);
-        MkNv(float, ColorBiasG, 0.25f);
-        MkNv(float, ColorBiasB, 0.25f);
         MkNv(int, WhiteClamp, 0);
-        MkNv(float, BrightThresh, 0.1f);
-        MkNv(float, SpecularHighlightAmount, 0.25f);
-        MkNv(float, SpecularHighlightSize, -0.25f);
-        MkNv(float, FogDensity, -0.5f);
-        MkNv(float, LightBrightnessAmount, -0.5f);
-        MkNv(float, LightBrightnessCenter, 0.25f);
-        MkNv(float, LightBrightnessWidth, 0.25f);
-        MkNv(float, AmbientBrightnessAmount, -0.5f);
-        MkNv(float, AmbientBrightnessCenter, 0.25f);
-        MkNv(float, AmbientBrightnessWidth, 0.25f);
+        MkNv(float, LightBrightnessHue, 0.25f);
+        MkNv(float, LightBrightnessSat, -0.25f);
+        MkNv(float, LightBrightnessVal, -0.25f);
+        MkNv(float, AmbientBrightnessHue, 0.25f);
+        MkNv(float, AmbientBrightnessSat, -0.25f);
+        MkNv(float, AmbientBrightnessVal, -0.25f);
         MkNv(int, MaxIters, 0);
         MkNv(float, Bailout, -0.5f);
         MkNv(float, DeMultiplier, 0.125f);
