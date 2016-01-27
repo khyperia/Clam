@@ -9,6 +9,7 @@ class CuMem
 {
     CUdeviceptr ptr;
     size_t count;
+    bool owned;
 
     CuMem &operator=(const CuMem &rhs)
     {
@@ -37,27 +38,41 @@ class CuMem
     }
 
 public:
-    CuMem() : ptr(0), count(0)
+    CuMem() : ptr(0), count(0), owned(false)
     {
     }
 
-    CuMem(size_t count) : count(count)
+    CuMem(size_t count) : count(count), owned(true)
     {
         Alloc();
     }
 
-    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), count(count)
+    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), count(count), owned(false)
     {
     }
 
     ~CuMem()
     {
-        Free();
+        if (owned)
+        {
+            Free();
+        }
     }
 
     void Realloc(size_t newCount)
     {
-        Free();
+        if (ptr != 0)
+        {
+            if (!owned)
+            {
+                throw std::runtime_error("Cannot resize a non-owned CuMem");
+            }
+            Free();
+        }
+        else
+        {
+            owned = true;
+        }
         count = newCount;
         Alloc();
     }
