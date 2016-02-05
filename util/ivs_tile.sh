@@ -118,10 +118,10 @@ case ${SLAVE}_${CLAM3_DEVICE} in
         ;;
 esac
 # use `bc -l` for decimal math (not needed with current numbers)
-renderposX=$(bc <<< "$SCREENWIDTH * (${WIN_X} - $MAX_SCREENCOORDS_X / 2)")
-renderposY=$(bc <<< "$SCREENHEIGHT * (${WIN_Y} - $MAX_SCREENCOORDS_Y / 2)")
 winwidth=$(bc <<< "$SCREENWIDTH * 3 / 2")
-winposX=$(bc <<< "$SCREENWIDTH * ${LOC_X}")
+winposX=$(bc <<< "$winwidth * ${LOC_X}")
+renderposX=$(bc <<< "$winwidth * (${WIN_X} - $MAX_SCREENCOORDS_X / 2)")
+renderposY=$(bc <<< "$SCREENHEIGHT * (${WIN_Y} - $MAX_SCREENCOORDS_Y / 2)")
 export CLAM3_RENDEROFFSET=${renderposX}x${renderposY}
 export CLAM3_WINDOWPOS=${winwidth}x${SCREENHEIGHT}+${winposX}+0
 export DISPLAY=:0

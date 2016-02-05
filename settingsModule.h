@@ -757,10 +757,12 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         else if (keycode == SDLK_LEFT)
         {
             nameValues[menuPos]->Modify(-1, true);
+            return true;
         }
         else if (keycode == SDLK_RIGHT)
         {
             nameValues[menuPos]->Modify(1, true);
+            return true;
         }
         else
         {
@@ -775,7 +777,7 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         {
             menuPos = 0;
         }
-        return true;
+        return false;
     }
 
     virtual bool RepeatKeypress(SDL_Keycode keycode, double time)

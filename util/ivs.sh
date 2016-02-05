@@ -15,7 +15,7 @@ IVS_HOSTNAME="ivs.research.mtu.edu"
 IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam3"
 HOST_PORT=23457
 VRPN_OBJECT=Wand
-FONT_ATTEMPT=/usr/share/fonts/dejavu/DejaVuLGCSansMono.ttf
+FONT_ATTEMPT=/usr/share/fonts/TTF/DejaVuSansMono.ttf
 export CLAM3_KERNEL=mandelbox
 if [ -e $HOME/.vrpn-server ]
 then

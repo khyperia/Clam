@@ -35,7 +35,8 @@ for SLAVE in "${SLAVE_IPS[@]}"
 do
   printMessage "Connecting to ${SLAVE}"
   ssh -R ${HOST_PORT}:localhost:${HOST_PORT} -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 0" &
-  ssh -R ${HOST_PORT}:localhost:${HOST_PORT} -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 1" &
+  # only first ssh needs reverse portforward
+  ssh -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 1" &
   sleep 1
 done
 
