@@ -46,9 +46,8 @@ struct CpuRenderType : public RenderType
     {
     }
 
-    virtual bool Update(Kernel *kern, TTF_Font *font)
+    void Blit(Kernel *kern, SDL_Surface *surface)
     {
-        SDL_Surface *surface = SDL_GetWindowSurface(window);
         if (SDL_LockSurface(surface))
         {
             throw std::runtime_error("Could not lock window surface");
@@ -59,14 +58,25 @@ struct CpuRenderType : public RenderType
         }
         kern->RenderInto((int *)surface->pixels, width, height);
         SDL_UnlockSurface(surface);
+    }
+
+    void DrawUI(Kernel *kern, TTF_Font *font, SDL_Surface *surface)
+    {
+        SDL_Surface *conf = kern->Configure(font);
+        if (conf)
+        {
+            SDL_BlitSurface(conf, NULL, surface, NULL);
+            SDL_FreeSurface(conf);
+        }
+    }
+
+    virtual bool Update(Kernel *kern, TTF_Font *font)
+    {
+        SDL_Surface *surface = SDL_GetWindowSurface(window);
+        Blit(kern, surface);
         if (IsUserInput())
         {
-            SDL_Surface *conf = kern->Configure(font);
-            if (conf)
-            {
-                SDL_BlitSurface(conf, NULL, surface, NULL);
-                SDL_FreeSurface(conf);
-            }
+            DrawUI(kern, font, surface);
         }
         SDL_UpdateWindowSurface(window);
         return true;
@@ -102,69 +112,90 @@ struct HeadlessRenderType : public RenderType
         return builder.str();
     }
 
+    void LoadAnimationState(Kernel *kernel)
+    {
+        std::cout << "Loading animation keyframes\n";
+        kernel->LoadAnimation();
+        kernel->SetTime(0, false);
+        kernel->SetFramed(true);
+    }
+
+    void LoadFileState(Kernel *kernel)
+    {
+        std::string filename = RenderstateFilename(kernel);
+        try
+        {
+            // Loads *.renderstate.clam3 (the previously-left-off render)
+            StateSync *sync = NewFileStateSync(filename.c_str(), true);
+            kernel->RecvState(sync, true);
+            delete sync;
+            std::cout << "Loaded intermediate state from " << filename << "\n";
+        }
+        catch (const std::exception &ex)
+        {
+            // If that fails, try *.clam3 (the saved state parameters)
+            std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what()
+            << "\nTrying initial headless state instead\n";
+            StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
+            kernel->RecvState(sync, false);
+            kernel->SetFramed(true); // ensure we're not rendering with basic mode
+            delete sync;
+        }
+    }
+
+    void SaveProgress(Kernel *kernel, int numLeft)
+    {
+        std::string filename = RenderstateFilename(kernel);
+        StateSync *sync = NewFileStateSync(filename.c_str(), false);
+        kernel->SendState(sync, true);
+        delete sync;
+        std::cout << "Saved intermediate progress to " << filename << " (" << numLeft << " frames left)\n";
+    }
+
+    void SaveFinalImage(Kernel *kernel, const std::string &subext)
+    {
+        SDL_Surface *surface = SDL_CreateRGBSurface(0, (int)width, (int)height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
+        if (SDL_LockSurface(surface))
+        {
+            throw std::runtime_error("Could not lock temp buffer surface");
+        }
+        kernel->RenderInto((int *)surface->pixels, width, height);
+        SDL_UnlockSurface(surface);
+        std::string filename = RenderstateFilename(kernel);
+        filename += "." + subext + ".bmp";
+        SDL_SaveBMP(surface, filename.c_str());
+        std::cout << "Saved image '" << filename << "'\n";
+        SDL_FreeSurface(surface);
+    }
+
     virtual bool Update(Kernel *kernel, TTF_Font *)
     {
         if (currentTime == 0 && currentFrame == numFrames)
         {
             std::cout << "Flush/loading initial state\n";
+            // TODO: Figure out why this is somtimes needed
             kernel->RenderInto(NULL, width, height);
             if (numTimes > 1)
             {
-                std::cout << "Loading animation keyframes\n";
-                kernel->LoadAnimation();
-                kernel->SetTime(0, false);
-                kernel->SetFramed(true);
+                LoadAnimationState(kernel);
             }
             else
             {
-                std::string filename = RenderstateFilename(kernel);
-                try
-                {
-                    StateSync *sync = NewFileStateSync(filename.c_str(), true);
-                    kernel->RecvState(sync, true);
-                    delete sync;
-                    std::cout << "Loaded intermediate state from " << filename << "\n";
-                }
-                catch (const std::exception &ex)
-                {
-                    std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what()
-                    << "\nTrying initial headless state instead\n";
-                    StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
-                    kernel->RecvState(sync, false);
-                    kernel->SetFramed(true);
-                    delete sync;
-                }
+                LoadFileState(kernel);
             }
+            // note we can't refactor SetFramed to here, due to possibly just loading a renderstate.clam3
         }
         currentFrame--;
         kernel->RenderInto(NULL, width, height);
+
         const int saveInterval = 5;
         if (currentFrame % (1 << saveInterval) == 0 && numTimes <= 1)
         {
-            if (numTimes <= 1)
-            {
-                std::cout << currentFrame << " frames left\n";
-            }
-            std::string filename = RenderstateFilename(kernel);
-            StateSync *sync = NewFileStateSync(filename.c_str(), false);
-            kernel->SendState(sync, true);
-            delete sync;
-            std::cout << "Saved intermediate progress to " << filename << "\n";
+            SaveProgress(kernel, currentFrame);
         }
         if (currentFrame == 0)
         {
-            SDL_Surface *surface = SDL_CreateRGBSurface(0, (int)width, (int)height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
-            if (SDL_LockSurface(surface))
-            {
-                throw std::runtime_error("Could not lock temp buffer surface");
-            }
-            kernel->RenderInto((int *)surface->pixels, width, height);
-            SDL_UnlockSurface(surface);
-            std::string filename = RenderstateFilename(kernel);
-            filename += "." + tostring(currentTime) + ".bmp";
-            SDL_SaveBMP(surface, filename.c_str());
-            std::cout << "Saved image '" << filename << "'\n";
-            SDL_FreeSurface(surface);
+            SaveFinalImage(kernel, tostring(currentTime));
             currentTime++;
             if (currentTime >= numTimes)
             {
@@ -172,7 +203,7 @@ struct HeadlessRenderType : public RenderType
             }
             double time = (double)currentTime / numTimes;
             //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
-            kernel->SetTime(time, false);
+            kernel->SetTime(time, false); // boolean is `wrap`
             kernel->SetFramed(true);
             currentFrame = numFrames;
         }
@@ -180,60 +211,71 @@ struct HeadlessRenderType : public RenderType
     }
 };
 
-Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
+static void InitCuda(CUcontext *cuContext)
 {
-    bool isCompute = IsCompute();
-    int numHeadlessTimes;
-    int headless = Headless(&numHeadlessTimes);
+    if (!cudaSuccessfulInit)
+    {
+        throw std::runtime_error("CUDA device init failure while in compute mode");
+    }
+    int deviceNum = CudaDeviceNum(); // user setting
+    int maxDev = 0;
+    HandleCu(cuDeviceGetCount(&maxDev));
+    if (maxDev <= 0)
+    {
+        throw std::runtime_error("cuDeviceGetCount returned zero, is an NVIDIA GPU present on the system?");
+    }
+    if (deviceNum < 0 || deviceNum >= maxDev)
+    {
+        throw std::runtime_error("Invalid device number " + tostring(deviceNum) + ": must be less than "
+                                 + tostring(maxDev));
+    }
+    CUdevice cuDevice;
+    HandleCu(cuDeviceGet(&cuDevice, deviceNum));
+    {
+        char name[128];
+        HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
+        std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << "\n";
+    }
+    HandleCu(cuCtxCreate(cuContext, CU_CTX_SCHED_YIELD, cuDevice));
+    HandleCu(cuCtxSetCurrent(*cuContext));
+}
 
+static SDL_Rect GetWindowPos()
+{
     std::string winpos = WindowPos();
     if (winpos.empty())
     {
         puts("Window position wasn't specified. Defaulting to 500x500+100+100");
         winpos = "500x500+100+100";
     }
-    int x, y, width, height;
-    if (sscanf(winpos.c_str(), "%dx%d%d%d", &width, &height, &x, &y) != 4)
+    SDL_Rect windowPos;
+    if (sscanf(winpos.c_str(), "%dx%d%d%d", &windowPos.w, &windowPos.h, &windowPos.x, &windowPos.y) != 4)
     {
         throw std::runtime_error("Window position was in an incorrect format");
     }
+    return windowPos;
+}
 
+Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
+{
+    bool isCompute = IsCompute();
+    int numHeadlessTimes;
+    int headless = Headless(&numHeadlessTimes);
+
+    SDL_Rect windowPos = GetWindowPos();
     if (headless <= 0)
     {
-        window = new DisplayWindow(x, y, width, height);
+        window = new DisplayWindow(windowPos.x, windowPos.y, windowPos.w, windowPos.h);
     }
     else
     {
         window = NULL;
-        headlessWindowSize = Vector2<int>(width, height);
+        headlessWindowSize = Vector2<int>(windowPos.w, windowPos.h);
     }
 
     if (isCompute)
     {
-        if (!cudaSuccessfulInit)
-        {
-            throw std::runtime_error("CUDA device init failure while in compute mode");
-        }
-        int deviceNum = CudaDeviceNum();
-        int maxDev = 0;
-        HandleCu(cuDeviceGetCount(&maxDev));
-        if (maxDev <= 0)
-        {
-            throw std::runtime_error("cuDeviceGetCount returned zero, is an NVIDIA GPU present on the system?");
-        }
-        if (deviceNum < 0 || deviceNum >= maxDev)
-        {
-            throw std::runtime_error("Invalid device number " + tostring(deviceNum) + ": must be less than "
-                                     + tostring(maxDev));
-        }
-        HandleCu(cuDeviceGet(&cuDevice, deviceNum));
-        {
-            char name[128];
-            HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
-            std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << "\n";
-        }
-        HandleCu(cuCtxCreate(&cuContext, CU_CTX_SCHED_YIELD, cuDevice));
-        HandleCu(cuCtxSetCurrent(cuContext));
+        InitCuda(&cuContext);
     }
 
     kernel = new Kernel(KernelName());
@@ -274,19 +316,8 @@ Driver::~Driver()
     }
 }
 
-bool Driver::RunFrame()
+void Driver::UpdateWindowSize()
 {
-    if (window)
-    {
-        if (!window->UserInput(kernel))
-        {
-            return false;
-        }
-    }
-    if (connection.Sync(kernel))
-    {
-        return false;
-    }
     int newWidth, newHeight;
     if (window)
     {
@@ -308,13 +339,32 @@ bool Driver::RunFrame()
             renderType->width = (size_t)newWidth;
             renderType->height = (size_t)newHeight;
         }
+    }
+}
+
+bool Driver::RunFrame(double timePassed)
+{
+    if (window)
+    {
+        if (!window->UserInput(kernel, timePassed))
+        {
+            return false;
+        }
+    }
+    if (connection.Sync(kernel))
+    {
+        return false;
+    }
+    UpdateWindowSize();
+    if (renderType)
+    {
         bool cont = renderType->Update(kernel, window ? window->font : NULL);
         return cont;
     }
     else
     {
         kernel->UpdateNoRender();
-        if (IsUserInput() && window != NULL)
+        if (IsUserInput())
         {
             SDL_Surface *conf = kernel->Configure(window->font);
             if (conf)

@@ -176,12 +176,16 @@ class FileStateSync : public StateSync
             long current = ftell(file);
             fseek(file, 0, SEEK_END);
             long end = ftell(file);
+            fclose(file);
             if (current != end)
             {
                 throw std::runtime_error("Not at end of file when closing FileStateSync");
             }
         }
-        fclose(file);
+        else
+        {
+            fclose(file);
+        }
     };
 
 public:

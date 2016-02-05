@@ -9,23 +9,16 @@ int main(int argc, char **argv)
 {
     ParseCmdline(argc, argv);
     Driver driver;
-    bool isCompute = IsCompute();
     Uint32 ticks = SDL_GetTicks();
+    double time = 1.0;
     try
     {
-        while (driver.RunFrame())
+        while (driver.RunFrame(time))
         {
-            if (!isCompute)
-            {
-                Uint32 newTicks = SDL_GetTicks();
-                Uint32 wait = newTicks - ticks;
-                ticks = newTicks;
-                const Uint32 delay = 1000 / 60;
-                if (wait < delay)
-                {
-                    SDL_Delay(delay - wait);
-                }
-            }
+            SDL_Delay(1);
+            Uint32 newTicks = SDL_GetTicks();
+            time = (newTicks - ticks) / 1000.0;
+            ticks = newTicks;
         }
     }
     catch (const std::exception &ex)

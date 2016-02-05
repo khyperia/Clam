@@ -7,8 +7,9 @@
 #include "network.h"
 #include <SDL.h>
 
-struct SettingModuleBase
+class SettingModuleBase
 {
+public:
     virtual ~SettingModuleBase()
     {
     }
@@ -113,15 +114,15 @@ public:
         {
             throw new std::runtime_error("Not enough keyframes for animation");
         }
-        time *= keyframes.size() - 1;
+        time *= wrap ? keyframes.size() : keyframes.size() - 1;
         size_t index = (size_t)time;
         time -= index;
         size_t sizem1 = keyframes.size() - 1;
         const std::vector<SettingModuleBase *> &zero = keyframes[index == 0 ? (wrap ? sizem1 : 0) : index - 1];
         const std::vector<SettingModuleBase *> &one = keyframes[index];
-        const std::vector<SettingModuleBase *> &two = keyframes[index + 1];
+        const std::vector<SettingModuleBase *> &two = keyframes[wrap ? (index + 1) % keyframes.size() : index + 1];
         const std::vector<SettingModuleBase *> &three = keyframes
-        [index + 1 == sizem1 ? (wrap ? 0 : sizem1) : index + 2];
+        [wrap ? (index + 2) % keyframes.size() : (index + 1 == sizem1 ? sizem1 : index + 2)];
         for (size_t i = 0; i < currentState.size(); i++)
         {
             currentState[i]->Animate(zero[i], one[i], two[i], three[i], time);

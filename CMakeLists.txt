@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 2.6)
 
 project(Clam3 C CXX)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS "ON")
-
 set(SOURCEDIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 

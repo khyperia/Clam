@@ -11,12 +11,12 @@ class CuMem
     size_t count;
     bool owned;
 
-    CuMem &operator=(const CuMem &rhs)
+    CuMem &operator=(const CuMem &)
     {
         return *this;
     }
 
-    CuMem(const CuMem &x)
+    CuMem(const CuMem &)
     {
     }
 

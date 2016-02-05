@@ -22,7 +22,7 @@ struct SdlInitClass
     }
 } sdlInitInstance;
 
-DisplayWindow::DisplayWindow(int x, int y, int width, int height)
+DisplayWindow::DisplayWindow(int x, int y, int width, int height) : fpsAverage(0), timeSinceLastTitle(0)
 {
     isUserInput = IsUserInput();
     // TODO: SDL_WINDOW_FULLSCREEN
@@ -46,7 +46,6 @@ DisplayWindow::DisplayWindow(int x, int y, int width, int height)
     {
         font = NULL;
     }
-    lastTicks = SDL_GetTicks();
 }
 
 DisplayWindow::~DisplayWindow()
@@ -61,7 +60,7 @@ DisplayWindow::~DisplayWindow()
     }
 }
 
-bool DisplayWindow::UserInput(Kernel *kernel)
+bool DisplayWindow::UserInput(Kernel *kernel, double timePassed)
 {
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -75,12 +74,18 @@ bool DisplayWindow::UserInput(Kernel *kernel)
             return false;
         }
     }
-    Uint32 newTicks = SDL_GetTicks();
-    double time = (newTicks - lastTicks) / 1000.0;
-    lastTicks = newTicks;
+    double weight = 1 / (fpsAverage + 1);
+    fpsAverage = (timePassed + fpsAverage * weight) / (weight + 1);
+    timeSinceLastTitle += timePassed;
+    while (timeSinceLastTitle > 1.0)
+    {
+        SDL_Delay(1);
+        SDL_SetWindowTitle(window, ("Clam3 - " + tostring(1 / fpsAverage) + " fps").c_str());
+        timeSinceLastTitle--;
+    }
     if (isUserInput)
     {
-        kernel->Integrate(time);
+        kernel->Integrate(timePassed);
     }
     return true;
 }

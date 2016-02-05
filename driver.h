@@ -12,14 +12,14 @@ class Driver
     DisplayWindow *window;
     Kernel *kernel;
     RenderType *renderType;
-    CUdevice cuDevice;
     CUcontext cuContext;
     Connection connection;
     Vector2<int> headlessWindowSize;
+    void UpdateWindowSize();
 public:
     Driver();
 
     ~Driver();
 
-    bool RunFrame();
+    bool RunFrame(double timePassed);
 };

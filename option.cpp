@@ -112,7 +112,7 @@ bool IsCompute()
 
 bool IsUserInput()
 {
-    return !HostBindPort().empty() || MasterIp().empty();
+    return (!HostBindPort().empty() || MasterIp().empty()) && headless.empty();
 }
 
 std::string WindowPos()
@@ -138,7 +138,10 @@ int Headless(int *numTimes)
         *numTimes = 0;
     }
     if (numScanned == 0)
+    {
+        std::cout << "Couldn't parse headless count, assuming not headless\n";
         return -1;
+    }
     return headlessCount;
 }
 

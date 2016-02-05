@@ -9,7 +9,8 @@
 
 class DisplayWindow
 {
-    Uint32 lastTicks;
+    double fpsAverage;
+    double timeSinceLastTitle;
     bool isUserInput;
 
     DisplayWindow(const DisplayWindow &)
@@ -30,5 +31,5 @@ public:
 
     ~DisplayWindow();
 
-    bool UserInput(Kernel *kernel);
+    bool UserInput(Kernel *kernel, double timePassed);
 };
