@@ -237,22 +237,22 @@ static __device__ float4 Mandelbulb(float4 z, const float Power)
     return make_float4(z3, dr);
 }
 
-static __device__ float4 Boxfold(float4 z, const float FoldingLimit)
+static __device__ float4 Boxfold(float4 z)
 {
     float3 znew = xyz(z);
-    znew = clamp(znew, -FoldingLimit, FoldingLimit) * 2.0f - znew;
+    znew = clamp(znew, -cfg.FoldingLimit, cfg.FoldingLimit) * 2.0f - znew;
     return make_float4(znew, z.w);
 }
 
-static __device__ float4 Spherefold(float4 z, const float MinRadius2, const float FixedRadius2)
+static __device__ float4 Spherefold(float4 z)
 {
-    z *= FixedRadius2 / clamp(length2(xyz(z)), MinRadius2, FixedRadius2);
+    z *= cfg.FixedRadius2 / clamp(length2(xyz(z)), cfg.MinRadius2, cfg.FixedRadius2);
     return z;
 }
 
-static __device__ float4 TScale(float4 z, const float Scale)
+static __device__ float4 TScale(float4 z)
 {
-    return z * make_float4(Scale, Scale, Scale, fabs(Scale));
+    return z * make_float4(cfg.Scale, cfg.Scale, cfg.Scale, fabs(cfg.Scale));
 }
 
 static __device__ float4 TOffset(float4 z, float3 offset)
@@ -265,52 +265,37 @@ static __device__ float4 TRotate(float4 v, float3 axis, float angle)
     return make_float4(Rotate(xyz(v), axis, angle), v.w);
 }
 
-static __device__ float4 Mandelbox(float4 z, float3 offset, const float FoldingLimit,
-        const float MinRadius2, const float FixedRadius2, const float Scale)
+static __device__ float4 Mandelbox(float4 z, float3 offset)
 {
-    z = Boxfold(z, FoldingLimit);
-    z = Spherefold(z, MinRadius2, FixedRadius2);
-    z = TScale(z, Scale);
+    z = Boxfold(z);
+    z = Spherefold(z);
+    z = TScale(z);
     z = TOffset(z, offset);
     return z;
 }
 
-static __device__ float4 DeIter(float4 z, int i, float3 offset, const float FoldingLimit,
-        const float MinRadius2, const float FixedRadius2, const float Scale, const float Rotation)
+static __device__ float4 DeIter(float4 z, int i, float3 offset)
 {
-    z = Mandelbox(z, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale);
-    //const float3 rotVec = normalize(make_float3(1, 1, 1));
-    //z = TRotate(z, rotVec, Rotation);
+    z = Mandelbox(z, offset);
+    const float3 rotVec = normalize(make_float3(cfg.DeRotationAxisX, cfg.DeRotationAxisY, cfg.DeRotationAxisZ));
+    z = TRotate(z, rotVec, cfg.DeRotationAmount);
     return z;
 }
 
 static __device__ float De(float3 offset, float3 *lighting)
 {
     float4 z = make_float4(offset, 1.0f);
-    const float FoldingLimit = cfg.FoldingLimit;
-    const float MinRadius2 = cfg.MinRadius2;
-    const float FixedRadius2 = cfg.FixedRadius2;
-    const float Scale = cfg.Scale;
-    const float DeRotation = cfg.DeRotation;
-    const float Bailout = cfg.Bailout;
     int n = cfg.MaxIters;
     do
     {
-        z = DeIter(z, n, offset, FoldingLimit, MinRadius2, FixedRadius2, Scale, DeRotation);
-    } while (length2(xyz(z)) < Bailout && --n);
+        z = DeIter(z, n, offset);
+    } while (length2(xyz(z)) < cfg.Bailout && --n);
     float distance = length(xyz(z)) / z.w;
     const float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
     float lightDistance = length(lightPos - offset) - cfg.LightSize;
     if (lightDistance < distance)
     {
-        if (lightDistance < cfg.LightSize * 0.1f)
-        {
-            *lighting = LightBrightness();
-        }
-        else
-        {
-            *lighting = make_float3(0);
-        }
+        *lighting = LightBrightness();
         return lightDistance;
     }
     else
@@ -324,17 +309,32 @@ static __device__ float3 NewRayDir(float3 position, float3 normal, float3 oldRay
         float *probability, ulong *rand)
 {
     float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
-    lightPos += RandSphere(rand) * cfg.LightSize;
-    float3 lightDir = lightPos - position;
-    float dist = length(lightDir);
-    lightDir /= dist;
-    float prob = 1 / sqrtf((cfg.LightSize * cfg.LightSize) / (dist * dist) + 1);
-    if (Rand(rand) > 0.5f && dot(lightDir, normal) > 0)
+     /*
+        hyp = d
+        opposite = r
+        theta = asin(r / d)
+        area of spherical cap = 2 * pi * r^2 * (1 - cos(theta))
+        area = 2 * pi * (1 - cos(asin(r / d)))
+        probability = 2 * (1 - cos(asin(r / d))) / 4
+        simplified = (1 - sqrt(1 - r^2/d^2)) / 2
+    */
+    float dist = length(lightPos - position);
+    dist = fmax(dist, cfg.LightSize);
+    float costheta = sqrtf(1 - (cfg.LightSize * cfg.LightSize) / (dist * dist));
+    float prob = (1 - costheta) / 2;
+
+    float3 lightPosR = lightPos + RandSphere(rand) * cfg.LightSize;
+    float3 lightDirR = normalize(lightPosR - position);
+    float3 lightDir = normalize(lightPos - position);
+    if (dot(lightDirR, normal) > 0)
     {
+        if (Rand(rand) > 0.5f)
+        {
+            *probability *= prob;
+            return lightDirR;
+        }
         *probability *= 1 - prob;
-        return lightDir;
     }
-    *probability *= prob;
     return RandHemisphere(rand, normal);
 }
 
@@ -379,7 +379,7 @@ static __device__ void Finish(MandelboxState *state, int x, int y, int width)
     float4 finalColor = state->lightColor;
     if (isnan(finalColor.x) || isnan(finalColor.x) || isnan(finalColor.x))
     {
-        finalColor = make_float4(1.0f, -1.0f, 1.0f, 1.0f) * 1000000000000.0f;
+        finalColor = make_float4(1.0f, -1.0f, 1.0f, 1.0f) * 1000.0f;
     }
     float4 oldColor = state->color;
     float3 result = (xyz(finalColor) * finalColor.w + xyz(oldColor) * oldColor.w)
@@ -424,7 +424,7 @@ static __device__ int TraceState(MandelboxState *state, float distance, float3 l
         state->normal = make_float3(0, 0, 0);
         if (state->totalDistance > cfg.MaxRayDist)
         {
-            lighting += AmbientBrightness();
+            lighting = AmbientBrightness();
         }
         if (length2(lighting) > 0)
         {
@@ -437,8 +437,14 @@ static __device__ int TraceState(MandelboxState *state, float distance, float3 l
     return TRACE_STATE;
 }
 
-static __device__ int NormalState(MandelboxState *state, float distance, ulong *rand)
+static __device__ int NormalState(MandelboxState *state, float distance, float3 lighting, ulong *rand)
 {
+    if (length2(lighting) > 0)
+    {
+        float3 newColor = xyz(state->lightColor) * lighting;
+        state->lightColor = make_float4(newColor, state->lightColor.w);
+        return FINISH_STATE;
+    }
     if (state->normal.x == 0)
     {
         state->normal.x = distance;
@@ -541,7 +547,7 @@ extern "C" __global__ void kern(uint* __restrict__ screenPixels, int screenX, in
             state.state = TraceState(&state, de, lighting, width, height);
             break;
         case NORMAL_STATE:
-            state.state = NormalState(&state, de, &rand);
+            state.state = NormalState(&state, de, lighting, &rand);
             break;
         case FINISH_STATE:
             state.state = FinishState(&state, screenPixels, x, y, width);

@@ -10,7 +10,10 @@ struct MandelboxCfg
     float FoldingLimit;
     float FixedRadius2;
     float MinRadius2;
-    float DeRotation;
+    float DeRotationAmount;
+    float DeRotationAxisX;
+    float DeRotationAxisY;
+    float DeRotationAxisZ;
     float DofAmount;
     float FovAbberation;
 
@@ -58,13 +61,16 @@ MandelboxCfg MandelboxDefault()
     x.FoldingLimit = 1.0f;
     x.FixedRadius2 = 1.0f;
     x.MinRadius2 = 0.25f;
-    x.DeRotation = 0;
+    x.DeRotationAmount = 0;
+    x.DeRotationAxisX = 1;
+    x.DeRotationAxisY = 1;
+    x.DeRotationAxisZ = 1;
     x.DofAmount = 0.005f;
     x.FovAbberation = 0.01f;
-    x.LightBrightnessHue = 0.0f;
+    x.LightBrightnessHue = 0.025f;
     x.LightBrightnessSat = 0.5f;
     x.LightBrightnessVal = 8.0f;
-    x.AmbientBrightnessHue = 0.55f;
+    x.AmbientBrightnessHue = 0.525f;
     x.AmbientBrightnessSat = 0.25f;
     x.AmbientBrightnessVal = 1.0f;
     x.LightPosX = 3;

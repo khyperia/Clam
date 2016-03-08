@@ -697,7 +697,10 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         MkNv(float, FoldingLimit, 0.25f);
         MkNv(float, FixedRadius2, 0.25f);
         MkNv(float, MinRadius2, 0.25f);
-        MkNv(float, DeRotation, 0.25f);
+        MkNv(float, DeRotationAmount, 0.25f);
+        MkNv(float, DeRotationAxisX, 0.25f);
+        MkNv(float, DeRotationAxisY, 0.25f);
+        MkNv(float, DeRotationAxisZ, 0.25f);
         MkNv(float, DofAmount, 0.01f);
         MkNv(float, FovAbberation, -0.1f);
         MkNv(float, LightPosX, 0.5f);
