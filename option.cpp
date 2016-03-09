@@ -6,11 +6,13 @@ static std::string masterIp;
 static std::string hostBindPort;
 static std::string windowPos;
 static std::string kernelName;
+static std::string imageName;
 static std::string headless;
 static std::string renderOffset;
 static std::string vrpn;
 static std::string font;
 static std::string cudaDeviceNum;
+static std::string saveProgress;
 
 static void TryParseEnv(std::string &ref, const char *varname)
 {
@@ -27,11 +29,13 @@ static void ParseEnvVar()
     TryParseEnv(hostBindPort, "CLAM3_HOST");
     TryParseEnv(windowPos, "CLAM3_WINDOWPOS");
     TryParseEnv(kernelName, "CLAM3_KERNEL");
+    TryParseEnv(imageName, "CLAM3_IMAGENAME");
     TryParseEnv(headless, "CLAM3_HEADLESS");
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
     TryParseEnv(vrpn, "CLAM3_VRPN");
     TryParseEnv(font, "CLAM3_FONT");
     TryParseEnv(cudaDeviceNum, "CLAM3_DEVICE");
+    TryParseEnv(saveProgress, "CLAM3_SAVEPROGRESS");
 }
 
 static void ParseArg(const std::string &option, const std::string &value)
@@ -52,6 +56,10 @@ static void ParseArg(const std::string &option, const std::string &value)
     {
         kernelName = value;
     }
+    else if (option == "--imagename" || option == "--hostname" || option == "--name")
+    {
+        imageName = value;
+    }
     else if (option == "--headless")
     {
         headless = value;
@@ -71,6 +79,10 @@ static void ParseArg(const std::string &option, const std::string &value)
     else if (option == "--device")
     {
         cudaDeviceNum = value;
+    }
+    else if (option == "--saveprogress")
+    {
+        saveProgress = value;
     }
     else
     {
@@ -123,6 +135,11 @@ std::string WindowPos()
 std::string KernelName()
 {
     return kernelName;
+}
+
+std::string ImageName()
+{
+    return imageName;
 }
 
 int Headless(int *numTimes)
@@ -182,4 +199,9 @@ int CudaDeviceNum()
         num = 0;
     }
     return num;
+}
+
+bool DoSaveProgress()
+{
+    return saveProgress.empty() || saveProgress == "true" || saveProgress == "1";
 }

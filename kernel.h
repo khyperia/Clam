@@ -71,4 +71,9 @@ public:
     void UserInput(SDL_Event event);
 
     void Integrate(double time);
+
+    void Synchronize() const
+    {
+        HandleCu(cuStreamSynchronize(stream));
+    }
 };

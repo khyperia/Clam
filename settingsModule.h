@@ -708,12 +708,15 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         MkNv(float, LightPosZ, 0.5f);
         MkNv(float, LightSize, -0.2f);
         MkNv(int, WhiteClamp, 0);
-        MkNv(float, LightBrightnessHue, 0.25f);
+        MkNv(float, LightBrightnessHue, 0.125f);
         MkNv(float, LightBrightnessSat, -0.25f);
         MkNv(float, LightBrightnessVal, -0.25f);
-        MkNv(float, AmbientBrightnessHue, 0.25f);
+        MkNv(float, AmbientBrightnessHue, 0.125f);
         MkNv(float, AmbientBrightnessSat, -0.25f);
         MkNv(float, AmbientBrightnessVal, -0.25f);
+        MkNv(float, ReflectHue, 0.125f);
+        MkNv(float, ReflectSat, -0.25f);
+        MkNv(float, ReflectVal, -0.25f);
         MkNv(int, MaxIters, 0);
         MkNv(float, Bailout, -0.5f);
         MkNv(float, DeMultiplier, 0.125f);

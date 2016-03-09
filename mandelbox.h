@@ -32,6 +32,10 @@ struct MandelboxCfg
     float AmbientBrightnessSat;
     float AmbientBrightnessVal;
 
+    float ReflectHue;
+    float ReflectSat;
+    float ReflectVal;
+
     int MaxIters;
     float Bailout;
     float DeMultiplier;
@@ -73,6 +77,9 @@ MandelboxCfg MandelboxDefault()
     x.AmbientBrightnessHue = 0.525f;
     x.AmbientBrightnessSat = 0.25f;
     x.AmbientBrightnessVal = 1.0f;
+    x.ReflectHue = 0.75f;
+    x.ReflectSat = 0.01f;
+    x.ReflectVal = 1.0f;
     x.LightPosX = 3;
     x.LightPosY = 3;
     x.LightPosZ = 3;

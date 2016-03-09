@@ -108,7 +108,13 @@ struct HeadlessRenderType : public RenderType
         {
             builder << "." << shiftx << "x" << shifty;
         }
-        builder << ".renderstate.clam3";
+        builder << ".renderstate";
+        std::string imagename = ImageName();
+        if (!imagename.empty())
+        {
+            builder << "." << imagename;
+        }
+        builder << ".clam3";
         return builder.str();
     }
 
@@ -162,7 +168,9 @@ struct HeadlessRenderType : public RenderType
         kernel->RenderInto((int *)surface->pixels, width, height);
         SDL_UnlockSurface(surface);
         std::string filename = RenderstateFilename(kernel);
-        filename += "." + subext + ".bmp";
+        if (!subext.empty())
+            filename += "." + subext;
+        filename += ".bmp";
         SDL_SaveBMP(surface, filename.c_str());
         std::cout << "Saved image '" << filename << "'\n";
         SDL_FreeSurface(surface);
@@ -191,11 +199,19 @@ struct HeadlessRenderType : public RenderType
         const int saveInterval = 5;
         if (currentFrame % (1 << saveInterval) == 0 && numTimes <= 1)
         {
-            SaveProgress(kernel, currentFrame);
+            if (DoSaveProgress())
+            {
+                SaveProgress(kernel, currentFrame);
+            }
+            else
+            {
+                kernel->Synchronize();
+                std::cout << currentTime << " frames left\n";
+            }
         }
         if (currentFrame == 0)
         {
-            SaveFinalImage(kernel, tostring(currentTime));
+            SaveFinalImage(kernel, numTimes <= 1 ? std::string("") : tostring(currentTime));
             currentTime++;
             if (currentTime >= numTimes)
             {

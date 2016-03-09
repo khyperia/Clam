@@ -484,7 +484,8 @@ static __device__ int NormalState(MandelboxState *state, float distance, float3 
                 &state->lightColor.w, rand);
         float3 newLightColor = xyz(state->lightColor);
         newLightColor *= BRDF(state->normal, state->direction, -oldRayDir)
-                * dot(state->normal, state->direction);
+                * dot(state->normal, state->direction)
+                * HueToRGB(cfg.ReflectHue, cfg.ReflectSat, cfg.ReflectVal);
         state->lightColor = make_float4(newLightColor, state->lightColor.w);
         state->totalDistance = 0;
         if (++state->traceIter > cfg.NumRayBounces)
