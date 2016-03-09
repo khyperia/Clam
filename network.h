@@ -22,10 +22,18 @@ public:
         Send(&data, sizeof(T));
     }
 
+    /*
     template<typename T>
     void SendArr(const std::vector<T> &data)
     {
         Send(data.data(), data.size() * sizeof(T));
+    }
+    */
+
+    template<typename T>
+    void SendFrom(T *data, size_t count)
+    {
+        Send(data, count * sizeof(T));
     }
 
     template<typename T>
@@ -36,12 +44,20 @@ public:
         return *data;
     }
 
+    /*
     template<typename T>
     std::vector<T> RecvArr(size_t count)
     {
         std::vector<T> data(count);
         Recv(data.data(), data.size() * sizeof(T));
         return data;
+    }
+    */
+
+    template<typename T>
+    void RecvInto(T *data, size_t count)
+    {
+        Recv(data, count * sizeof(T));
     }
 
     template<typename T>

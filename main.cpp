@@ -7,12 +7,12 @@
 
 int main(int argc, char **argv)
 {
-    ParseCmdline(argc, argv);
-    Driver driver;
-    Uint32 ticks = SDL_GetTicks();
-    double time = 1.0;
     try
     {
+        ParseCmdline(argc, argv);
+        Driver driver;
+        Uint32 ticks = SDL_GetTicks();
+        double time = 1.0;
         while (driver.RunFrame(time))
         {
             SDL_Delay(1);
@@ -24,6 +24,10 @@ int main(int argc, char **argv)
     catch (const std::exception &ex)
     {
         std::cout << "Fatal exception:\n" << ex.what() << "\n";
+    }
+    catch (...)
+    {
+        std::cout << "Unknown fatal exception\n";
     }
     return 0;
 }

@@ -236,7 +236,7 @@ static void InitCuda(CUcontext *cuContext)
         HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
         std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << "\n";
     }
-    HandleCu(cuCtxCreate(cuContext, CU_CTX_SCHED_YIELD, cuDevice));
+    HandleCu(cuCtxCreate(cuContext, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice));
     HandleCu(cuCtxSetCurrent(*cuContext));
 }
 

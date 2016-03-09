@@ -92,35 +92,37 @@ public:
         return elemsize() * sizeof(T);
     }
 
-    void CopyTo(T *cpu) const
+    void CopyTo(T *cpu, CUstream stream) const
     {
         if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
         }
-        HandleCu(cuMemcpyDtoH(cpu, ptr, bytesize()));
+        HandleCu(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
     }
 
-    void CopyFrom(const T *cpu) const
+    void CopyFrom(const T *cpu, CUstream stream) const
     {
         if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
         }
-        HandleCu(cuMemcpyHtoD(ptr, cpu, bytesize()));
+        HandleCu(cuMemcpyHtoDAsync(ptr, cpu, bytesize(), stream));
     }
 
-    std::vector<T> Download() const
+    std::vector<T> Download(CUstream stream) const
     {
         std::vector<T> result(elemsize());
-        CopyTo(result.data());
+        CopyTo(result.data(), stream);
+        cuStreamSynchronize(stream);
         return result;
     }
 
-    static CuMem<T> Upload(const std::vector<T> &cpu)
+    static CuMem<T> Upload(const std::vector<T> &cpu, CUstream stream)
     {
         CuMem<T> result(cpu.size());
-        result.CopyFrom(cpu.data());
+        result.CopyFrom(cpu.data(), stream);
+        cuStreamSynchronize(stream);
         return result;
     }
 };

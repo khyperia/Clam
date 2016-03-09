@@ -28,6 +28,7 @@ class Kernel
 
     CUmodule cuModule;
     CUfunction kernelMain;
+    CUstream stream;
 
     Vector2<int> renderOffset;
     bool useRenderOffset;

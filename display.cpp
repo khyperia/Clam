@@ -7,11 +7,11 @@ struct SdlInitClass
     {
         if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO))
         {
-            throw std::runtime_error(SDL_GetError());
+            std::cout << "Error initializing SDL, may fail later: " << SDL_GetError() << "\n";
         }
         if (TTF_Init())
         {
-            throw std::runtime_error(TTF_GetError());
+            std::cout << "Error initializing SDL_ttf, may fail later: " << TTF_GetError() << "\n";
         }
     }
 

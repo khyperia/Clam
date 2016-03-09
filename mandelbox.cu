@@ -277,8 +277,9 @@ static __device__ float4 Mandelbox(float4 z, float3 offset)
 static __device__ float4 DeIter(float4 z, int i, float3 offset)
 {
     z = Mandelbox(z, offset);
-    const float3 rotVec = normalize(make_float3(cfg.DeRotationAxisX, cfg.DeRotationAxisY, cfg.DeRotationAxisZ));
-    z = TRotate(z, rotVec, cfg.DeRotationAmount);
+    // Rotation adds a *significant* amount of instructions to the DE, and slows down execution considerably.
+    //const float3 rotVec = normalize(make_float3(cfg.DeRotationAxisX, cfg.DeRotationAxisY, cfg.DeRotationAxisZ));
+    //z = TRotate(z, rotVec, cfg.DeRotationAmount);
     return z;
 }
 

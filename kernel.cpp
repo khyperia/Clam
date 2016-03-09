@@ -13,15 +13,15 @@ public:
     {
     }
 
-    virtual bool Update(int w, int h) = 0;
+    virtual bool Update(int w, int h, CUstream stream) = 0;
 
     virtual bool OneTimeKeypress(SDL_Keycode keycode) = 0;
 
     virtual bool RepeatKeypress(SDL_Keycode keycode, double time) = 0;
 
-    virtual void SendState(StateSync *output, bool everything) const = 0;
+    virtual void SendState(StateSync *output, bool everything, CUstream stream) const = 0;
 
-    virtual bool RecvState(StateSync *input, bool everything) = 0;
+    virtual bool RecvState(StateSync *input, bool everything, CUstream stream) = 0;
 
     virtual SDL_Surface *Configure(TTF_Font *font) const = 0;
 };
@@ -60,7 +60,7 @@ public:
     {
     }
 
-    virtual bool Update(int w, int h)
+    virtual bool Update(int w, int h, CUstream stream)
     {
         bool changed = width != w || height != h;
         if (changed)
@@ -74,7 +74,7 @@ public:
         {
             if (gpuVar)
             {
-                HandleCu(cuMemcpyHtoD(gpuVar, &value, sizeof(T)));
+                HandleCu(cuMemcpyHtoDAsync(gpuVar, &value, sizeof(T), stream));
             }
             oldCpuVar = value;
         }
@@ -118,12 +118,12 @@ public:
         return setting->RepeatKeypress(keycode, time);
     }
 
-    virtual void SendState(StateSync *output, bool everything) const
+    virtual void SendState(StateSync *output, bool everything, CUstream) const
     {
         setting->SendState(output, everything);
     }
 
-    virtual bool RecvState(StateSync *input, bool everything)
+    virtual bool RecvState(StateSync *input, bool everything, CUstream)
     {
         return setting->RecvState(input, everything);
     }
@@ -237,17 +237,22 @@ public:
         return false;
     }
 
-    virtual void SendState(StateSync *output, bool everything) const
+    virtual void SendState(StateSync *output, bool everything, CUstream stream) const
     {
         if (everything)
         {
             size_t size = (size_t)elementSize * width * height;
             output->Send(size);
-            output->SendArr(CuMem<char>(value, size).Download());
+            char *host;
+            HandleCu(cuMemAllocHost((void**)&host, size));
+            CuMem<char>(value, size).CopyTo(host, stream);
+            output->SendFrom(host, size);
+            cuStreamSynchronize(stream);
+            HandleCu(cuMemFreeHost(host));
         }
     }
 
-    virtual bool RecvState(StateSync *input, bool everything)
+    virtual bool RecvState(StateSync *input, bool everything, CUstream stream)
     {
         if (everything)
         {
@@ -258,12 +263,19 @@ public:
                 std::cout << "Not uploading state buffer due to mismatched sizes: current "
                 << existingSize << "(" << elementSize << " * " << width << " * " << height
                 << "), new " << size << "\n";
-                input->RecvArr<char>(size);
+                char *tmp = new char[size];
+                input->RecvInto(tmp, size);
+                delete tmp;
                 return false;
             }
             else
             {
-                CuMem<char>(value, size).CopyFrom(input->RecvArr<char>(size).data());
+                char *host;
+                HandleCu(cuMemAllocHost((void**)&host, size));
+                input->RecvInto(host, size);
+                CuMem<char>(value, size).CopyFrom(host, stream);
+                cuStreamSynchronize(stream);
+                HandleCu(cuMemFreeHost(host));
                 return true;
             }
         }
@@ -345,6 +357,7 @@ Kernel::Kernel(std::string name) :
     {
         HandleCu(cuModuleGetFunction(&kernelMain, cuModule, "kern"));
     }
+    HandleCu(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
 }
 
 Kernel::~Kernel()
@@ -367,6 +380,13 @@ Kernel::~Kernel()
     if (animation)
     {
         delete animation;
+    }
+    if (stream)
+    {
+        if (cuStreamDestroy(stream) != CUDA_SUCCESS)
+        {
+            std::cout << "Failed to destroy stream\n";
+        }
     }
 }
 
@@ -431,7 +451,7 @@ void Kernel::SendState(StateSync *output, bool everything) const
     }
     for (size_t i = 0; i < modules.size(); i++)
     {
-        modules[i]->SendState(output, everything);
+        modules[i]->SendState(output, everything, stream);
     }
 }
 
@@ -455,7 +475,7 @@ void Kernel::RecvState(StateSync *input, bool everything)
     }
     for (size_t i = 0; i < modules.size(); i++)
     {
-        if (modules[i]->RecvState(input, everything))
+        if (modules[i]->RecvState(input, everything, stream))
         {
             if (everything)
             {
@@ -546,7 +566,7 @@ void Kernel::UpdateNoRender()
 {
     for (size_t i = 0; i < modules.size(); i++)
     {
-        if (modules[i]->Update(-1, -1))
+        if (modules[i]->Update(-1, -1, stream))
         {
             ResetFrame(frame);
         }
@@ -568,7 +588,7 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
     }
     for (size_t i = 0; i < modules.size(); i++)
     {
-        if (modules[i]->Update((int)width, (int)height))
+        if (modules[i]->Update((int)width, (int)height, stream))
         {
             ResetFrame(frame);
         }
@@ -595,9 +615,10 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
     unsigned int blockY = (unsigned int)maxLocalSize;
     unsigned int gridX = (unsigned int)(width + blockX - 1) / blockX;
     unsigned int gridY = (unsigned int)(height + blockY - 1) / blockY;
-    HandleCu(cuLaunchKernel(kernelMain, gridX, gridY, 1, blockX, blockY, 1, 0, NULL, args, NULL));
+    HandleCu(cuLaunchKernel(kernelMain, gridX, gridY, 1, blockX, blockY, 1, 0, stream, args, NULL));
     if (memory)
     {
-        gpuBuffer.CopyTo(memory);
+        gpuBuffer.CopyTo(memory, stream);
+        HandleCu(cuStreamSynchronize(stream)); // TODO
     }
 }
