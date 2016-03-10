@@ -342,14 +342,13 @@ struct HeadlessRenderType : public RenderType
         }
         if (currentFrames[context] == 0)
         {
+            if (numTimes > 1)
+            {
+                double time = (double)currentTimeByContext[context] / numTimes;
+                //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
+                kernel->SetTime(time, false, context); // boolean is `wrap`
+            }
             kernel->SetFramed(true, context);
-        }
-        // Hack. SettingsModule.h doesn't have the concept of contexts built into it, so they bork on multi-GPU.
-        if (numTimes > 1)
-        {
-            double time = (double)currentTimeByContext[context] / numTimes;
-            //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
-            kernel->SetTime(time, false); // boolean is `wrap`
         }
         kernel->RenderInto(currentFrames[context] == numFrames - 1 ? blitData.data : NULL,
                            (size_t)blitData.width, (size_t)blitData.height, context);

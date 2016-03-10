@@ -23,8 +23,9 @@ class Kernel
 
     std::set<SDL_Keycode> pressedKeys;
 
-    std::vector<SettingModuleBase *> settings;
-    std::vector<KernelModuleBase *> modules;
+    // byContext<allModules<setting> >
+    std::vector<std::vector<SettingModuleBase *> > settings;
+    std::vector<std::vector<KernelModuleBase *> > modules;
 
     std::vector<CUcontext> contexts;
     std::vector<CUmodule> cuModules;
@@ -63,7 +64,7 @@ public:
 
     void LoadAnimation();
 
-    void SetTime(double time, bool wrap);
+    void SetTime(double time, bool wrap, int context);
 
     void SetFramed(bool framed, int context);
 
