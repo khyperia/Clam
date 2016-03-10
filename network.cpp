@@ -100,10 +100,8 @@ void Connection::Recv(void *data, size_t size)
 // Returns true on failure
 bool Connection::Sync(Kernel *kernel)
 {
-    if (socket == NULL)
-    {
-        return false;
-    }
+    // Invalid context is okay because we're not doing a full sync
+    const int context = -1;
     if (socketIsHost)
     {
         while (true)
@@ -119,7 +117,7 @@ bool Connection::Sync(Kernel *kernel)
         {
             try
             {
-                kernel->SendState(clients[i], false);
+                kernel->SendState(clients[i], false, context);
             }
             catch (const std::runtime_error &e)
             {
@@ -134,7 +132,7 @@ bool Connection::Sync(Kernel *kernel)
         {
             try
             {
-                kernel->RecvState(this, false);
+                kernel->RecvState(this, false, context);
             }
             catch (const std::runtime_error &e)
             {
@@ -144,6 +142,11 @@ bool Connection::Sync(Kernel *kernel)
         }
     }
     return false;
+}
+
+bool Connection::IsSyncing()
+{
+    return socket != NULL;
 }
 
 class FileStateSync : public StateSync

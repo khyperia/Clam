@@ -131,15 +131,6 @@ std::string KernelName()
     return kernelName;
 }
 
-std::string GpuName()
-{
-    if (!cudaDeviceNum.empty())
-    {
-        return "gpu" + cudaDeviceNum;
-    }
-    return "";
-}
-
 int Headless(int *numTimes)
 {
     if (headless.empty())
@@ -184,19 +175,30 @@ std::string FontName()
     return font;
 }
 
-int CudaDeviceNum()
+std::vector<int> CudaDeviceNums()
 {
+    std::vector<int> result;
     if (cudaDeviceNum.empty())
     {
-        return 0;
+        result.push_back(0);
+        return result;
     }
+    // http://stackoverflow.com/questions/1894886
+    std::stringstream ss(cudaDeviceNum);
     int num;
-    if (sscanf(cudaDeviceNum.c_str(), "%d", &num) != 1)
+    while (ss >> num)
     {
-        std::cout << "Couldn't parse cuda device number, assuming 0\n";
-        num = 0;
+        result.push_back(num);
+        if (ss.peek() == ',')
+        {
+            ss.ignore();
+        }
     }
-    return num;
+    if (result.size() == 0)
+    {
+        throw std::runtime_error("Bad device parameter: no devices specified");
+    }
+    return result;
 }
 
 bool DoSaveProgress()

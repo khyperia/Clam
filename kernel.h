@@ -26,14 +26,15 @@ class Kernel
     std::vector<SettingModuleBase *> settings;
     std::vector<KernelModuleBase *> modules;
 
-    CUmodule cuModule;
-    CUfunction kernelMain;
-    CUstream stream;
+    std::vector<CUcontext> contexts;
+    std::vector<CUmodule> cuModules;
+    std::vector<CUfunction> kernelMains;
+    std::vector<CUstream> streams;
 
     Vector2<int> renderOffset;
     bool useRenderOffset;
 
-    int frame;
+    std::vector<int> frames;
 
     size_t maxLocalSize;
 
@@ -41,32 +42,32 @@ class Kernel
 
     SettingAnimation *animation;
 
-    CuMem<int> gpuBuffer;
-    size_t oldWidth;
-    size_t oldHeight;
+    std::vector<CuMem<int> > gpuBuffers;
+    std::vector<size_t> oldWidth;
+    std::vector<size_t> oldHeight;
 
 public:
-    Kernel(std::string name);
+    Kernel(std::string name, std::vector<CUcontext> contexts);
 
     ~Kernel();
 
-    void SendState(StateSync *output, bool everything) const;
+    void SendState(StateSync *output, bool everything, int context) const;
 
-    void RecvState(StateSync *input, bool everything);
+    void RecvState(StateSync *input, bool everything, int context);
 
     void UpdateNoRender();
 
-    void Resize(size_t width, size_t height);
+    void Resize(size_t width, size_t height, int context);
 
-    void RenderInto(int *memory, size_t width, size_t height);
+    void RenderInto(int *memory, size_t width, size_t height, int context);
 
     void LoadAnimation();
 
     void SetTime(double time, bool wrap);
 
-    void SetFramed(bool framed);
+    void SetFramed(bool framed, int context);
 
-    int GetFrame();
+    int GetFrame(int context);
 
     SDL_Surface *Configure(TTF_Font *font);
 
@@ -76,8 +77,8 @@ public:
 
     void Integrate(double time);
 
-    const CUstream& Stream() const
+    const CUstream& Stream(int context) const
     {
-        return stream;
+        return streams[context];
     }
 };

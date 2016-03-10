@@ -93,6 +93,8 @@ public:
     void Recv(void *data, size_t size);
 
     bool Sync(Kernel *kernel);
+
+    bool IsSyncing();
 };
 
 StateSync *NewFileStateSync(const char *filename, bool reading);

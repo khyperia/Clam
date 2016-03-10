@@ -16,10 +16,6 @@ class CuMem
         return *this;
     }
 
-    CuMem(const CuMem &)
-    {
-    }
-
     void Alloc()
     {
         HandleCu(cuMemAlloc(&ptr, bytesize()));
@@ -38,6 +34,14 @@ class CuMem
     }
 
 public:
+    // oh god I hope this doesn't get used, it's only public becase std::vector needs it to fill it
+    CuMem(const CuMem &other)
+    {
+        ptr = other.ptr;
+        count = other.count;
+        owned = other.owned;
+    }
+
     CuMem() : ptr(0), count(0), owned(false)
     {
     }
@@ -59,8 +63,9 @@ public:
         }
     }
 
-    void Realloc(size_t newCount)
+    void Realloc(size_t newCount, int context)
     {
+        (void)context;
         if (ptr != 0)
         {
             if (!owned)
@@ -92,8 +97,9 @@ public:
         return elemsize() * sizeof(T);
     }
 
-    void CopyTo(T *cpu, CUstream stream) const
+    void CopyTo(T *cpu, CUstream stream, int context) const
     {
+        (void)context;
         if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
@@ -101,8 +107,9 @@ public:
         HandleCu(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
     }
 
-    void CopyFrom(const T *cpu, CUstream stream) const
+    void CopyFrom(const T *cpu, CUstream stream, int context) const
     {
+        (void)context;
         if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");

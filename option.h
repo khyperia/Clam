@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 void ParseCmdline(int argc, char **argv);
 
@@ -16,8 +17,6 @@ std::string WindowPos();
 
 std::string KernelName();
 
-std::string GpuName();
-
 int Headless(int *numTimes);
 
 bool RenderOffset(int *shiftx, int *shifty);
@@ -26,6 +25,6 @@ std::string VrpnName();
 
 std::string FontName();
 
-int CudaDeviceNum();
+std::vector<int> CudaDeviceNums();
 
 bool DoSaveProgress();

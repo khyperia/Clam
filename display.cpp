@@ -23,29 +23,6 @@ struct SdlInitClass
     }
 } sdlInitInstance;
 
-/*
-bool DisplayWindow::UserInput(Kernel *kernel, double timePassed)
-{
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
-        if (isUserInput)
-        {
-            kernel->UserInput(event);
-        }
-        if (event.type == SDL_QUIT)
-        {
-            return false;
-        }
-    }
-    if (isUserInput)
-    {
-        kernel->Integrate(timePassed);
-    }
-    return true;
-}
-*/
-
 void WindowCreate(SDL_Window **window, TTF_Font **font, int x, int y, int width, int height)
 {
     // TODO: SDL_WINDOW_FULLSCREEN
