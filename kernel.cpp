@@ -247,7 +247,7 @@ public:
             HandleCu(cuMemAllocHost((void**)&host, size));
             CuMem<char>(value, size).CopyTo(host, stream);
             output->SendFrom(host, size);
-            cuStreamSynchronize(stream);
+            HandleCu(cuStreamSynchronize(stream)); // TODO: SendState sync
             HandleCu(cuMemFreeHost(host));
         }
     }
@@ -274,7 +274,7 @@ public:
                 HandleCu(cuMemAllocHost((void**)&host, size));
                 input->RecvInto(host, size);
                 CuMem<char>(value, size).CopyFrom(host, stream);
-                cuStreamSynchronize(stream);
+                HandleCu(cuStreamSynchronize(stream)); // TODO: RecvState sync
                 HandleCu(cuMemFreeHost(host));
                 return true;
             }
@@ -562,6 +562,11 @@ void Kernel::SetFramed(bool framed)
     frame = framed ? 0 : -1;
 }
 
+int Kernel::GetFrame()
+{
+    return frame;
+}
+
 void Kernel::UpdateNoRender()
 {
     for (size_t i = 0; i < modules.size(); i++)
@@ -573,7 +578,7 @@ void Kernel::UpdateNoRender()
     }
 }
 
-void Kernel::RenderInto(int *memory, size_t width, size_t height)
+void Kernel::Resize(size_t width, size_t height)
 {
     if (width != oldWidth || height != oldHeight)
     {
@@ -593,6 +598,12 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
             ResetFrame(frame);
         }
     }
+}
+
+// NOTE: Async copy into memory param, needs a kernel->Stream() synch to finish.
+void Kernel::RenderInto(int *memory, size_t width, size_t height)
+{
+    Resize(width, height);
     int renderOffsetX = useRenderOffset ? renderOffset.x : -(int)width / 2;
     int renderOffsetY = useRenderOffset ? renderOffset.y : -(int)height / 2;
     int mywidth = (int)width;
@@ -619,6 +630,5 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height)
     if (memory)
     {
         gpuBuffer.CopyTo(memory, stream);
-        HandleCu(cuStreamSynchronize(stream)); // TODO
     }
 }

@@ -6,7 +6,6 @@ static std::string masterIp;
 static std::string hostBindPort;
 static std::string windowPos;
 static std::string kernelName;
-static std::string imageName;
 static std::string headless;
 static std::string renderOffset;
 static std::string vrpn;
@@ -29,7 +28,6 @@ static void ParseEnvVar()
     TryParseEnv(hostBindPort, "CLAM3_HOST");
     TryParseEnv(windowPos, "CLAM3_WINDOWPOS");
     TryParseEnv(kernelName, "CLAM3_KERNEL");
-    TryParseEnv(imageName, "CLAM3_IMAGENAME");
     TryParseEnv(headless, "CLAM3_HEADLESS");
     TryParseEnv(renderOffset, "CLAM3_RENDEROFFSET");
     TryParseEnv(vrpn, "CLAM3_VRPN");
@@ -55,10 +53,6 @@ static void ParseArg(const std::string &option, const std::string &value)
     else if (option == "--kernel" || option == "-k")
     {
         kernelName = value;
-    }
-    else if (option == "--imagename" || option == "--hostname" || option == "--name")
-    {
-        imageName = value;
     }
     else if (option == "--headless")
     {
@@ -137,9 +131,13 @@ std::string KernelName()
     return kernelName;
 }
 
-std::string ImageName()
+std::string GpuName()
 {
-    return imageName;
+    if (!cudaDeviceNum.empty())
+    {
+        return "gpu" + cudaDeviceNum;
+    }
+    return "";
 }
 
 int Headless(int *numTimes)
@@ -152,7 +150,7 @@ int Headless(int *numTimes)
     int numScanned = sscanf(headless.c_str(), "%d,%d", &headlessCount, numTimes);
     if (numScanned < 2)
     {
-        *numTimes = 0;
+        *numTimes = 1;
     }
     if (numScanned == 0)
     {

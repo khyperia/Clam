@@ -7,19 +7,28 @@ extern bool cudaSuccessfulInit;
 
 struct RenderType;
 
+struct BlitData
+{
+    int width, height;
+    int32_t *data;
+};
+
 class Driver
 {
-    DisplayWindow *window;
     Kernel *kernel;
     RenderType *renderType;
     CUcontext cuContext;
     Connection connection;
-    Vector2<int> headlessWindowSize;
-    void UpdateWindowSize();
+    Uint32 lastTickTime;
 public:
     Driver();
 
     ~Driver();
 
-    bool RunFrame(double timePassed);
+    void MainLoop();
+    void BlitImmediate(BlitData blitData);
+    void Tick();
 };
+
+void EnqueueCuMemFreeHost(void *hostPtr);
+void EnqueueBlitData(BlitData blitData);

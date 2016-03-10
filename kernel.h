@@ -56,6 +56,8 @@ public:
 
     void UpdateNoRender();
 
+    void Resize(size_t width, size_t height);
+
     void RenderInto(int *memory, size_t width, size_t height);
 
     void LoadAnimation();
@@ -63,6 +65,8 @@ public:
     void SetTime(double time, bool wrap);
 
     void SetFramed(bool framed);
+
+    int GetFrame();
 
     SDL_Surface *Configure(TTF_Font *font);
 
@@ -72,8 +76,8 @@ public:
 
     void Integrate(double time);
 
-    void Synchronize() const
+    const CUstream& Stream() const
     {
-        HandleCu(cuStreamSynchronize(stream));
+        return stream;
     }
 };

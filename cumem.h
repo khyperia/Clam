@@ -109,20 +109,4 @@ public:
         }
         HandleCu(cuMemcpyHtoDAsync(ptr, cpu, bytesize(), stream));
     }
-
-    std::vector<T> Download(CUstream stream) const
-    {
-        std::vector<T> result(elemsize());
-        CopyTo(result.data(), stream);
-        cuStreamSynchronize(stream);
-        return result;
-    }
-
-    static CuMem<T> Upload(const std::vector<T> &cpu, CUstream stream)
-    {
-        CuMem<T> result(cpu.size());
-        result.CopyFrom(cpu.data(), stream);
-        cuStreamSynchronize(stream);
-        return result;
-    }
 };

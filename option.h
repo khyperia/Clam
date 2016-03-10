@@ -16,7 +16,7 @@ std::string WindowPos();
 
 std::string KernelName();
 
-std::string ImageName();
+std::string GpuName();
 
 int Headless(int *numTimes);
 

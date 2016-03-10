@@ -21,9 +21,7 @@ struct CudaInitClass
 
 struct RenderType
 {
-    size_t width, height;
-
-    RenderType() : width(0), height(0)
+    RenderType()
     {
     }
 
@@ -31,32 +29,109 @@ struct RenderType
     {
     };
 
-    virtual bool Update(Kernel *kernel, TTF_Font *font) = 0;
+    virtual void Boot(Kernel *kernel) = 0;
+
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel) = 0;
 };
+
+static SDL_Rect GetWindowPos()
+{
+    std::string winpos = WindowPos();
+    if (winpos.empty())
+    {
+        puts("Window position wasn't specified. Defaulting to 500x500+100+100");
+        winpos = "500x500+100+100";
+    }
+    SDL_Rect windowPos;
+    if (sscanf(winpos.c_str(), "%dx%d%d%d", &windowPos.w, &windowPos.h, &windowPos.x, &windowPos.y) != 4)
+    {
+        throw std::runtime_error("Window position was in an incorrect format");
+    }
+    return windowPos;
+}
+
+struct NoRenderType : public RenderType
+{
+    SDL_Window *window;
+    TTF_Font *font;
+
+    NoRenderType(SDL_Rect windowPos) : RenderType()
+    {
+        WindowCreate(&window, &font, windowPos.x, windowPos.y, windowPos.w, windowPos.h);
+    }
+
+    ~NoRenderType()
+    {
+        WindowDestroy(window, font);
+    }
+
+    virtual void Boot(Kernel *)
+    {
+        EnqueueBlitData(BlitData());
+    }
+
+    virtual void BlitFrame(BlitData, Kernel *kernel)
+    {
+        kernel->UpdateNoRender();
+        SDL_Surface *surface = SDL_GetWindowSurface(window);
+        SDL_FillRect(surface, NULL, 0);
+        SDL_Surface *conf = kernel->Configure(font);
+        if (conf)
+        {
+            SDL_BlitSurface(conf, NULL, surface, NULL);
+            SDL_FreeSurface(conf);
+        }
+        SDL_UpdateWindowSurface(window);
+
+        // dummy data just so we get called again
+        EnqueueBlitData(BlitData());
+    }
+};
+
+static void EnqueueSyncBlitDataHelper(CUstream, CUresult, void *userData)
+{
+    BlitData *blitData = (BlitData *)userData;
+    BlitData data = *blitData;
+    delete blitData;
+    EnqueueBlitData(data);
+}
+
+static void EnqueueSyncBlitData(CUstream stream, BlitData blitData)
+{
+    HandleCu(cuStreamAddCallback(stream, EnqueueSyncBlitDataHelper, new BlitData(blitData), 0));
+}
 
 struct CpuRenderType : public RenderType
 {
     SDL_Window *window;
+    TTF_Font *font;
+    BlitData oldBlitData;
 
-    CpuRenderType(SDL_Window *window) : RenderType(), window(window)
+    CpuRenderType(SDL_Rect windowPos) : RenderType(), oldBlitData()
     {
+        oldBlitData.data = NULL;
+        WindowCreate(&window, &font, windowPos.x, windowPos.y, windowPos.w, windowPos.h);
     }
 
     ~CpuRenderType()
     {
+        WindowDestroy(window, font);
     }
 
-    void Blit(Kernel *kern, SDL_Surface *surface)
+    void Blit(BlitData pixbuf, SDL_Surface *surface)
     {
         if (SDL_LockSurface(surface))
         {
-            throw std::runtime_error("Could not lock window surface");
+            throw std::runtime_error("Could not lock SDL surface");
         }
         if (surface->format->BytesPerPixel != 4)
         {
             throw std::runtime_error("Window surface bytes/pixel != 4");
         }
-        kern->RenderInto((int *)surface->pixels, width, height);
+        size_t pixbuf_size = (size_t)pixbuf.width * (size_t)pixbuf.height * surface->format->BytesPerPixel;
+        size_t surface_size = (size_t)surface->w * surface->h * surface->format->BytesPerPixel;
+        size_t size = pixbuf_size < surface_size ? pixbuf_size : surface_size;
+        memcpy(surface->pixels, pixbuf.data, size);
         SDL_UnlockSurface(surface);
     }
 
@@ -70,36 +145,70 @@ struct CpuRenderType : public RenderType
         }
     }
 
-    virtual bool Update(Kernel *kern, TTF_Font *font)
+    virtual void Boot(Kernel *kernel)
     {
+        EnqueueFrame(kernel);
+    }
+
+    void EnqueueFrame(Kernel *kernel)
+    {
+        int width, height;
+        SDL_GetWindowSize(window, &width, &height);
+        if (width <= 0 || height <= 0)
+        {
+            throw std::runtime_error("Invalid SDL window size");
+        }
+        if (oldBlitData.width != width || oldBlitData.height != height)
+        {
+            EnqueueCuMemFreeHost(oldBlitData.data);
+            oldBlitData.data = NULL;
+            oldBlitData.width = width;
+            oldBlitData.height = height;
+        }
+        if (!oldBlitData.data)
+        {
+            HandleCu(cuMemAllocHost((void **)&oldBlitData.data, (size_t)width * height * sizeof(int) * 4));
+        }
+        kernel->RenderInto(oldBlitData.data, (size_t)oldBlitData.width, (size_t)oldBlitData.height);
+        EnqueueSyncBlitData(kernel->Stream(), oldBlitData);
+    }
+
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel)
+    {
+        EnqueueFrame(kernel); // this is above the others so that the GPU gets started as we're blitting
+
         SDL_Surface *surface = SDL_GetWindowSurface(window);
-        Blit(kern, surface);
+        Blit(pixbuf, surface);
         if (IsUserInput())
         {
-            DrawUI(kern, font, surface);
+            DrawUI(kernel, font, surface);
         }
         SDL_UpdateWindowSurface(window);
-        return true;
-    };
+    }
 };
 
 struct HeadlessRenderType : public RenderType
 {
-    int numFrames;
+    const int numFrames;
     int currentFrame;
-    int numTimes;
+    const int numTimes;
     int currentTime;
+    BlitData mBlitData;
 
-    HeadlessRenderType(int numFrames, int numTimes)
-            : numFrames(numFrames), currentFrame(numFrames), numTimes(numTimes), currentTime(0)
+    HeadlessRenderType(int numFrames, int numTimes, int width, int height)
+            : numFrames(numFrames), currentFrame(0), numTimes(numTimes), currentTime(0)
     {
+        mBlitData.width = width;
+        mBlitData.height = height;
+        HandleCu(cuMemAllocHost((void **)&mBlitData.data, (size_t)width * height * sizeof(int) * 4));
     }
 
     ~HeadlessRenderType()
     {
+        HandleCu(cuMemFreeHost(mBlitData.data));
     }
 
-    std::string RenderstateFilename(Kernel *kernel)
+    std::string RenderstateFilename(Kernel *kernel, int currentTime)
     {
         std::ostringstream builder;
         builder << kernel->Name();
@@ -109,10 +218,14 @@ struct HeadlessRenderType : public RenderType
             builder << "." << shiftx << "x" << shifty;
         }
         builder << ".renderstate";
-        std::string imagename = ImageName();
-        if (!imagename.empty())
+        std::string gpuname = GpuName();
+        if (!gpuname.empty())
         {
-            builder << "." << imagename;
+            builder << "." << gpuname;
+        }
+        if (numTimes > 1)
+        {
+            builder << ".t" << currentTime;
         }
         builder << ".clam3";
         return builder.str();
@@ -122,13 +235,11 @@ struct HeadlessRenderType : public RenderType
     {
         std::cout << "Loading animation keyframes\n";
         kernel->LoadAnimation();
-        kernel->SetTime(0, false);
-        kernel->SetFramed(true);
     }
 
-    void LoadFileState(Kernel *kernel)
+    void LoadFileState(Kernel *kernel, int time)
     {
-        std::string filename = RenderstateFilename(kernel);
+        std::string filename = RenderstateFilename(kernel, time);
         try
         {
             // Loads *.renderstate.clam3 (the previously-left-off render)
@@ -149,81 +260,106 @@ struct HeadlessRenderType : public RenderType
         }
     }
 
-    void SaveProgress(Kernel *kernel, int numLeft)
+    void SaveProgress(Kernel *kernel, int currentTime)
     {
-        std::string filename = RenderstateFilename(kernel);
+        std::string filename = RenderstateFilename(kernel, currentTime);
         StateSync *sync = NewFileStateSync(filename.c_str(), false);
         kernel->SendState(sync, true);
         delete sync;
-        std::cout << "Saved intermediate progress to " << filename << " (" << numLeft << " frames left)\n";
+        std::cout << "Saved intermediate progress to " << filename << "\n";
     }
 
-    void SaveFinalImage(Kernel *kernel, const std::string &subext)
+    virtual void Boot(Kernel *kernel)
     {
-        SDL_Surface *surface = SDL_CreateRGBSurface(0, (int)width, (int)height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
-        if (SDL_LockSurface(surface))
+        const int syncEveryNFrames = 32;
+        for (int i = 0; i < syncEveryNFrames; i++)
         {
-            throw std::runtime_error("Could not lock temp buffer surface");
+            if (EnqueueSingle(kernel, mBlitData))
+            {
+                break;
+            }
         }
-        kernel->RenderInto((int *)surface->pixels, width, height);
-        SDL_UnlockSurface(surface);
-        std::string filename = RenderstateFilename(kernel);
-        if (!subext.empty())
-            filename += "." + subext;
-        filename += ".bmp";
-        SDL_SaveBMP(surface, filename.c_str());
-        std::cout << "Saved image '" << filename << "'\n";
-        SDL_FreeSurface(surface);
+        EnqueueSyncBlitData(kernel->Stream(), mBlitData);
     }
 
-    virtual bool Update(Kernel *kernel, TTF_Font *)
+    // returns true if current frame can't be added to anymore
+    virtual bool EnqueueSingle(Kernel *kernel, BlitData blitData)
     {
-        if (currentTime == 0 && currentFrame == numFrames)
+        if (currentTime == 0 && currentFrame == 0)
         {
-            std::cout << "Flush/loading initial state\n";
-            // TODO: Figure out why this is somtimes needed
-            kernel->RenderInto(NULL, width, height);
+            //std::cout << "Flush/loading initial state\n";
+            kernel->Resize((size_t)blitData.width, (size_t)blitData.height);
             if (numTimes > 1)
             {
                 LoadAnimationState(kernel);
             }
             else
             {
-                LoadFileState(kernel);
+                LoadFileState(kernel, currentTime);
+                int frame = kernel->GetFrame();
+                if (frame > 0)
+                {
+                    currentFrame = frame;
+                }
             }
             // note we can't refactor SetFramed to here, due to possibly just loading a renderstate.clam3
         }
-        currentFrame--;
-        kernel->RenderInto(NULL, width, height);
-
-        const int saveInterval = 5;
-        if (currentFrame % (1 << saveInterval) == 0 && numTimes <= 1)
-        {
-            if (DoSaveProgress())
-            {
-                SaveProgress(kernel, currentFrame);
-            }
-            else
-            {
-                kernel->Synchronize();
-                std::cout << currentTime << " frames left\n";
-            }
-        }
         if (currentFrame == 0)
         {
-            SaveFinalImage(kernel, numTimes <= 1 ? std::string("") : tostring(currentTime));
-            currentTime++;
-            if (currentTime >= numTimes)
+            if (numTimes > 1)
             {
-                return false;
+                double time = (double)currentTime / numTimes;
+                //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
+                kernel->SetTime(time, false); // boolean is `wrap`
             }
-            double time = (double)currentTime / numTimes;
-            //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
-            kernel->SetTime(time, false); // boolean is `wrap`
             kernel->SetFramed(true);
-            currentFrame = numFrames;
         }
-        return true;
+        kernel->RenderInto(currentFrame == numFrames - 1 ? blitData.data : NULL,
+                           (size_t)blitData.width, (size_t)blitData.height);
+        currentFrame++;
+        return currentFrame >= numFrames;
+    }
+
+    void WriteFrame(BlitData pixbuf, Kernel *kernel, int currentTime)
+    {
+        SDL_Surface *surface = SDL_CreateRGBSurface(0, pixbuf.width, pixbuf.height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
+        if (SDL_LockSurface(surface))
+        {
+            throw std::runtime_error("Could not lock temp buffer surface");
+        }
+        memcpy(surface->pixels, pixbuf.data, (size_t)pixbuf.width * pixbuf.height * surface->format->BytesPerPixel);
+        SDL_UnlockSurface(surface);
+        std::string filename = RenderstateFilename(kernel, currentTime);
+        filename += ".bmp";
+        SDL_SaveBMP(surface, filename.c_str());
+        std::cout << "Saved image '" << filename << "'\n";
+        SDL_FreeSurface(surface);
+    }
+
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel)
+    {
+        if (DoSaveProgress() && numTimes <= 1)
+        {
+            SaveProgress(kernel, currentTime);
+        }
+        std::cout << numFrames - currentFrame << " frames left in this image, " <<
+        numTimes - currentTime << " images left\n";
+        if (currentFrame >= numFrames)
+        {
+            WriteFrame(pixbuf, kernel, currentTime);
+            currentFrame = 0;
+            currentTime++; // TODO: Multi-GPU queue
+        }
+        if (currentTime >= numTimes)
+        {
+            SDL_Event quitEvent;
+            quitEvent.type = SDL_QUIT;
+            SDL_PushEvent(&quitEvent);
+        }
+        else
+        {
+            Boot(kernel);
+        }
     }
 };
 
@@ -256,38 +392,13 @@ static void InitCuda(CUcontext *cuContext)
     HandleCu(cuCtxSetCurrent(*cuContext));
 }
 
-static SDL_Rect GetWindowPos()
-{
-    std::string winpos = WindowPos();
-    if (winpos.empty())
-    {
-        puts("Window position wasn't specified. Defaulting to 500x500+100+100");
-        winpos = "500x500+100+100";
-    }
-    SDL_Rect windowPos;
-    if (sscanf(winpos.c_str(), "%dx%d%d%d", &windowPos.w, &windowPos.h, &windowPos.x, &windowPos.y) != 4)
-    {
-        throw std::runtime_error("Window position was in an incorrect format");
-    }
-    return windowPos;
-}
-
-Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
+Driver::Driver() : cuContext(0), connection()
 {
     bool isCompute = IsCompute();
     int numHeadlessTimes;
     int headless = Headless(&numHeadlessTimes);
 
     SDL_Rect windowPos = GetWindowPos();
-    if (headless <= 0)
-    {
-        window = new DisplayWindow(windowPos.x, windowPos.y, windowPos.w, windowPos.h);
-    }
-    else
-    {
-        window = NULL;
-        headlessWindowSize = Vector2<int>(windowPos.w, windowPos.h);
-    }
 
     if (isCompute)
     {
@@ -297,27 +408,23 @@ Driver::Driver() : cuContext(0), connection(), headlessWindowSize(0, 0)
     kernel = new Kernel(KernelName());
     if (isCompute)
     {
-        if (headless <= 0)
+        if (headless > 0)
         {
-            renderType = new CpuRenderType(window->window);
+            renderType = new HeadlessRenderType(headless, numHeadlessTimes, windowPos.w, windowPos.h);
         }
         else
         {
-            renderType = new HeadlessRenderType(headless, numHeadlessTimes);
+            renderType = new CpuRenderType(windowPos);
         }
     }
     else
     {
-        renderType = NULL;
+        renderType = new NoRenderType(windowPos);
     }
 }
 
 Driver::~Driver()
 {
-    if (window)
-    {
-        delete window;
-    }
     if (renderType)
     {
         delete renderType;
@@ -332,66 +439,99 @@ Driver::~Driver()
     }
 }
 
-void Driver::UpdateWindowSize()
+void Driver::Tick()
 {
-    int newWidth, newHeight;
-    if (window)
+    Uint32 currentTime = SDL_GetTicks();
+    double time = (currentTime - lastTickTime) / 1000.0;
+    lastTickTime = currentTime;
+
+    /*
+    double weight = 1 / (fpsAverage + 1);
+    fpsAverage = (timePassed + fpsAverage * weight) / (weight + 1);
+    timeSinceLastTitle += timePassed;
+    while (timeSinceLastTitle > 1.0)
     {
-        SDL_GetWindowSize(window->window, &newWidth, &newHeight);
+        SDL_Delay(1);
+        SDL_SetWindowTitle(window, ("Clam3 - " + tostring(1 / fpsAverage) + " fps").c_str());
+        timeSinceLastTitle--;
     }
-    else
+    */
+
+    if (IsUserInput())
     {
-        newWidth = headlessWindowSize.x;
-        newHeight = headlessWindowSize.y;
+        kernel->Integrate(time);
     }
-    if (newWidth <= 0 || newHeight <= 0)
+    if (connection.Sync(kernel))
     {
-        throw std::runtime_error("Window size 0x0 is invalid");
+        SDL_Event event;
+        event.type = SDL_QUIT;
+        SDL_PushEvent(&event);
     }
-    if (renderType)
+}
+
+void Driver::MainLoop()
+{
+    SDL_Event event;
+    renderType->Boot(kernel);
+    bool isUserInput = IsUserInput();
+    while (true)
     {
-        if ((size_t)newWidth != renderType->width || (size_t)newHeight != renderType->height)
+        if (!SDL_WaitEvent(&event))
         {
-            renderType->width = (size_t)newWidth;
-            renderType->height = (size_t)newHeight;
+            throw std::runtime_error(SDL_GetError());
+        }
+        if (event.type == SDL_QUIT)
+        {
+            break;
+        }
+        if (isUserInput)
+        {
+            kernel->UserInput(event);
+        }
+        if (event.type == SDL_USEREVENT)
+        {
+            void (*func)(Driver *, void *) = (void (*)(Driver *, void *))event.user.data1;
+            void *param = event.user.data2;
+            func(this, param);
         }
     }
 }
 
-bool Driver::RunFrame(double timePassed)
+void EnqueueSdlEvent(void (*funcPtr)(Driver *, void *), void *data)
 {
-    if (window)
-    {
-        if (!window->UserInput(kernel, timePassed))
-        {
-            return false;
-        }
-    }
-    if (connection.Sync(kernel))
-    {
-        return false;
-    }
-    UpdateWindowSize();
-    if (renderType)
-    {
-        bool cont = renderType->Update(kernel, window ? window->font : NULL);
-        return cont;
-    }
-    else
-    {
-        kernel->UpdateNoRender();
-        if (IsUserInput())
-        {
-            SDL_Surface *conf = kernel->Configure(window->font);
-            if (conf)
-            {
-                SDL_Surface *surface = SDL_GetWindowSurface(window->window);
-                SDL_FillRect(surface, NULL, 0);
-                SDL_BlitSurface(conf, NULL, surface, NULL);
-                SDL_FreeSurface(conf);
-                SDL_UpdateWindowSurface(window->window);
-            }
-        }
-        return true;
-    }
+    SDL_Event event;
+    event.type = SDL_USEREVENT;
+    event.user.code = 0;
+    event.user.data1 = (void *)funcPtr;
+    event.user.data2 = data;
+    SDL_PushEvent(&event);
+}
+
+static void EnqueueCuMemFreeHelper(Driver *, void *hostPtr)
+{
+    HandleCu(cuMemFreeHost(hostPtr));
+}
+
+void EnqueueCuMemFreeHost(void *hostPtr)
+{
+    EnqueueSdlEvent(EnqueueCuMemFreeHelper, hostPtr);
+}
+
+void Driver::BlitImmediate(BlitData blitData)
+{
+    Tick(); // well, where else am I going to put it?
+    renderType->BlitFrame(blitData, kernel);
+}
+
+static void EnqueueBlitDataHelper(Driver *driver, void *blitData)
+{
+    BlitData *data = (BlitData *)blitData;
+    BlitData temp = *data;
+    delete data;
+    driver->BlitImmediate(temp);
+}
+
+void EnqueueBlitData(BlitData blitData)
+{
+    EnqueueSdlEvent(EnqueueBlitDataHelper, new BlitData(blitData));
 }
