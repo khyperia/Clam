@@ -101,7 +101,7 @@ void Connection::Recv(void *data, size_t size)
 bool Connection::Sync(Kernel *kernel)
 {
     // Invalid context is okay because we're not doing a full sync
-    const int context = -1;
+    const CudaContext context = CudaContext::Invalid;
     if (socketIsHost)
     {
         while (true)

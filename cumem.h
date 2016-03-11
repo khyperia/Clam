@@ -16,9 +16,9 @@ class CuMem
         return *this;
     }
 
-    void Alloc()
+    void Alloc(CudaContext context)
     {
-        HandleCu(cuMemAlloc(&ptr, bytesize()));
+        context.Run(cuMemAlloc(&ptr, bytesize()));
     }
 
     void Free()
@@ -46,9 +46,9 @@ public:
     {
     }
 
-    CuMem(size_t count) : count(count), owned(true)
+    CuMem(CudaContext context, size_t count) : count(count), owned(true)
     {
-        Alloc();
+        Alloc(context);
     }
 
     CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), count(count), owned(false)
@@ -63,9 +63,8 @@ public:
         }
     }
 
-    void Realloc(size_t newCount, int context)
+    void Realloc(size_t newCount, CudaContext context)
     {
-        (void)context;
         if (ptr != 0)
         {
             if (!owned)
@@ -79,7 +78,7 @@ public:
             owned = true;
         }
         count = newCount;
-        Alloc();
+        Alloc(context);
     }
 
     CUdeviceptr &operator()()
@@ -97,23 +96,21 @@ public:
         return elemsize() * sizeof(T);
     }
 
-    void CopyTo(T *cpu, CUstream stream, int context) const
+    void CopyTo(T *cpu, CUstream stream, CudaContext context) const
     {
-        (void)context;
         if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
         }
-        HandleCu(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
+        context.Run(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
     }
 
-    void CopyFrom(const T *cpu, CUstream stream, int context) const
+    void CopyFrom(const T *cpu, CUstream stream, CudaContext context) const
     {
-        (void)context;
         if (!ptr)
         {
             throw std::runtime_error("Operating on invalid CuMem");
         }
-        HandleCu(cuMemcpyHtoDAsync(ptr, cpu, bytesize(), stream));
+        context.Run(cuMemcpyHtoDAsync(ptr, cpu, bytesize(), stream));
     }
 };

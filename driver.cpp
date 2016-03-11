@@ -29,9 +29,9 @@ struct RenderType
     {
     };
 
-    virtual void Boot(Kernel *kernel, int context) = 0;
+    virtual void Boot(Kernel *kernel, CudaContext context) = 0;
 
-    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, int context) = 0;
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, CudaContext context) = 0;
 };
 
 static SDL_Rect GetWindowPos()
@@ -65,12 +65,12 @@ struct NoRenderType : public RenderType
         WindowDestroy(window, font);
     }
 
-    virtual void Boot(Kernel *, int context)
+    virtual void Boot(Kernel *, CudaContext context)
     {
         EnqueueBlitData(BlitData(), context);
     }
 
-    virtual void BlitFrame(BlitData, Kernel *kernel, int context)
+    virtual void BlitFrame(BlitData, Kernel *kernel, CudaContext context)
     {
         kernel->UpdateNoRender();
         SDL_Surface *surface = SDL_GetWindowSurface(window);
@@ -91,24 +91,26 @@ struct NoRenderType : public RenderType
 struct SyncBlitData
 {
     BlitData blitData;
-    int context;
+    CudaContext context;
+
+    SyncBlitData(BlitData blitData, CudaContext context) : blitData(blitData), context(context)
+    {
+    }
 };
 
 static void EnqueueSyncBlitDataHelper(CUstream, CUresult, void *userData)
 {
     SyncBlitData *blitData = (SyncBlitData *)userData;
     BlitData data = blitData->blitData;
-    int context = blitData->context;
+    CudaContext context = blitData->context;
     delete blitData;
     EnqueueBlitData(data, context);
 }
 
-static void EnqueueSyncBlitData(CUstream stream, BlitData blitData, int context)
+static void EnqueueSyncBlitData(CUstream stream, BlitData blitData, CudaContext context)
 {
-    SyncBlitData *syncBlitData = new SyncBlitData();
-    syncBlitData->blitData = blitData;
-    syncBlitData->context = context;
-    HandleCu(cuStreamAddCallback(stream, EnqueueSyncBlitDataHelper, syncBlitData, 0));
+    SyncBlitData *syncBlitData = new SyncBlitData(blitData, context);
+    context.Run(cuStreamAddCallback(stream, EnqueueSyncBlitDataHelper, syncBlitData, 0));
 }
 
 struct CpuRenderType : public RenderType
@@ -158,12 +160,12 @@ struct CpuRenderType : public RenderType
         }
     }
 
-    virtual void Boot(Kernel *kernel, int context)
+    virtual void Boot(Kernel *kernel, CudaContext context)
     {
         EnqueueFrame(kernel, context);
     }
 
-    void EnqueueFrame(Kernel *kernel, int context)
+    void EnqueueFrame(Kernel *kernel, CudaContext context)
     {
         int width, height;
         SDL_GetWindowSize(window, &width, &height);
@@ -171,23 +173,24 @@ struct CpuRenderType : public RenderType
         {
             throw std::runtime_error("Invalid SDL window size");
         }
-        if (oldBlitData[context].width != width || oldBlitData[context].height != height)
+        if (oldBlitData[context.Index()].width != width || oldBlitData[context.Index()].height != height)
         {
-            EnqueueCuMemFreeHost(oldBlitData[context].data, context);
-            oldBlitData[context].data = NULL;
-            oldBlitData[context].width = width;
-            oldBlitData[context].height = height;
+            EnqueueCuMemFreeHost(oldBlitData[context.Index()].data, context);
+            oldBlitData[context.Index()].data = NULL;
+            oldBlitData[context.Index()].width = width;
+            oldBlitData[context.Index()].height = height;
         }
-        if (!oldBlitData[context].data)
+        if (!oldBlitData[context.Index()].data)
         {
-            HandleCu(cuMemAllocHost((void **)&oldBlitData[context].data, (size_t)width * height * sizeof(int) * 4));
+            context.Run(cuMemAllocHost((void **)&oldBlitData[context.Index()].data,
+                                       (size_t)width * height * sizeof(int) * 4));
         }
-        kernel->RenderInto(oldBlitData[context].data, (size_t)oldBlitData[context].width,
-                           (size_t)oldBlitData[context].height, context);
-        EnqueueSyncBlitData(kernel->Stream(context), oldBlitData[context], context);
+        kernel->RenderInto(oldBlitData[context.Index()].data, (size_t)oldBlitData[context.Index()].width,
+                           (size_t)oldBlitData[context.Index()].height, context);
+        EnqueueSyncBlitData(kernel->Stream(context), oldBlitData[context.Index()], context);
     }
 
-    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, int context)
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, CudaContext context)
     {
         EnqueueFrame(kernel, context); // this is above the follwing so that the GPU gets started as we're blitting
 
@@ -208,19 +211,19 @@ struct HeadlessRenderType : public RenderType
     const int numTimes;
     std::vector<int> currentTimeByContext;
     int currentTime;
-    std::vector<CUcontext> contexts;
-    std::vector<BlitData> mBlitData; // TODO: Multi-GPU, this should be vector
+    std::vector<CudaContext> contexts;
+    std::vector<BlitData> mBlitData;
 
-    HeadlessRenderType(int numFrames, int numTimes, int width, int height, std::vector<CUcontext> contexts)
+    HeadlessRenderType(int numFrames, int numTimes, int width, int height, std::vector<CudaContext> contexts)
             : numFrames(numFrames), currentFrames(), numTimes(numTimes), currentTime(0), contexts(contexts), mBlitData()
     {
         for (size_t i = 0; i < contexts.size(); i++)
         {
-            HandleCu(cuCtxSetCurrent(contexts[i]));
+            contexts[i].SetCurrent();
             BlitData blitData;
             blitData.width = width;
             blitData.height = height;
-            HandleCu(cuMemAllocHost((void **)&blitData.data, (size_t)width * height * sizeof(int) * 4));
+            contexts[i].Run(cuMemAllocHost((void **)&blitData.data, (size_t)width * height * sizeof(int) * 4));
             mBlitData.push_back(blitData);
             currentTimeByContext.push_back(currentTime++);
         }
@@ -230,8 +233,8 @@ struct HeadlessRenderType : public RenderType
     {
         for (size_t i = 0; i < contexts.size(); i++)
         {
-            HandleCu(cuCtxSetCurrent(contexts[i]));
-            HandleCu(cuMemFreeHost(mBlitData[i].data));
+            contexts[i].SetCurrent();
+            contexts[i].Run(cuMemFreeHost(mBlitData[i].data));
         }
     }
 
@@ -259,7 +262,7 @@ struct HeadlessRenderType : public RenderType
         kernel->LoadAnimation();
     }
 
-    void LoadFileState(Kernel *kernel, int time, int context)
+    void LoadFileState(Kernel *kernel, int time, CudaContext context)
     {
         std::string filename = RenderstateFilename(kernel, time);
         try
@@ -281,7 +284,7 @@ struct HeadlessRenderType : public RenderType
         }
     }
 
-    void SaveProgress(Kernel *kernel, int currentTime, int context)
+    void SaveProgress(Kernel *kernel, int currentTime, CudaContext context)
     {
         std::string filename = RenderstateFilename(kernel, currentTime);
         StateSync *sync = NewFileStateSync(filename.c_str(), false);
@@ -290,70 +293,66 @@ struct HeadlessRenderType : public RenderType
         std::cout << "Saved intermediate progress to " << filename << "\n";
     }
 
-    virtual void Boot(Kernel *kernel, int context)
+    virtual void Boot(Kernel *kernel, CudaContext context)
     {
-        if (currentFrames.size() != (size_t)context)
+        if (currentFrames.size() != (size_t)context.Index())
         {
             throw std::runtime_error("Headless contexts not added in order (this is an implicit dependency in code)");
         }
         currentFrames.push_back(0);
+        //std::cout << "Flush/loading initial state\n";
+        kernel->Resize((size_t)mBlitData[context.Index()].width, (size_t)mBlitData[context.Index()].height, context);
         EnqueueMany(kernel, context);
     }
 
-    void EnqueueMany(Kernel *kernel, int context)
+    void EnqueueMany(Kernel *kernel, CudaContext context)
     {
         const int syncEveryNFrames = 32;
         for (int i = 0; i < syncEveryNFrames; i++)
         {
-            if (EnqueueSingle(kernel, mBlitData[context], context))
+            if (EnqueueSingle(kernel, mBlitData[context.Index()], context))
             {
                 break;
             }
         }
-        EnqueueSyncBlitData(kernel->Stream(context), mBlitData[context], context);
+        EnqueueSyncBlitData(kernel->Stream(context), mBlitData[context.Index()], context);
     }
 
     // returns true if current frame can't be added to anymore
-    virtual bool EnqueueSingle(Kernel *kernel, BlitData blitData, int context)
+    virtual bool EnqueueSingle(Kernel *kernel, BlitData blitData, CudaContext context)
     {
         // this is one of the implicit dependencies mentioned above
-        if (currentTimeByContext[context] == 0 && currentFrames[context] == 0)
+        if (currentTimeByContext[context.Index()] == 0 && currentFrames[context.Index()] == 0)
         {
-            //std::cout << "Flush/loading initial state\n";
-            for (size_t i = 0; i < contexts.size(); i++)
-            {
-                HandleCu(cuCtxSetCurrent(contexts[i]));
-                kernel->Resize((size_t)blitData.width, (size_t)blitData.height, (int)i);
-            }
             if (numTimes > 1)
             {
                 LoadAnimationState(kernel);
             }
             else
             {
-                LoadFileState(kernel, currentTimeByContext[context], context);
+                LoadFileState(kernel, currentTimeByContext[context.Index()], context);
                 int frame = kernel->GetFrame(context);
                 if (frame > 0)
                 {
-                    currentFrames[context] = frame;
+                    currentFrames[context.Index()] = frame;
                 }
             }
             // note we can't refactor SetFramed to here, due to possibly just loading a renderstate.clam3
         }
-        if (currentFrames[context] == 0)
+        if (currentFrames[context.Index()] == 0)
         {
             if (numTimes > 1)
             {
-                double time = (double)currentTimeByContext[context] / numTimes;
+                double time = (double)currentTimeByContext[context.Index()] / numTimes;
                 //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
                 kernel->SetTime(time, false, context); // boolean is `wrap`
             }
             kernel->SetFramed(true, context);
         }
-        kernel->RenderInto(currentFrames[context] == numFrames - 1 ? blitData.data : NULL,
+        kernel->RenderInto(currentFrames[context.Index()] == numFrames - 1 ? blitData.data : NULL,
                            (size_t)blitData.width, (size_t)blitData.height, context);
-        currentFrames[context]++;
-        return currentFrames[context] >= numFrames;
+        currentFrames[context.Index()]++;
+        return currentFrames[context.Index()] >= numFrames;
     }
 
     void WriteFrame(BlitData pixbuf, Kernel *kernel, int currentTime)
@@ -372,27 +371,27 @@ struct HeadlessRenderType : public RenderType
         SDL_FreeSurface(surface);
     }
 
-    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, int context)
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, CudaContext context)
     {
         if (DoSaveProgress() && numTimes <= 1)
         {
-            SaveProgress(kernel, currentTimeByContext[context], context);
+            SaveProgress(kernel, currentTimeByContext[context.Index()], context);
         }
         if (numTimes <= 1)
         {
-            std::cout << numFrames - currentFrames[context] << " frames left in this image, " <<
-            numTimes - currentTimeByContext[context] << " images left\n";
+            std::cout << numFrames - currentFrames[context.Index()] << " frames left in this image, " <<
+            numTimes - currentTimeByContext[context.Index()] << " images left\n";
         }
-        if (currentFrames[context] >= numFrames)
+        if (currentFrames[context.Index()] >= numFrames)
         {
-            WriteFrame(pixbuf, kernel, currentTimeByContext[context]);
-            currentFrames[context] = 0;
-            currentTimeByContext[context] = currentTime;
+            WriteFrame(pixbuf, kernel, currentTimeByContext[context.Index()]);
+            currentFrames[context.Index()] = 0;
+            currentTimeByContext[context.Index()] = currentTime;
             currentTime++;
         }
-        if (currentTimeByContext[context] >= numTimes)
+        if (currentTimeByContext[context.Index()] >= numTimes)
         {
-            currentFrames[context] = -1;
+            currentFrames[context.Index()] = -1;
             for (size_t i = 0; i < currentFrames.size(); i++)
             {
                 if (currentFrames[i] != -1)
@@ -419,7 +418,10 @@ static CUcontext InitCuda(int deviceNum)
         throw std::runtime_error("CUDA device init failure while in compute mode");
     }
     int maxDev = 0;
-    HandleCu(cuDeviceGetCount(&maxDev));
+    if (cuDeviceGetCount(&maxDev) != CUDA_SUCCESS)
+    {
+        throw std::runtime_error("Could not get number of CUDA devices");
+    }
     if (maxDev <= 0)
     {
         throw std::runtime_error("cuDeviceGetCount returned zero, is an NVIDIA GPU present on the system?");
@@ -430,14 +432,23 @@ static CUcontext InitCuda(int deviceNum)
                                  + tostring(maxDev));
     }
     CUdevice cuDevice;
-    HandleCu(cuDeviceGet(&cuDevice, deviceNum));
+    if (cuDeviceGet(&cuDevice, deviceNum) != CUDA_SUCCESS)
+    {
+        throw std::runtime_error("Could not get CUDA device " + tostring(deviceNum));
+    }
     {
         char name[128];
-        HandleCu(cuDeviceGetName(name, sizeof(name) - 1, cuDevice));
+        if (cuDeviceGetName(name, sizeof(name) - 1, cuDevice) != CUDA_SUCCESS)
+        {
+            throw std::runtime_error("Could not get CUDA device name for device number " + tostring(deviceNum));
+        }
         std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << "\n";
     }
     CUcontext result;
-    HandleCu(cuCtxCreate(&result, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice));
+    if (cuCtxCreate(&result, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice) != CUDA_SUCCESS)
+    {
+        throw std::runtime_error("Could not create CUDA context");
+    }
     return result;
 }
 
@@ -454,7 +465,7 @@ Driver::Driver() : cuContexts(), connection()
         std::vector<int> deviceNums = CudaDeviceNums();
         for (size_t i = 0; i < deviceNums.size(); i++)
         {
-            cuContexts.push_back(InitCuda(deviceNums[0]));
+            cuContexts.push_back(CudaContext(InitCuda(deviceNums[i]), (int)i));
         }
     }
 
@@ -488,10 +499,8 @@ Driver::~Driver()
     }
     for (size_t i = 0; i < cuContexts.size(); i++)
     {
-        if (cuContexts[i])
-        {
-            HandleCu(cuCtxDestroy(cuContexts[i]));
-        }
+        cuContexts[i].SetCurrent();
+        cuContexts[i].Run(cuCtxDestroy(cuContexts[i].UnderlyingContext()));
     }
 }
 
@@ -533,8 +542,8 @@ void Driver::MainLoop()
     SDL_Event event;
     for (size_t i = 0; i < cuContexts.size(); i++)
     {
-        HandleCu(cuCtxSetCurrent(cuContexts[i]));
-        renderType->Boot(kernel, (int)i);
+        cuContexts[i].SetCurrent();
+        renderType->Boot(kernel, cuContexts[i]);
     }
     bool isUserInput = IsUserInput();
     while (true)
@@ -554,42 +563,41 @@ void Driver::MainLoop()
         if (event.type == SDL_USEREVENT)
         {
             int context = event.user.code;
-            void (*func)(Driver *, int, void *) = (void (*)(Driver *, int, void *))event.user.data1;
+            void (*func)(Driver *, CudaContext, void *) = (void (*)(Driver *, CudaContext, void *))event.user.data1;
             void *param = event.user.data2;
-            HandleCu(cuCtxSetCurrent(cuContexts[context]));
-            func(this, context, param);
+            cuContexts[context].SetCurrent();
+            func(this, cuContexts[context], param);
         }
     }
 }
 
-void EnqueueSdlEvent(void (*funcPtr)(Driver *, int, void *), void *data, int context)
+void EnqueueSdlEvent(void (*funcPtr)(Driver *, CudaContext, void *), void *data, CudaContext context)
 {
     SDL_Event event;
     event.type = SDL_USEREVENT;
-    event.user.code = context;
+    event.user.code = context.Index();
     event.user.data1 = (void *)funcPtr;
     event.user.data2 = data;
     SDL_PushEvent(&event);
 }
 
-static void EnqueueCuMemFreeHelper(Driver *, int context, void *hostPtr)
+static void EnqueueCuMemFreeHelper(Driver *, CudaContext context, void *hostPtr)
 {
-    (void)context;
-    HandleCu(cuMemFreeHost(hostPtr));
+    context.Run(cuMemFreeHost(hostPtr));
 }
 
-void EnqueueCuMemFreeHost(void *hostPtr, int context)
+void EnqueueCuMemFreeHost(void *hostPtr, CudaContext context)
 {
     EnqueueSdlEvent(EnqueueCuMemFreeHelper, hostPtr, context);
 }
 
-void Driver::BlitImmediate(BlitData blitData, int context)
+void Driver::BlitImmediate(BlitData blitData, CudaContext context)
 {
     Tick(); // well, where else am I going to put it?
     renderType->BlitFrame(blitData, kernel, context);
 }
 
-static void EnqueueBlitDataHelper(Driver *driver, int context, void *blitData)
+static void EnqueueBlitDataHelper(Driver *driver, CudaContext context, void *blitData)
 {
     BlitData *data = (BlitData *)blitData;
     BlitData temp = *data;
@@ -597,7 +605,7 @@ static void EnqueueBlitDataHelper(Driver *driver, int context, void *blitData)
     driver->BlitImmediate(temp, context);
 }
 
-void EnqueueBlitData(BlitData blitData, int context)
+void EnqueueBlitData(BlitData blitData, CudaContext context)
 {
     EnqueueSdlEvent(EnqueueBlitDataHelper, new BlitData(blitData), context);
 }

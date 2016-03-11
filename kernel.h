@@ -27,7 +27,7 @@ class Kernel
     std::vector<std::vector<SettingModuleBase *> > settings;
     std::vector<std::vector<KernelModuleBase *> > modules;
 
-    std::vector<CUcontext> contexts;
+    std::vector<CudaContext> contexts;
     std::vector<CUmodule> cuModules;
     std::vector<CUfunction> kernelMains;
     std::vector<CUstream> streams;
@@ -48,27 +48,27 @@ class Kernel
     std::vector<size_t> oldHeight;
 
 public:
-    Kernel(std::string name, std::vector<CUcontext> contexts);
+    Kernel(std::string name, std::vector<CudaContext> contexts);
 
     ~Kernel();
 
-    void SendState(StateSync *output, bool everything, int context) const;
+    void SendState(StateSync *output, bool everything, CudaContext context) const;
 
-    void RecvState(StateSync *input, bool everything, int context);
+    void RecvState(StateSync *input, bool everything, CudaContext context);
 
     void UpdateNoRender();
 
-    void Resize(size_t width, size_t height, int context);
+    void Resize(size_t width, size_t height, CudaContext context);
 
-    void RenderInto(int *memory, size_t width, size_t height, int context);
+    void RenderInto(int *memory, size_t width, size_t height, CudaContext context);
 
     void LoadAnimation();
 
-    void SetTime(double time, bool wrap, int context);
+    void SetTime(double time, bool wrap, CudaContext context);
 
-    void SetFramed(bool framed, int context);
+    void SetFramed(bool framed, CudaContext context);
 
-    int GetFrame(int context);
+    int GetFrame(CudaContext context);
 
     SDL_Surface *Configure(TTF_Font *font);
 
@@ -78,8 +78,8 @@ public:
 
     void Integrate(double time);
 
-    const CUstream& Stream(int context) const
+    const CUstream& Stream(CudaContext context) const
     {
-        return streams[context];
+        return streams[context.Index()];
     }
 };
