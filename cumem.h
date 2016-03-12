@@ -16,7 +16,7 @@ class CuMem
         return *this;
     }
 
-    void Alloc(CudaContext context)
+    void Alloc(const CudaContext context)
     {
         context.Run(cuMemAlloc(&ptr, bytesize()));
     }
@@ -46,7 +46,7 @@ public:
     {
     }
 
-    CuMem(CudaContext context, size_t count) : count(count), owned(true)
+    CuMem(const CudaContext context, size_t count) : count(count), owned(true)
     {
         Alloc(context);
     }
@@ -63,7 +63,7 @@ public:
         }
     }
 
-    void Realloc(size_t newCount, CudaContext context)
+    void Realloc(size_t newCount, const CudaContext context)
     {
         if (ptr != 0)
         {
@@ -96,7 +96,7 @@ public:
         return elemsize() * sizeof(T);
     }
 
-    void CopyTo(T *cpu, CUstream stream, CudaContext context) const
+    void CopyTo(T *cpu, CUstream stream, const CudaContext context) const
     {
         if (!ptr)
         {
@@ -105,7 +105,7 @@ public:
         context.Run(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
     }
 
-    void CopyFrom(const T *cpu, CUstream stream, CudaContext context) const
+    void CopyFrom(const T *cpu, CUstream stream, const CudaContext context) const
     {
         if (!ptr)
         {

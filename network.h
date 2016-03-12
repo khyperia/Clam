@@ -8,60 +8,42 @@ class StateSync;
 
 class StateSync
 {
-    virtual void Send(const void *data, size_t size) = 0;
+    virtual void Send(const void *data, size_t size) const = 0;
 
-    virtual void Recv(void *data, size_t size) = 0;
+    virtual void Recv(void *data, size_t size) const = 0;
 
 public:
     virtual ~StateSync()
     { };
 
     template<typename T>
-    void Send(const T &data)
+    void Send(const T &data) const
     {
         Send(&data, sizeof(T));
     }
 
-    /*
     template<typename T>
-    void SendArr(const std::vector<T> &data)
-    {
-        Send(data.data(), data.size() * sizeof(T));
-    }
-    */
-
-    template<typename T>
-    void SendFrom(T *data, size_t count)
+    void SendFrom(T *data, size_t count) const
     {
         Send(data, count * sizeof(T));
     }
 
     template<typename T>
-    T Recv()
+    T Recv() const
     {
         T *data = (T *)alloca(sizeof(T));
         Recv(data, sizeof(T));
         return *data;
     }
 
-    /*
     template<typename T>
-    std::vector<T> RecvArr(size_t count)
-    {
-        std::vector<T> data(count);
-        Recv(data.data(), data.size() * sizeof(T));
-        return data;
-    }
-    */
-
-    template<typename T>
-    void RecvInto(T *data, size_t count)
+    void RecvInto(T *data, size_t count) const
     {
         Recv(data, count * sizeof(T));
     }
 
     template<typename T>
-    bool RecvChanged(T &original)
+    bool RecvChanged(T &original) const
     {
         T newval = Recv<T>();
         if (original != newval)
@@ -88,13 +70,13 @@ public:
 
     ~Connection();
 
-    void Send(const void *data, size_t size);
+    void Send(const void *data, size_t size) const;
 
-    void Recv(void *data, size_t size);
+    void Recv(void *data, size_t size) const;
 
     bool Sync(Kernel *kernel);
 
-    bool IsSyncing();
+    bool IsSyncing() const;
 };
 
 StateSync *NewFileStateSync(const char *filename, bool reading);

@@ -70,7 +70,7 @@ Connection::~Connection()
     }
 }
 
-void Connection::Send(const void *data, size_t size)
+void Connection::Send(const void *data, size_t size) const
 {
     int sentSize = SDLNet_TCP_Send(socket, data, (int)size);
     if (sentSize != (int)size)
@@ -80,7 +80,7 @@ void Connection::Send(const void *data, size_t size)
     }
 }
 
-void Connection::Recv(void *data, size_t size)
+void Connection::Recv(void *data, size_t size) const
 {
     size_t sizeTotal = 0;
     while (sizeTotal < size)
@@ -144,7 +144,7 @@ bool Connection::Sync(Kernel *kernel)
     return false;
 }
 
-bool Connection::IsSyncing()
+bool Connection::IsSyncing() const
 {
     return socket != NULL;
 }
@@ -154,7 +154,7 @@ class FileStateSync : public StateSync
     FILE *file;
     bool reading;
 
-    void Send(const void *data, size_t size)
+    void Send(const void *data, size_t size) const
     {
         if (reading)
         {
@@ -163,7 +163,7 @@ class FileStateSync : public StateSync
         fwrite(data, size, 1, file);
     }
 
-    void Recv(void *data, size_t size)
+    void Recv(void *data, size_t size) const
     {
         if (!reading)
         {

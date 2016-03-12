@@ -22,9 +22,9 @@ public:
 
     virtual bool RepeatKeypress(SDL_Keycode keycode, double time) = 0;
 
-    virtual void SendState(StateSync *output) const = 0;
+    virtual void SendState(const StateSync *output) const = 0;
 
-    virtual bool RecvState(StateSync *input) = 0;
+    virtual bool RecvState(const StateSync *input) = 0;
 
     virtual void Update() = 0;
 
@@ -203,13 +203,13 @@ struct ModuleJuliaBrotSettings : public SettingModule<JuliaBrotSettings>
         return true;
     }
 
-    virtual void SendState(StateSync *output) const
+    virtual void SendState(const StateSync *output) const
     {
         output->Send(juliaPos);
         output->Send(juliaEnabled);
     }
 
-    virtual bool RecvState(StateSync *input)
+    virtual bool RecvState(const StateSync *input)
     {
         bool changed = false;
         changed |= input->RecvChanged(juliaPos);
@@ -339,13 +339,13 @@ struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
         return true;
     }
 
-    virtual void SendState(StateSync *output) const
+    virtual void SendState(const StateSync *output) const
     {
         output->Send(pos);
         output->Send(zoom);
     }
 
-    virtual bool RecvState(StateSync *input)
+    virtual bool RecvState(const StateSync *input)
     {
         bool changed = false;
         changed |= input->RecvChanged(pos);
@@ -527,7 +527,7 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
         return true;
     }
 
-    virtual void SendState(StateSync *output) const
+    virtual void SendState(const StateSync *output) const
     {
         output->Send(pos);
         output->Send(look);
@@ -536,7 +536,7 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
         output->Send(focalDistance);
     }
 
-    virtual bool RecvState(StateSync *input)
+    virtual bool RecvState(const StateSync *input)
     {
         bool changed = false;
         changed |= input->RecvChanged(pos);
@@ -803,12 +803,12 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         return true;
     }
 
-    virtual void SendState(StateSync *output) const
+    virtual void SendState(const StateSync *output) const
     {
         output->Send(editValue);
     }
 
-    virtual bool RecvState(StateSync *input)
+    virtual bool RecvState(const StateSync *input)
     {
         return input->RecvChanged(editValue);
     }

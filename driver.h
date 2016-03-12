@@ -17,7 +17,7 @@ class Driver
 {
     Kernel *kernel;
     RenderType *renderType;
-    std::vector<CudaContext> cuContexts;
+    const std::vector<CudaContext> cuContexts;
     Connection connection;
     Uint32 lastTickTime;
 public:
@@ -26,9 +26,9 @@ public:
     ~Driver();
 
     void MainLoop();
-    void BlitImmediate(BlitData blitData, CudaContext context);
+    void BlitImmediate(const BlitData blitData, const CudaContext context);
     void Tick();
 };
 
-void EnqueueCuMemFreeHost(void *hostPtr, CudaContext context);
-void EnqueueBlitData(BlitData blitData, CudaContext context);
+void EnqueueCuMemFreeHost(void *hostPtr, const CudaContext context);
+void EnqueueBlitData(BlitData blitData, const CudaContext context);

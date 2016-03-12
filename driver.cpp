@@ -29,9 +29,9 @@ struct RenderType
     {
     };
 
-    virtual void Boot(Kernel *kernel, CudaContext context) = 0;
+    virtual void Boot(Kernel *kernel, const CudaContext context) = 0;
 
-    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, CudaContext context) = 0;
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, const CudaContext context) = 0;
 };
 
 static SDL_Rect GetWindowPos()
@@ -65,12 +65,12 @@ struct NoRenderType : public RenderType
         WindowDestroy(window, font);
     }
 
-    virtual void Boot(Kernel *, CudaContext context)
+    virtual void Boot(Kernel *, const CudaContext context)
     {
         EnqueueBlitData(BlitData(), context);
     }
 
-    virtual void BlitFrame(BlitData, Kernel *kernel, CudaContext context)
+    virtual void BlitFrame(BlitData, Kernel *kernel, const CudaContext context)
     {
         kernel->UpdateNoRender();
         SDL_Surface *surface = SDL_GetWindowSurface(window);
@@ -91,9 +91,9 @@ struct NoRenderType : public RenderType
 struct SyncBlitData
 {
     BlitData blitData;
-    CudaContext context;
+    const CudaContext context;
 
-    SyncBlitData(BlitData blitData, CudaContext context) : blitData(blitData), context(context)
+    SyncBlitData(BlitData blitData, const CudaContext context) : blitData(blitData), context(context)
     {
     }
 };
@@ -102,12 +102,12 @@ static void EnqueueSyncBlitDataHelper(CUstream, CUresult, void *userData)
 {
     SyncBlitData *blitData = (SyncBlitData *)userData;
     BlitData data = blitData->blitData;
-    CudaContext context = blitData->context;
+    const CudaContext context = blitData->context;
     delete blitData;
     EnqueueBlitData(data, context);
 }
 
-static void EnqueueSyncBlitData(CUstream stream, BlitData blitData, CudaContext context)
+static void EnqueueSyncBlitData(CUstream stream, BlitData blitData, const CudaContext context)
 {
     SyncBlitData *syncBlitData = new SyncBlitData(blitData, context);
     context.Run(cuStreamAddCallback(stream, EnqueueSyncBlitDataHelper, syncBlitData, 0));
@@ -133,7 +133,7 @@ struct CpuRenderType : public RenderType
         WindowDestroy(window, font);
     }
 
-    void Blit(BlitData pixbuf, SDL_Surface *surface)
+    void Blit(BlitData pixbuf, SDL_Surface *surface) const
     {
         if (SDL_LockSurface(surface))
         {
@@ -150,7 +150,7 @@ struct CpuRenderType : public RenderType
         SDL_UnlockSurface(surface);
     }
 
-    void DrawUI(Kernel *kern, TTF_Font *font, SDL_Surface *surface)
+    void DrawUI(Kernel *kern, TTF_Font *font, SDL_Surface *surface) const
     {
         SDL_Surface *conf = kern->Configure(font);
         if (conf)
@@ -160,12 +160,12 @@ struct CpuRenderType : public RenderType
         }
     }
 
-    virtual void Boot(Kernel *kernel, CudaContext context)
+    virtual void Boot(Kernel *kernel, const CudaContext context)
     {
         EnqueueFrame(kernel, context);
     }
 
-    void EnqueueFrame(Kernel *kernel, CudaContext context)
+    void EnqueueFrame(Kernel *kernel, const CudaContext context)
     {
         int width, height;
         SDL_GetWindowSize(window, &width, &height);
@@ -190,7 +190,7 @@ struct CpuRenderType : public RenderType
         EnqueueSyncBlitData(kernel->Stream(context), oldBlitData[context.Index()], context);
     }
 
-    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, CudaContext context)
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, const CudaContext context)
     {
         EnqueueFrame(kernel, context); // this is above the follwing so that the GPU gets started as we're blitting
 
@@ -211,10 +211,10 @@ struct HeadlessRenderType : public RenderType
     const int numTimes;
     std::vector<int> currentTimeByContext;
     int currentTime;
-    std::vector<CudaContext> contexts;
+    const std::vector<CudaContext> contexts;
     std::vector<BlitData> mBlitData;
 
-    HeadlessRenderType(int numFrames, int numTimes, int width, int height, std::vector<CudaContext> contexts)
+    HeadlessRenderType(int numFrames, int numTimes, int width, int height, const std::vector<CudaContext> contexts)
             : numFrames(numFrames), currentFrames(), numTimes(numTimes), currentTime(0), contexts(contexts), mBlitData()
     {
         for (size_t i = 0; i < contexts.size(); i++)
@@ -225,7 +225,15 @@ struct HeadlessRenderType : public RenderType
             blitData.height = height;
             contexts[i].Run(cuMemAllocHost((void **)&blitData.data, (size_t)width * height * sizeof(int) * 4));
             mBlitData.push_back(blitData);
-            currentTimeByContext.push_back(currentTime++);
+            currentTimeByContext.push_back(currentTime);
+            if (numTimes > 1)
+            {
+                currentTime++;
+            }
+        }
+        if (numTimes <= 1)
+        {
+            currentTime++;
         }
     }
 
@@ -238,7 +246,7 @@ struct HeadlessRenderType : public RenderType
         }
     }
 
-    std::string RenderstateFilename(Kernel *kernel, int currentTime)
+    std::string RenderstateFilename(Kernel *kernel, int currentTime, const CudaContext context) const
     {
         std::ostringstream builder;
         builder << kernel->Name();
@@ -252,19 +260,23 @@ struct HeadlessRenderType : public RenderType
         {
             builder << ".t" << currentTime;
         }
+        else if (contexts.size() != 1)
+        {
+            builder << ".gpu" << context.Index();
+        }
         builder << ".clam3";
         return builder.str();
     }
 
-    void LoadAnimationState(Kernel *kernel)
+    void LoadAnimationState(Kernel *kernel) const
     {
         std::cout << "Loading animation keyframes\n";
         kernel->LoadAnimation();
     }
 
-    void LoadFileState(Kernel *kernel, int time, CudaContext context)
+    void LoadFileState(Kernel *kernel, int time, const CudaContext context) const
     {
-        std::string filename = RenderstateFilename(kernel, time);
+        std::string filename = RenderstateFilename(kernel, time, context);
         try
         {
             // Loads *.renderstate.clam3 (the previously-left-off render)
@@ -284,16 +296,16 @@ struct HeadlessRenderType : public RenderType
         }
     }
 
-    void SaveProgress(Kernel *kernel, int currentTime, CudaContext context)
+    void SaveProgress(Kernel *kernel, int currentTime, const CudaContext context) const
     {
-        std::string filename = RenderstateFilename(kernel, currentTime);
+        std::string filename = RenderstateFilename(kernel, currentTime, context);
         StateSync *sync = NewFileStateSync(filename.c_str(), false);
         kernel->SendState(sync, true, context);
         delete sync;
         std::cout << "Saved intermediate progress to " << filename << "\n";
     }
 
-    virtual void Boot(Kernel *kernel, CudaContext context)
+    virtual void Boot(Kernel *kernel, const CudaContext context)
     {
         if (currentFrames.size() != (size_t)context.Index())
         {
@@ -305,7 +317,7 @@ struct HeadlessRenderType : public RenderType
         EnqueueMany(kernel, context);
     }
 
-    void EnqueueMany(Kernel *kernel, CudaContext context)
+    void EnqueueMany(Kernel *kernel, const CudaContext context)
     {
         const int syncEveryNFrames = 32;
         for (int i = 0; i < syncEveryNFrames; i++)
@@ -319,7 +331,7 @@ struct HeadlessRenderType : public RenderType
     }
 
     // returns true if current frame can't be added to anymore
-    virtual bool EnqueueSingle(Kernel *kernel, BlitData blitData, CudaContext context)
+    virtual bool EnqueueSingle(Kernel *kernel, BlitData blitData, const CudaContext context)
     {
         // this is one of the implicit dependencies mentioned above
         if (currentTimeByContext[context.Index()] == 0 && currentFrames[context.Index()] == 0)
@@ -355,7 +367,7 @@ struct HeadlessRenderType : public RenderType
         return currentFrames[context.Index()] >= numFrames;
     }
 
-    void WriteFrame(BlitData pixbuf, Kernel *kernel, int currentTime)
+    void WriteFrame(BlitData pixbuf, Kernel *kernel, int currentTime, const CudaContext context) const
     {
         SDL_Surface *surface = SDL_CreateRGBSurface(0, pixbuf.width, pixbuf.height, 4 * 8, 255 << 16, 255 << 8, 255, 0);
         if (SDL_LockSurface(surface))
@@ -364,14 +376,14 @@ struct HeadlessRenderType : public RenderType
         }
         memcpy(surface->pixels, pixbuf.data, (size_t)pixbuf.width * pixbuf.height * surface->format->BytesPerPixel);
         SDL_UnlockSurface(surface);
-        std::string filename = RenderstateFilename(kernel, currentTime);
+        std::string filename = RenderstateFilename(kernel, currentTime, context);
         filename += ".bmp";
         SDL_SaveBMP(surface, filename.c_str());
         std::cout << "Saved image '" << filename << "'\n";
         SDL_FreeSurface(surface);
     }
 
-    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, CudaContext context)
+    virtual void BlitFrame(BlitData pixbuf, Kernel *kernel, const CudaContext context)
     {
         if (DoSaveProgress() && numTimes <= 1)
         {
@@ -384,7 +396,7 @@ struct HeadlessRenderType : public RenderType
         }
         if (currentFrames[context.Index()] >= numFrames)
         {
-            WriteFrame(pixbuf, kernel, currentTimeByContext[context.Index()]);
+            WriteFrame(pixbuf, kernel, currentTimeByContext[context.Index()], context);
             currentFrames[context.Index()] = 0;
             currentTimeByContext[context.Index()] = currentTime;
             currentTime++;
@@ -452,22 +464,26 @@ static CUcontext InitCuda(int deviceNum)
     return result;
 }
 
-Driver::Driver() : cuContexts(), connection()
+const std::vector<CudaContext> InitCudaContexts()
+{
+    std::vector<CudaContext> cuContexts;
+    if (!IsCompute())
+        return cuContexts;
+    std::vector<int> deviceNums = CudaDeviceNums();
+    for (size_t i = 0; i < deviceNums.size(); i++)
+    {
+        cuContexts.push_back(CudaContext(InitCuda(deviceNums[i]), (int)i));
+    }
+    return cuContexts;
+}
+
+Driver::Driver() : cuContexts(InitCudaContexts()), connection()
 {
     bool isCompute = IsCompute();
     int numHeadlessTimes;
     int headless = Headless(&numHeadlessTimes);
 
     SDL_Rect windowPos = GetWindowPos();
-
-    if (isCompute)
-    {
-        std::vector<int> deviceNums = CudaDeviceNums();
-        for (size_t i = 0; i < deviceNums.size(); i++)
-        {
-            cuContexts.push_back(CudaContext(InitCuda(deviceNums[i]), (int)i));
-        }
-    }
 
     kernel = new Kernel(KernelName(), cuContexts);
     if (isCompute)
@@ -489,14 +505,8 @@ Driver::Driver() : cuContexts(), connection()
 
 Driver::~Driver()
 {
-    if (renderType)
-    {
-        delete renderType;
-    }
-    if (kernel)
-    {
-        delete kernel;
-    }
+    delete renderType;
+    delete kernel;
     for (size_t i = 0; i < cuContexts.size(); i++)
     {
         cuContexts[i].SetCurrent();
@@ -563,7 +573,7 @@ void Driver::MainLoop()
         if (event.type == SDL_USEREVENT)
         {
             int context = event.user.code;
-            void (*func)(Driver *, CudaContext, void *) = (void (*)(Driver *, CudaContext, void *))event.user.data1;
+            void (*func)(Driver *, const CudaContext, void *) = (void (*)(Driver *, const CudaContext, void *))event.user.data1;
             void *param = event.user.data2;
             cuContexts[context].SetCurrent();
             func(this, cuContexts[context], param);
@@ -571,7 +581,7 @@ void Driver::MainLoop()
     }
 }
 
-void EnqueueSdlEvent(void (*funcPtr)(Driver *, CudaContext, void *), void *data, CudaContext context)
+void EnqueueSdlEvent(void (*funcPtr)(Driver *, const CudaContext, void *), void *data, const CudaContext context)
 {
     SDL_Event event;
     event.type = SDL_USEREVENT;
@@ -581,23 +591,23 @@ void EnqueueSdlEvent(void (*funcPtr)(Driver *, CudaContext, void *), void *data,
     SDL_PushEvent(&event);
 }
 
-static void EnqueueCuMemFreeHelper(Driver *, CudaContext context, void *hostPtr)
+static void EnqueueCuMemFreeHelper(Driver *, const CudaContext context, void *hostPtr)
 {
     context.Run(cuMemFreeHost(hostPtr));
 }
 
-void EnqueueCuMemFreeHost(void *hostPtr, CudaContext context)
+void EnqueueCuMemFreeHost(void *hostPtr, const CudaContext context)
 {
     EnqueueSdlEvent(EnqueueCuMemFreeHelper, hostPtr, context);
 }
 
-void Driver::BlitImmediate(BlitData blitData, CudaContext context)
+void Driver::BlitImmediate(const BlitData blitData, const CudaContext context)
 {
     Tick(); // well, where else am I going to put it?
     renderType->BlitFrame(blitData, kernel, context);
 }
 
-static void EnqueueBlitDataHelper(Driver *driver, CudaContext context, void *blitData)
+static void EnqueueBlitDataHelper(Driver *driver, const CudaContext context, void *blitData)
 {
     BlitData *data = (BlitData *)blitData;
     BlitData temp = *data;
@@ -605,7 +615,7 @@ static void EnqueueBlitDataHelper(Driver *driver, CudaContext context, void *bli
     driver->BlitImmediate(temp, context);
 }
 
-void EnqueueBlitData(BlitData blitData, CudaContext context)
+void EnqueueBlitData(const BlitData blitData, const CudaContext context)
 {
     EnqueueSdlEvent(EnqueueBlitDataHelper, new BlitData(blitData), context);
 }
