@@ -16,11 +16,18 @@ protected:
 
     void CheckContext(const CudaContext context) const
     {
-        if (myContext.Index() != context.Index())
+        if (myContext.IsValid() && context.IsValid())
         {
-            throw std::runtime_error(
-                    "Invalid context on KernelModule: " + tostring(context.Index()) + " while this module's context is " +
-                    tostring(myContext.Index()));
+            if (myContext.Index() != context.Index())
+            {
+                throw std::runtime_error(
+                        "Invalid context on KernelModule: " + tostring(context.Index()) + " while this module's context is " +
+                        tostring(myContext.Index()));
+            }
+        }
+        else if (myContext.IsValid() != context.IsValid())
+        {
+            throw std::runtime_error("Invalid context on KernelModule: one was valid, the other wasn't");
         }
     }
 
@@ -83,7 +90,7 @@ public:
             Resize(w, h, context);
         }
         Update(context);
-        if (memcmp(&oldCpuVar, &value, sizeof(T)))
+        if (context.IsValid() && memcmp(&oldCpuVar, &value, sizeof(T)))
         {
             context.Run(cuMemcpyHtoDAsync(gpuVar, &value, sizeof(T), stream));
             oldCpuVar = value;
@@ -432,6 +439,10 @@ Kernel::Kernel(std::string name, const std::vector<CudaContext> contexts) :
         oldWidth.push_back(0);
         oldHeight.push_back(0);
     }
+    if (frames.size() == 0)
+    {
+        frames.push_back(-1);
+    }
 }
 
 Kernel::~Kernel()
@@ -537,8 +548,10 @@ void Kernel::SendState(const StateSync *output, bool everything, const CudaConte
     int index = context.IsValid() ? context.Index() : 0;
     for (size_t i = 0; i < modules[index].size(); i++)
     {
-        modules[index][i]->SendState(output, everything, (int)oldWidth[index], (int)oldHeight[index],
-                              streams[index], context);
+        int oldw = oldWidth.size() == 0 ? -1 : oldWidth[index];
+        int oldh = oldHeight.size() == 0 ? -1 : oldHeight[index];
+        CUstream stream = streams.size() == 0 ? NULL : streams[index];
+        modules[index][i]->SendState(output, everything, oldw, oldh, stream, context);
     }
 }
 
@@ -565,11 +578,14 @@ void Kernel::RecvState(const StateSync *input, bool everything, const CudaContex
                 frames[context.Index()] = -1;
             }
         }
-        else if (!context.IsValid() && AllNegOne(frames))
+        else if (!context.IsValid())
         {
             for (size_t i = 0; i < frames.size(); i++)
             {
-                frames[i] = 0;
+                if (frames[i] == -1)
+                {
+                    frames[i] = 0;
+                }
             }
         }
         else if (context.IsValid() && frames[context.Index()] == -1)

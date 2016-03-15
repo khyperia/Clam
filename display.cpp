@@ -1,6 +1,7 @@
 #include "display.h"
 #include "option.h"
 #include <iostream>
+#include <stdexcept>
 
 struct SdlInitClass
 {

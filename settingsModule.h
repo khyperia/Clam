@@ -628,7 +628,7 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
             {
                 if (!oneTime)
                 {
-                    value *= std::exp((T)time * -incType);
+                    value *= (T)std::exp((T)time * -incType);
                 }
             }
             else if (incType > 0)

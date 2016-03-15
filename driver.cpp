@@ -555,6 +555,10 @@ void Driver::MainLoop()
         cuContexts[i].SetCurrent();
         renderType->Boot(kernel, cuContexts[i]);
     }
+    if (dynamic_cast<NoRenderType*>(renderType) && cuContexts.size() == 0)
+    {
+        renderType->Boot(kernel, CudaContext::Invalid);
+    }
     bool isUserInput = IsUserInput();
     while (true)
     {
@@ -575,8 +579,10 @@ void Driver::MainLoop()
             int context = event.user.code;
             void (*func)(Driver *, const CudaContext, void *) = (void (*)(Driver *, const CudaContext, void *))event.user.data1;
             void *param = event.user.data2;
-            cuContexts[context].SetCurrent();
-            func(this, cuContexts[context], param);
+            const CudaContext thisContext = context == -1 ? CudaContext::Invalid : cuContexts[context];
+            if (thisContext.IsValid())
+                thisContext.SetCurrent();
+            func(this, thisContext, param);
         }
     }
 }
@@ -585,7 +591,7 @@ void EnqueueSdlEvent(void (*funcPtr)(Driver *, const CudaContext, void *), void 
 {
     SDL_Event event;
     event.type = SDL_USEREVENT;
-    event.user.code = context.Index();
+    event.user.code = context.IsValid() ? context.Index() : -1;
     event.user.data1 = (void *)funcPtr;
     event.user.data2 = data;
     SDL_PushEvent(&event);

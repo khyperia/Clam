@@ -16,7 +16,7 @@ IVS_TEMP_DIR="/research/${IVS_USER}/temp-clam3"
 HOST_PORT=23457
 VRPN_OBJECT=Wand
 FONT_ATTEMPT=/usr/share/fonts/TTF/DejaVuSansMono.ttf
-export CLAM3_KERNEL=mandelbox
+export CLAM3_KERNEL=${1:-mandelbox}
 if [ -e $HOME/.vrpn-server ]
 then
     export CLAM3_VRPN=${VRPN_OBJECT}@$(<$HOME/.vrpn-server)

@@ -64,7 +64,7 @@ public:
         if (callResult != CUDA_SUCCESS)
         {
             const char *errstr;
-            if (cuGetErrorString(callResult, &errstr) != CUDA_SUCCESS)
+            //if (cuGetErrorString(callResult, &errstr) != CUDA_SUCCESS)
             {
                 errstr = "unknown error";
             }

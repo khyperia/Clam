@@ -9,8 +9,8 @@
 #define OffsetR 0.0f
 #define OffsetG 0.0f
 #define OffsetB 0.0f
-#define Saturation 0.5f
-#define SubtractBrightness 0.3f
+#define Saturation 0.2f
+#define SubtractBrightness 0.6f
 
 __constant__ Gpu2dCameraSettings CameraArr[1];
 #define Camera (CameraArr[0])
