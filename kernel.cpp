@@ -325,11 +325,11 @@ public:
     }
 };
 
-extern const unsigned char mandelbox[];
-extern const unsigned int mandelbox_len;
+extern "C" extern const unsigned char mandelbox[];
+extern "C" extern const unsigned int mandelbox_len;
 
-extern const unsigned char mandelbrot[];
-extern const unsigned int mandelbrot_len;
+extern "C" extern const unsigned char mandelbrot[];
+extern "C" extern const unsigned int mandelbrot_len;
 
 static void AddMandelbox(CUmodule cuModule,
                          std::vector<std::vector<SettingModuleBase *> > &settingAdd,

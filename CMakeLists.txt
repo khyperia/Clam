@@ -7,10 +7,19 @@ set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98 -Wall -Wextra")
+set(CMAKE_C_FLAGS "-std=c99")
+set(CMAKE_CXX_FLAGS "-std=c++98")
 set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-Wall;--use_fast_math;-lineinfo")
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+
+if (MSVC)
+    add_definitions(-DMSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc -std=c++98")
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-DMSVC")
+else ()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+endif()
 
 file(GLOB cppfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cpp")
 file(GLOB hfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.h")
@@ -21,6 +30,7 @@ set(CMAKE_LIBRARY_PATH
         "/home/echauck/SDL2_net/lib"
         "/home/echauck/SDL2_ttf/lib"
         "/home/kuhl/public-vrlab/vrpn/build"
+        "${CMAKE_SOURCE_DIR}/../SDL2/lib"
         "${CMAKE_SOURCE_DIR}/../vrpn/build"
         "${CMAKE_SOURCE_DIR}/../../prog/vrpn/build"
         "/opt/cuda/lib"
@@ -30,6 +40,7 @@ set(CMAKE_INCLUDE_PATH
         "/home/echauck/SDL2_net/include"
         "/home/echauck/SDL2_ttf/include"
         "/home/kuhl/public-vrlab/vrpn"
+        "${CMAKE_SOURCE_DIR}/../SDL2/include"
         "${CMAKE_SOURCE_DIR}/../vrpn"
         "${CMAKE_SOURCE_DIR}/../../prog/vrpn"
         "/opt/cuda/include"
@@ -86,10 +97,15 @@ add_executable(clam3 ${sources} ${genfiles})
 add_dependencies(clam3 shfiles)
 
 target_link_libraries(clam3
-        cuda
         ${SDL2_LIBRARIES}
         ${SDL2_NET_LIBRARIES}
         ${SDL2_TTF_LIBRARIES})
+
+if (MSVC)
+target_link_libraries(clam3 "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib")
+else()
+target_link_libraries(clam3 cuda)
+endif()
 
 if (VRPN_FOUND)
     target_link_libraries(clam3

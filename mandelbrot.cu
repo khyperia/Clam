@@ -42,7 +42,7 @@ static __device__ float3 Mandelbrot(float2 z)
     return make_float3(r, g, b);
 }
 
-static __device__ uint PackPixel(float3 pixel)
+static __device__ unsigned int PackPixel(float3 pixel)
 {
     pixel.x *= 255;
     pixel.y *= 255;
@@ -62,7 +62,7 @@ static __device__ uint PackPixel(float3 pixel)
     return (255 << 24) | ((int)pixel.x << 16) | ((int)pixel.y << 8) | ((int)pixel.z);
 }
 
-extern "C" __global__ void kern(uint* __restrict__ screenPixels, int screenX, int screenY,
+extern "C" __global__ void kern(unsigned int* __restrict__ screenPixels, int screenX, int screenY,
         int width, int height, int frame)
 {
     int x = blockDim.x * blockIdx.x + threadIdx.x;

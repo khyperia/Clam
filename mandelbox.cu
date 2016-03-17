@@ -1,4 +1,8 @@
+#ifdef MSVC
+#include "helper_math.h"
+#else
 #include <../samples/common/inc/helper_math.h>
+#endif
 #include <float.h>
 #include "kernelStructs.h"
 #include "mandelbox.h"
@@ -26,7 +30,7 @@ void Test()
 #define NORMAL_STATE 2
 #define FINISH_STATE 3
 
-static const float NORMAL_DELTA = FLT_EPSILON * 8;
+#define NORMAL_DELTA (FLT_EPSILON * 8)
 
 __constant__ MandelboxCfg MandelboxCfgArr[1];
 #define cfg (MandelboxCfgArr[0])
@@ -60,19 +64,19 @@ static __device__ float length2(float3 v)
     return dot(v, v);
 }
 
-static __device__ uint MWC64X(ulong *state)
+static __device__ uint MWC64X(unsigned long long *state)
 {
     uint c = (*state) >> 32, x = (*state) & 0xFFFFFFFF;
-    *state = x * ((ulong)4294883355U) + c;
+    *state = x * ((unsigned long long)4294883355U) + c;
     return x ^ c;
 }
 
-static __device__ float Rand(ulong* seed)
+static __device__ float Rand(unsigned long long* seed)
 {
     return (float)MWC64X(seed) / 4294967296.0f;
 }
 
-static __device__ float2 RandCircle(ulong* rand)
+static __device__ float2 RandCircle(unsigned long long* rand)
 {
     float2 polar = make_float2(Rand(rand) * 6.28318531f, sqrt(Rand(rand)));
     return make_float2(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
@@ -80,14 +84,14 @@ static __device__ float2 RandCircle(ulong* rand)
 
 // Box-Muller transform
 // returns two normally-distributed independent variables
-static __device__ float2 RandNormal(ulong* rand)
+static __device__ float2 RandNormal(unsigned long long* rand)
 {
     float mul = sqrt(-2 * log2(Rand(rand)));
     float angle = 6.28318530718f * Rand(rand);
     return mul * make_float2(cos(angle), sin(angle));
 }
 
-static __device__ float3 RandSphere(ulong* rand)
+static __device__ float3 RandSphere(unsigned long long* rand)
 {
     float2 normal;
     float rest;
@@ -99,7 +103,7 @@ static __device__ float3 RandSphere(ulong* rand)
     return normalize(make_float3(normal.x, normal.y, rest));
 }
 
-static __device__ float3 RandHemisphere(ulong *rand, float3 normal)
+static __device__ float3 RandHemisphere(unsigned long long *rand, float3 normal)
 {
     float3 result = RandSphere(rand);
     if (dot(result, normal) < 0)
@@ -107,11 +111,11 @@ static __device__ float3 RandHemisphere(ulong *rand, float3 normal)
     return result;
 }
 
-static __device__ ulong GetRand(int x, int y, int width, int frame)
+static __device__ unsigned long long GetRand(int x, int y, int width, int frame)
 {
-    ulong rand;
+    unsigned long long rand;
     uint2 randBuffer = BufferRand[y * width + x];
-    rand = (ulong)randBuffer.x << 32 | (ulong)randBuffer.y;
+    rand = (unsigned long long)randBuffer.x << 32 | (unsigned long long)randBuffer.y;
     rand += y * width + x;
     if (frame < 1)
     {
@@ -123,7 +127,7 @@ static __device__ ulong GetRand(int x, int y, int width, int frame)
     return rand;
 }
 
-static __device__ void SetRand(int x, int y, int width, ulong rand)
+static __device__ void SetRand(int x, int y, int width, unsigned long long rand)
 {
     BufferRand[y * width + x] = make_uint2((uint)(rand >> 32), (uint)rand);
 }
@@ -140,7 +144,7 @@ static __device__ float3 RayDir(float3 forward, float3 up, float2 screenCoords, 
     return look.x * right + look.y * up + look.z * forward;
 }
 
-static __device__ void ApplyDof(float3* position, float3* lookat, float focalPlane, ulong* rand)
+static __device__ void ApplyDof(float3* position, float3* lookat, float focalPlane, unsigned long long* rand)
 {
     float3 focalPosition = *position + *lookat * focalPlane;
     float3 xShift = cross(make_float3(0, 0, 1), *lookat);
@@ -152,7 +156,7 @@ static __device__ void ApplyDof(float3* position, float3* lookat, float focalPla
 }
 
 static __device__ void GetCamera(float3 *origin, float3 *direction, int x, int y, int screenX,
-        int screenY, int width, int height, ulong *rand)
+        int screenY, int width, int height, unsigned long long *rand)
 {
     *origin = make_float3(Camera.posX, Camera.posY, Camera.posZ);
     float3 look = make_float3(Camera.lookX, Camera.lookY, Camera.lookZ);
@@ -307,7 +311,7 @@ static __device__ float De(float3 offset, float3 *lighting)
 }
 
 static __device__ float3 NewRayDir(float3 position, float3 normal, float3 oldRayDir,
-        float *probability, ulong *rand)
+        float *probability, unsigned long long *rand)
 {
     float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
      /*
@@ -389,7 +393,7 @@ static __device__ void Finish(MandelboxState *state, int x, int y, int width)
 }
 
 static __device__ int PreviewState(MandelboxState *state, uint* __restrict__ screenPixels, int x,
-        int y, int screenX, int screenY, int width, int height, ulong *rand)
+        int y, int screenX, int screenY, int width, int height, unsigned long long *rand)
 {
     GetCamera(&state->position, &state->direction, x, y, screenX, screenY, width, height, rand);
     float value = SimpleTrace(state->position, state->direction, width, height);
@@ -399,7 +403,7 @@ static __device__ int PreviewState(MandelboxState *state, uint* __restrict__ scr
 }
 
 static __device__ int InitState(MandelboxState *state, int x, int y, int screenX, int screenY,
-        int width, int height, ulong *rand)
+        int width, int height, unsigned long long *rand)
 {
     GetCamera(&state->position, &state->direction, x, y, screenX, screenY, width, height, rand);
     state->lightColor = make_float4(1);
@@ -438,7 +442,7 @@ static __device__ int TraceState(MandelboxState *state, float distance, float3 l
     return TRACE_STATE;
 }
 
-static __device__ int NormalState(MandelboxState *state, float distance, float3 lighting, ulong *rand)
+static __device__ int NormalState(MandelboxState *state, float distance, float3 lighting, unsigned long long *rand)
 {
     if (length2(lighting) > 0)
     {
@@ -514,7 +518,7 @@ extern "C" __global__ void kern(uint* __restrict__ screenPixels, int screenX, in
     if (x >= width || y >= height)
         return;
 
-    ulong rand = GetRand(x, y, width, frame);
+    unsigned long long rand = GetRand(x, y, width, frame);
 
     MandelboxState state = BufferScratch[y * width + x];
     if (frame == -1)
