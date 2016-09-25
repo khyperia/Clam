@@ -86,7 +86,7 @@ void VrpnHelp::MainLoop()
     if (!printed)
     {
         printed = true;
-        std::cout << "VRPN is disabled, GetVRPN will have no effect";
+        std::cout << "VRPN is disabled, GetVRPN will have no effect" << std::endl;
     }
 }
 

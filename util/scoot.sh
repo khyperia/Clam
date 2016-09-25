@@ -8,4 +8,4 @@ export CLAM3_SAVEPROGRESS=0
 
 export CLAM3_DEVICE=0,1,2,3
 
-./clam3
+exec ./clam3

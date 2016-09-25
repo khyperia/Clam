@@ -9,8 +9,11 @@ set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_C_FLAGS "-std=c99")
 set(CMAKE_CXX_FLAGS "-std=c++98")
-set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-Wall;--use_fast_math;-lineinfo")
+set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-std=c++98,-Wall,-std=c++98;--use_fast_math;-lineinfo")
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+
+# https://www.reddit.com/r/archlinux/comments/4iczja/a_work_around_if_you_are_using_cuda_and_have/
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-D__CORRECT_ISO_CPP11_MATH_H_PROTO")
 
 if (MSVC)
     add_definitions(-DMSVC)

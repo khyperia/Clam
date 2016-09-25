@@ -21,7 +21,8 @@ protected:
             if (myContext.Index() != context.Index())
             {
                 throw std::runtime_error(
-                        "Invalid context on KernelModule: " + tostring(context.Index()) + " while this module's context is " +
+                        "Invalid context on KernelModule: " + tostring(context.Index()) +
+                        " while this module's context is " +
                         tostring(myContext.Index()));
             }
         }
@@ -45,7 +46,8 @@ public:
     virtual void SendState(const StateSync *output, bool everything, int width, int height, CUstream stream,
                            const CudaContext context) const = 0;
 
-    virtual bool RecvState(const StateSync *input, bool everything, int width, int height, CUstream stream, const CudaContext context) = 0;
+    virtual bool RecvState(const StateSync *input, bool everything, int width, int height, CUstream stream,
+                           const CudaContext context) = 0;
 
     virtual SDL_Surface *Configure(TTF_Font *font) const = 0;
 };
@@ -170,14 +172,14 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
     const CudaContext context = CudaContext::Invalid;
     if (keycode == SDLK_t)
     {
-        std::cout << "Saving state\n";
+        std::cout << "Saving state" << std::endl;
         StateSync *sync = NewFileStateSync((Name() + ".clam3").c_str(), false);
         SendState(sync, false, context);
         delete sync;
     }
     else if (keycode == SDLK_y)
     {
-        std::cout << "Loading state\n";
+        std::cout << "Loading state" << std::endl;
         StateSync *sync = NewFileStateSync((Name() + ".clam3").c_str(), true);
         RecvState(sync, false, context);
         delete sync;
@@ -191,19 +193,19 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
                 StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
                 animation = new SettingAnimation(sync, settings[0]);
                 delete sync;
-                std::cout << "Loaded previous animation\n";
+                std::cout << "Loaded previous animation" << std::endl;
             }
             catch (const std::exception &e)
             {
                 animation = new SettingAnimation(NULL, settings[0]);
-                std::cout << "Created new animation\n";
+                std::cout << "Created new animation" << std::endl;
             }
         }
         animation->AddKeyframe(settings[0]);
         StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
         animation->WriteKeyframes(sync);
         delete sync;
-        std::cout << "Added keyframe\n";
+        std::cout << "Added keyframe" << std::endl;
     }
     else if (keycode == SDLK_b)
     {
@@ -215,7 +217,7 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
         StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
         animation->WriteKeyframes(sync);
         delete sync;
-        std::cout << "Cleared keyframes\n";
+        std::cout << "Cleared keyframes" << std::endl;
     }
     else if (keycode == SDLK_x)
     {
@@ -242,7 +244,7 @@ public:
     {
         if (value && cuMemFree(value) != CUDA_SUCCESS)
         {
-            std::cout << "Could not free CUDA memory\n"; // TODO: Wrong context?
+            std::cout << "Could not free CUDA memory" << std::endl; // TODO: Wrong context?
         }
     }
 
@@ -288,7 +290,8 @@ public:
         }
     }
 
-    virtual bool RecvState(const StateSync *input, bool everything, int width, int height, CUstream stream, const CudaContext context)
+    virtual bool RecvState(const StateSync *input, bool everything, int width, int height, CUstream stream,
+                           const CudaContext context)
     {
         if (everything)
         {
@@ -298,7 +301,7 @@ public:
             {
                 std::cout << "Not uploading state buffer due to mismatched sizes: current "
                 << existingSize << "(" << elementSize << " * " << width << " * " << height
-                << "), new " << size << "\n";
+                << "), new " << size << std::endl;
                 char *tmp = new char[size];
                 input->RecvInto(tmp, size);
                 delete[] tmp;
@@ -325,11 +328,13 @@ public:
     }
 };
 
-extern "C" extern const unsigned char mandelbox[];
-extern "C" extern const unsigned int mandelbox_len;
+extern "C" {
+extern const unsigned char mandelbox[];
+extern const unsigned int mandelbox_len;
 
-extern "C" extern const unsigned char mandelbrot[];
-extern "C" extern const unsigned int mandelbrot_len;
+extern const unsigned char mandelbrot[];
+extern const unsigned int mandelbrot_len;
+}
 
 static void AddMandelbox(CUmodule cuModule,
                          std::vector<std::vector<SettingModuleBase *> > &settingAdd,
@@ -451,7 +456,7 @@ Kernel::~Kernel()
     {
         if (cuModuleUnload(cuModules[context]) != CUDA_SUCCESS)
         {
-            std::cout << "Failed to unload kernel module\n";
+            std::cout << "Failed to unload kernel module" << std::endl;
         }
         for (size_t i = 0; i < modules[context].size(); i++)
         {
@@ -463,7 +468,7 @@ Kernel::~Kernel()
         }
         if (cuStreamDestroy(streams[context]) != CUDA_SUCCESS)
         {
-            std::cout << "Failed to destroy stream\n";
+            std::cout << "Failed to destroy stream" << std::endl;
         }
     }
     if (animation)
@@ -548,8 +553,8 @@ void Kernel::SendState(const StateSync *output, bool everything, const CudaConte
     int index = context.IsValid() ? context.Index() : 0;
     for (size_t i = 0; i < modules[index].size(); i++)
     {
-        int oldw = oldWidth.size() == 0 ? -1 : oldWidth[index];
-        int oldh = oldHeight.size() == 0 ? -1 : oldHeight[index];
+        int oldw = oldWidth.size() == 0 ? -1 : (int)oldWidth[index];
+        int oldh = oldHeight.size() == 0 ? -1 : (int)oldHeight[index];
         CUstream stream = streams.size() == 0 ? NULL : streams[index];
         modules[index][i]->SendState(output, everything, oldw, oldh, stream, context);
     }
@@ -596,8 +601,10 @@ void Kernel::RecvState(const StateSync *input, bool everything, const CudaContex
     int index = context.IsValid() ? context.Index() : 0;
     for (size_t i = 0; i < modules[index].size(); i++)
     {
-        if (modules[index][i]->RecvState(input, everything, (int)oldWidth[index], (int)oldHeight[index],
-                                  streams[index], context))
+        int oldw = oldWidth.size() == 0 ? -1 : (int)oldWidth[index];
+        int oldh = oldHeight.size() == 0 ? -1 : (int)oldHeight[index];
+        CUstream stream = streams.size() == 0 ? NULL : streams[index];
+        if (modules[index][i]->RecvState(input, everything, oldw, oldh, stream, context))
         {
             if (everything)
             {
@@ -611,6 +618,20 @@ void Kernel::RecvState(const StateSync *input, bool everything, const CudaContex
                 else
                 {
                     frames[context.Index()] = loadedFrame;
+                }
+            }
+            else
+            {
+                if (context.IsValid())
+                {
+                    if (frames[context.Index()] != -1)
+                    {
+                        frames[context.Index()] = 0;
+                    }
+                }
+                else
+                {
+                    ResetFrames(frames);
                 }
             }
         }
@@ -683,7 +704,7 @@ void Kernel::SetTime(double time, bool wrap, const CudaContext context)
 {
     if (!animation)
     {
-        std::cout << "No animation keyframes loaded\n";
+        std::cout << "No animation keyframes loaded" << std::endl;
         return;
     }
     animation->Animate(settings[context.Index()], time, wrap);
@@ -718,7 +739,7 @@ void Kernel::Resize(size_t width, size_t height, const CudaContext context)
         if (oldWidth[context.Index()] != 0 || oldHeight[context.Index()] != 0)
         {
             std::cout << "Resized from " << oldWidth[context.Index()] << "x" << oldHeight[context.Index()] <<
-            " to " << width << "x" << height << "\n";
+            " to " << width << "x" << height << std::endl;
         }
         oldWidth[context.Index()] = width;
         oldHeight[context.Index()] = height;
@@ -760,7 +781,8 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height, const CudaCont
     unsigned int blockY = (unsigned int)maxLocalSize;
     unsigned int gridX = (unsigned int)(width + blockX - 1) / blockX;
     unsigned int gridY = (unsigned int)(height + blockY - 1) / blockY;
-    context.Run(cuLaunchKernel(kernelMains[context.Index()], gridX, gridY, 1, blockX, blockY, 1, 0, streams[context.Index()], args, NULL));
+    context.Run(cuLaunchKernel(kernelMains[context.Index()], gridX, gridY, 1, blockX, blockY, 1, 0,
+                               streams[context.Index()], args, NULL));
     if (memory)
     {
         gpuBuffers[context.Index()].CopyTo(memory, streams[context.Index()], context);

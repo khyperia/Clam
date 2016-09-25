@@ -121,7 +121,7 @@ bool Connection::Sync(Kernel *kernel)
             }
             catch (const std::runtime_error &e)
             {
-                std::cout << "Sending state failed:\n" << e.what() << "\n";
+                std::cout << "Sending state failed:" << std::endl << e.what() << std::endl;
                 return true;
             }
         }
@@ -136,7 +136,7 @@ bool Connection::Sync(Kernel *kernel)
             }
             catch (const std::runtime_error &e)
             {
-                std::cout << "Receiving state failed:\n" << e.what() << "\n";
+                std::cout << "Receiving state failed:" << std::endl << e.what() << std::endl;
                 return true;
             }
         }

@@ -12,7 +12,7 @@ CUDA_TOOLKIT_ROOT_DIR=/share/apps/cuda
 # Prints a very readable bold message that stands out
 function printMessage()
 {
-    echo "$(tput sgr 0)$(tput bold)== ${BASH_SOURCE} ===> $(tput setaf 1)$@$(tput sgr 0)"
+    echo "== ${BASH_SOURCE} ===> $@"
 }
 
 cd "${IVS_TEMP_DIR}"
@@ -34,10 +34,10 @@ printMessage "Connecting to clients..."
 for SLAVE in "${SLAVE_IPS[@]}"
 do
   printMessage "Connecting to ${SLAVE}"
-  ssh -R ${HOST_PORT}:localhost:${HOST_PORT} -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 0" &
+  ssh -R ${HOST_PORT}:localhost:${HOST_PORT} ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 0" &
   # only first ssh needs reverse portforward
-  ssh -t -t ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 1" &
-  sleep 1
+  ssh ${SLAVE} "cd ${IVS_TEMP_DIR}/build; ./ivs_tile.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"localhost:${HOST_PORT}\" 1" &
+  sleep 0.1
 done
 
 printMessage "Waiting for slaves"

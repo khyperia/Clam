@@ -27,7 +27,7 @@ class CuMem
         {
             if (cuMemFree(ptr) != CUDA_SUCCESS)
             {
-                std::cout << "Could not free CuMem\n";
+                std::cout << "Could not free CuMem" << std::endl;
             }
             ptr = 0;
         }

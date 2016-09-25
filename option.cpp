@@ -80,7 +80,7 @@ static void ParseArg(const std::string &option, const std::string &value)
     }
     else
     {
-        std::cout << "Unknown option " << option << "\n";
+        std::cout << "Unknown option " << option << std::endl;
     }
 }
 
@@ -93,7 +93,7 @@ void ParseCmdline(int argc, char **argv)
         i++;
         if (i >= argc)
         {
-            std::cout << "Option " << option << " needs a value\n";
+            std::cout << "Option " << option << " needs a value" << std::endl;
             continue;
         }
         std::string value(argv[i]);
@@ -145,7 +145,7 @@ int Headless(int *numTimes)
     }
     if (numScanned == 0)
     {
-        std::cout << "Couldn't parse headless count, assuming not headless\n";
+        std::cout << "Couldn't parse headless count, assuming not headless" << std::endl;
         return -1;
     }
     return headlessCount;
@@ -159,7 +159,7 @@ bool RenderOffset(int *shiftx, int *shifty)
     }
     if (sscanf(renderOffset.c_str(), "%dx%d", shiftx, shifty) != 2)
     {
-        std::cout << "Couldn't parse render offset, assuming no offset\n";
+        std::cout << "Couldn't parse render offset, assuming no offset" << std::endl;
         return false;
     }
     return true;

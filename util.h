@@ -78,9 +78,13 @@ public:
         {
             throw std::runtime_error("SetCurrent() called on invalid context");
         }
+        if (currentContext == index)
+        {
+            return;
+        }
         currentContext = index;
         Run(cuCtxSetCurrent(context));
-        //std::cout << "Set current context to " << index << "\n";
+        //std::cout << "Set current context to " << index << std::endl;
     }
 
     bool IsValid() const

@@ -14,7 +14,7 @@ struct CudaInitClass
         }
         else
         {
-            std::cout << "cuInit failed\n";
+            std::cout << "cuInit failed" << std::endl;
         }
     }
 } cudaInitInstance;
@@ -39,7 +39,7 @@ static SDL_Rect GetWindowPos()
     std::string winpos = WindowPos();
     if (winpos.empty())
     {
-        std::cout << "Window position wasn't specified. Defaulting to 500x500+100+100\n";
+        std::cout << "Window position wasn't specified. Defaulting to 500x500+100+100" << std::endl;
         winpos = "500x500+100+100";
     }
     SDL_Rect windowPos;
@@ -270,7 +270,7 @@ struct HeadlessRenderType : public RenderType
 
     void LoadAnimationState(Kernel *kernel) const
     {
-        std::cout << "Loading animation keyframes\n";
+        std::cout << "Loading animation keyframes" << std::endl;
         kernel->LoadAnimation();
     }
 
@@ -283,13 +283,13 @@ struct HeadlessRenderType : public RenderType
             StateSync *sync = NewFileStateSync(filename.c_str(), true);
             kernel->RecvState(sync, true, context);
             delete sync;
-            std::cout << "Loaded intermediate state from " << filename << "\n";
+            std::cout << "Loaded intermediate state from " << filename << std::endl;
         }
         catch (const std::exception &ex)
         {
             // If that fails, try *.clam3 (the saved state parameters)
             std::cout << "Didn't load intermediate state from " << filename << ": " << ex.what()
-            << "\nTrying initial headless state instead\n";
+            << std::endl << "Trying initial headless state instead" << std::endl;
             StateSync *sync = NewFileStateSync((kernel->Name() + ".clam3").c_str(), true);
             kernel->RecvState(sync, false, context);
             delete sync;
@@ -302,7 +302,7 @@ struct HeadlessRenderType : public RenderType
         StateSync *sync = NewFileStateSync(filename.c_str(), false);
         kernel->SendState(sync, true, context);
         delete sync;
-        std::cout << "Saved intermediate progress to " << filename << "\n";
+        std::cout << "Saved intermediate progress to " << filename << std::endl;
     }
 
     virtual void Boot(Kernel *kernel, const CudaContext context)
@@ -312,7 +312,6 @@ struct HeadlessRenderType : public RenderType
             throw std::runtime_error("Headless contexts not added in order (this is an implicit dependency in code)");
         }
         currentFrames.push_back(0);
-        //std::cout << "Flush/loading initial state\n";
         kernel->Resize((size_t)mBlitData[context.Index()].width, (size_t)mBlitData[context.Index()].height, context);
         EnqueueMany(kernel, context);
     }
@@ -356,7 +355,7 @@ struct HeadlessRenderType : public RenderType
             if (numTimes > 1)
             {
                 double time = (double)currentTimeByContext[context.Index()] / numTimes;
-                //time = -std::cos(time * 6.28318530718f) * 0.5f + 0.5f;
+                //time = -std::cos(time * 6.28318530718) * 0.5 + 0.5;
                 kernel->SetTime(time, false, context); // boolean is `wrap`
             }
             kernel->SetFramed(true, context);
@@ -379,7 +378,7 @@ struct HeadlessRenderType : public RenderType
         std::string filename = RenderstateFilename(kernel, currentTime, context);
         filename += ".bmp";
         SDL_SaveBMP(surface, filename.c_str());
-        std::cout << "Saved image '" << filename << "'\n";
+        std::cout << "Saved image '" << filename << "'" << std::endl;
         SDL_FreeSurface(surface);
     }
 
@@ -392,7 +391,7 @@ struct HeadlessRenderType : public RenderType
         if (numTimes <= 1)
         {
             std::cout << numFrames - currentFrames[context.Index()] << " frames left in this image, " <<
-            numTimes - currentTimeByContext[context.Index()] << " images left\n";
+            numTimes - currentTimeByContext[context.Index()] << " images left" << std::endl;
         }
         if (currentFrames[context.Index()] >= numFrames)
         {
@@ -454,7 +453,7 @@ static CUcontext InitCuda(int deviceNum)
         {
             throw std::runtime_error("Could not get CUDA device name for device number " + tostring(deviceNum));
         }
-        std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << "\n";
+        std::cout << "Using device (" << deviceNum << " of " << maxDev << "): " << name << std::endl;
     }
     CUcontext result;
     if (cuCtxCreate(&result, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice) != CUDA_SUCCESS)

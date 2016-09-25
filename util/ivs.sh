@@ -6,7 +6,7 @@ set -o nounset
 # Prints a very readable bold message that stands out
 function printMessage()
 {
-    echo "$(tput sgr 0)$(tput bold)== ${BASH_SOURCE} ===> $(tput setaf 1)$@$(tput sgr 0)"
+    echo "== ${BASH_SOURCE} ===> $@"
 }
 
 SOURCE_LOC=".."
@@ -40,7 +40,7 @@ sleep 1
 
 printMessage "SSHing to ${IVS_HOSTNAME}"
 
-ssh -R ${HOST_PORT}:localhost:${HOST_PORT} -t -t ${IVS_USER}@${IVS_HOSTNAME} "cd ${IVS_TEMP_DIR}/util; ./ivs_middle.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"${HOST_PORT}\""
+ssh -R ${HOST_PORT}:localhost:${HOST_PORT} ${IVS_USER}@${IVS_HOSTNAME} "cd ${IVS_TEMP_DIR}/util; ./ivs_middle.sh \"${CLAM3_KERNEL}\" \"${IVS_TEMP_DIR}\" \"${HOST_PORT}\""
 
 printMessage "SSH exited, waiting for host to exit"
 

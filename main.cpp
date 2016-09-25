@@ -20,11 +20,11 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &ex)
     {
-        std::cout << "Fatal exception:\n" << ex.what() << "\n";
+        std::cout << "Fatal exception:" << std::endl << ex.what() << std::endl;
     }
     catch (...)
     {
-        std::cout << "Unknown fatal exception\n";
+        std::cout << "Unknown fatal exception" << std::endl;
     }
 #endif
     return 0;

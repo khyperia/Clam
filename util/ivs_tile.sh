@@ -20,7 +20,7 @@ MAX_SCREENCOORDS_Y=4
 # Prints a very readable bold message that stands out
 function printMessage()
 {
-    echo "$(tput sgr 0)$(tput bold)== ${BASH_SOURCE} ===> $(tput setaf 1)$@$(tput sgr 0)"
+    echo "== ${BASH_SOURCE} ===> $@"
 }
 
 cd "${IVS_TEMP_DIR}/build"
@@ -125,5 +125,5 @@ renderposY=$(bc <<< "$SCREENHEIGHT * (${WIN_Y} - $MAX_SCREENCOORDS_Y / 2)")
 export CLAM3_RENDEROFFSET=${renderposX}x${renderposY}
 export CLAM3_WINDOWPOS=${winwidth}x${SCREENHEIGHT}+${winposX}+0
 export DISPLAY=:0
-printMessage "Booting ${SLAVE} render process: run ${CLAM3_KERNEL} on GPU${CLAM3_DEVICE} at ${SCREENWIDTH}x${SCREENHEIGHT}+${renderposX}+${renderposY} connect ${CLAM3_CONNECT}"
-./clam3
+printMessage "Exec on ${SLAVE} GPU${CLAM3_DEVICE}: window ${CLAM3_WINDOWPOS} offset ${CLAM3_RENDEROFFSET} connect ${CLAM3_CONNECT}"
+exec ./clam3

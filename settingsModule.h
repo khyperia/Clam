@@ -57,7 +57,7 @@ public:
             return;
         }
         int length = sync->Recv<int>();
-        std::cout << "Length " << length << "\n";
+        std::cout << "Length " << length << std::endl;
         for (int i = 0; i < length; i++)
         {
             for (size_t mod = 0; mod < moduleSetup.size(); mod++)
@@ -65,7 +65,7 @@ public:
                 moduleSetup[mod]->RecvState(sync);
             }
             AddKeyframe(moduleSetup);
-            std::cout << "Added keyframe\n";
+            std::cout << "Added keyframe" << std::endl;
         }
     }
 
@@ -292,13 +292,13 @@ struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
         {
             if (vrpn)
             {
-                std::cout << "Disabling VRPN\n";
+                std::cout << "Disabling VRPN" << std::endl;
                 delete vrpn;
                 vrpn = NULL;
             }
             else
             {
-                std::cout << "Enabling VRPN\n";
+                std::cout << "Enabling VRPN" << std::endl;
                 vrpn = new VrpnHelp();
             }
         }
@@ -437,13 +437,13 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
         {
             if (vrpn)
             {
-                std::cout << "Disabling VRPN\n";
+                std::cout << "Disabling VRPN" << std::endl;
                 delete vrpn;
                 vrpn = NULL;
             }
             else
             {
-                std::cout << "Enabling VRPN\n";
+                std::cout << "Enabling VRPN" << std::endl;
                 vrpn = new VrpnHelp();
             }
         }
@@ -593,8 +593,6 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         {
         }
 
-        //virtual const char *Name() const = 0;
-
         virtual void Modify(double time, bool oneTime) = 0;
 
         virtual void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int myIndex,
@@ -616,11 +614,6 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
                 incType(incType)
         {
         }
-
-        /*virtual const char *Name() const
-        {
-            return name;
-        }*/
 
         virtual void Modify(double time, bool oneTime)
         {
@@ -768,6 +761,11 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         else if (keycode == SDLK_RIGHT)
         {
             nameValues[menuPos]->Modify(1, true);
+            return true;
+        }
+        else if (keycode == SDLK_g)
+        {
+            editValue.DofAmount = editValue.DofAmount > 0 ? 0 : 0.005f;
             return true;
         }
         else
