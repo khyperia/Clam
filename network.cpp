@@ -75,8 +75,9 @@ void Connection::Send(const void *data, size_t size) const
     int sentSize = SDLNet_TCP_Send(socket, data, (int)size);
     if (sentSize != (int)size)
     {
-        throw std::runtime_error("Send on socket failed (attempted "
-                                 + tostring(size) + ", actual " + tostring(sentSize) + ")");
+        throw std::runtime_error(
+            "Send on socket failed (attempted " + tostring(size) + ", actual "
+                + tostring(sentSize) + ")");
     }
 }
 
@@ -88,15 +89,17 @@ void Connection::Recv(void *data, size_t size) const
         int recvSize = SDLNet_TCP_Recv(socket, data, (int)(size - sizeTotal));
         if (recvSize <= 0)
         {
-            std::string reason = recvSize ? "unknown error" : "closed by remote";
-            throw std::runtime_error("Recv on socket failed: " + reason +
-                                     " (attempted " + tostring(size) +
-                                     ", actual " + tostring(sizeTotal) + ")");
+            std::string
+                reason = recvSize ? "unknown error" : "closed by remote";
+            throw std::runtime_error(
+                "Recv on socket failed: " + reason + " (attempted "
+                    + tostring(size) + ", actual " + tostring(sizeTotal) + ")");
         }
         sizeTotal += (size_t)recvSize;
     }
 }
 
+/*
 // Returns true on failure
 bool Connection::Sync(Kernel *kernel)
 {
@@ -121,7 +124,8 @@ bool Connection::Sync(Kernel *kernel)
             }
             catch (const std::runtime_error &e)
             {
-                std::cout << "Sending state failed:" << std::endl << e.what() << std::endl;
+                std::cout << "Sending state failed:" << std::endl << e.what()
+                          << std::endl;
                 return true;
             }
         }
@@ -136,20 +140,22 @@ bool Connection::Sync(Kernel *kernel)
             }
             catch (const std::runtime_error &e)
             {
-                std::cout << "Receiving state failed:" << std::endl << e.what() << std::endl;
+                std::cout << "Receiving state failed:" << std::endl << e.what()
+                          << std::endl;
                 return true;
             }
         }
     }
     return false;
 }
+*/
 
 bool Connection::IsSyncing() const
 {
     return socket != NULL;
 }
 
-class FileStateSync : public StateSync
+class FileStateSync: public StateSync
 {
     FILE *file;
     bool reading;
@@ -182,7 +188,9 @@ class FileStateSync : public StateSync
             fclose(file);
             if (current != end)
             {
-                throw std::runtime_error("Not at end of file when closing FileStateSync");
+                std::cout
+                    << "Error: Not at end of file when closing FileStateSync"
+                    << std::endl;
             }
         }
         else
@@ -193,11 +201,12 @@ class FileStateSync : public StateSync
 
 public:
     FileStateSync(const char *filename, bool reading)
-            : file(fopen(filename, reading ? "rb" : "wb")), reading(reading)
+        : file(fopen(filename, reading ? "rb" : "wb")), reading(reading)
     {
         if (!file)
         {
-            throw std::runtime_error("Could not open file " + std::string(filename));
+            throw std::runtime_error(
+                "Could not open file " + std::string(filename));
         }
     }
 };

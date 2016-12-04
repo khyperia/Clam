@@ -28,14 +28,17 @@ public:
 
     virtual void Update() = 0;
 
-    virtual void Animate(SettingModuleBase *zero, SettingModuleBase *one,
-                         SettingModuleBase *two, SettingModuleBase *three, double time) = 0;
+    virtual void Animate(SettingModuleBase *zero,
+                         SettingModuleBase *one,
+                         SettingModuleBase *two,
+                         SettingModuleBase *three,
+                         double time) = 0;
 
     virtual SDL_Surface *Configure(TTF_Font *font) const = 0;
 };
 
 template<typename T>
-struct SettingModule : public SettingModuleBase
+struct SettingModule: public SettingModuleBase
 {
     virtual ~SettingModule()
     {
@@ -49,8 +52,9 @@ class SettingAnimation
     std::vector<std::vector<SettingModuleBase *> > keyframes;
 
 public:
-    SettingAnimation(StateSync *sync, const std::vector<SettingModuleBase *> &moduleSetup)
-            : keyframes()
+    SettingAnimation(StateSync *sync,
+                     const std::vector<SettingModuleBase *> &moduleSetup)
+        : keyframes()
     {
         if (!sync)
         {
@@ -108,7 +112,9 @@ public:
         keyframes.push_back(cloned);
     }
 
-    void Animate(std::vector<SettingModuleBase *> &currentState, double time, bool wrap)
+    void Animate(std::vector<SettingModuleBase *> &currentState,
+                 double time,
+                 bool wrap)
     {
         if (keyframes.size() < 2)
         {
@@ -118,11 +124,16 @@ public:
         size_t index = (size_t)time;
         time -= index;
         size_t sizem1 = keyframes.size() - 1;
-        const std::vector<SettingModuleBase *> &zero = keyframes[index == 0 ? (wrap ? sizem1 : 0) : index - 1];
+        const std::vector<SettingModuleBase *>
+            &zero = keyframes[index == 0 ? (wrap ? sizem1 : 0) : index - 1];
         const std::vector<SettingModuleBase *> &one = keyframes[index];
-        const std::vector<SettingModuleBase *> &two = keyframes[wrap ? (index + 1) % keyframes.size() : index + 1];
-        const std::vector<SettingModuleBase *> &three = keyframes
-        [wrap ? (index + 2) % keyframes.size() : (index + 1 == sizem1 ? sizem1 : index + 2)];
+        const std::vector<SettingModuleBase *>
+            &two = keyframes[wrap ? (index + 1) % keyframes.size() : index + 1];
+        const std::vector<SettingModuleBase *> &three =
+            keyframes[wrap ? (index + 2) % keyframes.size() : (index + 1
+                                                                   == sizem1
+                                                               ? sizem1 : index
+                                                                   + 2)];
         for (size_t i = 0; i < currentState.size(); i++)
         {
             currentState[i]->Animate(zero[i], one[i], two[i], three[i], time);
@@ -130,13 +141,14 @@ public:
     }
 };
 
-struct ModuleJuliaBrotSettings : public SettingModule<JuliaBrotSettings>
+struct ModuleJuliaBrotSettings: public SettingModule<JuliaBrotSettings>
 {
     Vector2<double> juliaPos;
     int juliaEnabled;
     double moveSpeed;
 
-    ModuleJuliaBrotSettings() : juliaPos(0.5, 0.5), juliaEnabled(0), moveSpeed(0.5)
+    ModuleJuliaBrotSettings()
+        : juliaPos(0.5, 0.5), juliaEnabled(0), moveSpeed(0.5)
     {
     }
 
@@ -224,14 +236,25 @@ struct ModuleJuliaBrotSettings : public SettingModule<JuliaBrotSettings>
         value.juliaEnabled = juliaEnabled;
     }
 
-    virtual void Animate(SettingModuleBase *zeroBase, SettingModuleBase *oneBase,
-                         SettingModuleBase *twoBase, SettingModuleBase *threeBase, double time)
+    virtual void Animate(SettingModuleBase *zeroBase,
+                         SettingModuleBase *oneBase,
+                         SettingModuleBase *twoBase,
+                         SettingModuleBase *threeBase,
+                         double time)
     {
-        ModuleJuliaBrotSettings *zero = dynamic_cast<ModuleJuliaBrotSettings *>(zeroBase);
-        ModuleJuliaBrotSettings *one = dynamic_cast<ModuleJuliaBrotSettings *>(oneBase);
-        ModuleJuliaBrotSettings *two = dynamic_cast<ModuleJuliaBrotSettings *>(twoBase);
-        ModuleJuliaBrotSettings *three = dynamic_cast<ModuleJuliaBrotSettings *>(threeBase);
-        juliaPos = CatmullRom(zero->juliaPos, one->juliaPos, two->juliaPos, three->juliaPos, time);
+        ModuleJuliaBrotSettings
+            *zero = dynamic_cast<ModuleJuliaBrotSettings *>(zeroBase);
+        ModuleJuliaBrotSettings
+            *one = dynamic_cast<ModuleJuliaBrotSettings *>(oneBase);
+        ModuleJuliaBrotSettings
+            *two = dynamic_cast<ModuleJuliaBrotSettings *>(twoBase);
+        ModuleJuliaBrotSettings
+            *three = dynamic_cast<ModuleJuliaBrotSettings *>(threeBase);
+        juliaPos = CatmullRom(zero->juliaPos,
+                              one->juliaPos,
+                              two->juliaPos,
+                              three->juliaPos,
+                              time);
         juliaEnabled = one->juliaEnabled;
     }
 
@@ -241,16 +264,14 @@ struct ModuleJuliaBrotSettings : public SettingModule<JuliaBrotSettings>
     }
 };
 
-struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
+struct Module2dCameraSettings: public SettingModule<Gpu2dCameraSettings>
 {
     Vector2<double> pos;
     double zoom;
     VrpnHelp *vrpn;
 
-    Module2dCameraSettings() :
-            pos(0, 0),
-            zoom(1),
-            vrpn(NULL)
+    Module2dCameraSettings()
+        : pos(0, 0), zoom(1), vrpn(NULL)
     {
     }
 
@@ -360,13 +381,20 @@ struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
         value.zoom = (float)zoom;
     }
 
-    virtual void Animate(SettingModuleBase *zeroBase, SettingModuleBase *oneBase,
-                         SettingModuleBase *twoBase, SettingModuleBase *threeBase, double time)
+    virtual void Animate(SettingModuleBase *zeroBase,
+                         SettingModuleBase *oneBase,
+                         SettingModuleBase *twoBase,
+                         SettingModuleBase *threeBase,
+                         double time)
     {
-        Module2dCameraSettings *zero = dynamic_cast<Module2dCameraSettings *>(zeroBase);
-        Module2dCameraSettings *one = dynamic_cast<Module2dCameraSettings *>(oneBase);
-        Module2dCameraSettings *two = dynamic_cast<Module2dCameraSettings *>(twoBase);
-        Module2dCameraSettings *three = dynamic_cast<Module2dCameraSettings *>(threeBase);
+        Module2dCameraSettings
+            *zero = dynamic_cast<Module2dCameraSettings *>(zeroBase);
+        Module2dCameraSettings
+            *one = dynamic_cast<Module2dCameraSettings *>(oneBase);
+        Module2dCameraSettings
+            *two = dynamic_cast<Module2dCameraSettings *>(twoBase);
+        Module2dCameraSettings
+            *three = dynamic_cast<Module2dCameraSettings *>(threeBase);
         pos = CatmullRom(zero->pos, one->pos, two->pos, three->pos, time);
         zoom = CatmullRom(zero->zoom, one->zoom, two->zoom, three->zoom, time);
     }
@@ -377,7 +405,7 @@ struct Module2dCameraSettings : public SettingModule<Gpu2dCameraSettings>
     }
 };
 
-struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
+struct Module3dCameraSettings: public SettingModule<GpuCameraSettings>
 {
     Vector3<double> pos;
     Vector3<double> look;
@@ -386,13 +414,9 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
     double fov;
     VrpnHelp *vrpn;
 
-    Module3dCameraSettings() :
-            pos(10, 0, 0),
-            look(-1, 0, 0),
-            up(0, 1, 0),
-            focalDistance(8),
-            fov(1),
-            vrpn(NULL)
+    Module3dCameraSettings()
+        : pos(10, 0, 0), look(-1, 0, 0), up(0, 1, 0), focalDistance(8), fov(1),
+          vrpn(NULL)
     {
     }
 
@@ -562,19 +586,29 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
         value.focalDistance = (float)focalDistance;
     }
 
-    virtual void Animate(SettingModuleBase *zeroBase, SettingModuleBase *oneBase,
-                         SettingModuleBase *twoBase, SettingModuleBase *threeBase, double time)
+    virtual void Animate(SettingModuleBase *zeroBase,
+                         SettingModuleBase *oneBase,
+                         SettingModuleBase *twoBase,
+                         SettingModuleBase *threeBase,
+                         double time)
     {
-        Module3dCameraSettings *zero = dynamic_cast<Module3dCameraSettings *>(zeroBase);
-        Module3dCameraSettings *one = dynamic_cast<Module3dCameraSettings *>(oneBase);
-        Module3dCameraSettings *two = dynamic_cast<Module3dCameraSettings *>(twoBase);
-        Module3dCameraSettings *three = dynamic_cast<Module3dCameraSettings *>(threeBase);
+        Module3dCameraSettings
+            *zero = dynamic_cast<Module3dCameraSettings *>(zeroBase);
+        Module3dCameraSettings
+            *one = dynamic_cast<Module3dCameraSettings *>(oneBase);
+        Module3dCameraSettings
+            *two = dynamic_cast<Module3dCameraSettings *>(twoBase);
+        Module3dCameraSettings
+            *three = dynamic_cast<Module3dCameraSettings *>(threeBase);
         pos = CatmullRom(zero->pos, one->pos, two->pos, three->pos, time);
         look = CatmullRom(zero->look, one->look, two->look, three->look, time);
         up = CatmullRom(zero->up, one->up, two->up, three->up, time);
         fov = CatmullRom(zero->fov, one->fov, two->fov, three->fov, time);
-        focalDistance = CatmullRom(zero->focalDistance, one->focalDistance,
-                                   two->focalDistance, three->focalDistance, time);
+        focalDistance = CatmullRom(zero->focalDistance,
+                                   one->focalDistance,
+                                   two->focalDistance,
+                                   three->focalDistance,
+                                   time);
         look = look.normalized();
         up = cross(cross(look, up), look).normalized();
     }
@@ -585,7 +619,7 @@ struct Module3dCameraSettings : public SettingModule<GpuCameraSettings>
     }
 };
 
-struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
+struct ModuleMandelboxSettings: public SettingModule<MandelboxCfg>
 {
     struct NameValue
     {
@@ -595,23 +629,29 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
 
         virtual void Modify(double time, bool oneTime) = 0;
 
-        virtual void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int myIndex,
+        virtual void MenuItem(TTF_Font *font,
+                              SDL_Surface *masterSurf,
+                              int &maxWidth,
+                              int &height,
+                              int myIndex,
                               int menuPos) const = 0;
 
-        virtual void Animate(NameValue *one, NameValue *two, NameValue *three, NameValue *four, double time) = 0;
+        virtual void Animate(NameValue *one,
+                             NameValue *two,
+                             NameValue *three,
+                             NameValue *four,
+                             double time) = 0;
     };
 
     template<typename T>
-    struct TypedNameValue : public NameValue
+    struct TypedNameValue: public NameValue
     {
         const char *name;
         T &value;
         T incType;
 
-        TypedNameValue(const char *name, T &value, T incType) :
-                name(name),
-                value(value),
-                incType(incType)
+        TypedNameValue(const char *name, T &value, T incType)
+            : name(name), value(value), incType(incType)
         {
         }
 
@@ -640,15 +680,21 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
             }
         }
 
-        virtual void MenuItem(TTF_Font *font, SDL_Surface *masterSurf, int &maxWidth, int &height, int myIndex,
+        virtual void MenuItem(TTF_Font *font,
+                              SDL_Surface *masterSurf,
+                              int &maxWidth,
+                              int &height,
+                              int myIndex,
                               int menuPos) const
         {
             std::ostringstream result;
-            result << (menuPos == myIndex ? "* " : "  ") << name << " : " << value << "\n";
+            result << (menuPos == myIndex ? "* " : "  ") << name << " : "
+                   << value << "\n";
             if (masterSurf)
             {
                 SDL_Color color = {255, 0, 0, 0};
-                SDL_Surface *surf = TTF_RenderText_Blended(font, result.str().c_str(), color);
+                SDL_Surface *surf =
+                    TTF_RenderText_Blended(font, result.str().c_str(), color);
                 SDL_Rect rect;
                 rect.x = 0;
                 rect.y = height;
@@ -666,14 +712,23 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
             height += thisHeight;
         }
 
-        virtual void Animate(NameValue *zeroBase, NameValue *oneBase, NameValue *twoBase, NameValue *threeBase,
+        virtual void Animate(NameValue *zeroBase,
+                             NameValue *oneBase,
+                             NameValue *twoBase,
+                             NameValue *threeBase,
                              double time)
         {
-            TypedNameValue<T> *zero = dynamic_cast<TypedNameValue<T> *>(zeroBase);
+            TypedNameValue<T>
+                *zero = dynamic_cast<TypedNameValue<T> *>(zeroBase);
             TypedNameValue<T> *one = dynamic_cast<TypedNameValue<T> *>(oneBase);
             TypedNameValue<T> *two = dynamic_cast<TypedNameValue<T> *>(twoBase);
-            TypedNameValue<T> *three = dynamic_cast<TypedNameValue<T> *>(threeBase);
-            value = CatmullRom(zero->value, one->value, two->value, three->value, (T)time);
+            TypedNameValue<T>
+                *three = dynamic_cast<TypedNameValue<T> *>(threeBase);
+            value = CatmullRom(zero->value,
+                               one->value,
+                               two->value,
+                               three->value,
+                               (T)time);
         }
     };
 
@@ -820,17 +875,26 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         value = editValue;
     }
 
-    virtual void Animate(SettingModuleBase *zeroBase, SettingModuleBase *oneBase,
-                         SettingModuleBase *twoBase, SettingModuleBase *threeBase, double time)
+    virtual void Animate(SettingModuleBase *zeroBase,
+                         SettingModuleBase *oneBase,
+                         SettingModuleBase *twoBase,
+                         SettingModuleBase *threeBase,
+                         double time)
     {
-        ModuleMandelboxSettings *zero = dynamic_cast<ModuleMandelboxSettings *>(zeroBase);
-        ModuleMandelboxSettings *one = dynamic_cast<ModuleMandelboxSettings *>(oneBase);
-        ModuleMandelboxSettings *two = dynamic_cast<ModuleMandelboxSettings *>(twoBase);
-        ModuleMandelboxSettings *three = dynamic_cast<ModuleMandelboxSettings *>(threeBase);
+        ModuleMandelboxSettings
+            *zero = dynamic_cast<ModuleMandelboxSettings *>(zeroBase);
+        ModuleMandelboxSettings
+            *one = dynamic_cast<ModuleMandelboxSettings *>(oneBase);
+        ModuleMandelboxSettings
+            *two = dynamic_cast<ModuleMandelboxSettings *>(twoBase);
+        ModuleMandelboxSettings
+            *three = dynamic_cast<ModuleMandelboxSettings *>(threeBase);
         for (size_t i = 0; i < nameValues.size(); i++)
         {
-            nameValues[i]->Animate(zero->nameValues[i], one->nameValues[i],
-                                   two->nameValues[i], three->nameValues[i],
+            nameValues[i]->Animate(zero->nameValues[i],
+                                   one->nameValues[i],
+                                   two->nameValues[i],
+                                   three->nameValues[i],
                                    time);
         }
     }
@@ -841,14 +905,22 @@ struct ModuleMandelboxSettings : public SettingModule<MandelboxCfg>
         int height = 0;
         for (size_t i = 0; i < nameValues.size(); i++)
         {
-            nameValues[i]->MenuItem(font, NULL, maxWidth, height, (int)i, menuPos);
+            nameValues[i]
+                ->MenuItem(font, NULL, maxWidth, height, (int)i, menuPos);
         }
-        SDL_Surface *master = SDL_CreateRGBSurface(SDL_SWSURFACE, maxWidth, height, 32, 255 << 16, 255 << 8, 255,
+        SDL_Surface *master = SDL_CreateRGBSurface(SDL_SWSURFACE,
+                                                   maxWidth,
+                                                   height,
+                                                   32,
+                                                   255 << 16,
+                                                   255 << 8,
+                                                   255,
                                                    (Uint32)255 << 24);
         height = 0;
         for (size_t i = 0; i < nameValues.size(); i++)
         {
-            nameValues[i]->MenuItem(font, master, maxWidth, height, (int)i, menuPos);
+            nameValues[i]
+                ->MenuItem(font, master, maxWidth, height, (int)i, menuPos);
         }
         return master;
     }

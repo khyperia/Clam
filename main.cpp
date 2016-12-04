@@ -13,9 +13,20 @@ int main(int argc, char **argv)
     try
     {
 #endif
-        ParseCmdline(argc, argv);
-        Driver driver;
-        driver.MainLoop();
+    ParseCmdline(argc, argv);
+    CudaContext::Init();
+    CudaContext ctx(0);
+    RealtimeRender driver(std::move(ctx),
+                          KernelConfiguration("mandelbrot"),
+                          600,
+                          400,
+                          "/usr/share/fonts/TTF/DejaVuSansMono.ttf");
+    driver.StartLoop(1);
+    while (true)
+    {
+        if (!driver.Tick())
+            break;
+    }
 #if CATCH_EXCEPTIONS
     }
     catch (const std::exception &ex)

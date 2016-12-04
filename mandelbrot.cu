@@ -13,14 +13,18 @@
 #define SubtractBrightness 0.6f
 
 __constant__ Gpu2dCameraSettings CameraArr[1];
+
 #define Camera (CameraArr[0])
 
 __constant__ JuliaBrotSettings JuliaArr[1];
+
 #define Julia (JuliaArr[0])
 
 static __device__ float3 Mandelbrot(float2 z)
 {
-    float2 c = Julia.juliaEnabled ? make_float2(Julia.juliaX, Julia.juliaY) : z;
+    //float2 c = Julia.juliaEnabled ? make_float2(Julia.juliaX, Julia.juliaY) : z;
+    float2 c = z;
+
     int i = 0;
     while (i < MaxIters && z.x * z.x + z.y * z.y < Bailout)
     {
@@ -59,11 +63,16 @@ static __device__ unsigned int PackPixel(float3 pixel)
         pixel.z = 0;
     if (pixel.z > 255)
         pixel.z = 255;
-    return (255 << 24) | ((int)pixel.x << 16) | ((int)pixel.y << 8) | ((int)pixel.z);
+    return (255 << 24) | ((int)pixel.x << 16) | ((int)pixel.y << 8)
+        | ((int)pixel.z);
 }
 
-extern "C" __global__ void kern(unsigned int* __restrict__ screenPixels, int screenX, int screenY,
-        int width, int height, int frame)
+extern "C" __global__ void kern(unsigned int *__restrict__ screenPixels,
+                                int screenX,
+                                int screenY,
+                                int width,
+                                int height,
+                                int frame)
 {
     int x = blockDim.x * blockIdx.x + threadIdx.x;
     int y = blockDim.y * blockIdx.y + threadIdx.y;
@@ -71,11 +80,16 @@ extern "C" __global__ void kern(unsigned int* __restrict__ screenPixels, int scr
         return;
     float fx = (float)(x + screenX);
     float fy = (float)(y + screenY);
-    float mulBy = Camera.zoom * 2 / (width + height);
+
+    //float mulBy = Camera.zoom * 2 / (width + height);
+    float mulBy = 1.0 * 2 / (width + height);
+
     fx *= mulBy;
     fy *= mulBy;
-    fx += Camera.posX;
-    fy += Camera.posY;
+
+    // fx += Camera.posX;
+    // fy += Camera.posY;
+
     float3 color = Mandelbrot(make_float2(fx, fy));
     screenPixels[y * width + x] = PackPixel(color);
 }

@@ -7,7 +7,8 @@
 #include "option.h"
 
 // http://answers.unity3d.com/questions/372371
-static Vector3<double> mul_quat_vec(const double quat[4], const Vector3<double> &vec)
+static Vector3<double>
+mul_quat_vec(const double quat[4], const Vector3<double> &vec)
 {
     const double num = quat[0] * 2;
     const double num2 = quat[1] * 2;
@@ -22,9 +23,12 @@ static Vector3<double> mul_quat_vec(const double quat[4], const Vector3<double> 
     const double num11 = quat[3] * num2;
     const double num12 = quat[3] * num3;
     Vector3<double> result;
-    result.x = (1 - (num5 + num6)) * vec.x + (num7 - num12) * vec.y + (num8 + num11) * vec.z;
-    result.y = (num7 + num12) * vec.x + (1 - (num4 + num6)) * vec.y + (num9 - num10) * vec.z;
-    result.z = (num8 - num11) * vec.x + (num9 + num10) * vec.y + (1 - (num4 + num5)) * vec.z;
+    result.x = (1 - (num5 + num6)) * vec.x + (num7 - num12) * vec.y
+        + (num8 + num11) * vec.z;
+    result.y = (num7 + num12) * vec.x + (1 - (num4 + num6)) * vec.y
+        + (num9 - num10) * vec.z;
+    result.z = (num8 - num11) * vec.x + (num9 + num10) * vec.y
+        + (1 - (num4 + num5)) * vec.z;
     return result;
 }
 
@@ -41,7 +45,8 @@ void VRPN_CALLBACK HandleTracker(void *_this_untyped, const vrpn_TRACKERCB info)
     _this->up.y = -_this->up.y;
 }
 
-VrpnHelp::VrpnHelp() : con(NULL), pos(0, 0, 0), look(1, 0, 0), up(0, 1, 0)
+VrpnHelp::VrpnHelp()
+    : con(NULL), pos(0, 0, 0), look(1, 0, 0), up(0, 1, 0)
 {
 }
 

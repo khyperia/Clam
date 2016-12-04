@@ -5,18 +5,13 @@
 #include <iostream>
 
 template<typename T>
-class CuMem
+class CuMem: public NoClone
 {
     CUdeviceptr ptr;
     size_t count;
     bool owned;
 
-    CuMem &operator=(const CuMem &)
-    {
-        return *this;
-    }
-
-    void Alloc(const CudaContext context)
+    void Alloc(const CudaContext &context)
     {
         context.Run(cuMemAlloc(&ptr, bytesize()));
     }
@@ -34,26 +29,24 @@ class CuMem
     }
 
 public:
-    // oh god I hope this doesn't get used, it's only public becase std::vector needs it to fill it
-    CuMem(const CuMem &other)
-    {
-        ptr = other.ptr;
-        count = other.count;
-        owned = other.owned;
-    }
-
-    CuMem() : ptr(0), count(0), owned(false)
+    CuMem()
+        : ptr(0), count(0), owned(false)
     {
     }
 
-    CuMem(const CudaContext context, size_t count) : count(count), owned(true)
+    CuMem(const CudaContext &context, size_t count)
+        : count(count), owned(true)
     {
         Alloc(context);
     }
 
-    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), count(count), owned(false)
+    CuMem(CUdeviceptr ptr, size_t count)
+        : ptr(ptr), count(count), owned(false)
     {
     }
+
+    CuMem(const CuMem &) = delete;
+    CuMem(CuMem &&) = default;
 
     ~CuMem()
     {
@@ -63,7 +56,7 @@ public:
         }
     }
 
-    void Realloc(size_t newCount, const CudaContext context)
+    void Realloc(size_t newCount, const CudaContext &context)
     {
         if (ptr != 0)
         {
@@ -96,7 +89,7 @@ public:
         return elemsize() * sizeof(T);
     }
 
-    void CopyTo(T *cpu, CUstream stream, const CudaContext context) const
+    void CopyTo(T *cpu, CUstream stream, const CudaContext &context) const
     {
         if (!ptr)
         {
@@ -105,7 +98,8 @@ public:
         context.Run(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
     }
 
-    void CopyFrom(const T *cpu, CUstream stream, const CudaContext context) const
+    void
+    CopyFrom(const T *cpu, CUstream stream, const CudaContext &context) const
     {
         if (!ptr)
         {

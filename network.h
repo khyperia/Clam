@@ -14,7 +14,8 @@ class StateSync
 
 public:
     virtual ~StateSync()
-    { };
+    {
+    };
 
     template<typename T>
     void Send(const T &data) const
@@ -55,15 +56,17 @@ public:
     }
 };
 
-class Connection : public StateSync
+class Connection: public StateSync
 {
     TCPsocket socket;
     SDLNet_SocketSet socketSet;
     bool socketIsHost;
     std::vector<Connection *> clients;
 
-    Connection(TCPsocket forward) : socket(forward), socketSet(NULL)
-    { };
+    Connection(TCPsocket forward)
+        : socket(forward), socketSet(NULL)
+    {
+    };
 public:
 
     Connection();
@@ -74,7 +77,7 @@ public:
 
     void Recv(void *data, size_t size) const;
 
-    bool Sync(Kernel *kernel);
+    //bool Sync(Kernel *kernel);
 
     bool IsSyncing() const;
 };

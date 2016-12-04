@@ -1,16 +1,24 @@
 #include "option.h"
 #include "util.h"
-#include <stdio.h>
 
 static std::string masterIp;
+
 static std::string hostBindPort;
+
 static std::string windowPos;
+
 static std::string kernelName;
+
 static std::string headless;
+
 static std::string renderOffset;
+
 static std::string vrpn;
+
 static std::string font;
+
 static std::string cudaDeviceNum;
+
 static std::string saveProgress;
 
 static void TryParseEnv(std::string &ref, const char *varname)
@@ -138,14 +146,16 @@ int Headless(int *numTimes)
         return -1;
     }
     int headlessCount = 0;
-    int numScanned = sscanf(headless.c_str(), "%d,%d", &headlessCount, numTimes);
+    int numScanned =
+        sscanf(headless.c_str(), "%d,%d", &headlessCount, numTimes);
     if (numScanned < 2)
     {
         *numTimes = 1;
     }
     if (numScanned == 0)
     {
-        std::cout << "Couldn't parse headless count, assuming not headless" << std::endl;
+        std::cout << "Couldn't parse headless count, assuming not headless"
+                  << std::endl;
         return -1;
     }
     return headlessCount;
@@ -159,7 +169,8 @@ bool RenderOffset(int *shiftx, int *shifty)
     }
     if (sscanf(renderOffset.c_str(), "%dx%d", shiftx, shifty) != 2)
     {
-        std::cout << "Couldn't parse render offset, assuming no offset" << std::endl;
+        std::cout << "Couldn't parse render offset, assuming no offset"
+                  << std::endl;
         return false;
     }
     return true;
@@ -203,5 +214,6 @@ std::vector<int> CudaDeviceNums()
 
 bool DoSaveProgress()
 {
-    return saveProgress.empty() || saveProgress == "true" || saveProgress == "1";
+    return saveProgress.empty() || saveProgress == "true"
+        || saveProgress == "1";
 }

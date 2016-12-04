@@ -1,8 +1,7 @@
 #include "kernel.h"
-#include "settingsModule.h"
-#include "driver.h"
 #include <fstream>
 
+/*
 class KernelModuleBase
 {
     const CudaContext myContext;
@@ -10,7 +9,8 @@ class KernelModuleBase
 protected:
     virtual void Resize(int w, int h, const CudaContext context) = 0;
 
-    KernelModuleBase(const CudaContext context) : myContext(context)
+    KernelModuleBase(const CudaContext context)
+        : myContext(context)
     {
     }
 
@@ -20,15 +20,16 @@ protected:
         {
             if (myContext.Index() != context.Index())
             {
-                throw std::runtime_error(
-                        "Invalid context on KernelModule: " + tostring(context.Index()) +
-                        " while this module's context is " +
-                        tostring(myContext.Index()));
+                throw std::runtime_error("Invalid context on KernelModule: "
+                                             + tostring(context.Index())
+                                             + " while this module's context is "
+                                             + tostring(myContext.Index()));
             }
         }
         else if (myContext.IsValid() != context.IsValid())
         {
-            throw std::runtime_error("Invalid context on KernelModule: one was valid, the other wasn't");
+            throw std::runtime_error(
+                "Invalid context on KernelModule: one was valid, the other wasn't");
         }
     }
 
@@ -37,23 +38,35 @@ public:
     {
     }
 
-    virtual bool Update(int w, int h, bool resized, CUstream stream, const CudaContext context) = 0;
+    virtual bool Update(int w,
+                        int h,
+                        bool resized,
+                        CUstream stream,
+                        const CudaContext context) = 0;
 
     virtual bool OneTimeKeypress(SDL_Keycode keycode) = 0;
 
     virtual bool RepeatKeypress(SDL_Keycode keycode, double time) = 0;
 
-    virtual void SendState(const StateSync *output, bool everything, int width, int height, CUstream stream,
+    virtual void SendState(const StateSync *output,
+                           bool everything,
+                           int width,
+                           int height,
+                           CUstream stream,
                            const CudaContext context) const = 0;
 
-    virtual bool RecvState(const StateSync *input, bool everything, int width, int height, CUstream stream,
+    virtual bool RecvState(const StateSync *input,
+                           bool everything,
+                           int width,
+                           int height,
+                           CUstream stream,
                            const CudaContext context) = 0;
 
     virtual SDL_Surface *Configure(TTF_Font *font) const = 0;
 };
 
 template<typename T>
-class KernelModule : public KernelModuleBase
+class KernelModule: public KernelModuleBase
 {
 private:
     T oldCpuVar;
@@ -62,17 +75,21 @@ protected:
     CUdeviceptr gpuVar;
     CUmodule module;
 
-    KernelModule(CUmodule module, const char *varname, const CudaContext context) :
-            KernelModuleBase(context), oldCpuVar(), value(), module(module)
+    KernelModule(CUmodule module,
+                 const char *varname,
+                 const CudaContext context)
+        : KernelModuleBase(context), oldCpuVar(), value(), module(module)
     {
         if (module != NULL)
         {
             size_t gpuVarSize;
-            context.Run(cuModuleGetGlobal(&gpuVar, &gpuVarSize, module, varname));
+            context
+                .Run(cuModuleGetGlobal(&gpuVar, &gpuVarSize, module, varname));
             if (sizeof(T) != gpuVarSize)
             {
                 throw std::runtime_error(
-                        std::string(varname) + " size did not match actual size " + tostring(gpuVarSize));
+                    std::string(varname) + " size did not match actual size "
+                        + tostring(gpuVarSize));
             }
         }
     }
@@ -84,7 +101,11 @@ public:
     {
     }
 
-    virtual bool Update(int w, int h, bool changed, CUstream stream, const CudaContext context)
+    virtual bool Update(int w,
+                        int h,
+                        bool changed,
+                        CUstream stream,
+                        const CudaContext context)
     {
         CheckContext(context);
         if (changed)
@@ -102,14 +123,15 @@ public:
 };
 
 template<typename T>
-class KernelSettingsModule : public KernelModule<T>
+class KernelSettingsModule: public KernelModule<T>
 {
     SettingModule<T> *setting;
 
 public:
-    KernelSettingsModule(CUmodule module, SettingModule<T> *setting, const CudaContext context) :
-            KernelModule<T>(module, setting->VarName(), context),
-            setting(setting)
+    KernelSettingsModule(CUmodule module,
+                         SettingModule<T> *setting,
+                         const CudaContext context)
+        : KernelModule<T>(module, setting->VarName(), context), setting(setting)
     {
     }
 
@@ -138,12 +160,22 @@ public:
         return setting->RepeatKeypress(keycode, time);
     }
 
-    virtual void SendState(const StateSync *output, bool, int, int, CUstream, const CudaContext) const
+    virtual void SendState(const StateSync *output,
+                           bool,
+                           int,
+                           int,
+                           CUstream,
+                           const CudaContext) const
     {
         setting->SendState(output);
     }
 
-    virtual bool RecvState(const StateSync *input, bool, int, int, CUstream, const CudaContext)
+    virtual bool RecvState(const StateSync *input,
+                           bool,
+                           int,
+                           int,
+                           CUstream,
+                           const CudaContext)
     {
         return setting->RecvState(input);
     }
@@ -190,7 +222,9 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
         {
             try
             {
-                StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
+                StateSync *sync =
+                    NewFileStateSync((Name() + ".animation.clam3").c_str(),
+                                     true);
                 animation = new SettingAnimation(sync, settings[0]);
                 delete sync;
                 std::cout << "Loaded previous animation" << std::endl;
@@ -202,7 +236,8 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
             }
         }
         animation->AddKeyframe(settings[0]);
-        StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
+        StateSync *sync =
+            NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
         animation->WriteKeyframes(sync);
         delete sync;
         std::cout << "Added keyframe" << std::endl;
@@ -214,7 +249,8 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
             animation = new SettingAnimation(NULL, settings[0]);
         }
         animation->ClearKeyframes();
-        StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
+        StateSync *sync =
+            NewFileStateSync((Name() + ".animation.clam3").c_str(), false);
         animation->WriteKeyframes(sync);
         delete sync;
         std::cout << "Cleared keyframes" << std::endl;
@@ -229,14 +265,17 @@ void Kernel::CommonOneTimeKeypress(SDL_Keycode keycode)
     }
 }
 
-class ModuleBuffer : public KernelModule<CUdeviceptr>
+class ModuleBuffer: public KernelModule<CUdeviceptr>
 {
     int elementSize;
 
 public:
-    ModuleBuffer(CUmodule module, const char *varname, int elementSize, const CudaContext context) :
-            KernelModule<CUdeviceptr>(module, varname, context),
-            elementSize(elementSize)
+    ModuleBuffer(CUmodule module,
+                 const char *varname,
+                 int elementSize,
+                 const CudaContext context)
+        : KernelModule<CUdeviceptr>(module, varname, context),
+          elementSize(elementSize)
     {
     }
 
@@ -244,7 +283,8 @@ public:
     {
         if (value && cuMemFree(value) != CUDA_SUCCESS)
         {
-            std::cout << "Could not free CUDA memory" << std::endl; // TODO: Wrong context?
+            std::cout << "Could not free CUDA memory"
+                      << std::endl; // TODO: Wrong context?
         }
     }
 
@@ -273,7 +313,11 @@ public:
         return false;
     }
 
-    virtual void SendState(const StateSync *output, bool everything, int width, int height, CUstream stream,
+    virtual void SendState(const StateSync *output,
+                           bool everything,
+                           int width,
+                           int height,
+                           CUstream stream,
                            const CudaContext context) const
     {
         if (everything)
@@ -290,7 +334,11 @@ public:
         }
     }
 
-    virtual bool RecvState(const StateSync *input, bool everything, int width, int height, CUstream stream,
+    virtual bool RecvState(const StateSync *input,
+                           bool everything,
+                           int width,
+                           int height,
+                           CUstream stream,
                            const CudaContext context)
     {
         if (everything)
@@ -299,9 +347,10 @@ public:
             size_t existingSize = (size_t)elementSize * width * height;
             if (existingSize != size)
             {
-                std::cout << "Not uploading state buffer due to mismatched sizes: current "
-                << existingSize << "(" << elementSize << " * " << width << " * " << height
-                << "), new " << size << std::endl;
+                std::cout
+                    << "Not uploading state buffer due to mismatched sizes: current "
+                    << existingSize << "(" << elementSize << " * " << width
+                    << " * " << height << "), new " << size << std::endl;
                 char *tmp = new char[size];
                 input->RecvInto(tmp, size);
                 delete[] tmp;
@@ -314,7 +363,8 @@ public:
                 context.Run(cuMemAllocHost((void **)&host, size));
                 input->RecvInto(host, size);
                 CuMem<char>(value, size).CopyFrom(host, stream, context);
-                context.Run(cuStreamSynchronize(stream)); // TODO: RecvState sync
+                context
+                    .Run(cuStreamSynchronize(stream)); // TODO: RecvState sync
                 context.Run(cuMemFreeHost(host));
                 return true;
             }
@@ -347,10 +397,20 @@ static void AddMandelbox(CUmodule cuModule,
     ModuleMandelboxSettings *mbox = new ModuleMandelboxSettings();
     settings.push_back(camera);
     settings.push_back(mbox);
-    modules.push_back(new KernelSettingsModule<GpuCameraSettings>(cuModule, camera, context));
-    modules.push_back(new KernelSettingsModule<MandelboxCfg>(cuModule, mbox, context));
-    modules.push_back(new ModuleBuffer(cuModule, "BufferScratchArr", MandelboxStateSize, context));
-    modules.push_back(new ModuleBuffer(cuModule, "BufferRandArr", sizeof(int) * 2, context));
+    modules.push_back(new KernelSettingsModule<GpuCameraSettings>(cuModule,
+                                                                  camera,
+                                                                  context));
+    modules.push_back(new KernelSettingsModule<MandelboxCfg>(cuModule,
+                                                             mbox,
+                                                             context));
+    modules.push_back(new ModuleBuffer(cuModule,
+                                       "BufferScratchArr",
+                                       MandelboxStateSize,
+                                       context));
+    modules.push_back(new ModuleBuffer(cuModule,
+                                       "BufferRandArr",
+                                       sizeof(int) * 2,
+                                       context));
     settingAdd.push_back(settings);
     moduleAdd.push_back(modules);
 }
@@ -366,22 +426,21 @@ static void AddMandelbrot(CUmodule cuModule,
     ModuleJuliaBrotSettings *julia = new ModuleJuliaBrotSettings();
     settings.push_back(camera);
     settings.push_back(julia);
-    modules.push_back(new KernelSettingsModule<Gpu2dCameraSettings>(cuModule, camera, context));
-    modules.push_back(new KernelSettingsModule<JuliaBrotSettings>(cuModule, julia, context));
+    modules.push_back(new KernelSettingsModule<Gpu2dCameraSettings>(cuModule,
+                                                                    camera,
+                                                                    context));
+    modules.push_back(new KernelSettingsModule<JuliaBrotSettings>(cuModule,
+                                                                  julia,
+                                                                  context));
     settingAdd.push_back(settings);
     moduleAdd.push_back(modules);
 }
 
-Kernel::Kernel(std::string name, const std::vector<CudaContext> contexts) :
-        name(name),
-        contexts(contexts),
-        useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)),
-        frames(),
-        maxLocalSize(16),
-        animation(NULL),
-        gpuBuffers(contexts.size()),
-        oldWidth(),
-        oldHeight()
+Kernel::Kernel(std::string name, const std::vector<CudaContext> contexts)
+    : name(name), contexts(contexts),
+      useRenderOffset(RenderOffset(&renderOffset.x, &renderOffset.y)), frames(),
+      maxLocalSize(16), animation(NULL), gpuBuffers(contexts.size()),
+      oldWidth(), oldHeight()
 {
     if (name.empty())
     {
@@ -399,7 +458,10 @@ Kernel::Kernel(std::string name, const std::vector<CudaContext> contexts) :
         {
             contexts[i].SetCurrent();
             CUmodule cuModule;
-            contexts[i].Run(cuModuleLoadData(&cuModule, std::string((const char *)mandelbox, mandelbox_len).c_str()));
+            contexts[i].Run(cuModuleLoadData(&cuModule,
+                                             std::string((const char *)mandelbox,
+                                                         mandelbox_len)
+                                                 .c_str()));
             cuModules.push_back(cuModule);
 
             AddMandelbox(cuModule, settings, modules, contexts[i]);
@@ -415,7 +477,10 @@ Kernel::Kernel(std::string name, const std::vector<CudaContext> contexts) :
         {
             contexts[i].SetCurrent();
             CUmodule cuModule;
-            contexts[i].Run(cuModuleLoadData(&cuModule, std::string((const char *)mandelbrot, mandelbrot_len).c_str()));
+            contexts[i].Run(cuModuleLoadData(&cuModule,
+                                             std::string((const char *)mandelbrot,
+                                                         mandelbrot_len)
+                                                 .c_str()));
             cuModules.push_back(cuModule);
             AddMandelbrot(cuModule, settings, modules, contexts[i]);
         }
@@ -516,8 +581,7 @@ void Kernel::UserInput(SDL_Event event)
 void Kernel::Integrate(double time)
 {
     for (std::set<SDL_Keycode>::const_iterator iter = pressedKeys.begin();
-         iter != pressedKeys.end();
-         iter++)
+         iter != pressedKeys.end(); iter++)
     {
         for (size_t i = 0; i < modules[0].size(); i++)
         {
@@ -529,13 +593,16 @@ void Kernel::Integrate(double time)
     }
 }
 
-void Kernel::SendState(const StateSync *output, bool everything, const CudaContext context) const
+void Kernel::SendState(const StateSync *output,
+                       bool everything,
+                       const CudaContext context) const
 {
     if (everything)
     {
         if (!context.IsValid())
         {
-            throw std::runtime_error("Cannot send an 'everything' state with no GPU context");
+            throw std::runtime_error(
+                "Cannot send an 'everything' state with no GPU context");
         }
         output->Send(frames[context.Index()]);
     }
@@ -556,11 +623,14 @@ void Kernel::SendState(const StateSync *output, bool everything, const CudaConte
         int oldw = oldWidth.size() == 0 ? -1 : (int)oldWidth[index];
         int oldh = oldHeight.size() == 0 ? -1 : (int)oldHeight[index];
         CUstream stream = streams.size() == 0 ? NULL : streams[index];
-        modules[index][i]->SendState(output, everything, oldw, oldh, stream, context);
+        modules[index][i]
+            ->SendState(output, everything, oldw, oldh, stream, context);
     }
 }
 
-void Kernel::RecvState(const StateSync *input, bool everything, const CudaContext context)
+void Kernel::RecvState(const StateSync *input,
+                       bool everything,
+                       const CudaContext context)
 {
     int loadedFrame = 0;
     if (everything)
@@ -604,7 +674,8 @@ void Kernel::RecvState(const StateSync *input, bool everything, const CudaContex
         int oldw = oldWidth.size() == 0 ? -1 : (int)oldWidth[index];
         int oldh = oldHeight.size() == 0 ? -1 : (int)oldHeight[index];
         CUstream stream = streams.size() == 0 ? NULL : streams[index];
-        if (modules[index][i]->RecvState(input, everything, oldw, oldh, stream, context))
+        if (modules[index][i]
+            ->RecvState(input, everything, oldw, oldh, stream, context))
         {
             if (everything)
             {
@@ -667,13 +738,15 @@ SDL_Surface *Kernel::Configure(TTF_Font *font)
             width = surfs[i]->w;
         }
     }
-    SDL_Surface *wholeSurf = SDL_CreateRGBSurface(
-            0, width, height,
-            surfs[0]->format->BitsPerPixel,
-            surfs[0]->format->Rmask,
-            surfs[0]->format->Gmask,
-            surfs[0]->format->Bmask,
-            surfs[0]->format->Amask);
+    SDL_Surface *wholeSurf = SDL_CreateRGBSurface(0,
+                                                  width,
+                                                  height,
+                                                  surfs[0]->format
+                                                      ->BitsPerPixel,
+                                                  surfs[0]->format->Rmask,
+                                                  surfs[0]->format->Gmask,
+                                                  surfs[0]->format->Bmask,
+                                                  surfs[0]->format->Amask);
     height = 0;
     for (size_t i = 0; i < surfs.size(); i++)
     {
@@ -695,7 +768,8 @@ void Kernel::LoadAnimation()
     {
         delete animation;
     }
-    StateSync *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
+    StateSync
+        *sync = NewFileStateSync((Name() + ".animation.clam3").c_str(), true);
     animation = new SettingAnimation(sync, settings[0]);
     delete sync;
 }
@@ -734,12 +808,14 @@ void Kernel::UpdateNoRender()
 void Kernel::Resize(size_t width, size_t height, const CudaContext context)
 {
     bool resized = false;
-    if (width != oldWidth[context.Index()] || height != oldHeight[context.Index()])
+    if (width != oldWidth[context.Index()]
+        || height != oldHeight[context.Index()])
     {
         if (oldWidth[context.Index()] != 0 || oldHeight[context.Index()] != 0)
         {
-            std::cout << "Resized from " << oldWidth[context.Index()] << "x" << oldHeight[context.Index()] <<
-            " to " << width << "x" << height << std::endl;
+            std::cout << "Resized from " << oldWidth[context.Index()] << "x"
+                      << oldHeight[context.Index()] << " to " << width << "x"
+                      << height << std::endl;
         }
         oldWidth[context.Index()] = width;
         oldHeight[context.Index()] = height;
@@ -748,7 +824,11 @@ void Kernel::Resize(size_t width, size_t height, const CudaContext context)
     }
     for (size_t i = 0; i < modules[context.Index()].size(); i++)
     {
-        if (modules[context.Index()][i]->Update((int)width, (int)height, resized, streams[context.Index()], context))
+        if (modules[context.Index()][i]->Update((int)width,
+                                                (int)height,
+                                                resized,
+                                                streams[context.Index()],
+                                                context))
         {
             ResetFrames(frames);
         }
@@ -756,7 +836,10 @@ void Kernel::Resize(size_t width, size_t height, const CudaContext context)
 }
 
 // NOTE: Async copy into memory param, needs a kernel->Stream() synch to finish.
-void Kernel::RenderInto(int *memory, size_t width, size_t height, const CudaContext context)
+void Kernel::RenderInto(int *memory,
+                        size_t width,
+                        size_t height,
+                        const CudaContext context)
 {
     Resize(width, height, context);
     int renderOffsetX = useRenderOffset ? renderOffset.x : -(int)width / 2;
@@ -769,22 +852,235 @@ void Kernel::RenderInto(int *memory, size_t width, size_t height, const CudaCont
         frames[context.Index()]++;
     }
     void *args[] =
-            {
-                    &gpuBuffers[context.Index()](),
-                    &renderOffsetX,
-                    &renderOffsetY,
-                    &mywidth,
-                    &myheight,
-                    &myFrame
-            };
+        {&gpuBuffers[context.Index()](), &renderOffsetX, &renderOffsetY,
+         &mywidth, &myheight, &myFrame};
     unsigned int blockX = (unsigned int)maxLocalSize;
     unsigned int blockY = (unsigned int)maxLocalSize;
     unsigned int gridX = (unsigned int)(width + blockX - 1) / blockX;
     unsigned int gridY = (unsigned int)(height + blockY - 1) / blockY;
-    context.Run(cuLaunchKernel(kernelMains[context.Index()], gridX, gridY, 1, blockX, blockY, 1, 0,
-                               streams[context.Index()], args, NULL));
+    context.Run(cuLaunchKernel(kernelMains[context.Index()],
+                               gridX,
+                               gridY,
+                               1,
+                               blockX,
+                               blockY,
+                               1,
+                               0,
+                               streams[context.Index()],
+                               args,
+                               NULL));
     if (memory)
     {
-        gpuBuffers[context.Index()].CopyTo(memory, streams[context.Index()], context);
+        gpuBuffers[context.Index()]
+            .CopyTo(memory, streams[context.Index()], context);
     }
+}
+*/
+
+GpuKernelVar::GpuKernelVar(const GpuKernel &kernel, const char *name)
+    : gpuVar([&]() -> CuMem<char>
+             {
+                 CUdeviceptr deviceVar;
+                 size_t deviceSize;
+                 kernel.context.Run(cuModuleGetGlobal(&deviceVar,
+                                                      &deviceSize,
+                                                      kernel.module,
+                                                      name));
+                 return CuMem<char>(deviceVar, deviceSize);
+             }())
+{
+    kernel.context.Run(cuMemAllocHost((void **)&cpuCopy, gpuVar.bytesize()));
+}
+
+GpuKernelVar::~GpuKernelVar()
+{
+    (void)cuMemFreeHost(cpuCopy);
+}
+
+void GpuKernelVar::Sync(const CudaContext &context, CUstream stream)
+{
+    if (changed)
+    {
+        gpuVar.CopyFrom(cpuCopy, stream, context);
+        changed = false;
+    }
+}
+
+void GpuKernelVar::SetData(const char *data)
+{
+    if (memcmp(cpuCopy, data, gpuVar.bytesize()))
+    {
+        memcpy(cpuCopy, data, gpuVar.bytesize());
+        changed = true;
+    }
+}
+
+GpuKernel::GpuKernel(CudaContext context,
+                     std::function<void(int *, size_t, size_t)> render_callback,
+                     const unsigned char *data,
+                     size_t length)
+    : context(std::move(context)), render_callback(render_callback),
+      old_width(0), old_height(0)
+{
+    std::string data_str((const char *)data, length);
+    context.Run(cuModuleLoadData(&module, data_str.c_str()));
+    context.Run(cuModuleGetFunction(&main, module, "kern"));
+    context.Run(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+}
+
+GpuKernel::~GpuKernel()
+{
+    context.Run(cuStreamSynchronize(stream));
+    if (pinned != NULL)
+    {
+        context.Run(cuMemFreeHost(pinned));
+        pinned = NULL;
+    }
+    if (stream != NULL)
+    {
+        context.Run(cuStreamDestroy(stream));
+        stream = NULL;
+    }
+    main = NULL;
+    if (module != NULL)
+    {
+        context.Run(cuModuleUnload(module));
+        module = NULL;
+    }
+}
+
+void GpuKernel::Resize(size_t width, size_t height)
+{
+    if (width == old_width && height == old_height && pinned != NULL)
+    {
+        return;
+    }
+    context.Run(cuStreamSynchronize(stream));
+    old_width = width;
+    old_height = height;
+    if (pinned != NULL)
+    {
+        context.Run(cuMemFreeHost(pinned));
+        pinned = NULL;
+    }
+    size_t bytesize = width * height * sizeof(int);
+    context.Run(cuMemAllocHost((void **)&pinned, bytesize));
+    gpu_mem.~CuMem();
+    new (&gpu_mem) CuMem<int>(context, width * height);
+}
+
+void GpuKernel::SyncVars()
+{
+    for (const auto &variable : variable_cache)
+    {
+        std::get<1>(variable)->Sync(context, stream);
+    }
+}
+
+GpuKernelVar &GpuKernel::Variable(const std::string &name)
+{
+    if (variable_cache.count(name) == 0)
+    {
+        variable_cache.emplace(name, make_unique<GpuKernelVar>(*this, name.c_str()));
+    }
+    return *variable_cache.at(name);
+}
+
+struct streamCallbackData
+{
+    std::function<void(int *, size_t, size_t)> *render_callback;
+    int *cpu_mem;
+    size_t width, height;
+
+    streamCallbackData(std::function<void(int *,
+                                          size_t,
+                                          size_t)> *render_callback,
+                       int *cpu_mem,
+                       size_t width,
+                       size_t height)
+        : render_callback(render_callback), cpu_mem(cpu_mem), width(width),
+          height(height)
+    {
+    }
+};
+
+static void CUDA_CB streamCallback(CUstream, CUresult, void *userData)
+{
+    streamCallbackData *userDataPointer = (streamCallbackData *)userData;
+    std::unique_ptr<streamCallbackData> data(userDataPointer);
+    (*data->render_callback)(data->cpu_mem, data->width, data->height);
+}
+
+void GpuKernel::Run(int offsetX,
+                    int offsetY,
+                    int width,
+                    int height,
+                    int frame,
+                    bool enqueueDownload)
+{
+    Resize((size_t)width, (size_t)height);
+    SyncVars();
+    const unsigned int maxLocalSize = 16;
+    CUdeviceptr &gpu_ptr = gpu_mem();
+    unsigned int blockX = maxLocalSize;
+    unsigned int blockY = maxLocalSize;
+    unsigned int gridX = ((unsigned int)width + blockX - 1) / blockX;
+    unsigned int gridY = ((unsigned int)height + blockY - 1) / blockY;
+    void *args[] = {&gpu_ptr, &offsetX, &offsetY, &width, &height, &frame};
+    context.Run(cuLaunchKernel(main,
+                               gridX,
+                               gridY,
+                               1,
+                               blockX,
+                               blockY,
+                               1,
+                               0,
+                               stream,
+                               args,
+                               NULL));
+    if (enqueueDownload)
+    {
+        gpu_mem.CopyTo(pinned, stream, context);
+        std::unique_ptr<streamCallbackData> data =
+            make_unique<streamCallbackData>(&render_callback,
+                                            pinned,
+                                            width,
+                                            height);
+        context.Run(cuStreamAddCallback(stream,
+                                        streamCallback,
+                                        data.release(),
+                                        0));
+    }
+}
+
+extern "C" {
+extern const unsigned char mandelbox[];
+extern const unsigned int mandelbox_len;
+
+extern const unsigned char mandelbrot[];
+extern const unsigned int mandelbrot_len;
+}
+
+KernelConfiguration::KernelConfiguration(const std::string &kernelName)
+{
+    if (kernelName == "mandelbox")
+    {
+        kernelData = mandelbox;
+        kernelLength = mandelbox_len;
+    }
+    else if (kernelName == "mandelbrot")
+    {
+        kernelData = mandelbrot;
+        kernelLength = mandelbrot_len;
+    }
+}
+
+const unsigned char *KernelConfiguration::KernelData() const
+{
+    return kernelData;
+}
+
+unsigned int KernelConfiguration::KernelLength() const
+{
+    return kernelLength;
 }

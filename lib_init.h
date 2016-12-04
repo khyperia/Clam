@@ -1,0 +1,2 @@
+void IncrementSdlUsage();
+void DecrementSdlUsage();

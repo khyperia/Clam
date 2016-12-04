@@ -11,12 +11,12 @@ struct Vector4
     T w;
 
     Vector4(T _x, T _y, T _z, T _w)
-            : x(_x), y(_y), z(_z), w(_w)
+        : x(_x), y(_y), z(_z), w(_w)
     {
     }
 
     Vector4()
-            : x(0), y(0), z(0), w(0)
+        : x(0), y(0), z(0), w(0)
     {
     }
 
@@ -92,12 +92,12 @@ struct Vector3
     T z;
 
     Vector3(T _x, T _y, T _z)
-            : x(_x), y(_y), z(_z)
+        : x(_x), y(_y), z(_z)
     {
     }
 
     Vector3()
-            : x(0), y(0), z(0)
+        : x(0), y(0), z(0)
     {
     }
 
@@ -168,11 +168,9 @@ bool operator!=(const Vector3<T> &l, Vector3<T> &r)
 template<typename T>
 Vector3<T> cross(const Vector3<T> &l, const Vector3<T> &r)
 {
-    return Vector3<T>(
-            l.y * r.z - l.z * r.y,
-            l.z * r.x - l.x * r.z,
-            l.x * r.y - l.y * r.x
-    );
+    return Vector3<T>(l.y * r.z - l.z * r.y,
+                      l.z * r.x - l.x * r.z,
+                      l.x * r.y - l.y * r.x);
 }
 
 template<typename T>
@@ -188,12 +186,12 @@ struct Vector2
     T y;
 
     Vector2(T _x, T _y)
-            : x(_x), y(_y)
+        : x(_x), y(_y)
     {
     }
 
     Vector2()
-            : x(0), y(0)
+        : x(0), y(0)
     {
     }
 

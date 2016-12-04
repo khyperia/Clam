@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8)
 
 project(Clam3 C CXX)
 
@@ -7,45 +7,30 @@ set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-set(CMAKE_C_FLAGS "-std=c99")
-set(CMAKE_CXX_FLAGS "-std=c++98")
-set(CUDA_NVCC_FLAGS "-O3;--compiler-options;-std=c++98,-Wall,-std=c++98;--use_fast_math;-lineinfo")
-set(CUDA_PROPAGATE_HOST_FLAGS OFF)
-
-# https://www.reddit.com/r/archlinux/comments/4iczja/a_work_around_if_you_are_using_cuda_and_have/
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-D__CORRECT_ISO_CPP11_MATH_H_PROTO")
-
 if (MSVC)
     add_definitions(-DMSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc -std=c++98")
-    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-DMSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
 else ()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-endif()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
+endif ()
 
 file(GLOB cppfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cpp")
 file(GLOB hfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.h")
 set(sources ${cppfiles} ${hfiles})
 
 set(CMAKE_LIBRARY_PATH
-        "/home/echauck/SDL2/lib"
-        "/home/echauck/SDL2_net/lib"
-        "/home/echauck/SDL2_ttf/lib"
         "/home/kuhl/public-vrlab/vrpn/build"
+        "/home/echauck/SDL2/lib"
         "${CMAKE_SOURCE_DIR}/../SDL2/lib"
         "${CMAKE_SOURCE_DIR}/../vrpn/build"
-        "${CMAKE_SOURCE_DIR}/../../prog/vrpn/build"
         "/opt/cuda/lib"
         ${CMAKE_LIBRARY_PATH})
 set(CMAKE_INCLUDE_PATH
         "/home/echauck/SDL2/include"
-        "/home/echauck/SDL2_net/include"
-        "/home/echauck/SDL2_ttf/include"
         "/home/kuhl/public-vrlab/vrpn"
         "${CMAKE_SOURCE_DIR}/../SDL2/include"
         "${CMAKE_SOURCE_DIR}/../vrpn"
-        "${CMAKE_SOURCE_DIR}/../../prog/vrpn"
         "/opt/cuda/include"
         ${CMAKE_INCLUDE_PATH})
 
@@ -74,11 +59,16 @@ my_package_noreq(VRPN)
 
 add_executable(embed util/embed.c)
 
-add_custom_target(shfiles)
-file(GLOB shfiles "${SOURCEDIR}/util/*.sh")
+set(built_shfiles)
+file(GLOB shfiles RELATIVE "${SOURCEDIR}/util" "${SOURCEDIR}/util/*.sh")
 foreach (shfile ${shfiles})
-    add_custom_command(TARGET shfiles POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy ${shfile} ${CMAKE_BINARY_DIR})
+    set(infile "${SOURCEDIR}/util/${shfile}")
+    set(outfile "${CMAKE_BINARY_DIR}/${shfile}")
+    add_custom_command(
+            OUTPUT "${outfile}"
+            DEPENDS "${infile}"
+            COMMAND ${CMAKE_COMMAND} -E copy ${infile} ${outfile})
+    list(APPEND built_shfiles ${outfile})
 endforeach ()
 
 set(genfiles)
@@ -86,9 +76,14 @@ include_directories("${CMAKE_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 file(GLOB cufiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cu")
 foreach (filename ${cufiles})
-    cuda_compile_ptx(ptxfile "${filename}")
+    set(infile "${SOURCEDIR}/${filename}")
+    set(ptxfile "${CMAKE_BINARY_DIR}/generated/${filename}.ptx")
     set(outfile "${CMAKE_BINARY_DIR}/generated/${filename}.c")
     get_filename_component(varname ${filename} NAME_WE)
+    add_custom_command(
+            OUTPUT "${ptxfile}"
+            DEPENDS ${infile}
+            COMMAND nvcc "--use_fast_math" "-lineinfo" "-arch" "compute_35" "-ptx" "-o" "${ptxfile}" "${infile}")
     add_custom_command(
             OUTPUT "${outfile}"
             DEPENDS ${ptxfile}
@@ -96,8 +91,12 @@ foreach (filename ${cufiles})
     list(APPEND genfiles ${outfile})
 endforeach ()
 
-add_executable(clam3 ${sources} ${genfiles})
-add_dependencies(clam3 shfiles)
+add_executable(clam3 ${sources} ${genfiles} ${built_shfiles})
+
+set_property(TARGET clam3 PROPERTY CXX_STANDARD 11)
+set_property(TARGET clam3 PROPERTY CXX_STANDARD_REQUIRED ON)
+set_property(TARGET clam3 PROPERTY C_STANDARD 99)
+set_property(TARGET clam3 PROPERTY C_STANDARD_REQUIRED ON)
 
 target_link_libraries(clam3
         ${SDL2_LIBRARIES}
@@ -105,10 +104,10 @@ target_link_libraries(clam3
         ${SDL2_TTF_LIBRARIES})
 
 if (MSVC)
-target_link_libraries(clam3 "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib")
-else()
-target_link_libraries(clam3 cuda)
-endif()
+    target_link_libraries(clam3 "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64/cuda.lib")
+else ()
+    target_link_libraries(clam3 cuda)
+endif ()
 
 if (VRPN_FOUND)
     target_link_libraries(clam3

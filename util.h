@@ -1,9 +1,10 @@
 #pragma once
 
-#include <sstream>
-#include <stdexcept>
 #include <cuda.h>
 #include <iostream>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
 
 template<typename T>
 static std::string tostring(const T &value)
@@ -22,75 +23,36 @@ static T fromstring(const std::string &value)
     return result;
 }
 
-class CudaContext
+template<typename T, typename ...Args>
+std::unique_ptr<T> make_unique(Args &&...args)
 {
-    CUcontext context;
-    int index;
-    static int currentContext;
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 
-public:
-    static const CudaContext Invalid;
+// not allowed to clone nor move
+class Immobile
+{
+protected:
+    Immobile() = default;
+    virtual ~Immobile() = default;
 
-    CudaContext(CUcontext context, int index) : context(context), index(index)
-    {
-    }
+    Immobile(Immobile const &) = delete;
+    Immobile(Immobile &&) = delete;
+    Immobile& operator=(Immobile const &x) = delete;
+    Immobile& operator=(Immobile &&x) = delete;
+};
 
-    CUcontext UnderlyingContext() const
-    {
-        return context;
-    }
+// allowed to move, but not clone
+class NoClone
+{
+protected:
+    NoClone() = default;
+    virtual ~NoClone() = default;
+    NoClone(NoClone &&) = default;
+    NoClone& operator=(NoClone &&x) = default;
 
-    int Index() const
-    {
-        if (IsValid())
-        {
-            return index;
-        }
-        throw std::runtime_error("Index() called on invalid context");
-    }
-
-    inline void Run(CUresult callResult) const
-    {
-        if (!IsValid())
-        {
-            throw std::runtime_error("Run() called on invalid context");
-        }
-        if (currentContext != index)
-        {
-            throw std::runtime_error(
-                    "Current context not correct, call CudaContext::SetCurrent() before this call. This context: "
-                    + tostring(index) + ", active context: " + tostring(currentContext));
-        }
-        if (callResult != CUDA_SUCCESS)
-        {
-            const char *errstr;
-            //if (cuGetErrorString(callResult, &errstr) != CUDA_SUCCESS)
-            {
-                errstr = "unknown error";
-            }
-            throw std::runtime_error("CUDA error (" + tostring(callResult) + "): " + errstr);
-        }
-    }
-
-    void SetCurrent() const
-    {
-        if (!IsValid())
-        {
-            throw std::runtime_error("SetCurrent() called on invalid context");
-        }
-        if (currentContext == index)
-        {
-            return;
-        }
-        currentContext = index;
-        Run(cuCtxSetCurrent(context));
-        //std::cout << "Set current context to " << index << std::endl;
-    }
-
-    bool IsValid() const
-    {
-        return index != -1;
-    }
+    NoClone(NoClone const &) = delete;
+    NoClone& operator=(NoClone const &x) = delete;
 };
 
 template<typename T, typename Tscalar>
@@ -99,8 +61,63 @@ T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
     Tscalar t2 = t * t;
     Tscalar t3 = t2 * t;
 
-    return (((Tscalar)2 * p1) +
-            (-p0 + p2) * t +
-            ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
-            (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2;
+    return (((Tscalar)2 * p1) + (-p0 + p2) * t
+        + ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2
+        + (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2;
 }
+
+class CudaContext: public NoClone
+{
+    int deviceIndex;
+    CUdevice device;
+    CUcontext context;
+    static int currentContext;
+
+    inline static void CheckCall(CUresult callResult)
+    {
+        if (callResult != CUDA_SUCCESS)
+        {
+            const char *errstr;
+            if (cuGetErrorString(callResult, &errstr) == CUDA_SUCCESS)
+            {
+                throw std::runtime_error("CUDA error (" + tostring(callResult) + "): " + errstr);
+            }
+            else if (cuGetErrorName(callResult, &errstr) == CUDA_SUCCESS)
+            {
+                throw std::runtime_error("CUDA error " + tostring(callResult) + " = " + errstr);
+            }
+            else
+            {
+                throw std::runtime_error("CUDA error " + tostring(callResult) + " (no name)");
+            }
+        }
+    }
+
+public:
+    static void Init();
+    static inline void RunWithoutContext(CUresult callResult)
+    {
+        CheckCall(callResult);
+    }
+
+    static int DeviceCount();
+
+    CudaContext(int deviceIndex);
+
+    CUcontext Context() const;
+    CUdevice Device() const;
+    std::string DeviceName() const;
+    void SetCurrent() const;
+
+    inline void Run(CUresult callResult) const
+    {
+        if (currentContext != deviceIndex)
+        {
+            throw std::runtime_error(
+                "Current context not correct, call CudaContext::SetCurrent() before this call. This context: "
+                    + tostring(deviceIndex) + ", active context: "
+                    + tostring(currentContext));
+        }
+        CheckCall(callResult);
+    }
+};
