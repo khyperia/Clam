@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util.h"
+#include "cudaContext.h"
 #include <vector>
 #include <iostream>
 

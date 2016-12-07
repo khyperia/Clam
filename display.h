@@ -3,6 +3,7 @@
 #include <string>
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include "movable.h"
 
 struct BlitData
 {
@@ -12,8 +13,9 @@ struct BlitData
     BlitData(int32_t *data, int width, int height);
 };
 
-struct RenderTarget
+class RenderTarget: public Immobile
 {
+public:
     RenderTarget();
     virtual ~RenderTarget();
     RenderTarget(const RenderTarget& other) = delete;

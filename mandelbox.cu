@@ -337,15 +337,13 @@ static __device__ float3 NewRayDir(float3 position,
                                    unsigned long long *rand)
 {
     float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
-    /*
-       hyp = d
-       opposite = r
-       theta = asin(r / d)
-       area of spherical cap = 2 * pi * r^2 * (1 - cos(theta))
-       area = 2 * pi * (1 - cos(asin(r / d)))
-       probability = 2 * (1 - cos(asin(r / d))) / 4
-       simplified = (1 - sqrt(1 - r^2/d^2)) / 2
-   */
+    // hyp = d
+    // opposite = r
+    // theta = asin(r / d)
+    // area of spherical cap = 2 * pi * r^2 * (1 - cos(theta))
+    // area = 2 * pi * (1 - cos(asin(r / d)))
+    // probability = 2 * (1 - cos(asin(r / d))) / 4
+    // simplified = (1 - sqrt(1 - r^2/d^2)) / 2
     float dist = length(lightPos - position);
     dist = fmax(dist, cfg.LightSize);
     float costheta = sqrtf(1 - (cfg.LightSize * cfg.LightSize) / (dist * dist));

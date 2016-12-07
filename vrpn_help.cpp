@@ -4,7 +4,6 @@
 
 #include <vrpn_Tracker.h>
 #include <stdexcept>
-#include "option.h"
 
 // http://answers.unity3d.com/questions/372371
 static Vector3<double>
@@ -45,39 +44,28 @@ void VRPN_CALLBACK HandleTracker(void *_this_untyped, const vrpn_TRACKERCB info)
     _this->up.y = -_this->up.y;
 }
 
-VrpnHelp::VrpnHelp()
-    : con(NULL), pos(0, 0, 0), look(1, 0, 0), up(0, 1, 0)
+VrpnHelp::VrpnHelp(const std::string &serverName)
+    : con(vrpn_Tracker_Remote(serverName.c_str())), pos(0, 0, 0), look(1, 0, 0),
+      up(0, 1, 0)
 {
+    con.register_change_handler(this, HandleTracker);
 }
 
 VrpnHelp::~VrpnHelp()
 {
-    if (con)
-    {
-        delete con;
-    }
 }
 
 void VrpnHelp::MainLoop()
 {
-    if (!con)
-    {
-        std::string vrpnName = VrpnName();
-        if (vrpnName.empty())
-        {
-            throw std::runtime_error("VRPN name not specified");
-        }
-        con = new vrpn_Tracker_Remote(vrpnName.c_str());
-        con->register_change_handler(this, HandleTracker);
-    }
-    con->mainloop();
+    con.mainloop();
 }
 
 #else
 
 #include <iostream>
 
-VrpnHelp::VrpnHelp() : con(NULL)
+VrpnHelp::VrpnHelp(const std::string &serverName)
+    : con(0), pos(0, 0, 0), look(1, 0, 0), up(0, 1, 0)
 {
 }
 

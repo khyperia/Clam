@@ -81,14 +81,14 @@ extern "C" __global__ void kern(unsigned int *__restrict__ screenPixels,
     float fx = (float)(x + screenX);
     float fy = (float)(y + screenY);
 
-    //float mulBy = Camera.zoom * 2 / (width + height);
-    float mulBy = 1.0 * 2 / (width + height);
+    float mulBy = Camera.zoom * 2 / (width + height);
+    //float mulBy = 1.0 * 2 / (width + height);
 
     fx *= mulBy;
     fy *= mulBy;
 
-    // fx += Camera.posX;
-    // fy += Camera.posY;
+    fx += Camera.posX;
+    fy += Camera.posY;
 
     float3 color = Mandelbrot(make_float2(fx, fy));
     screenPixels[y * width + x] = PackPixel(color);

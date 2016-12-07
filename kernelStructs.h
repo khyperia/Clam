@@ -1,5 +1,6 @@
 #pragma once
 
+#if 0
 #ifndef __constant__
 #define __constant__
 #endif
@@ -8,6 +9,7 @@
 #endif
 #ifndef __global__
 #define __global__
+#endif
 #endif
 
 struct GpuCameraSettings
@@ -23,16 +25,6 @@ struct GpuCameraSettings
     float upZ;
     float fov;
     float focalDistance;
-
-    bool operator==(const GpuCameraSettings &right)
-    {
-        return memcmp(this, &right, sizeof(GpuCameraSettings)) == 0;
-    }
-
-    bool operator!=(const GpuCameraSettings &right)
-    {
-        return memcmp(this, &right, sizeof(GpuCameraSettings)) != 0;
-    }
 };
 
 struct Gpu2dCameraSettings
@@ -40,16 +32,6 @@ struct Gpu2dCameraSettings
     float posX;
     float posY;
     float zoom;
-
-    bool operator==(const Gpu2dCameraSettings &right)
-    {
-        return memcmp(this, &right, sizeof(Gpu2dCameraSettings)) == 0;
-    }
-
-    bool operator!=(const Gpu2dCameraSettings &right)
-    {
-        return memcmp(this, &right, sizeof(Gpu2dCameraSettings)) != 0;
-    }
 };
 
 struct JuliaBrotSettings
@@ -57,14 +39,4 @@ struct JuliaBrotSettings
     float juliaX;
     float juliaY;
     int juliaEnabled;
-
-    bool operator==(const JuliaBrotSettings &right)
-    {
-        return memcmp(this, &right, sizeof(JuliaBrotSettings)) == 0;
-    }
-
-    bool operator!=(const JuliaBrotSettings &right)
-    {
-        return memcmp(this, &right, sizeof(JuliaBrotSettings)) != 0;
-    }
 };

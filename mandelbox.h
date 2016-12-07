@@ -46,16 +46,6 @@ struct MandelboxCfg
     float QualityFirstRay;
     float QualityRestRay;
     int ItersPerKernel;
-
-    bool operator==(const MandelboxCfg &right)
-    {
-        return memcmp(this, &right, sizeof(MandelboxCfg)) == 0;
-    }
-
-    bool operator!=(const MandelboxCfg &right)
-    {
-        return memcmp(this, &right, sizeof(MandelboxCfg)) != 0;
-    }
 };
 
 MandelboxCfg MandelboxDefault()

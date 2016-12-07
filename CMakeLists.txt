@@ -53,7 +53,7 @@ endmacro()
 
 my_package(CUDA)
 my_package(SDL2)
-my_package(SDL2_net)
+#my_package(SDL2_net)
 my_package(SDL2_ttf)
 my_package_noreq(VRPN)
 

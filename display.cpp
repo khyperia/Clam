@@ -1,12 +1,11 @@
 #include "display.h"
 #include "lib_init.h"
-#include <stdexcept>
+#include <iostream>
 #include "util.h"
 
 BlitData::BlitData(int32_t *data, int width, int height)
     : width(width), height(height), data(data)
 {
-
 }
 
 RenderTarget::RenderTarget()
@@ -91,6 +90,11 @@ void SdlWindow::Blit(BlitData data, const std::string &text)
     SDL_UnlockSurface(surface);
     if (!text.empty())
     {
+        if (!this->font)
+        {
+            throw std::runtime_error(
+                "Tried to render text, but no font was available");
+        }
         SDL_Color color = {255, 0, 0, 0};
         SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(font,
                                                            text.c_str(),

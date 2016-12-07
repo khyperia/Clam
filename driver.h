@@ -3,22 +3,28 @@
 #include <functional>
 #include <memory>
 #include "display.h"
+#include "kernelConfig.h"
+#include "kernelControl.h"
 #include "kernel.h"
+#include "cudaContext.h"
 
 extern bool cudaSuccessfulInit;
 
 struct RenderType;
 
-class RealtimeRender
+class RealtimeRender: public Immobile
 {
     std::unique_ptr<RenderTarget> renderTarget;
     std::unique_ptr<GpuKernel> kernel;
-    bool isUserInput;
+    SettingCollection settings;
+    std::vector<std::unique_ptr<KernelControl>> kernelControls;
+    std::vector<std::unique_ptr<UiSetting>> uiSettings;
+    Uint32 last_enqueue_time;
 
     static std::function<void(int *, size_t, size_t)> GpuCallback();
     void EnqueueKernel(int frame);
     std::string ConfigText();
-    static void PushCallbackImpl(std::function<void(RealtimeRender &)> func);
+    static void PushCallback(std::function<void(RealtimeRender &)> func);
 public:
     RealtimeRender(CudaContext context,
                    const KernelConfiguration &kernel,
@@ -27,35 +33,5 @@ public:
                    const char *fontName);
     ~RealtimeRender();
     void StartLoop(size_t queue_size);
-    template<typename F>
-    void PushCallback(F f)
-    {
-        this->PushCallbackImpl(make_unique(f));
-    }
     bool Tick();
 };
-
-/*
-class Driver
-{
-    Kernel *kernel;
-    RenderTarget *renderTarget;
-    const std::vector<CudaContext> cuContexts;
-    Connection connection;
-    Uint32 lastTickTime;
-public:
-    Driver();
-
-    ~Driver();
-
-    void MainLoop();
-
-    void BlitImmediate(const BlitData blitData, const CudaContext context);
-
-    void Tick();
-};
-
-void EnqueueCuMemFreeHost(void *hostPtr, const CudaContext context);
-
-void EnqueueBlitData(BlitData blitData, const CudaContext context);
-*/
