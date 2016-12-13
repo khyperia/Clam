@@ -7,9 +7,9 @@ std::function<void(int *, size_t, size_t)> RealtimeRender::GpuCallback()
     {
         const auto cb = [data, width, height](RealtimeRender &self)
         {
+            self.EnqueueKernel(0);
             self.renderTarget->Blit(BlitData(data, (int)width, (int)height),
                                     self.ConfigText());
-            self.EnqueueKernel(0);
         };
         RealtimeRender::PushCallback(cb);
     };
@@ -38,9 +38,16 @@ RealtimeRender::~RealtimeRender()
     DecrementSdlUsage();
 }
 
+void RealtimeRender::UpdateFps(double elapsed_seconds)
+{
+    const double weight = 1 / (fpsAverage + 1);
+    fpsAverage = (elapsed_seconds + fpsAverage * weight) / (weight + 1);
+}
+
 std::string RealtimeRender::ConfigText()
 {
-    return "Hello, world!\nHey look a newline!";
+    return tostring(1 / fpsAverage)
+        + " fps\nHello, world!\nHey look a newline!";
 }
 
 void RealtimeRender::EnqueueKernel(int frame)
@@ -51,8 +58,9 @@ void RealtimeRender::EnqueueKernel(int frame)
         throw std::runtime_error("Realtime renderer must have render size hint");
     }
     auto current_ticks = SDL_GetTicks();
-    float elapsed_seconds = (current_ticks - last_enqueue_time) / 1000.0f;
+    double elapsed_seconds = (current_ticks - last_enqueue_time) / 1000.0;
     last_enqueue_time = current_ticks;
+    UpdateFps(elapsed_seconds);
     for (auto &uiSetting : uiSettings)
     {
         uiSetting->Integrate(settings, elapsed_seconds);
@@ -61,7 +69,12 @@ void RealtimeRender::EnqueueKernel(int frame)
     {
         control->SetFrom(settings);
     }
-    kernel->Run(0, 0, (int)width, (int)height, frame, true);
+    kernel->Run((int)width / -2,
+                (int)height / -2,
+                (int)width,
+                (int)height,
+                frame,
+                true);
 }
 
 void RealtimeRender::StartLoop(size_t queue_size)
@@ -84,7 +97,7 @@ void RealtimeRender::PushCallback(std::function<void(RealtimeRender & )> func)
 bool RealtimeRender::Tick()
 {
     SDL_Event event;
-    while (SDL_PollEvent(&event))
+    while (SDL_WaitEvent(&event))
     {
         if (event.type == SDL_QUIT)
         {
@@ -102,5 +115,5 @@ bool RealtimeRender::Tick()
             uiSetting->Input(settings, event);
         }
     }
-    return true;
+    return false;
 }

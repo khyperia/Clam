@@ -1,3 +1,4 @@
+#if 0
 #ifdef MSVC
 #include "helper_math.h"
 #else
@@ -5,7 +6,6 @@
 #endif
 #include <float.h>
 #include "kernelStructs.h"
-#include "mandelbox.h"
 
 struct MandelboxState
 {
@@ -32,13 +32,9 @@ void Test()
 
 #define NORMAL_DELTA (FLT_EPSILON * 8)
 
-__constant__ MandelboxCfg MandelboxCfgArr[1];
+__constant__ MandelboxCfg CfgArr[1];
 
 #define cfg (MandelboxCfgArr[0])
-
-__constant__ GpuCameraSettings CameraArr[1];
-
-#define Camera (CameraArr[0])
 
 __constant__ MandelboxState *BufferScratchArr[1];
 
@@ -177,16 +173,16 @@ static __device__ void GetCamera(float3 *origin,
                                  int height,
                                  unsigned long long *rand)
 {
-    *origin = make_float3(Camera.posX, Camera.posY, Camera.posZ);
-    float3 look = make_float3(Camera.lookX, Camera.lookY, Camera.lookZ);
-    float3 up = make_float3(Camera.upX, Camera.upY, Camera.upZ);
+    *origin = make_float3(Cfg.posX, Cfg.posY, Cfg.posZ);
+    float3 look = make_float3(Cfg.lookX, Cfg.lookY, Cfg.lookZ);
+    float3 up = make_float3(Cfg.upX, Cfg.upY, Cfg.upZ);
     float2
         screenCoords = make_float2((float)(x + screenX), (float)(y + screenY));
     screenCoords += make_float2(Rand(rand) - 0.5f, Rand(rand) - 0.5f);
-    float fov = Camera.fov * 2 / (width + height);
+    float fov = Cfg.fov * 2 / (width + height);
     //fov *= exp((*hue - 0.5f) * cfg.FovAbberation);
     *direction = RayDir(look, up, screenCoords, fov);
-    ApplyDof(origin, direction, Camera.focalDistance, rand);
+    ApplyDof(origin, direction, Cfg.focalDistance, rand);
 }
 
 static __device__ float3 HueToRGB(float hue, float saturation, float value)
@@ -375,7 +371,7 @@ static __device__ float BRDF(float3 normal, float3 incoming, float3 outgoing)
 static __device__ float
 SimpleTrace(float3 origin, float3 direction, float width, int height)
 {
-    const float quality = (width + height) / (2 * Camera.fov);
+    const float quality = (width + height) / (2 * Cfg.fov);
     float distance = 1.0f;
     float totalDistance = 0.0f;
     int i = 0;
@@ -477,7 +473,7 @@ static __device__ int TraceState(MandelboxState *state,
     float3 oldPos = state->position;
     state->position += state->direction * distance;
     const float quality = state->traceIter == 0 ? cfg.QualityFirstRay
-        * ((width + height) / (2 * Camera.fov)) : cfg.QualityRestRay;
+        * ((width + height) / (2 * Cfg.fov)) : cfg.QualityRestRay;
     if ((oldPos.x == state->position.x && oldPos.y == state->position.y
         && oldPos.z == state->position.z)
         || state->totalDistance > cfg.MaxRayDist
@@ -651,3 +647,4 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
     BufferScratch[y * width + x] = state;
     SetRand(x, y, width, rand);
 }
+#endif

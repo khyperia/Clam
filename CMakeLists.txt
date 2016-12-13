@@ -5,7 +5,7 @@ project(Clam3 C CXX)
 set(SOURCEDIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 
 if (MSVC)
     add_definitions(-DMSVC)

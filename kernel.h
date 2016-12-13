@@ -23,7 +23,9 @@ public:
     {
         if (sizeof(T) != gpuVar.bytesize())
         {
-            throw std::runtime_error("GPU/CPU variable size didn't match");
+            throw std::runtime_error(
+                "CPU/GPU variable size didn't match: " + tostring(sizeof(T))
+                    + " vs. " + tostring(gpuVar.bytesize()));
         }
         SetData((const char *)&value);
     }

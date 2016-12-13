@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "option.h"
 
 #ifdef main
 #undef main
@@ -112,16 +113,26 @@ while (timeSinceLastTitle > 1.0)
 // TODO: Renderstate default: renderstate then config state
 // TODO: Headless frames/times
 
-int main(int, char **)
+int main(int argc, char **argv)
 {
 #if CATCH_EXCEPTIONS
     try
     {
 #endif
+    UserOptions options;
+    options.Add("kernel", "mandelbrot");
+    options.Add("gpu", "0");
+    std::string cmdline_error = options.Parse(argc, argv);
+    if (!cmdline_error.empty())
+    {
+        std::cout << cmdline_error << std::endl;
+        return 1;
+    }
+
     CudaContext::Init();
-    CudaContext ctx(0);
+    CudaContext ctx(fromstring<int>(options.Get("gpu")));
     RealtimeRender driver(std::move(ctx),
-                          KernelConfiguration("mandelbrot"),
+                          KernelConfiguration(options.Get("kernel")),
                           600,
                           400,
                           "/usr/share/fonts/TTF/DejaVuSansMono.ttf");

@@ -2,33 +2,57 @@
 
 #define MaxIters 1000
 #define Bailout 16*16
-#define ColorVariance 0.1f
-#define MultipR 7.0f
-#define MultipG 9.0f
-#define MultipB 13.0f
-#define OffsetR 0.0f
-#define OffsetG 0.0f
-#define OffsetB 0.0f
-#define Saturation 0.2f
-#define SubtractBrightness 0.6f
+#define ColorVariance 0.2f
+#define Saturation 0.4f
+#define Value 0.6f
 
-__constant__ Gpu2dCameraSettings CameraArr[1];
+#define flt float
+#define flt2 float2
+#define make_flt2 make_float2
 
-#define Camera (CameraArr[0])
+__constant__ MandelbrotCfg CfgArr[1];
 
-__constant__ JuliaBrotSettings JuliaArr[1];
+#define Cfg (CfgArr[0])
 
-#define Julia (JuliaArr[0])
-
-static __device__ float3 Mandelbrot(float2 z)
+static __device__ float3 HueToRGB(float hue, float saturation, float value)
 {
-    //float2 c = Julia.juliaEnabled ? make_float2(Julia.juliaX, Julia.juliaY) : z;
-    float2 c = z;
+    hue = fmod(hue, 1.0f);
+    hue *= 3;
+    float frac = fmod(hue, 1.0f);
+    float3 color;
+    switch ((int)hue)
+    {
+        case 0:
+            color = make_float3(1 - frac, frac, 0);
+            break;
+        case 1:
+            color = make_float3(0, 1 - frac, frac);
+            break;
+        case 2:
+            color = make_float3(frac, 0, 1 - frac);
+            break;
+        default:
+            color = make_float3(1, 1, 1);
+            break;
+    }
+    color.x = sqrtf(color.x);
+    color.y = sqrtf(color.y);
+    color.z = sqrtf(color.z);
+    saturation = value * (1 - saturation);
+    color.x = color.x * (value - saturation) + saturation;
+    color.y = color.y * (value - saturation) + saturation;
+    color.z = color.z * (value - saturation) + saturation;
+    return color;
+}
+
+static __device__ float3 Mandelbrot(flt2 z)
+{
+    flt2 c = Cfg.juliaEnabled ? make_flt2(Cfg.juliaX, Cfg.juliaY) : z;
 
     int i = 0;
     while (i < MaxIters && z.x * z.x + z.y * z.y < Bailout)
     {
-        z = make_float2(z.x * z.x - z.y * z.y + c.x, 2 * z.x * z.y + c.y);
+        z = make_flt2(z.x * z.x - z.y * z.y + c.x, 2 * z.x * z.y + c.y);
         i++;
     }
     if (i == MaxIters)
@@ -37,13 +61,7 @@ static __device__ float3 Mandelbrot(float2 z)
     }
     float mu = i - log2(log(z.x * z.x + z.y * z.y));
     float x = mu * ColorVariance;
-    float r = sinf(x * MultipR + OffsetR) * 0.5f + 0.5f;
-    float g = sinf(x * MultipG + OffsetG) * 0.5f + 0.5f;
-    float b = sinf(x * MultipB + OffsetB) * 0.5f + 0.5f;
-    r = 1 - (1 - r) * Saturation - SubtractBrightness;
-    g = 1 - (1 - g) * Saturation - SubtractBrightness;
-    b = 1 - (1 - b) * Saturation - SubtractBrightness;
-    return make_float3(r, g, b);
+    return HueToRGB(x * ColorVariance, Saturation, Value);
 }
 
 static __device__ unsigned int PackPixel(float3 pixel)
@@ -78,18 +96,18 @@ extern "C" __global__ void kern(unsigned int *__restrict__ screenPixels,
     int y = blockDim.y * blockIdx.y + threadIdx.y;
     if (x >= width || y >= height)
         return;
-    float fx = (float)(x + screenX);
-    float fy = (float)(y + screenY);
+    flt fx = (flt)(x + screenX);
+    flt fy = (flt)(y + screenY);
 
-    float mulBy = Camera.zoom * 2 / (width + height);
+    float mulBy = Cfg.zoom * 2 / (width + height);
     //float mulBy = 1.0 * 2 / (width + height);
 
     fx *= mulBy;
     fy *= mulBy;
 
-    fx += Camera.posX;
-    fy += Camera.posY;
+    fx += Cfg.posX;
+    fy += Cfg.posY;
 
-    float3 color = Mandelbrot(make_float2(fx, fy));
+    float3 color = Mandelbrot(make_flt2(fx, fy));
     screenPixels[y * width + x] = PackPixel(color);
 }

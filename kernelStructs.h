@@ -1,6 +1,5 @@
 #pragma once
 
-#if 0
 #ifndef __constant__
 #define __constant__
 #endif
@@ -10,9 +9,8 @@
 #ifndef __global__
 #define __global__
 #endif
-#endif
 
-struct GpuCameraSettings
+struct MandelboxCfg
 {
     float posX;
     float posY;
@@ -25,17 +23,54 @@ struct GpuCameraSettings
     float upZ;
     float fov;
     float focalDistance;
+
+    float Scale;
+    float FoldingLimit;
+    float FixedRadius2;
+    float MinRadius2;
+    float DeRotationAmount;
+    float DeRotationAxisX;
+    float DeRotationAxisY;
+    float DeRotationAxisZ;
+    float DofAmount;
+    float FovAbberation;
+
+    float LightPosX;
+    float LightPosY;
+    float LightPosZ;
+    float LightSize;
+
+    int WhiteClamp;
+
+    float LightBrightnessHue;
+    float LightBrightnessSat;
+    float LightBrightnessVal;
+
+    float AmbientBrightnessHue;
+    float AmbientBrightnessSat;
+    float AmbientBrightnessVal;
+
+    float ReflectHue;
+    float ReflectSat;
+    float ReflectVal;
+
+    int MaxIters;
+    float Bailout;
+    float DeMultiplier;
+    int RandSeedInitSteps;
+    float MaxRayDist;
+    int MaxRaySteps;
+    int NumRayBounces;
+    float QualityFirstRay;
+    float QualityRestRay;
+    int ItersPerKernel;
 };
 
-struct Gpu2dCameraSettings
+struct MandelbrotCfg
 {
     float posX;
     float posY;
     float zoom;
-};
-
-struct JuliaBrotSettings
-{
     float juliaX;
     float juliaY;
     int juliaEnabled;

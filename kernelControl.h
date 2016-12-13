@@ -20,3 +20,10 @@ public:
     MandelbrotKernelControl(GpuKernelVar &kernelVariable);
     void SetFrom(const SettingCollection &settings) override;
 };
+
+class MandelboxKernelControl: public KernelControl
+{
+public:
+    MandelboxKernelControl(GpuKernelVar &kernelVariable);
+    void SetFrom(const SettingCollection &settings) override;
+};
