@@ -74,6 +74,11 @@ GpuKernel::~GpuKernel()
     }
 }
 
+CudaContext &GpuKernel::Context()
+{
+    return context;
+}
+
 void GpuKernel::Resize(size_t width, size_t height)
 {
     if (width == old_width && height == old_height && pinned != NULL)

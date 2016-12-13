@@ -26,6 +26,9 @@ public:
     ~Setting();
     Setting(Setting &&) = default;
     const std::string &Name() const;
+    bool IsInt() const;
+    bool IsFloat() const;
+    bool IsBool() const;
     int &AsInt();
     double &AsFloat();
     bool &AsBool();
@@ -37,10 +40,10 @@ public:
     void Load(const std::string &savedData);
 
     static Setting Interpolate(const Setting &p0,
-                        const Setting &p1,
-                        const Setting &p2,
-                        const Setting &p3,
-                        double time);
+                               const Setting &p1,
+                               const Setting &p2,
+                               const Setting &p3,
+                               double time);
 };
 
 class SettingCollection: public NoClone

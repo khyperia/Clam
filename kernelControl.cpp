@@ -1,3 +1,4 @@
+#include <cstring>
 #include "kernelControl.h"
 
 #include "kernelStructs.h"
@@ -16,25 +17,53 @@ MandelbrotKernelControl::MandelbrotKernelControl(GpuKernelVar &kernelVariable)
 {
 }
 
-void MandelbrotKernelControl::SetFrom(const SettingCollection &settings)
+MandelbrotKernelControl::~MandelbrotKernelControl()
+{
+}
+
+void MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
+                                      CudaContext &,
+                                      size_t,
+                                      size_t)
 {
     MandelbrotCfg temp;
-    temp.posX = settings.Get("posx").AsFloat();
-    temp.posY = settings.Get("posy").AsFloat();
-    temp.zoom = settings.Get("zoom").AsFloat();
-    temp.juliaX = settings.Get("juliax").AsFloat();
-    temp.juliaY = settings.Get("juliay").AsFloat();
+    temp.posX = (float)settings.Get("posx").AsFloat();
+    temp.posY = (float)settings.Get("posy").AsFloat();
+    temp.zoom = (float)settings.Get("zoom").AsFloat();
+    temp.juliaX = (float)settings.Get("juliax").AsFloat();
+    temp.juliaY = (float)settings.Get("juliay").AsFloat();
     temp.juliaEnabled = settings.Get("juliaenabled").AsBool() ? 1 : 0;
     kernelVariable.Set(temp);
 }
 
 MandelboxKernelControl::MandelboxKernelControl(GpuKernelVar &kernelVariable)
-    : KernelControl(kernelVariable)
+    : KernelControl(kernelVariable), old_width(0), old_height(0),
+      scratch_buffer(), rand_buffer()
 {
 }
 
-void MandelboxKernelControl::SetFrom(const SettingCollection &settings)
+MandelboxKernelControl::~MandelboxKernelControl()
 {
+}
+
+void MandelboxKernelControl::SetFrom(const SettingCollection &settings,
+                                     CudaContext &context,
+                                     size_t width,
+                                     size_t height)
+{
+    frame++;
+    if (old_width != width || old_height != height || !scratch_buffer()
+        || !rand_buffer())
+    {
+        frame = 0;
+        old_width = width;
+        old_height = height;
+        scratch_buffer.~CuMem();
+        rand_buffer.~CuMem();
+        new(&scratch_buffer) CuMem<char>(context,
+                                         width * height * MandelboxStateSize);
+        new(&rand_buffer) CuMem<uint64_t>(context, width * height);
+    }
     MandelboxCfg temp;
 #define DefineFlt(name) temp.name = (float)settings.Get(#name).AsFloat()
 #define DefineInt(name) temp.name = (int)settings.Get(#name).AsInt()
@@ -94,5 +123,19 @@ void MandelboxKernelControl::SetFrom(const SettingCollection &settings)
 #undef DefineFlt
 #undef DefineInt
 #undef DefineBool
+    if (!old_state)
+    {
+        frame = 0;
+        old_state = make_unique<MandelboxCfg>();
+        *old_state = temp;
+    }
+    else if (memcmp(old_state.get(), &temp, sizeof(temp)))
+    {
+        frame = 0;
+        *old_state = temp;
+    }
+    temp.scratch = scratch_buffer();
+    temp.randbuf = rand_buffer();
+    temp.Frame = frame;
     kernelVariable.Set(temp);
 }

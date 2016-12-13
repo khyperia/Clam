@@ -1,10 +1,12 @@
-#if 0
 #ifdef MSVC
 #include "helper_math.h"
 #else
 #include <../samples/common/inc/helper_math.h>
 #endif
 #include <float.h>
+
+typedef void *CUdeviceptr;
+
 #include "kernelStructs.h"
 
 struct MandelboxState
@@ -18,10 +20,25 @@ struct MandelboxState
     int traceIter;
     float totalDistance;
 };
-
-void Test()
+namespace staticassert
 {
-    //    static_assert(sizeof(MandelboxState) != MandelboxStateSize, "Bad static assert");
+template<bool x>
+struct test;
+template<>
+struct test<true>
+{
+};
+template<int x, int y>
+struct eq
+{
+    test<x == y> foo;
+};
+};
+
+static __device__ void Test()
+{
+    staticassert::eq<sizeof(MandelboxState), MandelboxStateSize> bar;
+    (void)bar.foo;
 }
 
 #define PREVIEW_STATE -1
@@ -34,15 +51,9 @@ void Test()
 
 __constant__ MandelboxCfg CfgArr[1];
 
-#define cfg (MandelboxCfgArr[0])
-
-__constant__ MandelboxState *BufferScratchArr[1];
-
-#define BufferScratch (BufferScratchArr[0])
-
-__constant__ uint2 *BufferRandArr[1];
-
-#define BufferRand (BufferRandArr[0])
+#define cfg (CfgArr[0])
+#define BufferScratch ((MandelboxState*)cfg.scratch)
+#define BufferRand ((uint2 *)cfg.randbuf)
 
 static __device__ float Gauss(float a, float c, float w, float x)
 {
@@ -112,14 +123,14 @@ static __device__ float3 RandHemisphere(unsigned long long *rand, float3 normal)
     return result;
 }
 
-static __device__ unsigned long long GetRand(int x, int y, int width, int frame)
+static __device__ unsigned long long GetRand(int x, int y, int width, bool init)
 {
     unsigned long long rand;
     uint2 randBuffer = BufferRand[y * width + x];
     rand = (unsigned long long)randBuffer.x << 32
         | (unsigned long long)randBuffer.y;
     rand += y * width + x;
-    if (frame < 1)
+    if (init)
     {
         for (int i = 0; (float)i / cfg.RandSeedInitSteps - 1
             < Rand(&rand) * cfg.RandSeedInitSteps; i++)
@@ -173,16 +184,16 @@ static __device__ void GetCamera(float3 *origin,
                                  int height,
                                  unsigned long long *rand)
 {
-    *origin = make_float3(Cfg.posX, Cfg.posY, Cfg.posZ);
-    float3 look = make_float3(Cfg.lookX, Cfg.lookY, Cfg.lookZ);
-    float3 up = make_float3(Cfg.upX, Cfg.upY, Cfg.upZ);
+    *origin = make_float3(cfg.posX, cfg.posY, cfg.posZ);
+    float3 look = make_float3(cfg.lookX, cfg.lookY, cfg.lookZ);
+    float3 up = make_float3(cfg.upX, cfg.upY, cfg.upZ);
     float2
         screenCoords = make_float2((float)(x + screenX), (float)(y + screenY));
     screenCoords += make_float2(Rand(rand) - 0.5f, Rand(rand) - 0.5f);
-    float fov = Cfg.fov * 2 / (width + height);
+    float fov = cfg.fov * 2 / (width + height);
     //fov *= exp((*hue - 0.5f) * cfg.FovAbberation);
     *direction = RayDir(look, up, screenCoords, fov);
-    ApplyDof(origin, direction, Cfg.focalDistance, rand);
+    ApplyDof(origin, direction, cfg.focalDistance, rand);
 }
 
 static __device__ float3 HueToRGB(float hue, float saturation, float value)
@@ -371,7 +382,7 @@ static __device__ float BRDF(float3 normal, float3 incoming, float3 outgoing)
 static __device__ float
 SimpleTrace(float3 origin, float3 direction, float width, int height)
 {
-    const float quality = (width + height) / (2 * Cfg.fov);
+    const float quality = (width + height) / (2 * cfg.fov);
     float distance = 1.0f;
     float totalDistance = 0.0f;
     int i = 0;
@@ -435,7 +446,9 @@ static __device__ int PreviewState(MandelboxState *state,
               rand);
     float value = SimpleTrace(state->position, state->direction, width, height);
     value = sqrtf(value);
-    screenPixels[y * width + x] = PackPixel(make_float4(value));
+    // TODO: for some reason the image is flipped vertically (SDL?)
+    int index = (height - y - 1) * width + x;
+    screenPixels[index] = PackPixel(make_float4(value));
     return PREVIEW_STATE;
 }
 
@@ -473,7 +486,7 @@ static __device__ int TraceState(MandelboxState *state,
     float3 oldPos = state->position;
     state->position += state->direction * distance;
     const float quality = state->traceIter == 0 ? cfg.QualityFirstRay
-        * ((width + height) / (2 * Cfg.fov)) : cfg.QualityRestRay;
+        * ((width + height) / (2 * cfg.fov)) : cfg.QualityRestRay;
     if ((oldPos.x == state->position.x && oldPos.y == state->position.y
         && oldPos.z == state->position.z)
         || state->totalDistance > cfg.MaxRayDist
@@ -567,10 +580,13 @@ static __device__ int FinishState(MandelboxState *state,
                                   uint *__restrict__ screenPixels,
                                   int x,
                                   int y,
-                                  int width)
+                                  int width,
+                                  int height)
 {
     Finish(state, x, y, width);
-    screenPixels[y * width + x] = PackPixel(state->color);
+    // TODO: for some reason the image is flipped vertically (SDL?)
+    int index = (height - y - 1) * width + x;
+    screenPixels[index] = PackPixel(state->color);
     return INIT_STATE;
 }
 
@@ -578,15 +594,15 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
                                 int screenX,
                                 int screenY,
                                 int width,
-                                int height,
-                                int frame)
+                                int height)
 {
     int x = blockDim.x * blockIdx.x + threadIdx.x;
     int y = blockDim.y * blockIdx.y + threadIdx.y;
     if (x >= width || y >= height)
         return;
 
-    unsigned long long rand = GetRand(x, y, width, frame);
+    int frame = cfg.Frame;
+    unsigned long long rand = GetRand(x, y, width, frame <= 0);
 
     MandelboxState state = BufferScratch[y * width + x];
     if (frame == -1)
@@ -600,7 +616,9 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
         state.state = INIT_STATE;
         state.position = make_float3(cfg.Bailout + 1);
         state.color = make_float4(0);
-        screenPixels[y * width + x] = 255u << 24;
+        // TODO: for some reason the image is flipped vertically (SDL?)
+        int index = (height - y - 1) * width + x;
+        screenPixels[index] = 255u << 24;
     }
 
     int i = state.state == PREVIEW_STATE ? 1 : max(1 << cfg.ItersPerKernel, 1);
@@ -638,7 +656,8 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
                 state.state = NormalState(&state, de, lighting, &rand);
                 break;
             case FINISH_STATE:
-                state.state = FinishState(&state, screenPixels, x, y, width);
+                state.state =
+                    FinishState(&state, screenPixels, x, y, width, height);
                 break;
         }
     }
@@ -647,4 +666,3 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
     BufferScratch[y * width + x] = state;
     SetRand(x, y, width, rand);
 }
-#endif

@@ -59,6 +59,7 @@ public:
               const unsigned char *data,
               size_t length);
     ~GpuKernel();
+    CudaContext &Context();
     GpuKernelVar &Variable(const std::string &name);
     void Run(int offsetX,
              int offsetY,

@@ -50,6 +50,21 @@ const std::string &Setting::Name() const
     return name;
 }
 
+bool Setting::IsInt() const
+{
+    return IsType(INT);
+}
+
+bool Setting::IsFloat() const
+{
+    return IsType(FLOAT);
+}
+
+bool Setting::IsBool() const
+{
+    return IsType(BOOL);
+}
+
 int &Setting::AsInt()
 {
     Check(INT);

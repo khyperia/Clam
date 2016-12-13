@@ -68,9 +68,6 @@ MkNv(int, ItersPerKernel, 0);
 else if (keycode == SDLK_g)
 editValue.DofAmount = editValue.DofAmount > 0 ? 0 : 0.005f;
 
-look = look.normalized();
-up = cross(cross(look, up), look).normalized();
-
 if (keycode == SDLK_BACKSLASH)
 std::cout << "Enabling VRPN" << std::endl;
 VrpnHelp *vrpn;

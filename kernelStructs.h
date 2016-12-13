@@ -10,8 +10,12 @@
 #define __global__
 #endif
 
+#define MandelboxStateSize 80
+
 struct MandelboxCfg
 {
+    CUdeviceptr scratch;
+    CUdeviceptr randbuf;
     float posX;
     float posY;
     float posZ;
@@ -64,6 +68,8 @@ struct MandelboxCfg
     float QualityFirstRay;
     float QualityRestRay;
     int ItersPerKernel;
+
+    int Frame;
 };
 
 struct MandelbrotCfg

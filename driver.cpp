@@ -46,8 +46,16 @@ void RealtimeRender::UpdateFps(double elapsed_seconds)
 
 std::string RealtimeRender::ConfigText()
 {
-    return tostring(1 / fpsAverage)
-        + " fps\nHello, world!\nHey look a newline!";
+    std::string result;
+    for (const auto &control : uiSettings)
+    {
+        auto conf = control->Describe(settings);
+        if (!conf.empty())
+        {
+            result += conf;
+        }
+    }
+    return tostring(1 / fpsAverage) + " fps\n" + result;
 }
 
 void RealtimeRender::EnqueueKernel(int frame)
@@ -67,7 +75,7 @@ void RealtimeRender::EnqueueKernel(int frame)
     }
     for (const auto &control: kernelControls)
     {
-        control->SetFrom(settings);
+        control->SetFrom(settings, kernel->Context(), width, height);
     }
     kernel->Run((int)width / -2,
                 (int)height / -2,

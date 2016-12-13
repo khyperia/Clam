@@ -13,7 +13,10 @@ std::string UserOptions::Parse(int, char **argv)
     for (auto &value : values)
     {
         auto upper = value.first;
-        std::transform(upper.begin(), upper.end(), upper.begin(), (int (*)(int))std::toupper);
+        std::transform(upper.begin(),
+                       upper.end(),
+                       upper.begin(),
+                       (int (*)(int))std::toupper);
         const auto env_name = "CLAM3_" + upper;
         auto env_val = std::getenv(env_name.c_str());
         if (env_val)
@@ -42,15 +45,19 @@ std::string UserOptions::Parse(int, char **argv)
         }
         auto arg_value = *argv;
         argv++;
+        bool found = false;
         for (auto &value : values)
         {
             if (arg == value.first)
             {
                 value.second = arg_value;
-                continue;
+                found = true;
             }
         }
-        return "Option " + arg + " does not exist";
+        if (!found)
+        {
+            return "Option \"" + arg + "\" does not exist";
+        }
     }
     return "";
 }
