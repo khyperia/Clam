@@ -39,11 +39,11 @@ private:
 
 class FileTarget: public RenderTarget
 {
-    std::string baseFileName;
-    int curImage;
+    std::string fileName;
 
 public:
-    FileTarget(std::string baseFileName);
+    static void Screenshot(std::string fileName, BlitData data);
+    FileTarget(std::string fileName);
     ~FileTarget();
 private:
     bool RequestSize(size_t *width, size_t *height) override;

@@ -1,3 +1,4 @@
+#include <fstream>
 #include "driver.h"
 #include "lib_init.h"
 
@@ -8,8 +9,13 @@ std::function<void(int *, size_t, size_t)> RealtimeRender::GpuCallback()
         const auto cb = [data, width, height](RealtimeRender &self)
         {
             self.EnqueueKernel(0);
-            self.renderTarget->Blit(BlitData(data, (int)width, (int)height),
-                                    self.ConfigText());
+            BlitData blitData(data, (int)width, (int)height);
+            self.renderTarget->Blit(blitData, self.ConfigText());
+            if (self.take_screenshot)
+            {
+                self.take_screenshot = false;
+                FileTarget::Screenshot("screenshot.bmp", blitData);
+            }
         };
         RealtimeRender::PushCallback(cb);
     };
@@ -102,6 +108,40 @@ void RealtimeRender::PushCallback(std::function<void(RealtimeRender & )> func)
     SDL_PushEvent(&event);
 }
 
+void RealtimeRender::DriverInput(SDL_Event event)
+{
+    if (event.type == SDL_KEYDOWN)
+    {
+        if (event.key.keysym.scancode == SDL_SCANCODE_P)
+        {
+            take_screenshot = true;
+        }
+        if (event.key.keysym.scancode == SDL_SCANCODE_T)
+        {
+            auto saved = settings.Save();
+            std::ofstream out("settings.clam3");
+            out << saved;
+            std::cout << "Saved state" << std::endl;
+        }
+        if (event.key.keysym.scancode == SDL_SCANCODE_Y)
+        {
+            std::ifstream in("settings.clam3");
+            if (in)
+            {
+                std::ostringstream contents;
+                contents << in.rdbuf();
+                settings.Load(contents.str());
+                std::cout << "Loaded state" << std::endl;
+            }
+            else
+            {
+                std::cout << "Didn't load state, settings.clam3 not found"
+                          << std::endl;
+            }
+        }
+    }
+}
+
 bool RealtimeRender::Tick()
 {
     SDL_Event event;
@@ -122,6 +162,7 @@ bool RealtimeRender::Tick()
         {
             uiSetting->Input(settings, event);
         }
+        DriverInput(event);
     }
     return false;
 }

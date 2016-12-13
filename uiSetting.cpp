@@ -258,7 +258,7 @@ void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
     if (event.type == SDL_KEYDOWN)
     {
         auto code = event.key.keysym.scancode;
-        if (code == up)
+        if (code == down)
         {
             currentIndex++;
             if (currentIndex >= (int)this->settings.size())
@@ -266,7 +266,7 @@ void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
                 currentIndex = 0;
             }
         }
-        else if (code == down)
+        else if (code == up)
         {
             currentIndex--;
             if (currentIndex < 0)

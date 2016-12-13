@@ -21,12 +21,14 @@ class RealtimeRender: public Immobile
     std::vector<std::unique_ptr<UiSetting>> uiSettings;
     Uint32 last_enqueue_time;
     double fpsAverage;
+    bool take_screenshot;
 
     static std::function<void(int *, size_t, size_t)> GpuCallback();
     void EnqueueKernel(int frame);
     void UpdateFps(double elapsed_seconds);
     std::string ConfigText();
     static void PushCallback(std::function<void(RealtimeRender &)> func);
+    void DriverInput(SDL_Event event);
 public:
     RealtimeRender(CudaContext context,
                    const KernelConfiguration &kernel,

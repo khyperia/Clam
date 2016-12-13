@@ -70,14 +70,14 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("LightPosZ", 4.0);
         result.AddSetting("LightSize", 1.0);
         result.AddSetting("WhiteClamp", false);
-        result.AddSetting("LightBrightnessHue", 0.1);
+        result.AddSetting("LightBrightnessHue", 0.05);
         result.AddSetting("LightBrightnessSat", 0.7);
-        result.AddSetting("LightBrightnessVal", 8.0);
+        result.AddSetting("LightBrightnessVal", 16.0);
         result.AddSetting("AmbientBrightnessHue", 0.6);
         result.AddSetting("AmbientBrightnessSat", 0.3);
         result.AddSetting("AmbientBrightnessVal", 1.0);
         result.AddSetting("ReflectHue", 0.0);
-        result.AddSetting("ReflectSat", 0.0);
+        result.AddSetting("ReflectSat", 0.001);
         result.AddSetting("ReflectVal", 1.0);
         result.AddSetting("MaxIters", 1024);
         result.AddSetting("Bailout", 1024.0);
@@ -125,7 +125,6 @@ KernelConfiguration::Controls(GpuKernel &kernel) const
         throw std::runtime_error("Invalid kernel name");
     }
     return result;
-
 }
 
 std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
@@ -138,7 +137,7 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
                                              SDL_SCANCODE_N,
                                              SDL_SCANCODE_M));
         result.push_back(make_unique<ExpVar>("focalDistance",
-                                             1.0,
+                                             0.25,
                                              SDL_SCANCODE_R,
                                              SDL_SCANCODE_F));
         result.push_back(make_unique<Camera3d>("posX",
@@ -173,20 +172,20 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("DeRotationAxisX", 0.25));
         settings.push_back(std::make_pair("DeRotationAxisY", 0.25));
         settings.push_back(std::make_pair("DeRotationAxisZ", 0.25));
-        settings.push_back(std::make_pair("DofAmount", 0.01));
+        settings.push_back(std::make_pair("DofAmount", -1.0));
         settings.push_back(std::make_pair("FovAbberation", -0.1));
         settings.push_back(std::make_pair("LightPosX", 0.5));
         settings.push_back(std::make_pair("LightPosY", 0.5));
         settings.push_back(std::make_pair("LightPosZ", 0.5));
         settings.push_back(std::make_pair("LightSize", -0.2));
         settings.push_back(std::make_pair("WhiteClamp", 0));
-        settings.push_back(std::make_pair("LightBrightnessHue", 0.125));
+        settings.push_back(std::make_pair("LightBrightnessHue", 0.05));
         settings.push_back(std::make_pair("LightBrightnessSat", -0.25));
         settings.push_back(std::make_pair("LightBrightnessVal", -0.25));
-        settings.push_back(std::make_pair("AmbientBrightnessHue", 0.125));
+        settings.push_back(std::make_pair("AmbientBrightnessHue", 0.05));
         settings.push_back(std::make_pair("AmbientBrightnessSat", -0.25));
         settings.push_back(std::make_pair("AmbientBrightnessVal", -0.25));
-        settings.push_back(std::make_pair("ReflectHue", 0.125));
+        settings.push_back(std::make_pair("ReflectHue", 0.05));
         settings.push_back(std::make_pair("ReflectSat", -0.25));
         settings.push_back(std::make_pair("ReflectVal", -0.25));
         settings.push_back(std::make_pair("MaxIters", 0));

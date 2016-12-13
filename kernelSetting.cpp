@@ -216,7 +216,9 @@ void SettingCollection::Load(const std::string &savedData)
         std::istringstream linestream(line);
         std::string name;
         std::string value;
-        if (!std::getline(linestream, name) || !std::getline(linestream, value))
+        std::getline(linestream, name, ' ');
+        std::getline(linestream, value, ' ');
+        if (name.empty() || value.empty())
         {
             throw std::runtime_error("Invalid formatted config line: " + line);
         }

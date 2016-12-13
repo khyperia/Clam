@@ -95,19 +95,39 @@ void SdlWindow::Blit(BlitData data, const std::string &text)
             throw std::runtime_error(
                 "Tried to render text, but no font was available");
         }
-        SDL_Color color = {255, 0, 0, 0};
-        SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(font,
-                                                           text.c_str(),
-                                                           color,
-                                                           (Uint32)data.width);
-        SDL_BlitSurface(surf, NULL, surface, NULL);
-        SDL_FreeSurface(surf);
+        {
+            SDL_Color color = {0, 0, 100, 255};
+            SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(font,
+                                                               text.c_str(),
+                                                               color,
+                                                               (Uint32)data
+                                                                   .width);
+            SDL_Rect dest_rect = {2, 1, surf->w, surf->h};
+            SDL_BlitSurface(surf, NULL, surface, &dest_rect);
+            SDL_FreeSurface(surf);
+        }
+        {
+            SDL_Color color = {255, 255, 155, 255};
+            SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(font,
+                                                               text.c_str(),
+                                                               color,
+                                                               (Uint32)data
+                                                                   .width);
+            SDL_BlitSurface(surf, NULL, surface, NULL);
+            SDL_FreeSurface(surf);
+        }
     }
     SDL_UpdateWindowSurface(window);
 }
 
-FileTarget::FileTarget(std::string baseFileName)
-    : baseFileName(baseFileName), curImage(0)
+void FileTarget::Screenshot(std::string baseFileName, BlitData data)
+{
+    FileTarget target(baseFileName);
+    target.Blit(data, "");
+}
+
+FileTarget::FileTarget(std::string fileName)
+    : fileName(fileName)
 {
 }
 
@@ -140,15 +160,13 @@ void FileTarget::Blit(BlitData data, const std::string &)
            (size_t)data.width * data.height * surface->format->BytesPerPixel);
     SDL_UnlockSurface(surface);
 
-    std::string
-        filename = this->baseFileName + "." + tostring(curImage) + ".bmp";
-    int ret = SDL_SaveBMP(surface, filename.c_str());
+    int ret = SDL_SaveBMP(surface, fileName.c_str());
     if (ret)
     {
         throw std::runtime_error(
-            "Could not save image " + filename + ": " + SDL_GetError());
+            "Could not save image " + fileName + ": " + SDL_GetError());
     }
-    std::cout << "Saved image '" << filename << "'" << std::endl;
+    std::cout << "Saved image '" << fileName << "'" << std::endl;
 
     SDL_FreeSurface(surface);
 }
