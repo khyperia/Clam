@@ -21,7 +21,7 @@ MandelbrotKernelControl::~MandelbrotKernelControl()
 {
 }
 
-void MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
+bool MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
                                       CudaContext &,
                                       size_t,
                                       size_t)
@@ -34,6 +34,7 @@ void MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
     temp.juliaY = (float)settings.Get("juliay").AsFloat();
     temp.juliaEnabled = settings.Get("juliaenabled").AsBool() ? 1 : 0;
     kernelVariable.Set(temp);
+    return true;
 }
 
 MandelboxKernelControl::MandelboxKernelControl(GpuKernelVar &kernelVariable)
@@ -46,16 +47,16 @@ MandelboxKernelControl::~MandelboxKernelControl()
 {
 }
 
-void MandelboxKernelControl::SetFrom(const SettingCollection &settings,
+bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
                                      CudaContext &context,
                                      size_t width,
                                      size_t height)
 {
-    frame++;
+    bool changed = false;
     if (old_width != width || old_height != height || !scratch_buffer()
         || !rand_buffer())
     {
-        frame = 0;
+        changed = true;
         old_width = width;
         old_height = height;
         scratch_buffer.~CuMem();
@@ -125,17 +126,17 @@ void MandelboxKernelControl::SetFrom(const SettingCollection &settings,
 #undef DefineBool
     if (!old_state)
     {
-        frame = 0;
+        changed = true;
         old_state = make_unique<MandelboxCfg>();
         *old_state = temp;
     }
     else if (memcmp(old_state.get(), &temp, sizeof(temp)))
     {
-        frame = 0;
+        changed = true;
         *old_state = temp;
     }
     temp.scratch = scratch_buffer();
     temp.randbuf = rand_buffer();
-    temp.Frame = frame;
     kernelVariable.Set(temp);
+    return changed;
 }

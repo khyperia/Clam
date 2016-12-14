@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <sstream>
 
 void UserOptions::Add(std::string name, std::string default_value)
 {
@@ -37,6 +38,16 @@ std::string UserOptions::Parse(int, char **argv)
         if (!had_prefix)
         {
             return "Option " + arg + " missing argument prefix";
+        }
+        if (arg == "help")
+        {
+            std::ostringstream help;
+            help << "Clam3 help:" << std::endl;
+            for (auto &value : values)
+            {
+                help << "--" << value.first << " " << value.second << std::endl;
+            }
+            return help.str();
         }
         argv++;
         if (!*argv)

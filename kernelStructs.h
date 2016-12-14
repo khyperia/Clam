@@ -68,8 +68,6 @@ struct MandelboxCfg
     float QualityFirstRay;
     float QualityRestRay;
     int ItersPerKernel;
-
-    int Frame;
 };
 
 struct MandelbrotCfg

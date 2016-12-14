@@ -11,7 +11,7 @@ public:
     KernelControl(GpuKernelVar &kernelVariable);
     virtual ~KernelControl();
 
-    virtual void SetFrom(const SettingCollection &settings,
+    virtual bool SetFrom(const SettingCollection &settings,
                          CudaContext &context,
                          size_t width,
                          size_t height) = 0;
@@ -22,7 +22,7 @@ class MandelbrotKernelControl: public KernelControl
 public:
     MandelbrotKernelControl(GpuKernelVar &kernelVariable);
     ~MandelbrotKernelControl() override;
-    void SetFrom(const SettingCollection &settings,
+    bool SetFrom(const SettingCollection &settings,
                  CudaContext &context,
                  size_t width,
                  size_t height) override;
@@ -37,11 +37,10 @@ class MandelboxKernelControl: public KernelControl
     CuMem<char> scratch_buffer;
     CuMem<uint64_t> rand_buffer;
     std::unique_ptr<MandelboxCfg> old_state;
-    int frame;
 public:
     MandelboxKernelControl(GpuKernelVar &kernelVariable);
     ~MandelboxKernelControl() override;
-    void SetFrom(const SettingCollection &settings,
+    bool SetFrom(const SettingCollection &settings,
                  CudaContext &context,
                  size_t width,
                  size_t height) override;

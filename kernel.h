@@ -59,12 +59,13 @@ public:
               const unsigned char *data,
               size_t length);
     ~GpuKernel();
+    void SyncStream();
     CudaContext &Context();
     GpuKernelVar &Variable(const std::string &name);
     void Run(int offsetX,
              int offsetY,
              int width,
              int height,
-             int frame,
+             int type,
              bool enqueueDownload);
 };

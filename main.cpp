@@ -119,6 +119,9 @@ int main(int argc, char **argv)
     UserOptions options;
     options.Add("kernel", "mandelbrot");
     options.Add("gpu", "0");
+    options.Add("save", "");
+    options.Add("frames", "100");
+    options.Add("size", "600x400");
     std::string cmdline_error = options.Parse(argc, argv);
     if (!cmdline_error.empty())
     {
@@ -126,18 +129,39 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    int width = 0;
+    int height = 0;
+    if (sscanf(options.Get("size").c_str(), "%dx%d", &width, &height) != 2)
+    {
+        std::cout << "size option has incorrect format" << std::endl;
+        return 1;
+    }
+
     CudaContext::Init();
     CudaContext ctx(fromstring<int>(options.Get("gpu")));
-    RealtimeRender driver(std::move(ctx),
-                          KernelConfiguration(options.Get("kernel")),
-                          600,
-                          400,
-                          "/usr/share/fonts/TTF/DejaVuSansMono.ttf");
-    driver.StartLoop(1);
-    while (true)
+    ctx.SetCurrent();
+
+    auto render_filename = options.Get("save");
+    if (render_filename.empty())
     {
-        if (!driver.Tick())
-            break;
+        RealtimeRender driver(std::move(ctx),
+                              KernelConfiguration(options.Get("kernel")),
+                              width,
+                              height,
+                              "/usr/share/fonts/TTF/DejaVuSansMono.ttf");
+        driver.Run();
+    }
+    else
+    {
+        auto num_frames = fromstring<int>(options.Get("frames"));
+        HeadlessRender driver(std::move(ctx),
+                              KernelConfiguration(options.Get("kernel")),
+                              (size_t)width,
+                              (size_t)height,
+                              num_frames,
+                              "settings.clam3",
+                              render_filename);
+        driver.Run();
     }
 #if CATCH_EXCEPTIONS
     }

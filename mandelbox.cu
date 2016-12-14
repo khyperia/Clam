@@ -590,28 +590,29 @@ static __device__ int FinishState(MandelboxState *state,
     return INIT_STATE;
 }
 
+// type: -1 is preview, 0 is init, 1 is continue
 extern "C" __global__ void kern(uint *__restrict__ screenPixels,
                                 int screenX,
                                 int screenY,
                                 int width,
-                                int height)
+                                int height,
+                                int type)
 {
     int x = blockDim.x * blockIdx.x + threadIdx.x;
     int y = blockDim.y * blockIdx.y + threadIdx.y;
     if (x >= width || y >= height)
         return;
 
-    int frame = cfg.Frame;
-    unsigned long long rand = GetRand(x, y, width, frame <= 0);
+    unsigned long long rand = GetRand(x, y, width, type <= 0);
 
     MandelboxState state = BufferScratch[y * width + x];
-    if (frame == -1)
+    if (type == -1)
     {
         state.state = PREVIEW_STATE;
         state.position = make_float3(cfg.Bailout + 1);
         state.color = make_float4(0);
     }
-    else if (frame == 0)
+    else if (type == 0)
     {
         state.state = INIT_STATE;
         state.position = make_float3(cfg.Bailout + 1);

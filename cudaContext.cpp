@@ -64,7 +64,7 @@ CudaContext::CudaContext(int deviceIndex)
 {
     currentContext = deviceIndex;
     Run(cuDeviceGet(&device, deviceIndex));
-    Run(cuCtxCreate(&context, 0, device));
+    Run(cuCtxCreate(&context, CU_CTX_BLOCKING_SYNC, device));
 }
 
 CUcontext CudaContext::Context() const

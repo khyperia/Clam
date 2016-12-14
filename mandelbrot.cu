@@ -1,3 +1,4 @@
+typedef void *CUdeviceptr;
 #include "kernelStructs.h"
 
 #define MaxIters 1000

@@ -45,7 +45,7 @@ GpuKernel::GpuKernel(CudaContext context,
                      const unsigned char *data,
                      size_t length)
     : context(std::move(context)), render_callback(render_callback),
-      old_width(0), old_height(0)
+      pinned(NULL), old_width(0), old_height(0)
 {
     std::string data_str((const char *)data, length);
     this->context.Run(cuModuleLoadData(&module, data_str.c_str()));
@@ -55,7 +55,7 @@ GpuKernel::GpuKernel(CudaContext context,
 
 GpuKernel::~GpuKernel()
 {
-    context.Run(cuStreamSynchronize(stream));
+    SyncStream();
     if (pinned != NULL)
     {
         context.Run(cuMemFreeHost(pinned));
@@ -79,13 +79,18 @@ CudaContext &GpuKernel::Context()
     return context;
 }
 
+void GpuKernel::SyncStream()
+{
+    context.Run(cuStreamSynchronize(stream));
+}
+
 void GpuKernel::Resize(size_t width, size_t height)
 {
     if (width == old_width && height == old_height && pinned != NULL)
     {
         return;
     }
-    context.Run(cuStreamSynchronize(stream));
+    SyncStream();
     old_width = width;
     old_height = height;
     if (pinned != NULL)
@@ -146,7 +151,7 @@ void GpuKernel::Run(int offsetX,
                     int offsetY,
                     int width,
                     int height,
-                    int frame,
+                    int type,
                     bool enqueueDownload)
 {
     context.SetCurrent();
@@ -158,7 +163,7 @@ void GpuKernel::Run(int offsetX,
     unsigned int blockY = maxLocalSize;
     unsigned int gridX = ((unsigned int)width + blockX - 1) / blockX;
     unsigned int gridY = ((unsigned int)height + blockY - 1) / blockY;
-    void *args[] = {&gpu_ptr, &offsetX, &offsetY, &width, &height, &frame};
+    void *args[] = {&gpu_ptr, &offsetX, &offsetY, &width, &height, &type};
     context.Run(cuLaunchKernel(main,
                                gridX,
                                gridY,

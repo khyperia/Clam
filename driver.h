@@ -6,11 +6,6 @@
 #include "kernelConfig.h"
 #include "kernelControl.h"
 #include "kernel.h"
-#include "cudaContext.h"
-
-extern bool cudaSuccessfulInit;
-
-struct RenderType;
 
 class RealtimeRender: public Immobile
 {
@@ -24,7 +19,8 @@ class RealtimeRender: public Immobile
     bool take_screenshot;
 
     static std::function<void(int *, size_t, size_t)> GpuCallback();
-    void EnqueueKernel(int frame);
+    void EnqueueKernel();
+    void StartLoop(size_t queue_size);
     void UpdateFps(double elapsed_seconds);
     std::string ConfigText();
     static void PushCallback(std::function<void(RealtimeRender &)> func);
@@ -36,6 +32,27 @@ public:
                    int height,
                    const char *fontName);
     ~RealtimeRender();
-    void StartLoop(size_t queue_size);
-    bool Tick();
+    void Run();
+};
+
+class HeadlessRender: public Immobile
+{
+    std::unique_ptr<GpuKernel> kernel;
+    SettingCollection settings;
+    std::vector<std::unique_ptr<KernelControl>> kernelControls;
+    int num_frames;
+    size_t width, height;
+
+    static std::function<void(int *, size_t, size_t)>
+    GpuCallback(std::string filename);
+public:
+    HeadlessRender(CudaContext context,
+                   const KernelConfiguration &kernel,
+                   size_t width,
+                   size_t height,
+                   int num_frames,
+                   const std::string settings_file,
+                   const std::string filename);
+    ~HeadlessRender();
+    void Run();
 };

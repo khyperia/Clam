@@ -83,7 +83,7 @@ foreach (filename ${cufiles})
     add_custom_command(
             OUTPUT "${ptxfile}"
             DEPENDS ${infile}
-            COMMAND nvcc "--use_fast_math" "-lineinfo" "-arch" "compute_35" "-ptx" "-o" "${ptxfile}" "${infile}")
+            COMMAND nvcc "--use_fast_math" "-lineinfo" "-arch" "compute_30" "-ptx" "-o" "${ptxfile}" "${infile}")
     add_custom_command(
             OUTPUT "${outfile}"
             DEPENDS ${ptxfile}
