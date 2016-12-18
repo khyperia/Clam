@@ -44,15 +44,9 @@ SettingCollection KernelConfiguration::Settings() const
     SettingCollection result;
     if (name == "mandelbox")
     {
-        result.AddSetting("posX", 0.0);
-        result.AddSetting("posY", 0.0);
-        result.AddSetting("posZ", 5.0);
-        result.AddSetting("lookX", 0.0);
-        result.AddSetting("lookY", 0.0);
-        result.AddSetting("lookZ", -1.0);
-        result.AddSetting("upX", 0.0);
-        result.AddSetting("upY", 1.0);
-        result.AddSetting("upZ", 0.0);
+        result.AddSetting("pos", Vector3<double>(0.0, 0.0, 5.0));
+        result.AddSetting("look", Vector3<double>(0.0, 0.0, -1.0));
+        result.AddSetting("up", Vector3<double>(0.0, 1.0, 0.0));
         result.AddSetting("fov", 1.0);
         result.AddSetting("focalDistance", 3.0);
         result.AddSetting("Scale", -2.0);
@@ -60,14 +54,10 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("FixedRadius2", 1.0);
         result.AddSetting("MinRadius2", 0.125);
         result.AddSetting("DeRotationAmount", 0.0);
-        result.AddSetting("DeRotationAxisX", 1.0);
-        result.AddSetting("DeRotationAxisY", 0.0);
-        result.AddSetting("DeRotationAxisZ", 0.0);
+        result.AddSetting("DeRotationAxis", Vector3<double>(1.0, 0.0, 0.0));
         result.AddSetting("DofAmount", 0.01);
         result.AddSetting("FovAbberation", 0.0);
-        result.AddSetting("LightPosX", 4.0);
-        result.AddSetting("LightPosY", 4.0);
-        result.AddSetting("LightPosZ", 4.0);
+        result.AddSetting("LightPos", Vector3<double>(4.0, 4.0, 4.0));
         result.AddSetting("LightSize", 1.0);
         result.AddSetting("WhiteClamp", false);
         result.AddSetting("LightBrightnessHue", 0.05);
@@ -92,11 +82,9 @@ SettingCollection KernelConfiguration::Settings() const
     }
     else if (name == "mandelbrot")
     {
-        result.AddSetting("posx", 0.0f);
-        result.AddSetting("posy", 0.0f);
+        result.AddSetting("pos", Vector2<double>(0.0, 0.0));
         result.AddSetting("zoom", 1.0f);
-        result.AddSetting("juliax", 0.0f);
-        result.AddSetting("juliay", 0.0f);
+        result.AddSetting("julia", Vector2<double>(0.0, 0.0));
         result.AddSetting("juliaenabled", false);
     }
     else
@@ -140,15 +128,9 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
                                              0.25,
                                              SDL_SCANCODE_R,
                                              SDL_SCANCODE_F));
-        result.push_back(make_unique<Camera3d>("posX",
-                                               "posY",
-                                               "posZ",
-                                               "lookX",
-                                               "lookY",
-                                               "lookZ",
-                                               "upX",
-                                               "upY",
-                                               "upZ",
+        result.push_back(make_unique<Camera3d>("pos",
+                                               "look",
+                                               "up",
                                                "fov",
                                                "focalDistance",
                                                SDL_SCANCODE_W,
@@ -169,14 +151,10 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("FixedRadius2", 0.25));
         settings.push_back(std::make_pair("MinRadius2", 0.25));
         settings.push_back(std::make_pair("DeRotationAmount", 0.25));
-        settings.push_back(std::make_pair("DeRotationAxisX", 0.25));
-        settings.push_back(std::make_pair("DeRotationAxisY", 0.25));
-        settings.push_back(std::make_pair("DeRotationAxisZ", 0.25));
+        settings.push_back(std::make_pair("DeRotationAxis", 0.25));
         settings.push_back(std::make_pair("DofAmount", -1.0));
         settings.push_back(std::make_pair("FovAbberation", -0.1));
-        settings.push_back(std::make_pair("LightPosX", 0.5));
-        settings.push_back(std::make_pair("LightPosY", 0.5));
-        settings.push_back(std::make_pair("LightPosZ", 0.5));
+        settings.push_back(std::make_pair("LightPos", 0.5));
         settings.push_back(std::make_pair("LightSize", -0.2));
         settings.push_back(std::make_pair("WhiteClamp", 0));
         settings.push_back(std::make_pair("LightBrightnessHue", 0.05));
@@ -210,15 +188,13 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
                                              1.0,
                                              SDL_SCANCODE_F,
                                              SDL_SCANCODE_R));
-        result.push_back(make_unique<Pan2d>("posx",
-                                            "posy",
+        result.push_back(make_unique<Pan2d>("pos",
                                             "zoom",
                                             SDL_SCANCODE_W,
                                             SDL_SCANCODE_S,
                                             SDL_SCANCODE_A,
                                             SDL_SCANCODE_D));
-        result.push_back(make_unique<Pan2d>("juliax",
-                                            "juliay",
+        result.push_back(make_unique<Pan2d>("julia",
                                             "zoom",
                                             SDL_SCANCODE_I,
                                             SDL_SCANCODE_K,

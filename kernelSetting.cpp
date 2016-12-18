@@ -1,5 +1,59 @@
 #include "kernelSetting.h"
 
+// // template<typename T>
+// T length(Vector2<T> left, Vector2<T> right)
+// {
+//     return (left - right).length();
+// }
+//
+// template<typename T>
+// T length(Vector3<T> left, Vector3<T> right)
+// {
+//     return (left - right).length();
+// }
+//
+// double length(double left, double right)
+// {
+//     auto value = left - right;
+//     return value < 0 ? -value : value;
+// }
+//
+// int length(int left, int right)
+// {
+//     auto value = left - right;
+//     return value < 0 ? -value : value;
+// }
+//
+// template<typename T, typename Tscalar>
+// Tscalar GetT(Tscalar t, T p0, T p1)
+// {
+//     Tscalar a = length(p1, p0);
+//     Tscalar c = std::pow(a, (Tscalar)0.5);
+//     return c + t;
+// }
+//
+// // https://en.wikipedia.org/wiki/Centripetal_Catmull–Rom_spline
+// template<typename T, typename Tscalar>
+// T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
+// {
+//     Tscalar min = 0.1f;
+//     Tscalar t0 = 0.0f;
+//     Tscalar t1 = min + GetT(t0, p0, p1);
+//     Tscalar t2 = min + GetT(t1, p1, p2);
+//     Tscalar t3 = min + GetT(t2, p2, p3);
+//
+//     T A1 = (t1 - t) / (t1 - t0) * p0 + (t - t0) / (t1 - t0) * p1;
+//     T A2 = (t2 - t) / (t2 - t1) * p1 + (t - t1) / (t2 - t1) * p2;
+//     T A3 = (t3 - t) / (t3 - t2) * p2 + (t - t2) / (t3 - t2) * p3;
+//
+//     T B1 = (t2 - t) / (t2 - t0) * A1 + (t - t0) / (t2 - t0) * A2;
+//     T B2 = (t3 - t) / (t3 - t1) * A2 + (t - t1) / (t3 - t1) * A3;
+//
+//     T C = (t2 - t) / (t2 - t1) * B1 + (t - t1) / (t2 - t1) * B2;
+//
+//    return C;
+// }
+
 template<typename T, typename Tscalar>
 T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
 {
@@ -26,8 +80,37 @@ Setting::Setting(const std::string name, bool value)
 {
 }
 
+Setting::Setting(const std::string name, Vector2<double> value)
+    : name(name), tag(VEC2), value_vec2(value)
+{
+}
+
+Setting::Setting(const std::string name, Vector3<double> value)
+    : name(name), tag(VEC3), value_vec3(value)
+{
+}
+
 Setting::~Setting()
 {
+}
+
+Setting Setting::Clone() const
+{
+    switch (tag)
+    {
+        case FLOAT:
+            return Setting(name, AsFloat());
+        case INT:
+            return Setting(name, AsInt());
+        case BOOL:
+            return Setting(name, AsBool());
+        case VEC2:
+            return Setting(name, AsVec2());
+        case VEC3:
+            return Setting(name, AsVec3());
+        default:
+            throw std::runtime_error("Invalid tag for " + name);
+    }
 }
 
 bool Setting::IsType(Setting::TagTy type) const
@@ -65,6 +148,16 @@ bool Setting::IsBool() const
     return IsType(BOOL);
 }
 
+bool Setting::IsVec2() const
+{
+    return IsType(VEC2);
+}
+
+bool Setting::IsVec3() const
+{
+    return IsType(VEC3);
+}
+
 int &Setting::AsInt()
 {
     Check(INT);
@@ -83,6 +176,18 @@ bool &Setting::AsBool()
     return value_bool;
 }
 
+Vector2<double> &Setting::AsVec2()
+{
+    Check(VEC2);
+    return value_vec2;
+}
+
+Vector3<double> &Setting::AsVec3()
+{
+    Check(VEC3);
+    return value_vec3;
+}
+
 const int &Setting::AsInt() const
 {
     Check(INT);
@@ -99,6 +204,18 @@ const bool &Setting::AsBool() const
 {
     Check(BOOL);
     return value_bool;
+}
+
+const Vector2<double> &Setting::AsVec2() const
+{
+    Check(VEC2);
+    return value_vec2;
+}
+
+const Vector3<double> &Setting::AsVec3() const
+{
+    Check(VEC3);
+    return value_vec3;
 }
 
 Setting Setting::Interpolate(const Setting &p0,
@@ -130,6 +247,20 @@ Setting Setting::Interpolate(const Setting &p0,
                                       time));
         case BOOL:
             return Setting(p0.name, p1.AsBool());
+        case VEC2:
+            return Setting(p0.name,
+                           CatmullRom(p0.AsVec2(),
+                                      p1.AsVec2(),
+                                      p2.AsVec2(),
+                                      p3.AsVec2(),
+                                      time));
+        case VEC3:
+            return Setting(p0.name,
+                           CatmullRom(p0.AsVec3(),
+                                      p1.AsVec3(),
+                                      p2.AsVec3(),
+                                      p3.AsVec3(),
+                                      time));
     }
     throw std::runtime_error("Invalid tag for " + p0.name);
 }
@@ -144,6 +275,10 @@ std::string Setting::Save() const
             return name + " " + tostring(AsInt());
         case BOOL:
             return name + (AsBool() ? " true" : " false");
+        case VEC2:
+            return name + " " + tostring(AsVec2());
+        case VEC3:
+            return name + " " + tostring(AsVec3());
     }
     throw std::runtime_error("Invalid tag for " + name);
 }
@@ -161,6 +296,12 @@ void Setting::Load(const std::string &savedData)
         case BOOL:
             AsBool() = (savedData == "true");
             break;
+        case VEC2:
+            AsVec2() = fromstring<Vector2<double>>(savedData);
+            break;
+        case VEC3:
+            AsVec3() = fromstring<Vector3<double>>(savedData);
+            break;
     }
 }
 
@@ -171,6 +312,16 @@ SettingCollection::SettingCollection()
 
 SettingCollection::~SettingCollection()
 {
+}
+
+SettingCollection SettingCollection::Clone() const
+{
+    SettingCollection result;
+    for (const auto &setting : settings)
+    {
+        result.AddSetting(setting.Clone());
+    }
+    return std::move(result);
 }
 
 void SettingCollection::AddSetting(Setting setting)
@@ -189,6 +340,18 @@ void SettingCollection::AddSetting(const std::string name, int value)
 }
 
 void SettingCollection::AddSetting(const std::string name, bool value)
+{
+    AddSetting(Setting(name, value));
+}
+
+void
+SettingCollection::AddSetting(const std::string name, Vector2<double> value)
+{
+    AddSetting(Setting(name, value));
+}
+
+void
+SettingCollection::AddSetting(const std::string name, Vector3<double> value)
 {
     AddSetting(Setting(name, value));
 }
@@ -250,10 +413,10 @@ const Setting &SettingCollection::Get(const std::string &name) const
     throw std::runtime_error("Could not find setting " + name);
 }
 
-SettingCollection SettingCollection::Interpolate(SettingCollection p0,
-                                                 SettingCollection p1,
-                                                 SettingCollection p2,
-                                                 SettingCollection p3,
+SettingCollection SettingCollection::Interpolate(const SettingCollection &p0,
+                                                 const SettingCollection &p1,
+                                                 const SettingCollection &p2,
+                                                 const SettingCollection &p3,
                                                  double time)
 {
     SettingCollection result;

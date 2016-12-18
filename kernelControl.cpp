@@ -27,11 +27,13 @@ bool MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
                                       size_t)
 {
     MandelbrotCfg temp;
-    temp.posX = (float)settings.Get("posx").AsFloat();
-    temp.posY = (float)settings.Get("posy").AsFloat();
+    auto &pos = settings.Get("pos").AsVec2();
+    auto &julia = settings.Get("julia").AsVec2();
+    temp.posX = (float)pos.x;
+    temp.posY = (float)pos.y;
     temp.zoom = (float)settings.Get("zoom").AsFloat();
-    temp.juliaX = (float)settings.Get("juliax").AsFloat();
-    temp.juliaY = (float)settings.Get("juliay").AsFloat();
+    temp.juliaX = (float)julia.x;
+    temp.juliaY = (float)julia.y;
     temp.juliaEnabled = settings.Get("juliaenabled").AsBool() ? 1 : 0;
     kernelVariable.Set(temp);
     return true;
@@ -66,18 +68,28 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
         new(&rand_buffer) CuMem<uint64_t>(context, width * height);
     }
     MandelboxCfg temp;
+    auto pos = settings.Get("pos").AsVec3();
+    auto look = settings.Get("look").AsVec3().normalized();
+    auto
+        up = cross(cross(look, settings.Get("up").AsVec3()), look).normalized();
+    temp.posX = (float)pos.x;
+    temp.posY = (float)pos.y;
+    temp.posZ = (float)pos.z;
+    temp.lookX = (float)look.x;
+    temp.lookY = (float)look.y;
+    temp.lookZ = (float)look.z;
+    temp.upX = (float)up.x;
+    temp.upY = (float)up.y;
+    temp.upZ = (float)up.z;
+#define DefineVec3(name) do { \
+        const auto& val = settings.Get(#name).AsVec3();\
+        temp.name##X = val.x;\
+        temp.name##Y = val.y;\
+        temp.name##Z = val.z;\
+    } while (0)
 #define DefineFlt(name) temp.name = (float)settings.Get(#name).AsFloat()
 #define DefineInt(name) temp.name = (int)settings.Get(#name).AsInt()
 #define DefineBool(name) temp.name = settings.Get(#name).AsBool() ? 1 : 0
-    DefineFlt(posX);
-    DefineFlt(posY);
-    DefineFlt(posZ);
-    DefineFlt(lookX);
-    DefineFlt(lookY);
-    DefineFlt(lookZ);
-    DefineFlt(upX);
-    DefineFlt(upY);
-    DefineFlt(upZ);
     DefineFlt(fov);
     DefineFlt(focalDistance);
 
@@ -86,15 +98,11 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     DefineFlt(FixedRadius2);
     DefineFlt(MinRadius2);
     DefineFlt(DeRotationAmount);
-    DefineFlt(DeRotationAxisX);
-    DefineFlt(DeRotationAxisY);
-    DefineFlt(DeRotationAxisZ);
+    DefineVec3(DeRotationAxis);
     DefineFlt(DofAmount);
     DefineFlt(FovAbberation);
 
-    DefineFlt(LightPosX);
-    DefineFlt(LightPosY);
-    DefineFlt(LightPosZ);
+    DefineVec3(LightPos);
     DefineFlt(LightSize);
 
     DefineBool(WhiteClamp);
@@ -121,6 +129,7 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     DefineFlt(QualityFirstRay);
     DefineFlt(QualityRestRay);
     DefineInt(ItersPerKernel);
+#undef DefineVec3
 #undef DefineFlt
 #undef DefineInt
 #undef DefineBool

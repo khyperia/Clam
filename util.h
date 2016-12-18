@@ -4,6 +4,16 @@
 #include <memory>
 #include <sstream>
 
+class TimeEstimate: public Immobile
+{
+    struct Time;
+    std::unique_ptr<Time> start;
+public:
+    TimeEstimate();
+    ~TimeEstimate();
+    std::string Mark(int current, int total);
+};
+
 template<typename T>
 static std::string tostring(const T &value)
 {

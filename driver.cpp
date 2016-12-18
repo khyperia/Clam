@@ -1,6 +1,4 @@
 #include <fstream>
-#include <chrono>
-#include <iomanip>
 #include "driver.h"
 #include "lib_init.h"
 
@@ -143,6 +141,25 @@ void RealtimeRender::DriverInput(SDL_Event event)
                           << std::endl;
             }
         }
+        if (event.key.keysym.scancode == SDL_SCANCODE_V)
+        {
+            auto saved = settings.Save();
+            std::ofstream
+                out("movie.clam3", std::ofstream::out | std::ofstream::app);
+            out << saved << "---" << std::endl;
+            std::cout << "Saved keyframe" << std::endl;
+        }
+        if (event.key.keysym.scancode == SDL_SCANCODE_B)
+        {
+            if (std::remove("movie.clam3"))
+            {
+                std::cout << "Unable to delete movie file" << std::endl;
+            }
+            else
+            {
+                std::cout << "Deleted keyframe file" << std::endl;
+            }
+        }
     }
 }
 
@@ -223,7 +240,7 @@ HeadlessRender::~HeadlessRender()
 void HeadlessRender::Run()
 {
     const int sync_every = 32;
-    auto start = std::chrono::system_clock::now();
+    TimeEstimate timer;
     for (int frame = 0; frame < num_frames; frame++)
     {
         kernel->Run((int)width / -2,
@@ -235,33 +252,136 @@ void HeadlessRender::Run()
         if (frame % sync_every == sync_every - 1)
         {
             kernel->SyncStream();
-            auto now = std::chrono::system_clock::now();
-            auto frame1 = frame + 1;
-            auto elapsed = now - start;
-            auto ticks_per = elapsed / frame1;
-            auto frames_left = num_frames - frame1;
-            auto time_left = ticks_per * frames_left;
 
-            auto elapsed_sec =
-                std::chrono::duration_cast<std::chrono::seconds>(elapsed)
-                    .count();
-            auto elapsed_min = elapsed_sec / 60;
-            elapsed_sec -= elapsed_min * 60;
-            auto time_left_sec =
-                std::chrono::duration_cast<std::chrono::seconds>(time_left)
-                    .count();
-            auto time_left_min = time_left_sec / 60;
-            time_left_sec -= time_left_min * 60;
-
-            std::cout << frame1 << "/" << num_frames << " ("
-                      << (int)((100.0 * frame1) / num_frames) << "%), "
-                      << std::setfill('0') << elapsed_min << ":"
-                      << std::setw(2) << elapsed_sec << " elapsed, "
-                      << time_left_min << ":" << std::setw(2)
-                      << time_left_sec << " left" << std::setfill(' ')
-                      << std::setw(0) << std::endl;
+            std::cout << timer.Mark(frame, num_frames) << std::endl;
         }
     }
     kernel->SyncStream();
     std::cout << "Done." << std::endl;
+}
+
+MovieRender::MovieRender(CudaContext context,
+                         const KernelConfiguration &kernel,
+                         size_t width,
+                         size_t height,
+                         int num_iters,
+                         int num_frames,
+                         bool loop,
+                         const std::string settings_file,
+                         const std::string base_filename)
+    : filename(std::move(std::make_shared<std::string>(std::move(base_filename)))),
+      kernel(make_unique<GpuKernel>(std::move(context),
+                                    GpuCallback(filename),
+                                    kernel.KernelData(),
+                                    kernel.KernelLength())),
+      template_settings(std::move(kernel.Settings())), settings(),
+      kernelControls(std::move(kernel.Controls(*this->kernel))),
+      num_iters(num_iters), num_frames(num_frames), loop(loop), width(width),
+      height(height)
+{
+    std::ifstream in(settings_file);
+    if (in)
+    {
+        std::ostringstream contents;
+        std::string line;
+        while (true)
+        {
+            bool end = !std::getline(in, line);
+            if (end || line == "---")
+            {
+                std::string value = contents.str();
+                if (!value.empty())
+                {
+                    SettingCollection setting = template_settings.Clone();
+                    setting.Load(value);
+                    settings.push_back(std::move(setting));
+                }
+                contents.str("");
+                contents.clear();
+            }
+            else if (!line.empty())
+            {
+                contents << line << std::endl;
+            }
+            if (end)
+            {
+                break;
+            }
+        }
+        if (settings.size() < 2)
+        {
+            throw std::runtime_error(
+                "Couldn't render: " + settings_file + " no keyframes in file");
+        }
+    }
+    else
+    {
+        throw std::runtime_error(
+            "Couldn't render: " + settings_file + " not found");
+    }
+}
+
+std::function<void(int *, size_t, size_t)>
+MovieRender::GpuCallback(std::shared_ptr<std::string> filename)
+{
+    const auto result = [filename](int *data, size_t width, size_t height)
+    {
+        BlitData blitData(data, (int)width, (int)height);
+        FileTarget::Screenshot(*filename, blitData);
+    };
+    return result;
+}
+
+MovieRender::~MovieRender()
+{
+}
+
+void MovieRender::Run()
+{
+    TimeEstimate timer;
+    for (int frame = 0; frame < num_frames; frame++)
+    {
+        *filename = "movie." + tostring(frame) + ".bmp";
+        double time = (double)frame / num_frames * (settings.size() - (loop ? 0 : 1));
+        int keyframe = (int)time;
+        time = time - keyframe;
+        int t0 = keyframe - 1;
+        int t1 = keyframe;
+        int t2 = keyframe + 1;
+        int t3 = keyframe + 2;
+        if (t0 < 0)
+        {
+            t0 = loop ? t0 + (int)settings.size() : 0;
+        }
+        if (t2 >= (int)settings.size())
+        {
+            t2 = loop ? t2 - (int)settings.size() : (int)settings.size() - 1;
+        }
+        if (t3 >= (int)settings.size())
+        {
+            t3 = loop ? t3 - (int)settings.size() : (int)settings.size() - 2;
+        }
+        SettingCollection this_frame =
+            SettingCollection::Interpolate(settings[t0],
+                                           settings[t1],
+                                           settings[t2],
+                                           settings[t3],
+                                           time);
+        for (const auto &control : kernelControls)
+        {
+            control
+                ->SetFrom(this_frame, this->kernel->Context(), width, height);
+        }
+        for (int iter = 0; iter < num_iters; iter++)
+        {
+            kernel->Run((int)width / -2,
+                        (int)height / -2,
+                        (int)width,
+                        (int)height,
+                        iter,
+                        iter == num_iters - 1);
+        }
+        kernel->SyncStream();
+        std::cout << timer.Mark(frame, num_frames) << std::endl;
+    }
 }

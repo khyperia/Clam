@@ -56,3 +56,31 @@ public:
     ~HeadlessRender();
     void Run();
 };
+
+class MovieRender: public Immobile
+{
+    std::shared_ptr<std::string> filename;
+    std::unique_ptr<GpuKernel> kernel;
+    SettingCollection template_settings;
+    std::vector<SettingCollection> settings;
+    std::vector<std::unique_ptr<KernelControl>> kernelControls;
+    int num_iters;
+    int num_frames;
+    bool loop;
+    size_t width, height;
+
+    static std::function<void(int *, size_t, size_t)>
+    GpuCallback(std::shared_ptr<std::string> filename);
+public:
+    MovieRender(CudaContext context,
+                const KernelConfiguration &kernel,
+                size_t width,
+                size_t height,
+                int num_iters,
+                int num_frames,
+                bool loop,
+                const std::string settings_file,
+                const std::string base_filename);
+    ~MovieRender();
+    void Run();
+};

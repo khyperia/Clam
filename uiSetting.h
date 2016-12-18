@@ -36,8 +36,7 @@ public:
 
 class Pan2d: public UiSetting
 {
-    std::string pos_x;
-    std::string pos_y;
+    std::string pos_name;
     std::string move_speed;
     SDL_Scancode up;
     SDL_Scancode down;
@@ -45,8 +44,7 @@ class Pan2d: public UiSetting
     SDL_Scancode right;
 
 public:
-    Pan2d(std::string pos_x,
-          std::string pos_y,
+    Pan2d(std::string pos_name,
           std::string move_speed,
           SDL_Scancode up,
           SDL_Scancode down,
@@ -59,15 +57,9 @@ public:
 
 class Camera3d: public UiSetting
 {
-    std::string pos_x;
-    std::string pos_y;
-    std::string pos_z;
-    std::string look_x;
-    std::string look_y;
-    std::string look_z;
-    std::string up_x;
-    std::string up_y;
-    std::string up_z;
+    std::string pos_name;
+    std::string look_name;
+    std::string up_name;
     std::string fov;
     std::string move_speed;
     SDL_Scancode forwards;
@@ -84,15 +76,9 @@ class Camera3d: public UiSetting
     SDL_Scancode roll_right;
 
 public:
-    Camera3d(std::string pos_x,
-             std::string pos_y,
-             std::string pos_z,
-             std::string look_x,
-             std::string look_y,
-             std::string look_z,
-             std::string up_x,
-             std::string up_y,
-             std::string up_z,
+    Camera3d(std::string pos_name,
+             std::string look_name,
+             std::string up_name,
              std::string fov,
              std::string move_speed,
              SDL_Scancode forwards,
@@ -132,6 +118,9 @@ class InteractiveSetting: public UiSetting
     SDL_Scancode increase;
     SDL_Scancode decrease;
     int currentIndex;
+    std::pair<std::string, double> &
+    Current(const SettingCollection &settings, int *elem);
+    int Size(const SettingCollection &settings);
 public:
     InteractiveSetting(std::vector<std::pair<std::string, double>> settings,
                        SDL_Scancode up,

@@ -62,14 +62,13 @@ void ExpVar::Integrate(SettingCollection &settings, double time)
     }
 }
 
-Pan2d::Pan2d(std::string pos_x,
-             std::string pos_y,
+Pan2d::Pan2d(std::string pos_name,
              std::string move_speed,
              SDL_Scancode up,
              SDL_Scancode down,
              SDL_Scancode left,
              SDL_Scancode right)
-    : UiSetting(), pos_x(std::move(pos_x)), pos_y(std::move(pos_y)),
+    : UiSetting(), pos_name(std::move(pos_name)),
       move_speed(std::move(move_speed)), up(up), down(down), left(left),
       right(right)
 {
@@ -83,24 +82,23 @@ void Pan2d::Integrate(SettingCollection &settings, double time)
 {
     UiSetting::Integrate(settings, time);
     const auto pan_speed = 1.0f / 4.0f;
-    auto &posx = settings.Get(this->pos_x).AsFloat();
-    auto &posy = settings.Get(this->pos_y).AsFloat();
+    auto &pos = settings.Get(this->pos_name).AsVec2();
     auto &move_speed = settings.Get(this->move_speed).AsFloat();
     if (IsKey(up))
     {
-        posy -= move_speed * pan_speed * time;
+        pos.y -= move_speed * pan_speed * time;
     }
     if (IsKey(down))
     {
-        posy += move_speed * pan_speed * time;
+        pos.y += move_speed * pan_speed * time;
     }
     if (IsKey(left))
     {
-        posx -= move_speed * pan_speed * time;
+        pos.x -= move_speed * pan_speed * time;
     }
     if (IsKey(right))
     {
-        posx += move_speed * pan_speed * time;
+        pos.x += move_speed * pan_speed * time;
     }
 }
 
@@ -123,15 +121,9 @@ void Toggle::Input(SettingCollection &settings, SDL_Event event)
     }
 }
 
-Camera3d::Camera3d(std::string pos_x,
-                   std::string pos_y,
-                   std::string pos_z,
-                   std::string look_x,
-                   std::string look_y,
-                   std::string look_z,
-                   std::string up_x,
-                   std::string up_y,
-                   std::string up_z,
+Camera3d::Camera3d(std::string pos_name,
+                   std::string look_name,
+                   std::string up_name,
                    std::string fov,
                    std::string move_speed,
                    SDL_Scancode forwards,
@@ -146,8 +138,7 @@ Camera3d::Camera3d(std::string pos_x,
                    SDL_Scancode yaw_right,
                    SDL_Scancode roll_left,
                    SDL_Scancode roll_right)
-    : pos_x(pos_x), pos_y(pos_y), pos_z(pos_z), look_x(look_x), look_y(look_y),
-      look_z(look_z), up_x(up_x), up_y(up_y), up_z(up_z), fov(fov),
+    : pos_name(pos_name), look_name(look_name), up_name(up_name), fov(fov),
       move_speed(move_speed), forwards(forwards), back(back), up(up),
       down(down), left(left), right(right), pitch_up(pitch_up),
       pitch_down(pitch_down), yaw_left(yaw_left), yaw_right(yaw_right),
@@ -162,20 +153,11 @@ Camera3d::~Camera3d()
 void Camera3d::Integrate(SettingCollection &settings, double time)
 {
     UiSetting::Integrate(settings, time);
-    auto &pos_x = settings.Get(this->pos_x).AsFloat();
-    auto &pos_y = settings.Get(this->pos_y).AsFloat();
-    auto &pos_z = settings.Get(this->pos_z).AsFloat();
-    auto &look_x = settings.Get(this->look_x).AsFloat();
-    auto &look_y = settings.Get(this->look_y).AsFloat();
-    auto &look_z = settings.Get(this->look_z).AsFloat();
-    auto &up_x = settings.Get(this->up_x).AsFloat();
-    auto &up_y = settings.Get(this->up_y).AsFloat();
-    auto &up_z = settings.Get(this->up_z).AsFloat();
+    auto &pos = settings.Get(this->pos_name).AsVec3();
+    auto &look = settings.Get(this->look_name).AsVec3();
+    auto &up = settings.Get(this->up_name).AsVec3();
     const auto move_speed = settings.Get(this->move_speed).AsFloat() * time;
     const auto turn_speed = settings.Get(this->fov).AsFloat() * time;
-    auto pos = Vector3<double>(pos_x, pos_y, pos_z);
-    auto look = Vector3<double>(look_x, look_y, look_z);
-    auto up = Vector3<double>(up_x, up_y, up_z);
     if (IsKey(this->forwards))
     {
         pos = pos + look * move_speed;
@@ -226,15 +208,6 @@ void Camera3d::Integrate(SettingCollection &settings, double time)
     }
     look = look.normalized();
     up = cross(cross(look, up), look).normalized();
-    pos_x = pos.x;
-    pos_y = pos.y;
-    pos_z = pos.z;
-    look_x = look.x;
-    look_y = look.y;
-    look_z = look.z;
-    up_x = up.x;
-    up_y = up.y;
-    up_z = up.z;
 }
 
 InteractiveSetting::InteractiveSetting(std::vector<std::pair<std::string,
@@ -252,6 +225,76 @@ InteractiveSetting::~InteractiveSetting()
 {
 }
 
+std::pair<std::string, double> &
+InteractiveSetting::Current(const SettingCollection &settings, int *elem)
+{
+    int cur = 0;
+    for (auto &setting : this->settings)
+    {
+        const auto &val = settings.Get(setting.first);
+        int delta = currentIndex - cur;
+        if (val.IsVec2())
+        {
+            if (delta < 2)
+            {
+                if (elem)
+                {
+                    *elem = delta;
+                }
+                return setting;
+            }
+            cur += 2;
+        }
+        else if (val.IsVec3())
+        {
+            if (delta < 3)
+            {
+                if (elem)
+                {
+                    *elem = delta;
+                }
+                return setting;
+            }
+            cur += 3;
+        }
+        else
+        {
+            if (delta < 1)
+            {
+                if (elem)
+                {
+                    *elem = delta;
+                }
+                return setting;
+            }
+            cur += 1;
+        }
+    }
+    return this->settings[0];
+}
+
+int InteractiveSetting::Size(const SettingCollection &settings)
+{
+    int size = 0;
+    for (const auto &setting : this->settings)
+    {
+        const auto &val = settings.Get(setting.first);
+        if (val.IsVec2())
+        {
+            size += 2;
+        }
+        else if (val.IsVec3())
+        {
+            size += 3;
+        }
+        else
+        {
+            size += 1;
+        }
+    }
+    return size;
+}
+
 void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
 {
     UiSetting::Input(settings, event);
@@ -261,7 +304,7 @@ void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
         if (code == down)
         {
             currentIndex++;
-            if (currentIndex >= (int)this->settings.size())
+            if (currentIndex >= Size(settings))
             {
                 currentIndex = 0;
             }
@@ -271,12 +314,12 @@ void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
             currentIndex--;
             if (currentIndex < 0)
             {
-                currentIndex = (int)this->settings.size();
+                currentIndex = Size(settings) - 1;
             }
         }
         else if (code == increase || code == decrease)
         {
-            auto &item = settings.Get(this->settings[currentIndex].first);
+            auto &item = settings.Get(Current(settings, nullptr).first);
             if (item.IsBool())
             {
                 auto &value = item.AsBool();
@@ -300,24 +343,40 @@ void InteractiveSetting::Integrate(SettingCollection &settings, double time)
     }
     if (delta != 0)
     {
-        auto &item = settings.Get(this->settings[currentIndex].first);
+        int elem = 0;
+        auto &current = Current(settings, &elem);
+        auto &item = settings.Get(current.first);
         if (item.IsInt())
         {
             auto &value = item.AsInt();
             value += delta;
         }
-        else if (item.IsFloat())
+        else if (item.IsFloat() || item.IsVec2() || item.IsVec3())
         {
-            auto &value = item.AsFloat();
-            auto rate = this->settings[currentIndex].second;
+            double *value;
+            if (item.IsFloat())
+            {
+                value = &item.AsFloat();
+            }
+            else if (item.IsVec2())
+            {
+                value = elem == 0 ? &item.AsVec2().x : &item.AsVec2().y;
+            }
+            else
+            {
+                value =
+                    elem == 0 ? &item.AsVec3().x : elem == 1 ? &item.AsVec3().y
+                                                             : &item.AsVec3().z;
+            }
+            auto rate = current.second;
             if (rate >= 0)
             {
-                value += delta * rate * time;
+                *value += delta * rate * time;
             }
             else
             {
                 rate = -rate;
-                value *= exp(delta * rate * time);
+                *value *= exp(delta * rate * time);
             }
         }
     }
@@ -331,29 +390,55 @@ InteractiveSetting::Describe(const SettingCollection &settings) const
     for (const auto &setting : this->settings)
     {
         const auto &val = settings.Get(setting.first);
-        if (idx == currentIndex)
+        int size = 1;
+        if (val.IsVec2())
         {
-            out << "* ";
+            size = 2;
         }
-        else
+        else if (val.IsVec3())
         {
-            out << "  ";
+            size = 3;
         }
-        out << val.Name() << " = ";
-        if (val.IsInt())
+        for (int delta = 0; delta < size; delta++)
         {
-            out << val.AsInt();
+            if (idx == currentIndex)
+            {
+                out << "* ";
+            }
+            else
+            {
+                out << "  ";
+            }
+            out << val.Name();
+            if (size != 1)
+            {
+                out << "[" << delta << "]";
+            }
+            out << " = ";
+            if (val.IsInt())
+            {
+                out << val.AsInt();
+            }
+            else if (val.IsFloat())
+            {
+                out << val.AsFloat();
+            }
+            else if (val.IsBool())
+            {
+                out << val.AsBool();
+            }
+            else if (val.IsVec2())
+            {
+                out << (delta == 0 ? val.AsVec2().x : val.AsVec2().y);
+            }
+            else if (val.IsVec3())
+            {
+                out << (delta == 0 ? val.AsVec3().x : delta == 1 ? val.AsVec3()
+                    .y : val.AsVec3().z);
+            }
+            out << std::endl;
+            idx++;
         }
-        else if (val.IsFloat())
-        {
-            out << val.AsFloat();
-        }
-        else if (val.IsBool())
-        {
-            out << val.AsBool();
-        }
-        out << std::endl;
-        idx++;
     }
     return out.str();
 }
