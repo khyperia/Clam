@@ -67,6 +67,18 @@ CudaContext::CudaContext(int deviceIndex)
     Run(cuCtxCreate(&context, CU_CTX_BLOCKING_SYNC, device));
 }
 
+CudaContext::~CudaContext()
+{
+    cuCtxDestroy(context);
+    if (currentContext == deviceIndex)
+    {
+        currentContext = -1;
+    }
+    deviceIndex = -1;
+    device = 0;
+    context = 0;
+}
+
 CUcontext CudaContext::Context() const
 {
     return context;

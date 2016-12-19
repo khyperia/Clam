@@ -412,7 +412,8 @@ InteractiveSetting::Describe(const SettingCollection &settings) const
             out << val.Name();
             if (size != 1)
             {
-                out << "[" << delta << "]";
+                const char *names[] = {"x", "y", "z"};
+                out << "." << names[delta];
             }
             out << " = ";
             if (val.IsInt())
@@ -425,7 +426,7 @@ InteractiveSetting::Describe(const SettingCollection &settings) const
             }
             else if (val.IsBool())
             {
-                out << val.AsBool();
+                out << (val.AsBool() ? "true" : "false");
             }
             else if (val.IsVec2())
             {

@@ -20,6 +20,7 @@ public:
     static int DeviceCount();
 
     CudaContext(int deviceIndex);
+    ~CudaContext();
     void SetCurrent() const;
 
     CUcontext Context() const;

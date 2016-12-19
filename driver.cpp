@@ -177,7 +177,8 @@ void RealtimeRender::Run()
         {
             std::function<void(RealtimeRender &)> *ptr =
                 (std::function<void(RealtimeRender &)> *)event.user.data1;
-            std::unique_ptr<std::function<void(RealtimeRender &)>> func(ptr);
+            std::unique_ptr<std::function<void(RealtimeRender &)>> func;
+            func.reset(ptr);
             (*func)(*this);
         }
         for (auto &uiSetting : uiSettings)
