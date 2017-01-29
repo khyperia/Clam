@@ -69,10 +69,10 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("ReflectHue", 0.0);
         result.AddSetting("ReflectSat", 0.001);
         result.AddSetting("ReflectVal", 1.0);
-        result.AddSetting("MaxIters", 1024);
+        result.AddSetting("MaxIters", 32);
         result.AddSetting("Bailout", 1024.0);
         result.AddSetting("DeMultiplier", 0.95);
-        result.AddSetting("RandSeedInitSteps", 64);
+        result.AddSetting("RandSeedInitSteps", 8);
         result.AddSetting("MaxRayDist", 16.0);
         result.AddSetting("MaxRaySteps", 32);
         result.AddSetting("NumRayBounces", 3);

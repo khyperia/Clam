@@ -69,7 +69,10 @@ CudaContext::CudaContext(int deviceIndex)
 
 CudaContext::~CudaContext()
 {
-    cuCtxDestroy(context);
+    if (context != 0)
+    {
+        cuCtxDestroy(context);
+    }
     if (currentContext == deviceIndex)
     {
         currentContext = -1;
@@ -77,6 +80,16 @@ CudaContext::~CudaContext()
     deviceIndex = -1;
     device = 0;
     context = 0;
+}
+
+CudaContext::CudaContext(CudaContext && other)
+{
+    deviceIndex = other.deviceIndex;
+    device = other.device;
+    context = other.context;
+    other.deviceIndex = -1;
+    other.device = 0;
+    other.context = 0;
 }
 
 CUcontext CudaContext::Context() const

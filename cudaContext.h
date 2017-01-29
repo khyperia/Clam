@@ -21,6 +21,7 @@ public:
 
     CudaContext(int deviceIndex);
     ~CudaContext();
+    CudaContext(CudaContext &&);
     void SetCurrent() const;
 
     CUcontext Context() const;

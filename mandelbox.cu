@@ -1,8 +1,4 @@
-#ifdef MSVC
-#include "helper_math.h"
-#else
-#include <../samples/common/inc/helper_math.h>
-#endif
+#include "vector.h"
 #include <float.h>
 
 typedef void *CUdeviceptr;
@@ -11,11 +7,11 @@ typedef void *CUdeviceptr;
 
 struct MandelboxState
 {
-    float4 color;
-    float4 lightColor;
-    float3 position;
-    float3 direction;
-    float3 normal;
+    Vector4<float> color;
+    Vector4<float> lightColor;
+    Vector3<float> position;
+    Vector3<float> direction;
+    Vector3<float> normal;
     int state;
     int traceIter;
     float totalDistance;
@@ -45,7 +41,8 @@ static __device__ void Test()
 #define INIT_STATE 0
 #define TRACE_STATE 1
 #define NORMAL_STATE 2
-#define FINISH_STATE 3
+#define SUBSURFACE_STATE 3
+#define FINISH_STATE 4
 
 #define NORMAL_DELTA (FLT_EPSILON * 8)
 
@@ -55,24 +52,14 @@ __constant__ MandelboxCfg CfgArr[1];
 #define BufferScratch ((MandelboxState*)cfg.scratch)
 #define BufferRand ((uint2 *)cfg.randbuf)
 
-static __device__ float Gauss(float a, float c, float w, float x)
-{
-    return a * expf(-((x - c) * (x - c)) / (float)(2 * w * w));
-}
+// static __device__ float Gauss(float a, float c, float w, float x)
+// {
+//     return a * expf(-((x - c) * (x - c)) / (float)(2 * w * w));
+// }
 
-static __device__ float3 xyz(float4 val)
+static __device__ Vector3<float> xyz(Vector4<float> val)
 {
-    return make_float3(val.x, val.y, val.z);
-}
-
-static __device__ float length2(float2 v)
-{
-    return dot(v, v);
-}
-
-static __device__ float length2(float3 v)
-{
-    return dot(v, v);
+    return Vector3<float>(val.x, val.y, val.z);
 }
 
 static __device__ uint MWC64X(unsigned long long *state)
@@ -87,24 +74,25 @@ static __device__ float Rand(unsigned long long *seed)
     return (float)MWC64X(seed) / 4294967296.0f;
 }
 
-static __device__ float2 RandCircle(unsigned long long *rand)
+static __device__ Vector2<float> RandCircle(unsigned long long *rand)
 {
-    float2 polar = make_float2(Rand(rand) * 6.28318531f, sqrt(Rand(rand)));
-    return make_float2(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
+    Vector2<float>
+        polar = Vector2<float>(Rand(rand) * 6.28318531f, sqrt(Rand(rand)));
+    return Vector2<float>(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
 }
 
 // Box-Muller transform
 // returns two normally-distributed independent variables
-static __device__ float2 RandNormal(unsigned long long *rand)
+static __device__ Vector2<float> RandNormal(unsigned long long *rand)
 {
     float mul = sqrt(-2 * log2(Rand(rand)));
     float angle = 6.28318530718f * Rand(rand);
-    return mul * make_float2(cos(angle), sin(angle));
+    return mul * Vector2<float>(cos(angle), sin(angle));
 }
 
-static __device__ float3 RandSphere(unsigned long long *rand)
+static __device__ Vector3<float> RandSphere(unsigned long long *rand)
 {
-    float2 normal;
+    Vector2<float> normal;
     float rest;
     do
     {
@@ -112,12 +100,13 @@ static __device__ float3 RandSphere(unsigned long long *rand)
         rest = RandNormal(rand).x;
     }
     while (normal.x == 0 && normal.y == 0 && rest == 0);
-    return normalize(make_float3(normal.x, normal.y, rest));
+    return Vector3<float>(normal.x, normal.y, rest).normalized();
 }
 
-static __device__ float3 RandHemisphere(unsigned long long *rand, float3 normal)
+static __device__ Vector3<float>
+RandHemisphere(unsigned long long *rand, Vector3<float> normal)
 {
-    float3 result = RandSphere(rand);
+    Vector3<float> result = RandSphere(rand);
     if (dot(result, normal) < 0)
         result = -result;
     return result;
@@ -146,36 +135,39 @@ static __device__ void SetRand(int x, int y, int width, unsigned long long rand)
 }
 
 // http://en.wikipedia.org/wiki/Stereographic_projection
-static __device__ float3
-RayDir(float3 forward, float3 up, float2 screenCoords, float fov)
+static __device__ Vector3<float> RayDir(Vector3<float> forward,
+                                        Vector3<float> up,
+                                        Vector2<float> screenCoords,
+                                        float fov)
 {
     screenCoords *= -fov;
-    float len2 = length2(screenCoords);
-    float3 look = make_float3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1)
-        / -(len2 + 1);
+    float len2 = screenCoords.length2();
+    Vector3<float> look =
+        Vector3<float>(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1)
+            / -(len2 + 1);
 
-    float3 right = cross(forward, up);
+    Vector3<float> right = cross(forward, up);
 
     return look.x * right + look.y * up + look.z * forward;
 }
 
-static __device__ void ApplyDof(float3 *position,
-                                float3 *lookat,
+static __device__ void ApplyDof(Vector3<float> *position,
+                                Vector3<float> *lookat,
                                 float focalPlane,
                                 unsigned long long *rand)
 {
-    float3 focalPosition = *position + *lookat * focalPlane;
-    float3 xShift = cross(make_float3(0, 0, 1), *lookat);
-    float3 yShift = cross(*lookat, xShift);
-    float2 offset = RandCircle(rand);
+    Vector3<float> focalPosition = *position + *lookat * focalPlane;
+    Vector3<float> xShift = cross(Vector3<float>(0, 0, 1), *lookat);
+    Vector3<float> yShift = cross(*lookat, xShift);
+    Vector2<float> offset = RandCircle(rand);
     float dofPickup = cfg.DofAmount;
-    *lookat = normalize(*lookat + offset.x * dofPickup * xShift
-                            + offset.y * dofPickup * yShift);
+    *lookat = (*lookat + offset.x * dofPickup * xShift
+        + offset.y * dofPickup * yShift).normalized();
     *position = focalPosition - *lookat * focalPlane;
 }
 
-static __device__ void GetCamera(float3 *origin,
-                                 float3 *direction,
+static __device__ void GetCamera(Vector3<float> *origin,
+                                 Vector3<float> *direction,
                                  int x,
                                  int y,
                                  int screenX,
@@ -184,147 +176,255 @@ static __device__ void GetCamera(float3 *origin,
                                  int height,
                                  unsigned long long *rand)
 {
-    *origin = make_float3(cfg.posX, cfg.posY, cfg.posZ);
-    float3 look = make_float3(cfg.lookX, cfg.lookY, cfg.lookZ);
-    float3 up = make_float3(cfg.upX, cfg.upY, cfg.upZ);
-    float2
-        screenCoords = make_float2((float)(x + screenX), (float)(y + screenY));
-    screenCoords += make_float2(Rand(rand) - 0.5f, Rand(rand) - 0.5f);
+    *origin = Vector3<float>(cfg.posX, cfg.posY, cfg.posZ);
+    Vector3<float> look = Vector3<float>(cfg.lookX, cfg.lookY, cfg.lookZ);
+    Vector3<float> up = Vector3<float>(cfg.upX, cfg.upY, cfg.upZ);
+    Vector2<float> screenCoords =
+        Vector2<float>((float)(x + screenX), (float)(y + screenY));
+    screenCoords += Vector2<float>(Rand(rand) - 0.5f, Rand(rand) - 0.5f);
     float fov = cfg.fov * 2 / (width + height);
     //fov *= exp((*hue - 0.5f) * cfg.FovAbberation);
     *direction = RayDir(look, up, screenCoords, fov);
     ApplyDof(origin, direction, cfg.focalDistance, rand);
 }
 
-static __device__ float3 HueToRGB(float hue, float saturation, float value)
+static __device__ Vector3<float>
+HueToRGB(float hue, float saturation, float value)
 {
     hue *= 3;
     float frac = fmod(hue, 1.0f);
-    float3 color;
+    Vector3<float> color;
     switch ((int)hue)
     {
         case 0:
-            color = make_float3(1 - frac, frac, 0);
+            color = Vector3<float>(1 - frac, frac, 0);
             break;
         case 1:
-            color = make_float3(0, 1 - frac, frac);
+            color = Vector3<float>(0, 1 - frac, frac);
             break;
         case 2:
-            color = make_float3(frac, 0, 1 - frac);
+            color = Vector3<float>(frac, 0, 1 - frac);
             break;
         default:
-            color = make_float3(1);
+            color = Vector3<float>(1, 1, 1);
             break;
     }
     color.x = sqrtf(color.x);
     color.y = sqrtf(color.y);
     color.z = sqrtf(color.z);
     saturation = value * (1 - saturation);
-    color = color * (value - saturation) + saturation;
+    color = color * (value - saturation)
+        + Vector3<float>(saturation, saturation, saturation);
     return color;
 }
 
-static __device__ float3 LightBrightness()
+static __device__ Vector3<float> LightBrightness()
 {
     return HueToRGB(cfg.LightBrightnessHue,
                     cfg.LightBrightnessSat,
                     cfg.LightBrightnessVal);
 }
 
-static __device__ float3 AmbientBrightness()
+static __device__ Vector3<float> AmbientBrightness()
 {
     return HueToRGB(cfg.AmbientBrightnessHue,
                     cfg.AmbientBrightnessSat,
                     cfg.AmbientBrightnessVal);
 }
 
-static __device__ float3 Rotate(float3 v, float3 axis, float angle)
+template<typename T>
+struct NumTraits;
+
+template<>
+struct NumTraits<float>
 {
-    float sina = sin(angle);
-    float cosa = cos(angle);
-    return cosa * v + sina * cross(axis, v) + (1 - cosa) * dot(axis, v) * axis;
-}
+    static __device__ float Const(const float value)
+    {
+        return value;
+    }
+};
 
-static __device__ float4 Mandelbulb(float4 z, const float Power)
+template<>
+struct NumTraits<Dual<float> >
 {
-    const float r = length(xyz(z));
+    static __device__ Dual<float> Const(const float value)
+    {
+        return Dual<float>(value, 0);
+    }
+};
 
-    // convert to polar coordinates
-    float theta = asin(z.z / r);
-    float phi = atan2(z.y, z.x);
-    float dr = powf(r, Power - 1.0) * Power * z.w + 1.0;
-
-    // scale and rotate the point
-    float zr = pow(r, Power);
-    theta = theta * Power;
-    phi = phi * Power;
-
-    // convert back to cartesian coordinates
-    float3 z3 = zr
-        * make_float3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
-    return make_float4(z3, dr);
-}
-
-static __device__ float4 Boxfold(float4 z)
+template<typename T>
+struct Fractal
 {
-    float3 znew = xyz(z);
-    znew = clamp(znew, -cfg.FoldingLimit, cfg.FoldingLimit) * 2.0f - znew;
-    return make_float4(znew, z.w);
-}
+    static __device__ Vector3<T> Rotate(Vector3<T> v, Vector3<T> axis, T angle)
+    {
+        T sina = sin(angle);
+        T cosa = cos(angle);
+        return cosa * v + sina * cross(axis, v)
+            + (1 - cosa) * dot(axis, v) * axis;
+    }
 
-static __device__ float4 Spherefold(float4 z)
-{
-    z *= cfg.FixedRadius2
-        / clamp(length2(xyz(z)), cfg.MinRadius2, cfg.FixedRadius2);
-    return z;
-}
+    static __device__ Vector4<T> Mandelbulb(Vector4<T> z, const T Power)
+    {
+        const T r = xyz(z).length();
 
-static __device__ float4 TScale(float4 z)
-{
-    return z * make_float4(cfg.Scale, cfg.Scale, cfg.Scale, fabs(cfg.Scale));
-}
+        // convert to polar coordinates
+        T theta = asin(z.z / r);
+        T phi = atan2(z.y, z.x);
+        T dr = powf(r, Power - 1.0) * Power * z.w + 1.0;
 
-static __device__ float4 TOffset(float4 z, float3 offset)
-{
-    return z + make_float4(offset, 1.0f);
-}
+        // scale and rotate the point
+        T zr = pow(r, Power);
+        theta = theta * Power;
+        phi = phi * Power;
 
-static __device__ float4 TRotate(float4 v, float3 axis, float angle)
-{
-    return make_float4(Rotate(xyz(v), axis, angle), v.w);
-}
+        // convert back to cartesian coordinates
+        Vector3<T> z3 = zr * Vector3<T>(cos(theta) * cos(phi),
+                                        cos(theta) * sin(phi),
+                                        sin(theta));
+        return Vector4<T>(z3.x, z3.y, z3.z, dr);
+    }
 
-static __device__ float4 Mandelbox(float4 z, float3 offset)
-{
-    z = Boxfold(z);
-    z = Spherefold(z);
-    z = TScale(z);
-    z = TOffset(z, offset);
-    return z;
-}
+    static __device__ Vector4<T> BoxfoldD(Vector4<T> z)
+    {
+        Vector3<T> znew = xyz(z);
+        znew = znew.clamp(-cfg.FoldingLimit, cfg.FoldingLimit) * 2.0f - znew;
+        return Vector4<T>(znew.x, znew.y, znew.z, z.w);
+    }
 
-static __device__ float4 DeIter(float4 z, int i, float3 offset)
-{
-    z = Mandelbox(z, offset);
-    // Rotation adds a *significant* amount of instructions to the DE, and slows down execution considerably.
-    //const float3 rotVec = normalize(make_float3(cfg.DeRotationAxisX, cfg.DeRotationAxisY, cfg.DeRotationAxisZ));
-    //z = TRotate(z, rotVec, cfg.DeRotationAmount);
-    return z;
-}
+    static __device__ Vector4<T> ContBoxfoldD(Vector4<T> z)
+    {
+        Vector3<T> znew = xyz(z);
+        Vector3<T>
+            zsq = Vector3<T>(znew.x * znew.x, znew.y * znew.y, znew.z * znew.z);
+        zsq += Vector3<T>(NumTraits<T>::Const(1),
+                          NumTraits<T>::Const(1),
+                          NumTraits<T>::Const(1));
+        Vector3<T> res = Vector3<T>(znew.x / sqrtf(zsq.x),
+                                    znew.y / sqrtf(zsq.y),
+                                    znew.z / sqrtf(zsq.z));
+        res *= NumTraits<T>::Const(sqrtf(8));
+        res = znew - res;
+        return Vector4<T>(res.x, res.y, res.z, z.w);
+    }
 
-static __device__ float De(float3 offset, float3 *lighting)
+    static __device__ Vector3<T> ContBoxfold(Vector3<T> z)
+    {
+        Vector3<T> zsq = Vector3<T>(z.x * z.x + NumTraits<T>::Const(1),
+                                    z.y * z.y + NumTraits<T>::Const(1),
+                                    z.z * z.z + NumTraits<T>::Const(1));
+        Vector3<T>
+            res(z.x / sqrtf(zsq.x), z.y / sqrtf(zsq.y), z.z / sqrtf(zsq.z));
+        return z - res * NumTraits<T>::Const(sqrtf(8));
+    }
+
+    static __device__ Vector4<T> SpherefoldD(Vector4<T> z)
+    {
+        z *= cfg.FixedRadius2
+            / clamp(xyz(z).length2(), cfg.MinRadius2, cfg.FixedRadius2);
+        return z;
+    }
+
+    static __device__ Vector4<T> ContSpherefoldD(Vector4<T> z)
+    {
+        z *= NumTraits<T>::Const(cfg.MinRadius2) / xyz(z).length2()
+            + NumTraits<T>::Const(cfg.FixedRadius2);
+        return z;
+    }
+
+    static __device__ Vector3<T> ContSpherefold(Vector3<T> z)
+    {
+        const T fixedRadius2 = NumTraits<T>::Const(cfg.FixedRadius2);
+        const Vector3<T>
+            fixedRadius2_vec(fixedRadius2, fixedRadius2, fixedRadius2);
+        return z * NumTraits<T>::Const(cfg.MinRadius2) / z.length2()
+            + fixedRadius2_vec;
+    }
+
+    static __device__ Vector4<T> TScaleD(Vector4<T> z)
+    {
+        const T scale = NumTraits<T>::Const(cfg.Scale);
+        const Vector4<T> mul(scale, scale, scale, fabs(scale));
+        return comp_mul(z, mul);
+    }
+
+    static __device__ Vector3<T> TScale(Vector3<T> z)
+    {
+        const T scale = NumTraits<T>::Const(cfg.Scale);
+        const Vector3<T> mul(scale, scale, scale);
+        return comp_mul(z, mul);
+    }
+
+    static __device__ Vector4<T> TOffsetD(Vector4<T> z, Vector3<T> offset)
+    {
+        return z + Vector4<T>(offset.x, offset.y, offset.z, 1.0f);
+    }
+
+    static __device__ Vector3<T> TOffset(Vector3<T> z, Vector3<T> offset)
+    {
+        return z + Vector3<T>(offset.x, offset.y, offset.z);
+    }
+
+    static __device__ Vector4<T>
+    TRotateD(Vector4<T> v, Vector3<T> axis, T angle)
+    {
+        const Vector3<T> rot = Rotate(xyz(v), axis, angle);
+        return Vector4<T>(rot.x, rot.y, rot.z, v.w);
+    }
+
+    static __device__ Vector4<T> MandelboxD(Vector4<T> z, Vector3<T> offset)
+    {
+        // z = ContBoxfoldD(z);
+        // z = ContSpherefoldD(z);
+        z = BoxfoldD(z);
+        z = SpherefoldD(z);
+        z = TScaleD(z);
+        z = TOffsetD(z, offset);
+        return z;
+    }
+
+    static __device__ Vector3<T> Mandelbox(Vector3<T> z, Vector3<T> offset)
+    {
+        z = ContBoxfold(z);
+        z = ContSpherefold(z);
+        z = TScale(z);
+        z = TOffset(z, offset);
+        return z;
+    }
+
+    static __device__ Vector4<T> DeIterD(Vector4<T> z, int i, Vector3<T> offset)
+    {
+        z = MandelboxD(z, offset);
+        // Rotation adds a *significant* amount of instructions to the DE, and slows down execution considerably.
+        //const Vector3<T> rotVec = normalize(Vector3<T>(cfg.DeRotationAxisX, cfg.DeRotationAxisY, cfg.DeRotationAxisZ));
+        //z = TRotate(z, rotVec, cfg.DeRotationAmount);
+        return z;
+    }
+};
+
+static __device__ float
+DeDir(Vector3<float> offset, Vector3<float> direction, Vector3<float> *lighting)
 {
-    float4 z = make_float4(offset, 1.0f);
+    Vector3<Dual<float> > dual(Dual<float>(offset.x, direction.x),
+                               Dual<float>(offset.y, direction.y),
+                               Dual<float>(offset.z, direction.z));
+    Vector3<Dual<float> > dual_offset = dual;
     int n = cfg.MaxIters;
     do
     {
-        z = DeIter(z, n, offset);
+        dual = Fractal<Dual<float> >::Mandelbox(dual, dual_offset);
     }
-    while (length2(xyz(z)) < cfg.Bailout && --n);
-    float distance = length(xyz(z)) / z.w;
-    const float3
-        lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
-    float lightDistance = length(lightPos - offset) - cfg.LightSize;
+    while (dual.length2().real < cfg.Bailout && --n);
+
+    float length_real = dual.x.real * dual.x.real + dual.y.real * dual.y.real
+        + dual.z.real * dual.z.real;
+    float length_dual = dual.x.dual * dual.x.dual + dual.y.dual * dual.y.dual
+        + dual.z.dual * dual.z.dual;
+
+    float distance = sqrtf(length_real) / sqrtf(length_dual) * 0.25f;
+    const Vector3<float>
+        lightPos = Vector3<float>(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
+    float lightDistance = (lightPos - offset).length() - cfg.LightSize;
     if (lightDistance < distance)
     {
         *lighting = LightBrightness();
@@ -332,18 +432,41 @@ static __device__ float De(float3 offset, float3 *lighting)
     }
     else
     {
-        *lighting = make_float3(0);
+        *lighting = Vector3<float>(0, 0, 0);
         return distance;
     }
 }
 
-static __device__ float3 NewRayDir(float3 position,
-                                   float3 normal,
-                                   float3 oldRayDir,
-                                   float *probability,
-                                   unsigned long long *rand)
+static __device__ float De(Vector3<float> offset, Vector3<float> *lighting)
 {
-    float3 lightPos = make_float3(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
+    Vector4<float> z = Vector4<float>(offset.x, offset.y, offset.z, 1.0f);
+    int n = cfg.MaxIters;
+    do
+    {
+        z = Fractal<float>::DeIterD(z, n, offset);
+    }
+    while (xyz(z).length2() < cfg.Bailout && --n);
+    float distance = xyz(z).length() / z.w;
+    const Vector3<float>
+        lightPos = Vector3<float>(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
+    float lightDistance = (lightPos - offset).length() - cfg.LightSize;
+    if (lightDistance < distance)
+    {
+        *lighting = LightBrightness();
+        return lightDistance;
+    }
+    else
+    {
+        *lighting = Vector3<float>(0, 0, 0);
+        return distance;
+    }
+}
+
+static __device__ Vector3<float>
+RayToLight(Vector3<float> position, float *probability, unsigned long long *rand)
+{
+    Vector3<float>
+        lightPos = Vector3<float>(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
     // hyp = d
     // opposite = r
     // theta = asin(r / d)
@@ -351,14 +474,25 @@ static __device__ float3 NewRayDir(float3 position,
     // area = 2 * pi * (1 - cos(asin(r / d)))
     // probability = 2 * (1 - cos(asin(r / d))) / 4
     // simplified = (1 - sqrt(1 - r^2/d^2)) / 2
-    float dist = length(lightPos - position);
+    float dist = (lightPos - position).length();
     dist = fmax(dist, cfg.LightSize);
     float costheta = sqrtf(1 - (cfg.LightSize * cfg.LightSize) / (dist * dist));
-    float prob = (1 - costheta) / 2;
+    *probability = (1 - costheta) / 2;
 
-    float3 lightPosR = lightPos + RandSphere(rand) * cfg.LightSize;
-    float3 lightDirR = normalize(lightPosR - position);
-    float3 lightDir = normalize(lightPos - position);
+    Vector3<float> lightPosR = lightPos + RandSphere(rand) * cfg.LightSize;
+    Vector3<float> lightDirR = (lightPosR - position).normalized();
+
+    return lightDirR;
+}
+
+static __device__ Vector3<float> NewRayDir(Vector3<float> position,
+                                           Vector3<float> normal,
+                                           Vector3<float> oldRayDir,
+                                           float *probability,
+                                           unsigned long long *rand)
+{
+    float prob;
+    Vector3<float> lightDirR = RayToLight(position, &prob, rand);
     if (dot(lightDirR, normal) > 0)
     {
         if (Rand(rand) > 0.5f)
@@ -371,16 +505,19 @@ static __device__ float3 NewRayDir(float3 position,
     return RandHemisphere(rand, normal);
 }
 
-static __device__ float BRDF(float3 normal, float3 incoming, float3 outgoing)
+static __device__ float
+BRDF(Vector3<float> normal, Vector3<float> incoming, Vector3<float> outgoing)
 {
     return 1;
-    //float3 halfV = normalize(incoming + outgoing);
+    //Vector3<float> halfV = normalize(incoming + outgoing);
     //float angle = acos(dot(normal, halfV));
     //return Gauss(1, 0, cfg.SpecularHighlightSize, angle);
 }
 
-static __device__ float
-SimpleTrace(float3 origin, float3 direction, float width, int height)
+static __device__ float SimpleTrace(Vector3<float> origin,
+                                    Vector3<float> direction,
+                                    float width,
+                                    int height)
 {
     const float quality = (width + height) / (2 * cfg.fov);
     float distance = 1.0f;
@@ -388,7 +525,7 @@ SimpleTrace(float3 origin, float3 direction, float width, int height)
     int i = 0;
     do
     {
-        float3 lighting;
+        Vector3<float> lighting;
         distance = De(origin + direction * totalDistance, &lighting)
             * cfg.DeMultiplier;
         totalDistance += distance;
@@ -398,31 +535,62 @@ SimpleTrace(float3 origin, float3 direction, float width, int height)
     return (float)(i - 1) / cfg.MaxRaySteps;
 }
 
-static __device__ uint PackPixel(float4 pixel)
+static __device__ int Bounce(MandelboxState *state, unsigned long long *rand)
+{
+    Vector3<float> oldRayDir = state->direction;
+    state->direction = NewRayDir(state->position,
+                                 state->normal,
+                                 oldRayDir,
+                                 &state->lightColor.w,
+                                 rand);
+    Vector3<float> newLightColor = xyz(state->lightColor);
+    Vector3<float> multiply_factor =
+        BRDF(state->normal, state->direction, -oldRayDir)
+            * dot(state->normal, state->direction)
+            * HueToRGB(cfg.ReflectHue, cfg.ReflectSat, cfg.ReflectVal);
+    newLightColor = comp_mul(newLightColor, multiply_factor);
+    state->lightColor = Vector4<float>(newLightColor.x,
+                                       newLightColor.y,
+                                       newLightColor.z,
+                                       state->lightColor.w);
+    state->totalDistance = 0;
+
+    if (++state->traceIter > cfg.NumRayBounces)
+    {
+        const float outside = cfg.Bailout + 1;
+        state->position = Vector3<float>(outside, outside, outside);
+        return FINISH_STATE;
+    }
+    return TRACE_STATE;
+}
+
+static __device__ uint PackPixel(Vector3<float> pixel)
 {
     if (cfg.WhiteClamp)
     {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
         if (maxVal > 1)
-            pixel /= maxVal;
+            pixel *= 1.0f / maxVal;
     }
-    pixel = clamp(pixel, 0.0f, 1.0f) * 255;
+    pixel = comp_mul(pixel.clamp(0.0f, 1.0f), Vector3<float>(255, 255, 255));
     return (255 << 24) | ((int)pixel.x << 16) | ((int)pixel.y << 8)
         | ((int)pixel.z);
 }
 
 static __device__ void Finish(MandelboxState *state, int x, int y, int width)
 {
-    float4 finalColor = state->lightColor;
+    Vector4<float> finalColor = state->lightColor;
     if (isnan(finalColor.x) || isnan(finalColor.x) || isnan(finalColor.x))
     {
-        finalColor = make_float4(1.0f, -1.0f, 1.0f, 1.0f) * 1000.0f;
+        //finalColor = Vector4<float>(1.0f, -1.0f, 1.0f, 1.0f) * 1000.0f;
+        finalColor = Vector4<float>(0.0f, 0.0f, 0.0f, 1.0f) * 0.001f;
     }
-    float4 oldColor = state->color;
-    float3 result =
+    Vector4<float> oldColor = state->color;
+    Vector3<float> result =
         (xyz(finalColor) * finalColor.w + xyz(oldColor) * oldColor.w)
             / (oldColor.w + finalColor.w);
-    state->color = make_float4(result, oldColor.w + finalColor.w);
+    state->color =
+        Vector4<float>(result.x, result.y, result.z, oldColor.w + finalColor.w);
 }
 
 static __device__ int PreviewState(MandelboxState *state,
@@ -448,7 +616,7 @@ static __device__ int PreviewState(MandelboxState *state,
     value = sqrtf(value);
     // TODO: for some reason the image is flipped vertically (SDL?)
     int index = (height - y - 1) * width + x;
-    screenPixels[index] = PackPixel(make_float4(value));
+    screenPixels[index] = PackPixel(Vector3<float>(value, value, value));
     return PREVIEW_STATE;
 }
 
@@ -470,7 +638,7 @@ static __device__ int InitState(MandelboxState *state,
               width,
               height,
               rand);
-    state->lightColor = make_float4(1);
+    state->lightColor = Vector4<float>(1, 1, 1, 1);
     state->totalDistance = 0;
     state->traceIter = 0;
     return TRACE_STATE;
@@ -478,12 +646,12 @@ static __device__ int InitState(MandelboxState *state,
 
 static __device__ int TraceState(MandelboxState *state,
                                  float distance,
-                                 float3 lighting,
+                                 Vector3<float> lighting,
                                  int width,
                                  int height)
 {
     state->totalDistance += distance;
-    float3 oldPos = state->position;
+    Vector3<float> oldPos = state->position;
     state->position += state->direction * distance;
     const float quality = state->traceIter == 0 ? cfg.QualityFirstRay
         * ((width + height) / (2 * cfg.fov)) : cfg.QualityRestRay;
@@ -493,16 +661,27 @@ static __device__ int TraceState(MandelboxState *state,
         || distance * quality < state->totalDistance)
     {
         state->position = state->position
-            + make_float3(-NORMAL_DELTA, NORMAL_DELTA, NORMAL_DELTA);
-        state->normal = make_float3(0, 0, 0);
+            + Vector3<float>(-NORMAL_DELTA, NORMAL_DELTA, NORMAL_DELTA);
+        state->normal = Vector3<float>(0, 0, 0);
         if (state->totalDistance > cfg.MaxRayDist)
         {
-            lighting = AmbientBrightness();
+            if (state->traceIter == 0)
+            {
+                lighting = Vector3<float>(0.3, 0.3, 0.3);
+            }
+            else
+            {
+                lighting = AmbientBrightness();
+            }
         }
-        if (length2(lighting) > 0)
+        if (lighting.length2() > 0)
         {
-            float3 newColor = xyz(state->lightColor) * lighting;
-            state->lightColor = make_float4(newColor, state->lightColor.w);
+            Vector3<float>
+                newColor = comp_mul(xyz(state->lightColor), lighting);
+            state->lightColor = Vector4<float>(newColor.x,
+                                               newColor.y,
+                                               newColor.z,
+                                               state->lightColor.w);
             return FINISH_STATE;
         }
         return NORMAL_STATE;
@@ -512,35 +691,38 @@ static __device__ int TraceState(MandelboxState *state,
 
 static __device__ int NormalState(MandelboxState *state,
                                   float distance,
-                                  float3 lighting,
+                                  Vector3<float> lighting,
                                   unsigned long long *rand)
 {
-    if (length2(lighting) > 0)
+    if (lighting.length2() > 0)
     {
-        float3 newColor = xyz(state->lightColor) * lighting;
-        state->lightColor = make_float4(newColor, state->lightColor.w);
+        Vector3<float> newColor = comp_mul(xyz(state->lightColor), lighting);
+        state->lightColor = Vector4<float>(newColor.x,
+                                           newColor.y,
+                                           newColor.z,
+                                           state->lightColor.w);
         return FINISH_STATE;
     }
     if (state->normal.x == 0)
     {
         state->normal.x = distance;
         state->position = state->position
-            + (make_float3(NORMAL_DELTA, -NORMAL_DELTA, NORMAL_DELTA)
-                - make_float3(-NORMAL_DELTA, NORMAL_DELTA, NORMAL_DELTA));
+            + (Vector3<float>(NORMAL_DELTA, -NORMAL_DELTA, NORMAL_DELTA)
+                - Vector3<float>(-NORMAL_DELTA, NORMAL_DELTA, NORMAL_DELTA));
     }
     else if (state->normal.y == 0)
     {
         state->normal.y = distance;
         state->position = state->position
-            + (make_float3(NORMAL_DELTA, NORMAL_DELTA, -NORMAL_DELTA)
-                - make_float3(NORMAL_DELTA, -NORMAL_DELTA, NORMAL_DELTA));
+            + (Vector3<float>(NORMAL_DELTA, NORMAL_DELTA, -NORMAL_DELTA)
+                - Vector3<float>(NORMAL_DELTA, -NORMAL_DELTA, NORMAL_DELTA));
     }
     else if (state->normal.z == 0)
     {
         state->normal.z = distance;
         state->position = state->position
-            + (make_float3(-NORMAL_DELTA, -NORMAL_DELTA, -NORMAL_DELTA)
-                - make_float3(NORMAL_DELTA, NORMAL_DELTA, -NORMAL_DELTA));
+            + (Vector3<float>(-NORMAL_DELTA, -NORMAL_DELTA, -NORMAL_DELTA)
+                - Vector3<float>(NORMAL_DELTA, NORMAL_DELTA, -NORMAL_DELTA));
     }
     else
     {
@@ -549,31 +731,61 @@ static __device__ int NormalState(MandelboxState *state,
         float dppn = state->normal.z;
         float dnnn = distance;
 
-        state->normal = normalize(make_float3((dppn + dpnp) - (dnpp + dnnn),
-                                              (dppn + dnpp) - (dpnp + dnnn),
-                                              (dpnp + dnpp) - (dppn + dnnn)));
+        state->normal = Vector3<float>((dppn + dpnp) - (dnpp + dnnn),
+                                       (dppn + dnpp) - (dpnp + dnnn),
+                                       (dpnp + dnpp) - (dppn + dnnn))
+            .normalized();
         state->position = state->position
-            - make_float3(-NORMAL_DELTA, -NORMAL_DELTA, -NORMAL_DELTA);
-        float3 oldRayDir = state->direction;
-        state->direction = NewRayDir(state->position,
-                                     state->normal,
-                                     oldRayDir,
-                                     &state->lightColor.w,
-                                     rand);
-        float3 newLightColor = xyz(state->lightColor);
-        newLightColor *= BRDF(state->normal, state->direction, -oldRayDir)
-            * dot(state->normal, state->direction)
-            * HueToRGB(cfg.ReflectHue, cfg.ReflectSat, cfg.ReflectVal);
-        state->lightColor = make_float4(newLightColor, state->lightColor.w);
-        state->totalDistance = 0;
-        if (++state->traceIter > cfg.NumRayBounces)
+            - Vector3<float>(-NORMAL_DELTA, -NORMAL_DELTA, -NORMAL_DELTA);
+
+        if (Rand(rand) < 0.125f)
         {
-            state->position = make_float3(cfg.Bailout + 1);
-            return FINISH_STATE;
+            float subsurface_jump_amount =
+                (dnpp + dpnp + dppn + dnnn) * (0.25f * 10);
+            // technically incorrect, since jumpback is anti-normal, but whatever
+            Vector3<float> subsurface_jump = RandHemisphere(rand, -state->normal) * subsurface_jump_amount;
+            //Vector3<float> subsurface_jump = state->normal * -subsurface_jump_amount;
+            state->position = state->position + subsurface_jump;
+            // use as threshhold
+            state->totalDistance = subsurface_jump_amount;
+            return SUBSURFACE_STATE;
         }
-        return TRACE_STATE;
+
+        return Bounce(state, rand);
     }
     return NORMAL_STATE;
+}
+
+static __device__ int SubsurfaceState(MandelboxState *state,
+                                      float distance,
+                                      Vector3<float> lighting,
+                                      unsigned long long *rand)
+{
+    float subsurface_jump_amount = state->totalDistance;
+    // bad subsurface test
+    if (distance > subsurface_jump_amount
+        || distance < subsurface_jump_amount * 0.25f)
+    {
+        Vector3<float>
+            subsurface_jump = state->normal * -subsurface_jump_amount;
+        state->position = state->position - subsurface_jump;
+        return Bounce(state, rand);
+    }
+
+    float subsurface_distance = 1 - distance / subsurface_jump_amount;
+    float prob;
+    state->direction = RayToLight(state->position, &prob, rand);
+    Vector3<float> newLightColor = xyz(state->lightColor);
+    Vector3<float> multiply_factor = HueToRGB(0.2f, 0.2f, subsurface_distance);
+    newLightColor = comp_mul(newLightColor, multiply_factor);
+    state->lightColor = Vector4<float>(newLightColor.x,
+                                       newLightColor.y,
+                                       newLightColor.z,
+                                       state->lightColor.w);
+
+    state->totalDistance = 0;
+    ++state->traceIter;
+    return TRACE_STATE;
 }
 
 static __device__ int FinishState(MandelboxState *state,
@@ -586,7 +798,7 @@ static __device__ int FinishState(MandelboxState *state,
     Finish(state, x, y, width);
     // TODO: for some reason the image is flipped vertically (SDL?)
     int index = (height - y - 1) * width + x;
-    screenPixels[index] = PackPixel(state->color);
+    screenPixels[index] = PackPixel(xyz(state->color));
     return INIT_STATE;
 }
 
@@ -609,14 +821,16 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
     if (type == -1)
     {
         state.state = PREVIEW_STATE;
-        state.position = make_float3(cfg.Bailout + 1);
-        state.color = make_float4(0);
+        const float outside = cfg.Bailout + 1;
+        state.position = Vector3<float>(outside, outside, outside);
+        state.color = Vector4<float>(0, 0, 0, 0);
     }
     else if (type == 0)
     {
         state.state = INIT_STATE;
-        state.position = make_float3(cfg.Bailout + 1);
-        state.color = make_float4(0);
+        const float outside = cfg.Bailout + 1;
+        state.position = Vector3<float>(outside, outside, outside);
+        state.color = Vector4<float>(0, 0, 0, 0);
         // TODO: for some reason the image is flipped vertically (SDL?)
         int index = (height - y - 1) * width + x;
         screenPixels[index] = 255u << 24;
@@ -625,7 +839,7 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
     int i = state.state == PREVIEW_STATE ? 1 : max(1 << cfg.ItersPerKernel, 1);
     do
     {
-        float3 lighting;
+        Vector3<float> lighting;
         float de = De(state.position, &lighting) * cfg.DeMultiplier;
         switch (state.state)
         {
@@ -655,6 +869,9 @@ extern "C" __global__ void kern(uint *__restrict__ screenPixels,
                 break;
             case NORMAL_STATE:
                 state.state = NormalState(&state, de, lighting, &rand);
+                break;
+            case SUBSURFACE_STATE:
+                state.state = SubsurfaceState(&state, de, lighting, &rand);
                 break;
             case FINISH_STATE:
                 state.state =
