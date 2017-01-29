@@ -26,7 +26,11 @@ SdlWindow::SdlWindow(int x, int y, int width, int height, const char *font)
     {
         if (font[0] == '\0')
         {
-            font = "/usr/share/fonts/TTF/Inconsolata-Regular.ttf";
+#if MSVC
+            font = "C:\\Windows\\Fonts\\consola.ttf";
+#else
+            font = "/usr/share/fonts/TTF/DejaVuSansMono.ttf";
+#endif
         }
         this->font = TTF_OpenFont(font, 14);
         if (!this->font)

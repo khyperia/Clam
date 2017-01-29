@@ -62,9 +62,9 @@ static __device__ Vector3<float> xyz(Vector4<float> val)
     return Vector3<float>(val.x, val.y, val.z);
 }
 
-static __device__ uint MWC64X(unsigned long long *state)
+static __device__ unsigned int MWC64X(unsigned long long *state)
 {
-    uint c = (*state) >> 32, x = (*state) & 0xFFFFFFFF;
+    unsigned int c = (*state) >> 32, x = (*state) & 0xFFFFFFFF;
     *state = x * ((unsigned long long)4294883355U) + c;
     return x ^ c;
 }
@@ -131,7 +131,7 @@ static __device__ unsigned long long GetRand(int x, int y, int width, bool init)
 
 static __device__ void SetRand(int x, int y, int width, unsigned long long rand)
 {
-    BufferRand[y * width + x] = make_uint2((uint)(rand >> 32), (uint)rand);
+    BufferRand[y * width + x] = make_uint2((unsigned int)(rand >> 32), (unsigned int)rand);
 }
 
 // http://en.wikipedia.org/wiki/Stereographic_projection
@@ -564,7 +564,7 @@ static __device__ int Bounce(MandelboxState *state, unsigned long long *rand)
     return TRACE_STATE;
 }
 
-static __device__ uint PackPixel(Vector3<float> pixel)
+static __device__ unsigned int PackPixel(Vector3<float> pixel)
 {
     if (cfg.WhiteClamp)
     {
@@ -594,7 +594,7 @@ static __device__ void Finish(MandelboxState *state, int x, int y, int width)
 }
 
 static __device__ int PreviewState(MandelboxState *state,
-                                   uint *__restrict__ screenPixels,
+                                   unsigned int *__restrict__ screenPixels,
                                    int x,
                                    int y,
                                    int screenX,
@@ -789,7 +789,7 @@ static __device__ int SubsurfaceState(MandelboxState *state,
 }
 
 static __device__ int FinishState(MandelboxState *state,
-                                  uint *__restrict__ screenPixels,
+                                  unsigned int *__restrict__ screenPixels,
                                   int x,
                                   int y,
                                   int width,
@@ -803,7 +803,7 @@ static __device__ int FinishState(MandelboxState *state,
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
-extern "C" __global__ void kern(uint *__restrict__ screenPixels,
+extern "C" __global__ void kern(unsigned int *__restrict__ screenPixels,
                                 int screenX,
                                 int screenY,
                                 int width,

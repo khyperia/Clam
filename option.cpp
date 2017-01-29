@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <sstream>
+#include <cctype>
 
 void UserOptions::Add(std::string name, std::string default_value)
 {

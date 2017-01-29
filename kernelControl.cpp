@@ -67,11 +67,25 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
                                          width * height * MandelboxStateSize);
         new(&rand_buffer) CuMem<uint64_t>(context, width * height);
     }
-    MandelboxCfg temp;
+    MandelboxCfg temp = {0};
+    if (!old_state)
+    {
+        changed = true;
+        old_state = make_unique<MandelboxCfg>();
+        *old_state = temp;
+    }
     auto pos = settings.Get("pos").AsVec3();
     auto look = settings.Get("look").AsVec3().normalized();
-    auto
-        up = cross(cross(look, settings.Get("up").AsVec3()), look).normalized();
+    auto up = cross(cross(look, settings.Get("up").AsVec3()), look).normalized();
+    changed |= (float)pos.x != old_state->posX;
+    changed |= (float)pos.y != old_state->posY;
+    changed |= (float)pos.z != old_state->posZ;
+    changed |= (float)look.x != old_state->lookX;
+    changed |= (float)look.y != old_state->lookY;
+    changed |= (float)look.z != old_state->lookZ;
+    changed |= (float)up.x != old_state->upX;
+    changed |= (float)up.y != old_state->upY;
+    changed |= (float)up.z != old_state->upZ;
     temp.posX = (float)pos.x;
     temp.posY = (float)pos.y;
     temp.posZ = (float)pos.z;
@@ -83,13 +97,28 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     temp.upZ = (float)up.z;
 #define DefineVec3(name) do { \
         const auto& val = settings.Get(#name).AsVec3();\
-        temp.name##X = val.x;\
-        temp.name##Y = val.y;\
-        temp.name##Z = val.z;\
+        changed |= (float)val.x != old_state->name##X; \
+        changed |= (float)val.y != old_state->name##Y; \
+        changed |= (float)val.z != old_state->name##Z; \
+        temp.name##X = (float)val.x;\
+        temp.name##Y = (float)val.y;\
+        temp.name##Z = (float)val.z;\
     } while (0)
-#define DefineFlt(name) temp.name = (float)settings.Get(#name).AsFloat()
-#define DefineInt(name) temp.name = (int)settings.Get(#name).AsInt()
-#define DefineBool(name) temp.name = settings.Get(#name).AsBool() ? 1 : 0
+#define DefineFlt(name) do { \
+        const auto& val = (float)settings.Get(#name).AsFloat(); \
+        changed |= val != old_state->name; \
+        temp.name = val; \
+    } while (0)
+#define DefineInt(name) do { \
+        const auto& val = settings.Get(#name).AsInt(); \
+        changed |= val != old_state->name; \
+        temp.name = val; \
+    } while (0)
+#define DefineBool(name) do { \
+        const auto& val = settings.Get(#name).AsBool(); \
+        changed |= val != (old_state->name != 0); \
+        temp.name = val ? 1 : 0; \
+    } while (0)
     DefineFlt(fov);
     DefineFlt(focalDistance);
 
@@ -133,17 +162,7 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
 #undef DefineFlt
 #undef DefineInt
 #undef DefineBool
-    if (!old_state)
-    {
-        changed = true;
-        old_state = make_unique<MandelboxCfg>();
-        *old_state = temp;
-    }
-    else if (memcmp(old_state.get(), &temp, sizeof(temp)))
-    {
-        changed = true;
-        *old_state = temp;
-    }
+    *old_state = temp;
     temp.scratch = scratch_buffer();
     temp.randbuf = rand_buffer();
     kernelVariable.Set(temp);

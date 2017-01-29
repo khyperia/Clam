@@ -126,7 +126,7 @@ int main(int argc, char **argv)
                               KernelConfiguration(options.Get("kernel")),
                               width,
                               height,
-                              "/usr/share/fonts/TTF/DejaVuSansMono.ttf");
+                              "");
         driver.Run();
     }
     else if (movie > 0)

@@ -1,4 +1,5 @@
 #include "cudaContext.h"
+#include <iostream>
 
 int CudaContext::currentContext = -1;
 
@@ -7,20 +8,26 @@ void CudaContext::CheckCall(CUresult callResult)
     if (callResult != CUDA_SUCCESS)
     {
         const char *errstr;
+        std::string message;
         if (cuGetErrorString(callResult, &errstr) == CUDA_SUCCESS)
         {
-            throw std::runtime_error(
-                "CUDA error (" + tostring(callResult) + "): " + errstr);
+            message = "CUDA error (" + tostring(callResult) + "): " + errstr;
         }
         else if (cuGetErrorName(callResult, &errstr) == CUDA_SUCCESS)
         {
-            throw std::runtime_error(
-                "CUDA error " + tostring(callResult) + " = " + errstr);
+            message = "CUDA error " + tostring(callResult) + " = " + errstr;
         }
         else
         {
-            throw std::runtime_error(
-                "CUDA error " + tostring(callResult) + " (no name)");
+            message = "CUDA error " + tostring(callResult) + " (no name)";
+        }
+        if (std::uncaught_exception())
+        {
+            std::cout << "CUDA error while processing exception: " << message << std::endl;
+        }
+        else
+        {
+            throw std::runtime_error(message);
         }
     }
 }
