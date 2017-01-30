@@ -67,7 +67,7 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
                                          width * height * MandelboxStateSize);
         new(&rand_buffer) CuMem<uint64_t>(context, width * height);
     }
-    MandelboxCfg temp = {0};
+    MandelboxCfg temp;
     if (!old_state)
     {
         changed = true;

@@ -4,6 +4,9 @@ extern "C" {
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
+extern const unsigned char mandelbox2[];
+extern const unsigned int mandelbox2_len;
+
 extern const unsigned char mandelbrot[];
 extern const unsigned int mandelbrot_len;
 }
@@ -19,6 +22,10 @@ const unsigned char *KernelConfiguration::KernelData() const
     {
         return mandelbox;
     }
+    else if (name == "mandelbox2")
+    {
+        return mandelbox2;
+    }
     else if (name == "mandelbrot")
     {
         return mandelbrot;
@@ -32,6 +39,10 @@ unsigned int KernelConfiguration::KernelLength() const
     {
         return mandelbox_len;
     }
+    else if (name == "mandelbox2")
+    {
+        return mandelbox2_len;
+    }
     else if (name == "mandelbrot")
     {
         return mandelbrot_len;
@@ -42,7 +53,7 @@ unsigned int KernelConfiguration::KernelLength() const
 SettingCollection KernelConfiguration::Settings() const
 {
     SettingCollection result;
-    if (name == "mandelbox")
+    if (name == "mandelbox" || name == "mandelbox2")
     {
         result.AddSetting("pos", Vector3<double>(0.0, 0.0, 5.0));
         result.AddSetting("look", Vector3<double>(0.0, 0.0, -1.0));
@@ -57,14 +68,14 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("DeRotationAxis", Vector3<double>(1.0, 0.0, 0.0));
         result.AddSetting("DofAmount", 0.01);
         result.AddSetting("FovAbberation", 0.0);
-        result.AddSetting("LightPos", Vector3<double>(4.0, 4.0, 4.0));
-        result.AddSetting("LightSize", 1.0);
+        result.AddSetting("LightPos", Vector3<double>(3.0, 4.0, 3.0));
+        result.AddSetting("LightSize", 0.5);
         result.AddSetting("WhiteClamp", false);
         result.AddSetting("LightBrightnessHue", 0.05);
         result.AddSetting("LightBrightnessSat", 0.7);
-        result.AddSetting("LightBrightnessVal", 16.0);
-        result.AddSetting("AmbientBrightnessHue", 0.6);
-        result.AddSetting("AmbientBrightnessSat", 0.3);
+        result.AddSetting("LightBrightnessVal", 8.0);
+        result.AddSetting("AmbientBrightnessHue", 0.55);
+        result.AddSetting("AmbientBrightnessSat", 0.5);
         result.AddSetting("AmbientBrightnessVal", 1.0);
         result.AddSetting("ReflectHue", 0.0);
         result.AddSetting("ReflectSat", 0.001);
@@ -75,9 +86,9 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("RandSeedInitSteps", 8);
         result.AddSetting("MaxRayDist", 16.0);
         result.AddSetting("MaxRaySteps", 32);
-        result.AddSetting("NumRayBounces", 3);
-        result.AddSetting("QualityFirstRay", 2.0);
-        result.AddSetting("QualityRestRay", 64.0);
+        result.AddSetting("NumRayBounces", 5);
+        result.AddSetting("QualityFirstRay", 4.0);
+        result.AddSetting("QualityRestRay", 128.0);
         result.AddSetting("ItersPerKernel", 8);
     }
     else if (name == "mandelbrot")
@@ -98,7 +109,7 @@ std::vector<std::unique_ptr<KernelControl>>
 KernelConfiguration::Controls(GpuKernel &kernel) const
 {
     std::vector<std::unique_ptr<KernelControl>> result;
-    if (name == "mandelbox")
+    if (name == "mandelbox" || name == "mandelbox2")
     {
         result.push_back(make_unique<MandelboxKernelControl>(kernel.Variable(
             "CfgArr")));
@@ -118,7 +129,7 @@ KernelConfiguration::Controls(GpuKernel &kernel) const
 std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
 {
     std::vector<std::unique_ptr<UiSetting>> result;
-    if (name == "mandelbox")
+    if (name == "mandelbox" || name == "mandelbox2")
     {
         result.push_back(make_unique<ExpVar>("fov",
                                              1.0,
