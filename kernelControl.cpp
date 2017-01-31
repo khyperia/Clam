@@ -126,10 +126,7 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     DefineFlt(FoldingLimit);
     DefineFlt(FixedRadius2);
     DefineFlt(MinRadius2);
-    DefineFlt(DeRotationAmount);
-    DefineVec3(DeRotationAxis);
     DefineFlt(DofAmount);
-    DefineFlt(FovAbberation);
 
     DefineVec3(LightPos);
     DefineFlt(LightSize);
@@ -144,10 +141,6 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     DefineFlt(AmbientBrightnessSat);
     DefineFlt(AmbientBrightnessVal);
 
-    DefineFlt(ReflectHue);
-    DefineFlt(ReflectSat);
-    DefineFlt(ReflectVal);
-
     DefineInt(MaxIters);
     DefineFlt(Bailout);
     DefineFlt(DeMultiplier);
@@ -157,7 +150,6 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     DefineInt(NumRayBounces);
     DefineFlt(QualityFirstRay);
     DefineFlt(QualityRestRay);
-    DefineInt(ItersPerKernel);
 #undef DefineVec3
 #undef DefineFlt
 #undef DefineInt

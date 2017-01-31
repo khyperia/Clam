@@ -4,9 +4,6 @@ extern "C" {
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
 
-extern const unsigned char mandelbox2[];
-extern const unsigned int mandelbox2_len;
-
 extern const unsigned char mandelbrot[];
 extern const unsigned int mandelbrot_len;
 }
@@ -22,10 +19,6 @@ const unsigned char *KernelConfiguration::KernelData() const
     {
         return mandelbox;
     }
-    else if (name == "mandelbox2")
-    {
-        return mandelbox2;
-    }
     else if (name == "mandelbrot")
     {
         return mandelbrot;
@@ -39,10 +32,6 @@ unsigned int KernelConfiguration::KernelLength() const
     {
         return mandelbox_len;
     }
-    else if (name == "mandelbox2")
-    {
-        return mandelbox2_len;
-    }
     else if (name == "mandelbrot")
     {
         return mandelbrot_len;
@@ -53,7 +42,7 @@ unsigned int KernelConfiguration::KernelLength() const
 SettingCollection KernelConfiguration::Settings() const
 {
     SettingCollection result;
-    if (name == "mandelbox" || name == "mandelbox2")
+    if (name == "mandelbox")
     {
         result.AddSetting("pos", Vector3<double>(0.0, 0.0, 5.0));
         result.AddSetting("look", Vector3<double>(0.0, 0.0, -1.0));
@@ -64,10 +53,7 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("FoldingLimit", 1.0);
         result.AddSetting("FixedRadius2", 1.0);
         result.AddSetting("MinRadius2", 0.125);
-        result.AddSetting("DeRotationAmount", 0.0);
-        result.AddSetting("DeRotationAxis", Vector3<double>(1.0, 0.0, 0.0));
         result.AddSetting("DofAmount", 0.01);
-        result.AddSetting("FovAbberation", 0.0);
         result.AddSetting("LightPos", Vector3<double>(3.0, 4.0, 3.0));
         result.AddSetting("LightSize", 0.5);
         result.AddSetting("WhiteClamp", false);
@@ -77,9 +63,6 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("AmbientBrightnessHue", 0.55);
         result.AddSetting("AmbientBrightnessSat", 0.5);
         result.AddSetting("AmbientBrightnessVal", 1.0);
-        result.AddSetting("ReflectHue", 0.0);
-        result.AddSetting("ReflectSat", 0.001);
-        result.AddSetting("ReflectVal", 1.0);
         result.AddSetting("MaxIters", 32);
         result.AddSetting("Bailout", 1024.0);
         result.AddSetting("DeMultiplier", 0.95);
@@ -89,7 +72,6 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("NumRayBounces", 5);
         result.AddSetting("QualityFirstRay", 4.0);
         result.AddSetting("QualityRestRay", 128.0);
-        result.AddSetting("ItersPerKernel", 8);
     }
     else if (name == "mandelbrot")
     {
@@ -109,7 +91,7 @@ std::vector<std::unique_ptr<KernelControl>>
 KernelConfiguration::Controls(GpuKernel &kernel) const
 {
     std::vector<std::unique_ptr<KernelControl>> result;
-    if (name == "mandelbox" || name == "mandelbox2")
+    if (name == "mandelbox")
     {
         result.push_back(make_unique<MandelboxKernelControl>(kernel.Variable(
             "CfgArr")));
@@ -129,7 +111,7 @@ KernelConfiguration::Controls(GpuKernel &kernel) const
 std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
 {
     std::vector<std::unique_ptr<UiSetting>> result;
-    if (name == "mandelbox" || name == "mandelbox2")
+    if (name == "mandelbox")
     {
         result.push_back(make_unique<ExpVar>("fov",
                                              1.0,
@@ -161,10 +143,7 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("FoldingLimit", 0.25));
         settings.push_back(std::make_pair("FixedRadius2", 0.25));
         settings.push_back(std::make_pair("MinRadius2", 0.25));
-        settings.push_back(std::make_pair("DeRotationAmount", 0.25));
-        settings.push_back(std::make_pair("DeRotationAxis", 0.25));
         settings.push_back(std::make_pair("DofAmount", -1.0));
-        settings.push_back(std::make_pair("FovAbberation", -0.1));
         settings.push_back(std::make_pair("LightPos", 0.5));
         settings.push_back(std::make_pair("LightSize", -0.2));
         settings.push_back(std::make_pair("WhiteClamp", 0));
@@ -174,9 +153,6 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("AmbientBrightnessHue", 0.05));
         settings.push_back(std::make_pair("AmbientBrightnessSat", -0.25));
         settings.push_back(std::make_pair("AmbientBrightnessVal", -0.25));
-        settings.push_back(std::make_pair("ReflectHue", 0.05));
-        settings.push_back(std::make_pair("ReflectSat", -0.25));
-        settings.push_back(std::make_pair("ReflectVal", -0.25));
         settings.push_back(std::make_pair("MaxIters", 0));
         settings.push_back(std::make_pair("Bailout", -0.5));
         settings.push_back(std::make_pair("DeMultiplier", 0.125));
@@ -186,7 +162,6 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("NumRayBounces", 0));
         settings.push_back(std::make_pair("QualityFirstRay", -0.5));
         settings.push_back(std::make_pair("QualityRestRay", -0.5));
-        settings.push_back(std::make_pair("ItersPerKernel", 0));
         result.push_back(make_unique<InteractiveSetting>(settings,
                                                          SDL_SCANCODE_UP,
                                                          SDL_SCANCODE_DOWN,

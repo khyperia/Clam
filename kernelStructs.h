@@ -10,7 +10,7 @@
 #define __global__
 #endif
 
-#define MandelboxStateSize 80
+#define MandelboxStateSize 16
 
 struct MandelboxCfg
 {
@@ -32,12 +32,7 @@ struct MandelboxCfg
     float FoldingLimit;
     float FixedRadius2;
     float MinRadius2;
-    float DeRotationAmount;
-    float DeRotationAxisX;
-    float DeRotationAxisY;
-    float DeRotationAxisZ;
     float DofAmount;
-    float FovAbberation;
 
     float LightPosX;
     float LightPosY;
@@ -54,10 +49,6 @@ struct MandelboxCfg
     float AmbientBrightnessSat;
     float AmbientBrightnessVal;
 
-    float ReflectHue;
-    float ReflectSat;
-    float ReflectVal;
-
     int MaxIters;
     float Bailout;
     float DeMultiplier;
@@ -67,7 +58,6 @@ struct MandelboxCfg
     int NumRayBounces;
     float QualityFirstRay;
     float QualityRestRay;
-    int ItersPerKernel;
 };
 
 struct MandelbrotCfg
