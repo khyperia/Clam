@@ -4,7 +4,6 @@
 #ifdef main
 #undef main
 #endif
-
 #define CATCH_EXCEPTIONS 0
 
 // Legacy code for reference on UI design
@@ -106,54 +105,53 @@ int main(int argc, char **argv)
         std::cout << cmdline_error << std::endl;
         return 1;
     }
-
     int width = 0;
     int height = 0;
     if (parse_size(options.Get("size"), &width, &height))
     {
         return 1;
     }
-
     CudaContext::Init();
     CudaContext ctx(fromstring<int>(options.Get("gpu")));
     ctx.SetCurrent();
-
     auto render_filename = options.Get("save");
     auto movie = fromstring<int>(options.Get("movie"));
     if (render_filename.empty())
     {
-        RealtimeRender driver(std::move(ctx),
-                              KernelConfiguration(options.Get("kernel")),
-                              width,
-                              height,
-                              "");
+        RealtimeRender driver(
+            std::move(ctx), KernelConfiguration(options.Get("kernel")), width, height, ""
+        );
         driver.Run();
     }
     else if (movie > 0)
     {
         auto num_frames = fromstring<int>(options.Get("frames"));
         auto loop = options.Get("movie_loop") != "false";
-        MovieRender driver(std::move(ctx),
-                           KernelConfiguration(options.Get("kernel")),
-                           (size_t)width,
-                           (size_t)height,
-                           num_frames,
-                           movie,
-                           loop,
-                           "movie.clam3",
-                           render_filename);
+        MovieRender driver(
+            std::move(ctx),
+            KernelConfiguration(options.Get("kernel")),
+            (size_t)width,
+            (size_t)height,
+            num_frames,
+            movie,
+            loop,
+            "movie.clam3",
+            render_filename
+        );
         driver.Run();
     }
     else
     {
         auto num_frames = fromstring<int>(options.Get("frames"));
-        HeadlessRender driver(std::move(ctx),
-                              KernelConfiguration(options.Get("kernel")),
-                              (size_t)width,
-                              (size_t)height,
-                              num_frames,
-                              "settings.clam3",
-                              render_filename);
+        HeadlessRender driver(
+            std::move(ctx),
+            KernelConfiguration(options.Get("kernel")),
+            (size_t)width,
+            (size_t)height,
+            num_frames,
+            "settings.clam3",
+            render_filename
+        );
         driver.Run();
     }
 #if CATCH_EXCEPTIONS

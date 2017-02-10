@@ -1,9 +1,6 @@
 #include "option.h"
-
 #include <algorithm>
-#include <cstdlib>
 #include <sstream>
-#include <cctype>
 
 void UserOptions::Add(std::string name, std::string default_value)
 {
@@ -15,10 +12,7 @@ std::string UserOptions::Parse(int, char **argv)
     for (auto &value : values)
     {
         auto upper = value.first;
-        std::transform(upper.begin(),
-                       upper.end(),
-                       upper.begin(),
-                       (int (*)(int))std::toupper);
+        std::transform(upper.begin(), upper.end(), upper.begin(), (int (*)(int))std::toupper);
         const auto env_name = "CLAM3_" + upper;
         auto env_val = std::getenv(env_name.c_str());
         if (env_val)
@@ -46,7 +40,11 @@ std::string UserOptions::Parse(int, char **argv)
             help << "Clam3 help:" << std::endl;
             for (auto &value : values)
             {
-                help << "--" << value.first << " " << value.second << std::endl;
+                help << "--";
+                help << value.first;
+                help << " ";
+                help << value.second;
+                help << std::endl;
             }
             return help.str();
         }

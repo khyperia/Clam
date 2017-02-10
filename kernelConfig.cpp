@@ -3,13 +3,11 @@
 extern "C" {
 extern const unsigned char mandelbox[];
 extern const unsigned int mandelbox_len;
-
 extern const unsigned char mandelbrot[];
 extern const unsigned int mandelbrot_len;
 }
 
-KernelConfiguration::KernelConfiguration(const std::string &kernelName)
-    : name(kernelName)
+KernelConfiguration::KernelConfiguration(const std::string &kernelName) : name(kernelName)
 {
 }
 
@@ -87,19 +85,16 @@ SettingCollection KernelConfiguration::Settings() const
     return result;
 }
 
-std::vector<std::unique_ptr<KernelControl>>
-KernelConfiguration::Controls(GpuKernel &kernel) const
+std::vector<std::unique_ptr<KernelControl>> KernelConfiguration::Controls(GpuKernel &kernel) const
 {
     std::vector<std::unique_ptr<KernelControl>> result;
     if (name == "mandelbox")
     {
-        result.push_back(make_unique<MandelboxKernelControl>(kernel.Variable(
-            "CfgArr")));
+        result.push_back(make_unique<MandelboxKernelControl>(kernel.Variable("CfgArr")));
     }
     else if (name == "mandelbrot")
     {
-        result.push_back(make_unique<MandelbrotKernelControl>(kernel.Variable(
-            "CfgArr")));
+        result.push_back(make_unique<MandelbrotKernelControl>(kernel.Variable("CfgArr")));
     }
     else
     {
@@ -113,31 +108,31 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
     std::vector<std::unique_ptr<UiSetting>> result;
     if (name == "mandelbox")
     {
-        result.push_back(make_unique<ExpVar>("fov",
-                                             1.0,
-                                             SDL_SCANCODE_N,
-                                             SDL_SCANCODE_M));
-        result.push_back(make_unique<ExpVar>("focalDistance",
-                                             0.25,
-                                             SDL_SCANCODE_R,
-                                             SDL_SCANCODE_F));
-        result.push_back(make_unique<Camera3d>("pos",
-                                               "look",
-                                               "up",
-                                               "fov",
-                                               "focalDistance",
-                                               SDL_SCANCODE_W,
-                                               SDL_SCANCODE_S,
-                                               SDL_SCANCODE_SPACE,
-                                               SDL_SCANCODE_Z,
-                                               SDL_SCANCODE_A,
-                                               SDL_SCANCODE_D,
-                                               SDL_SCANCODE_I,
-                                               SDL_SCANCODE_K,
-                                               SDL_SCANCODE_J,
-                                               SDL_SCANCODE_L,
-                                               SDL_SCANCODE_U,
-                                               SDL_SCANCODE_O));
+        result.push_back(make_unique<ExpVar>("fov", 1.0, SDL_SCANCODE_N, SDL_SCANCODE_M));
+        result.push_back(
+            make_unique<ExpVar>(
+                "focalDistance", 0.25, SDL_SCANCODE_R, SDL_SCANCODE_F
+            ));
+        result.push_back(
+            make_unique<Camera3d>(
+                "pos",
+                "look",
+                "up",
+                "fov",
+                "focalDistance",
+                SDL_SCANCODE_W,
+                SDL_SCANCODE_S,
+                SDL_SCANCODE_SPACE,
+                SDL_SCANCODE_Z,
+                SDL_SCANCODE_A,
+                SDL_SCANCODE_D,
+                SDL_SCANCODE_I,
+                SDL_SCANCODE_K,
+                SDL_SCANCODE_J,
+                SDL_SCANCODE_L,
+                SDL_SCANCODE_U,
+                SDL_SCANCODE_O
+            ));
         std::vector<std::pair<std::string, double>> settings;
         settings.push_back(std::make_pair("Scale", 0.25));
         settings.push_back(std::make_pair("FoldingLimit", 0.25));
@@ -162,30 +157,22 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("NumRayBounces", 0));
         settings.push_back(std::make_pair("QualityFirstRay", -0.5));
         settings.push_back(std::make_pair("QualityRestRay", -0.5));
-        result.push_back(make_unique<InteractiveSetting>(settings,
-                                                         SDL_SCANCODE_UP,
-                                                         SDL_SCANCODE_DOWN,
-                                                         SDL_SCANCODE_RIGHT,
-                                                         SDL_SCANCODE_LEFT));
+        result.push_back(
+            make_unique<InteractiveSetting>(
+                settings, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_LEFT
+            ));
     }
     else if (name == "mandelbrot")
     {
-        result.push_back(make_unique<ExpVar>("zoom",
-                                             1.0,
-                                             SDL_SCANCODE_F,
-                                             SDL_SCANCODE_R));
-        result.push_back(make_unique<Pan2d>("pos",
-                                            "zoom",
-                                            SDL_SCANCODE_W,
-                                            SDL_SCANCODE_S,
-                                            SDL_SCANCODE_A,
-                                            SDL_SCANCODE_D));
-        result.push_back(make_unique<Pan2d>("julia",
-                                            "zoom",
-                                            SDL_SCANCODE_I,
-                                            SDL_SCANCODE_K,
-                                            SDL_SCANCODE_J,
-                                            SDL_SCANCODE_L));
+        result.push_back(make_unique<ExpVar>("zoom", 1.0, SDL_SCANCODE_F, SDL_SCANCODE_R));
+        result.push_back(
+            make_unique<Pan2d>(
+                "pos", "zoom", SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D
+            ));
+        result.push_back(
+            make_unique<Pan2d>(
+                "julia", "zoom", SDL_SCANCODE_I, SDL_SCANCODE_K, SDL_SCANCODE_J, SDL_SCANCODE_L
+            ));
         result.push_back(make_unique<Toggle>("juliaenabled", SDL_SCANCODE_U));
     }
     else

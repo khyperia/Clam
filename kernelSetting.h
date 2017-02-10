@@ -4,7 +4,7 @@
 #include "util.h"
 #include "vector.h"
 
-class Setting: public NoClone
+class Setting : public NoClone
 {
     const std::string name;
     enum TagTy
@@ -21,7 +21,6 @@ class Setting: public NoClone
     };
     bool IsType(TagTy type) const;
     void Check(TagTy type) const;
-
 public:
     Setting(const std::string name, double value);
     Setting(const std::string name, int value);
@@ -47,21 +46,16 @@ public:
     const bool &AsBool() const;
     const Vector2<double> &AsVec2() const;
     const Vector3<double> &AsVec3() const;
-
     std::string Save() const;
     void Load(const std::string &savedData);
-
-    static Setting Interpolate(const Setting &p0,
-                               const Setting &p1,
-                               const Setting &p2,
-                               const Setting &p3,
-                               double time);
+    static Setting Interpolate(
+        const Setting &p0, const Setting &p1, const Setting &p2, const Setting &p3, double time
+    );
 };
 
-class SettingCollection: public NoClone
+class SettingCollection : public NoClone
 {
     std::vector<Setting> settings;
-
     void AddSetting(Setting setting);
 public:
     SettingCollection();
@@ -77,9 +71,11 @@ public:
     void Load(const std::string &savedData);
     Setting &Get(const std::string &name);
     const Setting &Get(const std::string &name) const;
-    static SettingCollection Interpolate(const SettingCollection &p0,
-                                         const SettingCollection &p1,
-                                         const SettingCollection &p2,
-                                         const SettingCollection &p3,
-                                         double time);
+    static SettingCollection Interpolate(
+        const SettingCollection &p0,
+        const SettingCollection &p1,
+        const SettingCollection &p2,
+        const SettingCollection &p3,
+        double time
+    );
 };

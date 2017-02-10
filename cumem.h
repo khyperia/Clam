@@ -6,7 +6,7 @@
 #include <iostream>
 
 template<typename T>
-class CuMem: public NoClone
+class CuMem : public NoClone
 {
     CUdeviceptr ptr;
     size_t count;
@@ -30,19 +30,16 @@ class CuMem: public NoClone
     }
 
 public:
-    CuMem()
-        : ptr(0), count(0), owned(false)
+    CuMem() : ptr(0), count(0), owned(false)
     {
     }
 
-    CuMem(const CudaContext &context, size_t count)
-        : count(count), owned(true)
+    CuMem(const CudaContext &context, size_t count) : count(count), owned(true)
     {
         Alloc(context);
     }
 
-    CuMem(CUdeviceptr ptr, size_t count)
-        : ptr(ptr), count(count), owned(false)
+    CuMem(CUdeviceptr ptr, size_t count) : ptr(ptr), count(count), owned(false)
     {
     }
 
@@ -55,24 +52,6 @@ public:
         {
             Free();
         }
-    }
-
-    void Realloc(size_t newCount, const CudaContext &context)
-    {
-        if (ptr != 0)
-        {
-            if (!owned)
-            {
-                throw std::runtime_error("Cannot resize a non-owned CuMem");
-            }
-            Free();
-        }
-        else
-        {
-            owned = true;
-        }
-        count = newCount;
-        Alloc(context);
     }
 
     CUdeviceptr &operator()()
@@ -99,8 +78,7 @@ public:
         context.Run(cuMemcpyDtoHAsync(cpu, ptr, bytesize(), stream));
     }
 
-    void
-    CopyFrom(const T *cpu, CUstream stream, const CudaContext &context) const
+    void CopyFrom(const T *cpu, CUstream stream, const CudaContext &context) const
     {
         if (!ptr)
         {

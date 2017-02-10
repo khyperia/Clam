@@ -1,8 +1,6 @@
 #include "uiSetting.h"
-#include "vector.h"
 
-UiSetting::UiSetting()
-    : pressed_keys()
+UiSetting::UiSetting() : pressed_keys()
 {
 }
 
@@ -36,11 +34,8 @@ std::string UiSetting::Describe(const SettingCollection &) const
     return "";
 }
 
-ExpVar::ExpVar(std::string name,
-               double rate,
-               SDL_Scancode increase,
-               SDL_Scancode decrease)
-    : name(std::move(name)), rate(rate), increase(increase), decrease(decrease)
+ExpVar::ExpVar(std::string name, double rate, SDL_Scancode increase, SDL_Scancode decrease) :
+    name(std::move(name)), rate(rate), increase(increase), decrease(decrease)
 {
 }
 
@@ -62,15 +57,21 @@ void ExpVar::Integrate(SettingCollection &settings, double time)
     }
 }
 
-Pan2d::Pan2d(std::string pos_name,
-             std::string move_speed,
-             SDL_Scancode up,
-             SDL_Scancode down,
-             SDL_Scancode left,
-             SDL_Scancode right)
-    : UiSetting(), pos_name(std::move(pos_name)),
-      move_speed(std::move(move_speed)), up(up), down(down), left(left),
-      right(right)
+Pan2d::Pan2d(
+    std::string pos_name,
+    std::string move_speed,
+    SDL_Scancode up,
+    SDL_Scancode down,
+    SDL_Scancode left,
+    SDL_Scancode right
+) :
+    UiSetting(),
+    pos_name(std::move(pos_name)),
+    move_speed(std::move(move_speed)),
+    up(up),
+    down(down),
+    left(left),
+    right(right)
 {
 }
 
@@ -102,8 +103,8 @@ void Pan2d::Integrate(SettingCollection &settings, double time)
     }
 }
 
-Toggle::Toggle(std::string name, SDL_Scancode key)
-    : UiSetting(), name(std::move(name)), key(std::move(key))
+Toggle::Toggle(std::string name, SDL_Scancode key) :
+    UiSetting(), name(std::move(name)), key(std::move(key))
 {
 }
 
@@ -121,28 +122,42 @@ void Toggle::Input(SettingCollection &settings, SDL_Event event)
     }
 }
 
-Camera3d::Camera3d(std::string pos_name,
-                   std::string look_name,
-                   std::string up_name,
-                   std::string fov,
-                   std::string move_speed,
-                   SDL_Scancode forwards,
-                   SDL_Scancode back,
-                   SDL_Scancode up,
-                   SDL_Scancode down,
-                   SDL_Scancode left,
-                   SDL_Scancode right,
-                   SDL_Scancode pitch_up,
-                   SDL_Scancode pitch_down,
-                   SDL_Scancode yaw_left,
-                   SDL_Scancode yaw_right,
-                   SDL_Scancode roll_left,
-                   SDL_Scancode roll_right)
-    : pos_name(pos_name), look_name(look_name), up_name(up_name), fov(fov),
-      move_speed(move_speed), forwards(forwards), back(back), up(up),
-      down(down), left(left), right(right), pitch_up(pitch_up),
-      pitch_down(pitch_down), yaw_left(yaw_left), yaw_right(yaw_right),
-      roll_left(roll_left), roll_right(roll_right)
+Camera3d::Camera3d(
+    std::string pos_name,
+    std::string look_name,
+    std::string up_name,
+    std::string fov,
+    std::string move_speed,
+    SDL_Scancode forwards,
+    SDL_Scancode back,
+    SDL_Scancode up,
+    SDL_Scancode down,
+    SDL_Scancode left,
+    SDL_Scancode right,
+    SDL_Scancode pitch_up,
+    SDL_Scancode pitch_down,
+    SDL_Scancode yaw_left,
+    SDL_Scancode yaw_right,
+    SDL_Scancode roll_left,
+    SDL_Scancode roll_right
+) :
+    pos_name(pos_name),
+    look_name(look_name),
+    up_name(up_name),
+    fov(fov),
+    move_speed(move_speed),
+    forwards(forwards),
+    back(back),
+    up(up),
+    down(down),
+    left(left),
+    right(right),
+    pitch_up(pitch_up),
+    pitch_down(pitch_down),
+    yaw_left(yaw_left),
+    yaw_right(yaw_right),
+    roll_left(roll_left),
+    roll_right(roll_right)
 {
 }
 
@@ -210,14 +225,19 @@ void Camera3d::Integrate(SettingCollection &settings, double time)
     up = cross(cross(look, up), look).normalized();
 }
 
-InteractiveSetting::InteractiveSetting(std::vector<std::pair<std::string,
-                                                             double>> settings,
-                                       SDL_Scancode up,
-                                       SDL_Scancode down,
-                                       SDL_Scancode increase,
-                                       SDL_Scancode decrease)
-    : settings(std::move(settings)), up(up), down(down), increase(increase),
-      decrease(decrease), currentIndex(0)
+InteractiveSetting::InteractiveSetting(
+    std::vector<std::pair<std::string, double>> settings,
+    SDL_Scancode up,
+    SDL_Scancode down,
+    SDL_Scancode increase,
+    SDL_Scancode decrease
+) :
+    settings(std::move(settings)),
+    up(up),
+    down(down),
+    increase(increase),
+    decrease(decrease),
+    currentIndex(0)
 {
 }
 
@@ -365,8 +385,7 @@ void InteractiveSetting::Integrate(SettingCollection &settings, double time)
             else
             {
                 value =
-                    elem == 0 ? &item.AsVec3().x : elem == 1 ? &item.AsVec3().y
-                                                             : &item.AsVec3().z;
+                    elem == 0 ? &item.AsVec3().x : elem == 1 ? &item.AsVec3().y : &item.AsVec3().z;
             }
             auto rate = current.second;
             if (rate >= 0)
@@ -382,8 +401,7 @@ void InteractiveSetting::Integrate(SettingCollection &settings, double time)
     }
 }
 
-std::string
-InteractiveSetting::Describe(const SettingCollection &settings) const
+std::string InteractiveSetting::Describe(const SettingCollection &settings) const
 {
     std::ostringstream out;
     int idx = 0;
@@ -434,8 +452,7 @@ InteractiveSetting::Describe(const SettingCollection &settings) const
             }
             else if (val.IsVec3())
             {
-                out << (delta == 0 ? val.AsVec3().x : delta == 1 ? val.AsVec3()
-                    .y : val.AsVec3().z);
+                out << (delta == 0 ? val.AsVec3().x : delta == 1 ? val.AsVec3().y : val.AsVec3().z);
             }
             out << std::endl;
             idx++;

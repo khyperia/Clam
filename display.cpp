@@ -3,8 +3,7 @@
 #include <iostream>
 #include "util.h"
 
-BlitData::BlitData(int32_t *data, int width, int height)
-    : width(width), height(height), data(data)
+BlitData::BlitData(int32_t *data, int width, int height) : width(width), height(height), data(data)
 {
 }
 
@@ -35,8 +34,9 @@ SdlWindow::SdlWindow(int x, int y, int width, int height, const char *font)
         this->font = TTF_OpenFont(font, 14);
         if (!this->font)
         {
-            throw std::runtime_error("Could not open font " + std::string(font)
-                                         + " (specify with $CLAM3_FONT)");
+            throw std::runtime_error(
+                "Could not open font " + std::string(font) + " (specify with $CLAM3_FONT)"
+            );
         }
     }
     else
@@ -96,27 +96,22 @@ void SdlWindow::Blit(BlitData data, const std::string &text)
     {
         if (!this->font)
         {
-            throw std::runtime_error(
-                "Tried to render text, but no font was available");
+            throw std::runtime_error("Tried to render text, but no font was available");
         }
         {
             SDL_Color color = {0, 0, 100, 255};
-            SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(font,
-                                                               text.c_str(),
-                                                               color,
-                                                               (Uint32)data
-                                                                   .width);
+            SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(
+                font, text.c_str(), color, (Uint32)data.width
+            );
             SDL_Rect dest_rect = {2, 1, surf->w, surf->h};
             SDL_BlitSurface(surf, NULL, surface, &dest_rect);
             SDL_FreeSurface(surf);
         }
         {
             SDL_Color color = {255, 255, 155, 255};
-            SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(font,
-                                                               text.c_str(),
-                                                               color,
-                                                               (Uint32)data
-                                                                   .width);
+            SDL_Surface *surf = TTF_RenderText_Blended_Wrapped(
+                font, text.c_str(), color, (Uint32)data.width
+            );
             SDL_BlitSurface(surf, NULL, surface, NULL);
             SDL_FreeSurface(surf);
         }
@@ -130,8 +125,7 @@ void FileTarget::Screenshot(std::string baseFileName, BlitData data)
     target.Blit(data, "");
 }
 
-FileTarget::FileTarget(std::string fileName)
-    : fileName(fileName)
+FileTarget::FileTarget(std::string fileName) : fileName(fileName)
 {
 }
 
@@ -147,30 +141,24 @@ bool FileTarget::RequestSize(size_t *, size_t *)
 // Text parameter is ignored
 void FileTarget::Blit(BlitData data, const std::string &)
 {
-    SDL_Surface *surface = SDL_CreateRGBSurface(0,
-                                                data.width,
-                                                data.height,
-                                                4 * 8,
-                                                255 << 16,
-                                                255 << 8,
-                                                255,
-                                                0);
+    SDL_Surface *surface = SDL_CreateRGBSurface(
+        0, data.width, data.height, 4 * 8, 255 << 16, 255 << 8, 255, 0
+    );
     if (SDL_LockSurface(surface))
     {
         throw std::runtime_error("Could not lock temp buffer surface");
     }
-    memcpy(surface->pixels,
-           data.data,
-           (size_t)data.width * data.height * surface->format->BytesPerPixel);
+    memcpy(
+        surface->pixels,
+        data.data,
+        (size_t)data.width * data.height * surface->format->BytesPerPixel
+    );
     SDL_UnlockSurface(surface);
-
     int ret = SDL_SaveBMP(surface, fileName.c_str());
     if (ret)
     {
-        throw std::runtime_error(
-            "Could not save image " + fileName + ": " + SDL_GetError());
+        throw std::runtime_error("Could not save image " + fileName + ": " + SDL_GetError());
     }
     std::cout << "Saved image '" << fileName << "'" << std::endl;
-
     SDL_FreeSurface(surface);
 }

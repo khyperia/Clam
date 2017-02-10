@@ -1,10 +1,10 @@
 #include <stdio.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     FILE *input;
     FILE *output;
-    const char* varname;
+    const char *varname;
     int c;
     if (argc != 4)
     {
@@ -22,7 +22,6 @@ int main(int argc, char** argv)
         return 1;
     }
     varname = argv[3];
-
     fprintf(output, "const unsigned char %s[] = {\n", varname);
     int length = 0;
     int column = 0;

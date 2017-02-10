@@ -22,20 +22,22 @@ std::function<void(int *, size_t, size_t)> RealtimeRender::GpuCallback()
     return result;
 }
 
-RealtimeRender::RealtimeRender(CudaContext context,
-                               const KernelConfiguration &kernel,
-                               int width,
-                               int height,
-                               const char *fontName)
-    : renderTarget(make_unique<SdlWindow>(100, 100, width, height, fontName)),
-      kernel(make_unique<GpuKernel>(std::move(context),
-                                    GpuCallback(),
-                                    kernel.KernelData(),
-                                    kernel.KernelLength())),
-      settings(std::move(kernel.Settings())),
-      kernelControls(std::move(kernel.Controls(*this->kernel))),
-      uiSettings(std::move(kernel.UiSettings())), last_enqueue_time(0),
-      fpsAverage(0), take_screenshot(false)
+RealtimeRender::RealtimeRender(
+    CudaContext context,
+    const KernelConfiguration &kernel,
+    int width,
+    int height,
+    const char *fontName
+) : renderTarget(make_unique<SdlWindow>(100, 100, width, height, fontName)),
+    kernel(
+        make_unique<GpuKernel>(
+            std::move(context), GpuCallback(), kernel.KernelData(), kernel.KernelLength())),
+    settings(std::move(kernel.Settings())),
+    kernelControls(std::move(kernel.Controls(*this->kernel))),
+    uiSettings(std::move(kernel.UiSettings())),
+    last_enqueue_time(0),
+    fpsAverage(0),
+    take_screenshot(false)
 {
     IncrementSdlUsage();
 }
@@ -85,12 +87,7 @@ void RealtimeRender::EnqueueKernel()
     {
         changed |= control->SetFrom(settings, kernel->Context(), width, height);
     }
-    kernel->Run((int)width / -2,
-                (int)height / -2,
-                (int)width,
-                (int)height,
-                changed ? 0 : 1,
-                true);
+    kernel->Run((int)width / -2, (int)height / -2, (int)width, (int)height, changed ? 0 : 1, true);
 }
 
 void RealtimeRender::StartLoop(size_t queue_size)
@@ -101,12 +98,11 @@ void RealtimeRender::StartLoop(size_t queue_size)
     }
 }
 
-void RealtimeRender::PushCallback(std::function<void(RealtimeRender & )> func)
+void RealtimeRender::PushCallback(std::function<void(class RealtimeRender &)> func)
 {
     SDL_Event event;
     event.type = SDL_USEREVENT;
-    event.user.data1 =
-        make_unique<std::function<void(RealtimeRender &)>>(func).release();
+    event.user.data1 = make_unique<std::function<void(RealtimeRender &)>>(func).release();
     SDL_PushEvent(&event);
 }
 
@@ -137,15 +133,13 @@ void RealtimeRender::DriverInput(SDL_Event event)
             }
             else
             {
-                std::cout << "Didn't load state, settings.clam3 not found"
-                          << std::endl;
+                std::cout << "Didn't load state, settings.clam3 not found" << std::endl;
             }
         }
         if (event.key.keysym.scancode == SDL_SCANCODE_V)
         {
             auto saved = settings.Save();
-            std::ofstream
-                out("movie.clam3", std::ofstream::out | std::ofstream::app);
+            std::ofstream out("movie.clam3", std::ofstream::out | std::ofstream::app);
             out << saved << "---" << std::endl;
             std::cout << "Saved keyframe" << std::endl;
         }
@@ -165,7 +159,7 @@ void RealtimeRender::DriverInput(SDL_Event event)
 
 void RealtimeRender::Run()
 {
-    StartLoop(1);
+    StartLoop(2);
     SDL_Event event;
     while (SDL_WaitEvent(&event))
     {
@@ -175,8 +169,9 @@ void RealtimeRender::Run()
         }
         if (event.type == SDL_USEREVENT)
         {
-            std::function<void(RealtimeRender &)> *ptr =
-                (std::function<void(RealtimeRender &)> *)event.user.data1;
+            std::function<void(RealtimeRender &)> *ptr = (std::function<void(RealtimeRender &)> *)event
+                .user
+                .data1;
             std::unique_ptr<std::function<void(RealtimeRender &)>> func;
             func.reset(ptr);
             (*func)(*this);
@@ -189,20 +184,25 @@ void RealtimeRender::Run()
     }
 }
 
-HeadlessRender::HeadlessRender(CudaContext context,
-                               const KernelConfiguration &kernel,
-                               size_t width,
-                               size_t height,
-                               int num_frames,
-                               const std::string settings_file,
-                               const std::string filename)
-    : kernel(make_unique<GpuKernel>(std::move(context),
-                                    GpuCallback(std::move(filename)),
-                                    kernel.KernelData(),
-                                    kernel.KernelLength())),
-      settings(std::move(kernel.Settings())),
-      kernelControls(std::move(kernel.Controls(*this->kernel))),
-      num_frames(num_frames), width(width), height(height)
+HeadlessRender::HeadlessRender(
+    CudaContext context,
+    const KernelConfiguration &kernel,
+    size_t width,
+    size_t height,
+    int num_frames,
+    const std::string settings_file,
+    const std::string filename
+) : kernel(
+    make_unique<GpuKernel>(
+        std::move(context),
+        GpuCallback(std::move(filename)),
+        kernel.KernelData(),
+        kernel.KernelLength())),
+    settings(std::move(kernel.Settings())),
+    kernelControls(std::move(kernel.Controls(*this->kernel))),
+    num_frames(num_frames),
+    width(width),
+    height(height)
 {
     std::ifstream in(settings_file);
     if (in)
@@ -214,7 +214,8 @@ HeadlessRender::HeadlessRender(CudaContext context,
     else
     {
         throw std::runtime_error(
-            "Couldn't render: " + settings_file + " not found");
+            "Couldn't render: " + settings_file + " not found"
+        );
     }
     for (const auto &control : kernelControls)
     {
@@ -222,8 +223,7 @@ HeadlessRender::HeadlessRender(CudaContext context,
     }
 }
 
-std::function<void(int *, size_t, size_t)>
-HeadlessRender::GpuCallback(std::string filename)
+std::function<void(int *, size_t, size_t)> HeadlessRender::GpuCallback(std::string filename)
 {
     const auto result = [filename](int *data, size_t width, size_t height)
     {
@@ -245,15 +245,15 @@ void HeadlessRender::Run()
     for (int frame = 0; frame < num_frames; frame++)
     {
         kernel->Run((int)width / -2,
-                    (int)height / -2,
-                    (int)width,
-                    (int)height,
-                    frame,
-                    frame == num_frames - 1);
+            (int)height / -2,
+            (int)width,
+            (int)height,
+            frame,
+            frame == num_frames - 1
+        );
         if (frame % sync_every == sync_every - 1)
         {
             kernel->SyncStream();
-
             std::cout << timer.Mark(frame, num_frames) << std::endl;
         }
     }
@@ -261,24 +261,28 @@ void HeadlessRender::Run()
     std::cout << "Done." << std::endl;
 }
 
-MovieRender::MovieRender(CudaContext context,
-                         const KernelConfiguration &kernel,
-                         size_t width,
-                         size_t height,
-                         int num_iters,
-                         int num_frames,
-                         bool loop,
-                         const std::string settings_file,
-                         const std::string base_filename)
-    : filename(std::move(std::make_shared<std::string>(std::move(base_filename)))),
-      kernel(make_unique<GpuKernel>(std::move(context),
-                                    GpuCallback(filename),
-                                    kernel.KernelData(),
-                                    kernel.KernelLength())),
-      template_settings(std::move(kernel.Settings())), settings(),
-      kernelControls(std::move(kernel.Controls(*this->kernel))),
-      num_iters(num_iters), num_frames(num_frames), loop(loop), width(width),
-      height(height)
+MovieRender::MovieRender(
+    CudaContext context,
+    const KernelConfiguration &kernel,
+    size_t width,
+    size_t height,
+    int num_iters,
+    int num_frames,
+    bool loop,
+    const std::string settings_file,
+    const std::string base_filename
+) : filename(std::move(std::make_shared<std::string>(std::move(base_filename)))),
+    kernel(
+        make_unique<GpuKernel>(
+            std::move(context), GpuCallback(filename), kernel.KernelData(), kernel.KernelLength())),
+    template_settings(std::move(kernel.Settings())),
+    settings(),
+    kernelControls(std::move(kernel.Controls(*this->kernel))),
+    num_iters(num_iters),
+    num_frames(num_frames),
+    loop(loop),
+    width(width),
+    height(height)
 {
     std::ifstream in(settings_file);
     if (in)
@@ -312,13 +316,15 @@ MovieRender::MovieRender(CudaContext context,
         if (settings.size() < 2)
         {
             throw std::runtime_error(
-                "Couldn't render: " + settings_file + " no keyframes in file");
+                "Couldn't render: " + settings_file + " no keyframes in file"
+            );
         }
     }
     else
     {
         throw std::runtime_error(
-            "Couldn't render: " + settings_file + " not found");
+            "Couldn't render: " + settings_file + " not found"
+        );
     }
 }
 
@@ -362,25 +368,22 @@ void MovieRender::Run()
         {
             t3 = loop ? t3 - (int)settings.size() : (int)settings.size() - 2;
         }
-        SettingCollection this_frame =
-            SettingCollection::Interpolate(settings[t0],
-                                           settings[t1],
-                                           settings[t2],
-                                           settings[t3],
-                                           time);
+        SettingCollection this_frame = SettingCollection::Interpolate(
+            settings[t0], settings[t1], settings[t2], settings[t3], time
+        );
         for (const auto &control : kernelControls)
         {
-            control
-                ->SetFrom(this_frame, this->kernel->Context(), width, height);
+            control->SetFrom(this_frame, this->kernel->Context(), width, height);
         }
         for (int iter = 0; iter < num_iters; iter++)
         {
             kernel->Run((int)width / -2,
-                        (int)height / -2,
-                        (int)width,
-                        (int)height,
-                        iter,
-                        iter == num_iters - 1);
+                (int)height / -2,
+                (int)width,
+                (int)height,
+                iter,
+                iter == num_iters - 1
+            );
         }
         kernel->SyncStream();
         std::cout << timer.Mark(frame, num_frames) << std::endl;

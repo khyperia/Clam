@@ -2,17 +2,19 @@
 #include <fstream>
 #include <cstring>
 
-GpuKernelVar::GpuKernelVar(const GpuKernel &kernel, const char *name)
-    : gpuVar([&]() -> CuMem<char>
-             {
-                 CUdeviceptr deviceVar;
-                 size_t deviceSize;
-                 kernel.context.Run(cuModuleGetGlobal(&deviceVar,
-                                                      &deviceSize,
-                                                      kernel.module,
-                                                      name));
-                 return CuMem<char>(deviceVar, deviceSize);
-             }())
+GpuKernelVar::GpuKernelVar(const GpuKernel &kernel, const char *name) : gpuVar(
+    [&]() -> CuMem<char>
+    {
+        CUdeviceptr deviceVar;
+        size_t deviceSize;
+        kernel.context.Run(
+            cuModuleGetGlobal(
+                &deviceVar, &deviceSize, kernel.module, name
+            ));
+        return CuMem<char>(
+            deviceVar, deviceSize
+        );
+    }())
 {
     kernel.context.Run(cuMemAllocHost((void **)&cpuCopy, gpuVar.bytesize()));
 }
@@ -40,12 +42,17 @@ void GpuKernelVar::SetData(const char *data)
     }
 }
 
-GpuKernel::GpuKernel(CudaContext context,
-                     std::function<void(int *, size_t, size_t)> render_callback,
-                     const unsigned char *data,
-                     size_t length)
-    : context(std::move(context)), render_callback(render_callback),
-      pinned(NULL), old_width(0), old_height(0)
+GpuKernel::GpuKernel(
+    CudaContext context,
+    std::function<void(int *, size_t, size_t)> render_callback,
+    const unsigned char *data,
+    size_t length
+) :
+    context(std::move(context)),
+    render_callback(render_callback),
+    pinned(NULL),
+    old_width(0),
+    old_height(0)
 {
     std::string data_str((const char *)data, length);
     this->context.Run(cuModuleLoadData(&module, data_str.c_str()));
@@ -116,8 +123,7 @@ GpuKernelVar &GpuKernel::Variable(const std::string &name)
 {
     if (variable_cache.count(name) == 0)
     {
-        variable_cache
-            .emplace(name, make_unique<GpuKernelVar>(*this, name.c_str()));
+        variable_cache.emplace(name, make_unique<GpuKernelVar>(*this, name.c_str()));
     }
     return *variable_cache.at(name);
 }
@@ -128,14 +134,12 @@ struct streamCallbackData
     int *cpu_mem;
     size_t width, height;
 
-    streamCallbackData(std::function<void(int *,
-                                          size_t,
-                                          size_t)> *render_callback,
-                       int *cpu_mem,
-                       size_t width,
-                       size_t height)
-        : render_callback(render_callback), cpu_mem(cpu_mem), width(width),
-          height(height)
+    streamCallbackData(
+        std::function<void(int *, size_t, size_t)> *render_callback,
+        int *cpu_mem,
+        size_t width,
+        size_t height
+    ) : render_callback(render_callback), cpu_mem(cpu_mem), width(width), height(height)
     {
     }
 };
@@ -147,12 +151,7 @@ static void CUDA_CB streamCallback(CUstream, CUresult, void *userData)
     (*data->render_callback)(data->cpu_mem, data->width, data->height);
 }
 
-void GpuKernel::Run(int offsetX,
-                    int offsetY,
-                    int width,
-                    int height,
-                    int type,
-                    bool enqueueDownload)
+void GpuKernel::Run(int offsetX, int offsetY, int width, int height, int type, bool enqueueDownload)
 {
     context.SetCurrent();
     Resize((size_t)width, (size_t)height);
@@ -164,28 +163,13 @@ void GpuKernel::Run(int offsetX,
     unsigned int gridX = ((unsigned int)width + blockX - 1) / blockX;
     unsigned int gridY = ((unsigned int)height + blockY - 1) / blockY;
     void *args[] = {&gpu_ptr, &offsetX, &offsetY, &width, &height, &type};
-    context.Run(cuLaunchKernel(main,
-                               gridX,
-                               gridY,
-                               1,
-                               blockX,
-                               blockY,
-                               1,
-                               0,
-                               stream,
-                               args,
-                               NULL));
+    context.Run(cuLaunchKernel(main, gridX, gridY, 1, blockX, blockY, 1, 0, stream, args, NULL));
     if (enqueueDownload)
     {
         gpu_mem.CopyTo(pinned, stream, context);
-        std::unique_ptr<streamCallbackData> data =
-            make_unique<streamCallbackData>(&render_callback,
-                                            pinned,
-                                            width,
-                                            height);
-        context.Run(cuStreamAddCallback(stream,
-                                        streamCallback,
-                                        data.release(),
-                                        0));
+        std::unique_ptr<streamCallbackData> data = make_unique<streamCallbackData>(
+            &render_callback, pinned, width, height
+        );
+        context.Run(cuStreamAddCallback(stream, streamCallback, data.release(), 0));
     }
 }

@@ -4,7 +4,7 @@
 #include <memory>
 #include <sstream>
 
-class TimeEstimate: public Immobile
+class TimeEstimate : public Immobile
 {
     struct Time;
     std::unique_ptr<Time> start;
@@ -34,9 +34,11 @@ static T fromstring(const std::string &value)
 #ifdef MSVC
 using std::make_unique;
 #else
+
 template<typename T, typename ...Args>
 std::unique_ptr<T> make_unique(Args &&...args)
 {
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
+
 #endif

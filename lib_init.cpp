@@ -7,13 +7,11 @@ static void InitSdl()
 {
     if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO))
     {
-        throw std::runtime_error(
-            "Error initializing SDL: " + std::string(SDL_GetError()));
+        throw std::runtime_error("Error initializing SDL: " + std::string(SDL_GetError()));
     }
     if (TTF_Init())
     {
-        throw std::runtime_error(
-            "Error initializing SDL_ttf: " + std::string(TTF_GetError()));
+        throw std::runtime_error("Error initializing SDL_ttf: " + std::string(TTF_GetError()));
     }
 }
 

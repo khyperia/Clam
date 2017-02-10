@@ -42,9 +42,8 @@ void CudaContext::Run(CUresult callResult) const
     if (currentContext != deviceIndex)
     {
         throw std::runtime_error(
-            "Current context not correct, call CudaContext::SetCurrent() before this call. This context: "
-                + tostring(deviceIndex) + ", active context: "
-                + tostring(currentContext));
+            "Current context not correct, call CudaContext::SetCurrent() before this call. This context: " +
+                tostring(deviceIndex) + ", active context: " + tostring(currentContext));
     }
     CheckCall(callResult);
 }
@@ -66,8 +65,7 @@ int CudaContext::DeviceCount()
     return 0;
 }
 
-CudaContext::CudaContext(int deviceIndex)
-    : deviceIndex(deviceIndex)
+CudaContext::CudaContext(int deviceIndex) : deviceIndex(deviceIndex)
 {
     currentContext = deviceIndex;
     Run(cuDeviceGet(&device, deviceIndex));
@@ -89,7 +87,7 @@ CudaContext::~CudaContext()
     context = 0;
 }
 
-CudaContext::CudaContext(CudaContext && other)
+CudaContext::CudaContext(CudaContext &&other)
 {
     deviceIndex = other.deviceIndex;
     device = other.device;

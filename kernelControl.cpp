@@ -1,10 +1,8 @@
 #include <cstring>
 #include "kernelControl.h"
-
 #include "kernelStructs.h"
 
-KernelControl::KernelControl(GpuKernelVar &kernelVariable)
-    : kernelVariable(kernelVariable)
+KernelControl::KernelControl(GpuKernelVar &kernelVariable) : kernelVariable(kernelVariable)
 {
 }
 
@@ -12,8 +10,8 @@ KernelControl::~KernelControl()
 {
 }
 
-MandelbrotKernelControl::MandelbrotKernelControl(GpuKernelVar &kernelVariable)
-    : KernelControl(kernelVariable)
+MandelbrotKernelControl::MandelbrotKernelControl(GpuKernelVar &kernelVariable) :
+    KernelControl(kernelVariable)
 {
 }
 
@@ -21,10 +19,8 @@ MandelbrotKernelControl::~MandelbrotKernelControl()
 {
 }
 
-bool MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
-                                      CudaContext &,
-                                      size_t,
-                                      size_t)
+bool
+MandelbrotKernelControl::SetFrom(const SettingCollection &settings, CudaContext &, size_t, size_t)
 {
     MandelbrotCfg temp;
     auto &pos = settings.Get("pos").AsVec2();
@@ -39,9 +35,8 @@ bool MandelbrotKernelControl::SetFrom(const SettingCollection &settings,
     return true;
 }
 
-MandelboxKernelControl::MandelboxKernelControl(GpuKernelVar &kernelVariable)
-    : KernelControl(kernelVariable), old_width(0), old_height(0),
-      scratch_buffer(), rand_buffer()
+MandelboxKernelControl::MandelboxKernelControl(GpuKernelVar &kernelVariable) :
+    KernelControl(kernelVariable), old_width(0), old_height(0), scratch_buffer(), rand_buffer()
 {
 }
 
@@ -49,25 +44,22 @@ MandelboxKernelControl::~MandelboxKernelControl()
 {
 }
 
-bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
-                                     CudaContext &context,
-                                     size_t width,
-                                     size_t height)
+bool MandelboxKernelControl::SetFrom(
+    const SettingCollection &settings, CudaContext &context, size_t width, size_t height
+)
 {
     bool changed = false;
-    if (old_width != width || old_height != height || !scratch_buffer()
-        || !rand_buffer())
+    if (old_width != width || old_height != height || !scratch_buffer() || !rand_buffer())
     {
         changed = true;
         old_width = width;
         old_height = height;
         scratch_buffer.~CuMem();
         rand_buffer.~CuMem();
-        new(&scratch_buffer) CuMem<char>(context,
-                                         width * height * MandelboxStateSize);
+        new(&scratch_buffer) CuMem<char>(context, width * height * MandelboxStateSize);
         new(&rand_buffer) CuMem<uint64_t>(context, width * height);
     }
-    MandelboxCfg temp;
+    MandelboxCfg temp = {};
     if (!old_state)
     {
         changed = true;
@@ -121,26 +113,20 @@ bool MandelboxKernelControl::SetFrom(const SettingCollection &settings,
     } while (0)
     DefineFlt(fov);
     DefineFlt(focalDistance);
-
     DefineFlt(Scale);
     DefineFlt(FoldingLimit);
     DefineFlt(FixedRadius2);
     DefineFlt(MinRadius2);
     DefineFlt(DofAmount);
-
     DefineVec3(LightPos);
     DefineFlt(LightSize);
-
     DefineBool(WhiteClamp);
-
     DefineFlt(LightBrightnessHue);
     DefineFlt(LightBrightnessSat);
     DefineFlt(LightBrightnessVal);
-
     DefineFlt(AmbientBrightnessHue);
     DefineFlt(AmbientBrightnessSat);
     DefineFlt(AmbientBrightnessVal);
-
     DefineInt(MaxIters);
     DefineFlt(Bailout);
     DefineFlt(DeMultiplier);
