@@ -111,8 +111,8 @@ class InteractiveSetting : public UiSetting
     SDL_Scancode increase;
     SDL_Scancode decrease;
     int currentIndex;
-    std::pair<std::string, double> &Current(const SettingCollection &settings, int *elem);
-    int Size(const SettingCollection &settings);
+    std::pair<std::string, double> &Current(const SettingCollection &values, int *elem);
+    int Size(const SettingCollection &values);
 public:
     InteractiveSetting(
         std::vector<std::pair<std::string, double>> settings,
@@ -122,7 +122,7 @@ public:
         SDL_Scancode decrease
     );
     ~InteractiveSetting() override;
-    void Input(SettingCollection &settings, SDL_Event event) override;
-    void Integrate(SettingCollection &settings, double time) override;
+    void Input(SettingCollection &values, SDL_Event event) override;
+    void Integrate(SettingCollection &values, double time) override;
     std::string Describe(const SettingCollection &settings) const override;
 };

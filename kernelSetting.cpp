@@ -104,9 +104,8 @@ Setting Setting::Clone() const
             return Setting(name, AsVec2());
         case VEC3:
             return Setting(name, AsVec3());
-        default:
-            throw std::runtime_error("Invalid tag for " + name);
     }
+    throw std::runtime_error("Invalid tag for " + name);
 }
 
 bool Setting::IsType(Setting::TagTy type) const
@@ -297,7 +296,7 @@ SettingCollection SettingCollection::Clone() const
     {
         result.AddSetting(setting.Clone());
     }
-    return std::move(result);
+    return result;
 }
 
 void SettingCollection::AddSetting(Setting setting)

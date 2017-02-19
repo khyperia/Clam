@@ -25,7 +25,7 @@ SdlWindow::SdlWindow(int x, int y, int width, int height, const char *font)
     {
         if (font[0] == '\0')
         {
-#if MSVC
+#ifdef MSVC
             font = "C:\\Windows\\Fonts\\consola.ttf";
 #else
             font = "/usr/share/fonts/TTF/DejaVuSansMono.ttf";
@@ -86,8 +86,8 @@ void SdlWindow::Blit(BlitData data, const std::string &text)
     {
         throw std::runtime_error("Window surface bytes/pixel != 4");
     }
-    size_t pixbuf_size = (size_t)data.width * data.height;
-    size_t surface_size = (size_t)surface->w * surface->h;
+    size_t pixbuf_size = (size_t)data.width * (size_t)data.height;
+    size_t surface_size = (size_t)surface->w * (size_t)surface->h;
     size_t size = pixbuf_size < surface_size ? pixbuf_size : surface_size;
     size_t byte_size = size * surface->format->BytesPerPixel;
     memcpy(surface->pixels, data.data, byte_size);
@@ -151,7 +151,7 @@ void FileTarget::Blit(BlitData data, const std::string &)
     memcpy(
         surface->pixels,
         data.data,
-        (size_t)data.width * data.height * surface->format->BytesPerPixel
+        (size_t)data.width * (size_t)data.height * surface->format->BytesPerPixel
     );
     SDL_UnlockSurface(surface);
     int ret = SDL_SaveBMP(surface, fileName.c_str());

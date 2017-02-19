@@ -112,12 +112,12 @@ struct Random
         }
     }
 
-    __device__ Vector3<float> Hemisphere(Vector3<float> normal)
-    {
-        Vector3<float> result = Sphere();
-        result *= dot(result, normal) > 0 ? 1.0f : -1.0f;
-        return result;
-    }
+    // __device__ Vector3<float> Hemisphere(Vector3<float> normal)
+    // {
+    //     Vector3<float> result = Sphere();
+    //     result *= dot(result, normal) > 0 ? 1.0f : -1.0f;
+    //     return result;
+    // }
 };
 
 struct Ray
@@ -277,6 +277,10 @@ struct Fractal
     {
         Vector4<float> z = Vector4<float>(offset.x, offset.y, offset.z, 1.0f);
         int n = cfg.MaxIters;
+        if (n < 1)
+        {
+            n = 1;
+        }
         do
         {
             z = MandelboxD(z, offset);
@@ -286,32 +290,31 @@ struct Fractal
     }
 
     static __device__ float Cast(
-        Ray ray,
-        float initialDistance,
-        const float quality,
-        const float maxDist,
-        Vector3<float> *normal,
-        bool *maxedOut
+        Ray ray, const float quality, const float maxDist, Vector3<float> *normal
     )
     {
         float distance;
-        float totalDistance = initialDistance;
+        float totalDistance = 0.0f;
         int i = 0;
+        const int maxSteps = cfg.MaxRaySteps;
+        const float deMultiplier = cfg.DeMultiplier;
         do
         {
-            distance = De(ray.At(totalDistance)) * cfg.DeMultiplier;
+            distance = De(ray.At(totalDistance)) * deMultiplier;
             totalDistance += distance;
-            if (++i == cfg.MaxRaySteps)
+            if (++i == maxSteps)
             {
                 *normal = Vector3<float>(1, 0, 0);
-                *maxedOut = true;
                 return totalDistance;
             }
         }
         while (totalDistance < maxDist && distance * quality > totalDistance);
-        *maxedOut = false;
         Vector3<float> final = ray.At(totalDistance);
-        const float delta = FLT_EPSILON * 8;
+        float delta = FLT_EPSILON * 8;
+        if (distance * 0.5f > delta)
+        {
+            delta = distance * 0.5f;
+        }
         float dnpp = De(final + Vector3<float>(-delta, delta, delta));
         float dpnp = De(final + Vector3<float>(delta, -delta, delta));
         float dppn = De(final + Vector3<float>(delta, delta, -delta));
@@ -341,82 +344,70 @@ struct Tracer
         return HueToRGB(cfg.LightBrightnessHue, cfg.LightBrightnessSat, cfg.LightBrightnessVal);
     }
 
+    static __device__ Vector3<float> LightPos()
+    {
+        return Vector3<float>(cfg.LightPosX, cfg.LightPosY, cfg.LightPosZ);
+    }
+
+    static __device__ float
+    Specular(Vector3<float> incoming, Vector3<float> outgoing, Vector3<float> normal)
+    {
+        const Vector3<float> half = (incoming + outgoing).normalized();
+        const float dot_prod = fabsf(dot(half, normal));
+        const float hardness = 128.0f;
+        const float base_reflection = 0.7f; // TODO: Make configurable.
+        const float spec = powf(sinf(dot_prod * M_PI_2), hardness);
+        return spec * (1 - base_reflection) + base_reflection;
+    }
+
     static __device__ Vector3<float> Trace(Ray ray, int width, int height, Random &rand)
     {
-        Vector3<float> rayColor(1, 1, 1);
+        Vector3<float> rayColor(0, 0, 0);
+        float reflectionColor = 1.0f;
         bool firstRay = true;
-        bool lighting = false;
-        const float lightingProbability = cfg.LightSize;
-        float totalDistance = 0.0f;
-        float maxDist = cfg.MaxRayDist;
+        const float maxDist = cfg.MaxRayDist;
         for (int i = 0; i < cfg.NumRayBounces; i++)
         {
             const float quality = firstRay ? cfg.QualityFirstRay *
                 ((width + height) / (2 * cfg.fov)) : cfg.QualityRestRay;
             Vector3<float> normal;
-            bool maxedOut;
-            const float distance = Fractal::Cast(
-                ray, totalDistance, quality, maxDist, &normal, &maxedOut
-            );
+            const float distance = Fractal::Cast(ray, quality, maxDist, &normal);
             if (distance > maxDist)
             {
-                Vector3<float> color;
-                if (lighting)
-                {
-                    color = LightBrightness() / (1 - lightingProbability);
-                }
-                else if (!firstRay)
-                {
-                    color = AmbientBrightness() / lightingProbability;
-                }
-                else
-                {
-                    color = Vector3<float>(0.3, 0.3, 0.3);
-                }
-                return comp_mul(rayColor, color);
-            }
-            if (maxedOut)
-            {
-                totalDistance = distance;
-                continue;
-            }
-            if (lighting)
-            {
+                Vector3<float> color = firstRay
+                    ? Vector3<float>(0.3, 0.3, 0.3)
+                    : AmbientBrightness();
+                rayColor += color * reflectionColor;
                 break;
             }
-            totalDistance = 0.0f;
-            firstRay = false;
-            Vector3<float> newPos = ray.At(distance);
-            Vector3<float> newDir;
-            if (rand.Next() > lightingProbability)
-            {
-                const Vector3<float> lightPos = Vector3<float>(cfg.LightPosX,
-                    cfg.LightPosY,
-                    cfg.LightPosZ
-                );
-                // TODO: Soft shadows, shuffle lightPos a bit
+            // incorporates lambertian lighting
+            const Vector3<float> newDir = (rand.Sphere() + normal).normalized();
+            const Vector3<float> newPos = ray.At(distance);
 
-                Vector3<float> toLight = lightPos - newPos;
-                maxDist = toLight.length();
-                const float referenceLightDist = 1.0f;
-                rayColor *= referenceLightDist / (maxDist * maxDist);
-                toLight *= 1 / maxDist;
-                newDir = toLight * (1 / maxDist);
-                lighting = true;
-            }
-            else
+            // direct lighting
+            // TODO: Soft shadows, shuffle lightPos a bit
+            const Vector3<float> toLightVec = LightPos() - newPos;
+            const float lightDist = toLightVec.length();
+            const Vector3<float> toLight = toLightVec * (1 / lightDist);
+            float normalDotProd = dot(normal, toLight);
+            if (normalDotProd > 0)
             {
-                newDir = rand.Hemisphere(normal);
+                const float dimmingFactor =
+                    (normalDotProd * reflectionColor * Specular(toLight, -ray.dir, normal)) /
+                        (lightDist * lightDist);
+                const float distance = Fractal::Cast(
+                    Ray(newPos, toLight), quality, lightDist, &normal
+                );
+                if (distance >= lightDist)
+                {
+                    rayColor += LightBrightness() * dimmingFactor;
+                }
             }
-            float factor = dot(normal, newDir);
-            if (factor < 0)
-            {
-                break;
-            }
-            rayColor *= factor; // * surfaceColor
+            reflectionColor *= Specular(newDir, -ray.dir, normal);
             ray = Ray(newPos, newDir);
+            firstRay = false;
         }
-        return Vector3<float>(0, 0, 0);
+        return rayColor;
     }
 };
 

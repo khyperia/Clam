@@ -23,7 +23,7 @@ struct MandelboxCfg
     float LightPosX;
     float LightPosY;
     float LightPosZ;
-    float LightSize;
+    float LightProbability; // TODO: not used
     int WhiteClamp;
     float LightBrightnessHue;
     float LightBrightnessSat;

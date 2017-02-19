@@ -4,12 +4,12 @@
 
 std::function<void(int *, size_t, size_t)> RealtimeRender::GpuCallback()
 {
-    const auto result = [](int *data, size_t width, size_t height)
+    const auto result = [](int *data, size_t result_width, size_t result_height)
     {
-        const auto cb = [data, width, height](RealtimeRender &self)
+        const auto cb = [data, result_width, result_height](RealtimeRender &self)
         {
             self.EnqueueKernel();
-            BlitData blitData(data, (int)width, (int)height);
+            BlitData blitData(data, (int)result_width, (int)result_height);
             self.renderTarget->Blit(blitData, self.ConfigText());
             if (self.take_screenshot)
             {
@@ -32,9 +32,9 @@ RealtimeRender::RealtimeRender(
     kernel(
         make_unique<GpuKernel>(
             std::move(context), GpuCallback(), kernel.KernelData(), kernel.KernelLength())),
-    settings(std::move(kernel.Settings())),
-    kernelControls(std::move(kernel.Controls(*this->kernel))),
-    uiSettings(std::move(kernel.UiSettings())),
+    settings(kernel.Settings()),
+    kernelControls(kernel.Controls(*this->kernel)),
+    uiSettings(kernel.UiSettings()),
     last_enqueue_time(0),
     fpsAverage(0),
     take_screenshot(false)
@@ -198,8 +198,8 @@ HeadlessRender::HeadlessRender(
         GpuCallback(std::move(filename)),
         kernel.KernelData(),
         kernel.KernelLength())),
-    settings(std::move(kernel.Settings())),
-    kernelControls(std::move(kernel.Controls(*this->kernel))),
+    settings(kernel.Settings()),
+    kernelControls(kernel.Controls(*this->kernel)),
     num_frames(num_frames),
     width(width),
     height(height)
@@ -225,9 +225,9 @@ HeadlessRender::HeadlessRender(
 
 std::function<void(int *, size_t, size_t)> HeadlessRender::GpuCallback(std::string filename)
 {
-    const auto result = [filename](int *data, size_t width, size_t height)
+    const auto result = [filename](int *data, size_t result_width, size_t result_height)
     {
-        BlitData blitData(data, (int)width, (int)height);
+        BlitData blitData(data, (int)result_width, (int)result_height);
         std::cout << "Saving: " << filename << std::endl;
         FileTarget::Screenshot(filename, blitData);
     };
@@ -271,13 +271,13 @@ MovieRender::MovieRender(
     bool loop,
     const std::string settings_file,
     const std::string base_filename
-) : filename(std::move(std::make_shared<std::string>(std::move(base_filename)))),
+) : filename(std::make_shared<std::string>(std::move(base_filename))),
     kernel(
         make_unique<GpuKernel>(
             std::move(context), GpuCallback(filename), kernel.KernelData(), kernel.KernelLength())),
-    template_settings(std::move(kernel.Settings())),
+    template_settings(kernel.Settings()),
     settings(),
-    kernelControls(std::move(kernel.Controls(*this->kernel))),
+    kernelControls(kernel.Controls(*this->kernel)),
     num_iters(num_iters),
     num_frames(num_frames),
     loop(loop),
@@ -331,9 +331,9 @@ MovieRender::MovieRender(
 std::function<void(int *, size_t, size_t)>
 MovieRender::GpuCallback(std::shared_ptr<std::string> filename)
 {
-    const auto result = [filename](int *data, size_t width, size_t height)
+    const auto result = [filename](int *data, size_t result_width, size_t result_height)
     {
-        BlitData blitData(data, (int)width, (int)height);
+        BlitData blitData(data, (int)result_width, (int)result_height);
         FileTarget::Screenshot(*filename, blitData);
     };
     return result;
@@ -349,24 +349,24 @@ void MovieRender::Run()
     for (int frame = 0; frame < num_frames; frame++)
     {
         *filename = "movie." + tostring(frame) + ".bmp";
-        double time = (double)frame / num_frames * (settings.size() - (loop ? 0 : 1));
-        int keyframe = (int)time;
+        double time = (double)frame / num_frames * settings.size();
+        size_t keyframe = (size_t)time;
         time = time - keyframe;
-        int t0 = keyframe - 1;
-        int t1 = keyframe;
-        int t2 = keyframe + 1;
-        int t3 = keyframe + 2;
-        if (t0 < 0)
+        size_t t0 = keyframe - 1;
+        size_t t1 = keyframe;
+        size_t t2 = keyframe + 1;
+        size_t t3 = keyframe + 2;
+        if (keyframe == 0)
         {
-            t0 = loop ? t0 + (int)settings.size() : 0;
+            t0 = loop ? keyframe + settings.size() - 1 : 0;
         }
-        if (t2 >= (int)settings.size())
+        if (t2 >= settings.size())
         {
-            t2 = loop ? t2 - (int)settings.size() : (int)settings.size() - 1;
+            t2 = loop ? t2 - settings.size() : settings.size() - 1;
         }
-        if (t3 >= (int)settings.size())
+        if (t3 >= settings.size())
         {
-            t3 = loop ? t3 - (int)settings.size() : (int)settings.size() - 2;
+            t3 = loop ? t3 - settings.size() : settings.size() - 1;
         }
         SettingCollection this_frame = SettingCollection::Interpolate(
             settings[t0], settings[t1], settings[t2], settings[t3], time

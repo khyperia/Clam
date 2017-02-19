@@ -119,7 +119,7 @@ bool MandelboxKernelControl::SetFrom(
     DefineFlt(MinRadius2);
     DefineFlt(DofAmount);
     DefineVec3(LightPos);
-    DefineFlt(LightSize);
+    DefineFlt(LightProbability);
     DefineBool(WhiteClamp);
     DefineFlt(LightBrightnessHue);
     DefineFlt(LightBrightnessSat);

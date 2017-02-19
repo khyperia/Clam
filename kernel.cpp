@@ -168,7 +168,7 @@ void GpuKernel::Run(int offsetX, int offsetY, int width, int height, int type, b
     {
         gpu_mem.CopyTo(pinned, stream, context);
         std::unique_ptr<streamCallbackData> data = make_unique<streamCallbackData>(
-            &render_callback, pinned, width, height
+            &render_callback, pinned, (size_t)width, (size_t)height
         );
         context.Run(cuStreamAddCallback(stream, streamCallback, data.release(), 0));
     }

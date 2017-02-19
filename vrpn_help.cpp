@@ -24,7 +24,7 @@ static Vector3<double> mul_quat_vec(const double quat[4], const Vector3<double> 
     return result;
 }
 
-void VRPN_CALLBACK HandleTracker(void *_this_untyped, const vrpn_TRACKERCB info)
+static void VRPN_CALLBACK HandleTracker(void *_this_untyped, const vrpn_TRACKERCB info)
 {
     VrpnHelp *_this = (VrpnHelp *)_this_untyped;
     _this->pos.x = info.pos[0];

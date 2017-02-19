@@ -81,6 +81,5 @@ const std::string &UserOptions::Get(std::string name)
             return value.second;
         }
     }
-    static std::string empty("");
-    return empty;
+    throw std::runtime_error("Option not found: " + name);
 }

@@ -43,10 +43,10 @@ ExpVar::~ExpVar()
 {
 }
 
-void ExpVar::Integrate(SettingCollection &settings, double time)
+void ExpVar::Integrate(SettingCollection &values, double time)
 {
-    UiSetting::Integrate(settings, time);
-    auto &value = settings.Get(this->name).AsFloat();
+    UiSetting::Integrate(values, time);
+    auto &value = values.Get(this->name).AsFloat();
     if (IsKey(increase))
     {
         value *= exp(rate * time);
@@ -79,27 +79,27 @@ Pan2d::~Pan2d()
 {
 }
 
-void Pan2d::Integrate(SettingCollection &settings, double time)
+void Pan2d::Integrate(SettingCollection &values, double time)
 {
-    UiSetting::Integrate(settings, time);
-    const auto pan_speed = 1.0f / 4.0f;
-    auto &pos = settings.Get(this->pos_name).AsVec2();
-    auto &move_speed = settings.Get(this->move_speed).AsFloat();
+    UiSetting::Integrate(values, time);
+    const auto pan_speed = 1.0 / 4.0;
+    auto &pos = values.Get(this->pos_name).AsVec2();
+    auto &move_value = values.Get(this->move_speed).AsFloat();
     if (IsKey(up))
     {
-        pos.y -= move_speed * pan_speed * time;
+        pos.y -= move_value * pan_speed * time;
     }
     if (IsKey(down))
     {
-        pos.y += move_speed * pan_speed * time;
+        pos.y += move_value * pan_speed * time;
     }
     if (IsKey(left))
     {
-        pos.x -= move_speed * pan_speed * time;
+        pos.x -= move_value * pan_speed * time;
     }
     if (IsKey(right))
     {
-        pos.x += move_speed * pan_speed * time;
+        pos.x += move_value * pan_speed * time;
     }
 }
 
@@ -165,64 +165,65 @@ Camera3d::~Camera3d()
 {
 }
 
-void Camera3d::Integrate(SettingCollection &settings, double time)
+void Camera3d::Integrate(SettingCollection &values, double time)
 {
-    UiSetting::Integrate(settings, time);
-    auto &pos = settings.Get(this->pos_name).AsVec3();
-    auto &look = settings.Get(this->look_name).AsVec3();
-    auto &up = settings.Get(this->up_name).AsVec3();
-    const auto move_speed = settings.Get(this->move_speed).AsFloat() * time;
-    const auto turn_speed = settings.Get(this->fov).AsFloat() * time;
+    UiSetting::Integrate(values, time);
+    auto &pos_value = values.Get(this->pos_name).AsVec3();
+    auto &look_value = values.Get(this->look_name).AsVec3();
+    auto &up_value = values.Get(this->up_name).AsVec3();
+    const auto move_value = values.Get(this->move_speed).AsFloat() * time;
+    const auto turn_speed = values.Get(this->fov).AsFloat() * time;
+    const auto roll_speed = time;
     if (IsKey(this->forwards))
     {
-        pos = pos + look * move_speed;
+        pos_value = pos_value + look_value * move_value;
     }
     if (IsKey(this->back))
     {
-        pos = pos - look * move_speed;
+        pos_value = pos_value - look_value * move_value;
     }
     if (IsKey(this->up))
     {
-        pos = pos + up * move_speed;
+        pos_value = pos_value + up_value * move_value;
     }
     if (IsKey(this->down))
     {
-        pos = pos - up * move_speed;
+        pos_value = pos_value - up_value * move_value;
     }
     if (IsKey(this->right))
     {
-        pos = pos + cross(look, up) * move_speed;
+        pos_value = pos_value + cross(look_value, up_value) * move_value;
     }
     if (IsKey(this->left))
     {
-        pos = pos - cross(look, up) * move_speed;
+        pos_value = pos_value - cross(look_value, up_value) * move_value;
     }
     if (IsKey(this->pitch_up))
     {
-        look = look + up * turn_speed;
+        look_value = look_value + up_value * turn_speed;
     }
     if (IsKey(this->pitch_down))
     {
-        look = look - up * turn_speed;
+        look_value = look_value - up_value * turn_speed;
     }
     if (IsKey(this->yaw_right))
     {
-        look = look + cross(look, up) * turn_speed;
+        look_value = look_value + cross(look_value, up_value) * turn_speed;
     }
     if (IsKey(this->yaw_left))
     {
-        look = look - cross(look, up) * turn_speed;
+        look_value = look_value - cross(look_value, up_value) * turn_speed;
     }
     if (IsKey(this->roll_right))
     {
-        up = up + cross(look, up) * turn_speed;
+        up_value = up_value + cross(look_value, up_value) * roll_speed;
     }
     if (IsKey(this->roll_left))
     {
-        up = up - cross(look, up) * turn_speed;
+        up_value = up_value - cross(look_value, up_value) * roll_speed;
     }
-    look = look.normalized();
-    up = cross(cross(look, up), look).normalized();
+    look_value = look_value.normalized();
+    up_value = cross(cross(look_value, up_value), look_value).normalized();
 }
 
 InteractiveSetting::InteractiveSetting(
@@ -246,12 +247,12 @@ InteractiveSetting::~InteractiveSetting()
 }
 
 std::pair<std::string, double> &
-InteractiveSetting::Current(const SettingCollection &settings, int *elem)
+InteractiveSetting::Current(const SettingCollection &values, int *elem)
 {
     int cur = 0;
     for (auto &setting : this->settings)
     {
-        const auto &val = settings.Get(setting.first);
+        const auto &val = values.Get(setting.first);
         int delta = currentIndex - cur;
         if (val.IsVec2())
         {
@@ -293,12 +294,12 @@ InteractiveSetting::Current(const SettingCollection &settings, int *elem)
     return this->settings[0];
 }
 
-int InteractiveSetting::Size(const SettingCollection &settings)
+int InteractiveSetting::Size(const SettingCollection &values)
 {
     int size = 0;
     for (const auto &setting : this->settings)
     {
-        const auto &val = settings.Get(setting.first);
+        const auto &val = values.Get(setting.first);
         if (val.IsVec2())
         {
             size += 2;
@@ -315,16 +316,16 @@ int InteractiveSetting::Size(const SettingCollection &settings)
     return size;
 }
 
-void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
+void InteractiveSetting::Input(SettingCollection &values, SDL_Event event)
 {
-    UiSetting::Input(settings, event);
+    UiSetting::Input(values, event);
     if (event.type == SDL_KEYDOWN)
     {
         auto code = event.key.keysym.scancode;
         if (code == down)
         {
             currentIndex++;
-            if (currentIndex >= Size(settings))
+            if (currentIndex >= Size(values))
             {
                 currentIndex = 0;
             }
@@ -334,12 +335,12 @@ void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
             currentIndex--;
             if (currentIndex < 0)
             {
-                currentIndex = Size(settings) - 1;
+                currentIndex = Size(values) - 1;
             }
         }
         else if (code == increase || code == decrease)
         {
-            auto &item = settings.Get(Current(settings, nullptr).first);
+            auto &item = values.Get(Current(values, nullptr).first);
             if (item.IsBool())
             {
                 auto &value = item.AsBool();
@@ -349,9 +350,9 @@ void InteractiveSetting::Input(SettingCollection &settings, SDL_Event event)
     }
 }
 
-void InteractiveSetting::Integrate(SettingCollection &settings, double time)
+void InteractiveSetting::Integrate(SettingCollection &values, double time)
 {
-    UiSetting::Integrate(settings, time);
+    UiSetting::Integrate(values, time);
     int delta = 0;
     if (IsKey(increase))
     {
@@ -364,8 +365,8 @@ void InteractiveSetting::Integrate(SettingCollection &settings, double time)
     if (delta != 0)
     {
         int elem = 0;
-        auto &current = Current(settings, &elem);
-        auto &item = settings.Get(current.first);
+        auto &current = Current(values, &elem);
+        auto &item = values.Get(current.first);
         if (item.IsInt())
         {
             auto &value = item.AsInt();
@@ -401,13 +402,13 @@ void InteractiveSetting::Integrate(SettingCollection &settings, double time)
     }
 }
 
-std::string InteractiveSetting::Describe(const SettingCollection &settings) const
+std::string InteractiveSetting::Describe(const SettingCollection &values) const
 {
     std::ostringstream out;
     int idx = 0;
     for (const auto &setting : this->settings)
     {
-        const auto &val = settings.Get(setting.first);
+        const auto &val = values.Get(setting.first);
         int size = 1;
         if (val.IsVec2())
         {

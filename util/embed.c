@@ -22,6 +22,7 @@ int main(int argc, char **argv)
         return 1;
     }
     varname = argv[3];
+    fprintf(output, "extern const unsigned char %s[];\n", varname);
     fprintf(output, "const unsigned char %s[] = {\n", varname);
     int length = 0;
     int column = 0;
@@ -37,6 +38,7 @@ int main(int argc, char **argv)
         }
     }
     fprintf(output, "\n};\n\n");
+    fprintf(output, "extern const int %s_len;\n", varname);
     fprintf(output, "const int %s_len = %d;\n\n", varname, length);
     fclose(input);
     fclose(output);

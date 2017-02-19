@@ -42,7 +42,7 @@ pos.y = (vrpn->pos.z - 1.5) * -1;
 zoom = exp(vrpn->pos.y);
 */
 
-int parse_size(const std::string &str, int *width, int *height)
+static int parse_size(const std::string &str, int *width, int *height)
 {
     if (str == "hd")
     {

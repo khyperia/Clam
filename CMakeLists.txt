@@ -7,13 +7,26 @@ set(CMAKE_MODULE_PATH ${SOURCEDIR}/cmake)
 
 set(CMAKE_BUILD_TYPE Release)
 
+set(nowarn
+        "-Wno-c++98-compat-pedantic"
+        "-Wno-padded"
+        "-Wno-deprecated"
+        "-Wno-weak-vtables"
+        "-Wno-old-style-cast"
+        "-Wno-shadow-field-in-constructor"
+        "-Wno-float-equal"
+        )
+
 if (MSVC)
     add_definitions(-DMSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
+    add_compile_options("-EHsc")
 else ()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
+    add_compile_options("-Weverything")
+    foreach (item ${nowarn})
+        add_compile_options(${item})
+    endforeach ()
 endif ()
+set(NVCC_ARGS "--use_fast_math" "-lineinfo" "--gpu-architecture" "sm_52" "--resource-usage")
 
 file(GLOB cppfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cpp")
 file(GLOB hfiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.h")
@@ -37,14 +50,14 @@ set(CMAKE_INCLUDE_PATH
 macro(my_package pacname)
     find_package(${pacname} REQUIRED)
     string(TOUPPER ${pacname} pacname_upper)
-    include_directories(${${pacname_upper}_INCLUDE_DIRS})
+    include_directories(SYSTEM ${${pacname_upper}_INCLUDE_DIRS})
 endmacro()
 
 macro(my_package_noreq pacname)
     find_package(${pacname})
     string(TOUPPER ${pacname} pacname_upper)
     if (${pacname_upper}_FOUND)
-        include_directories(${${pacname_upper}_INCLUDE_DIRS})
+        include_directories(SYSTEM ${${pacname_upper}_INCLUDE_DIRS})
         add_definitions(-DHAVE_${pacname_upper})
     else ()
         message(WARNING "${pacname} not found!")
@@ -77,17 +90,17 @@ file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 file(GLOB cufiles RELATIVE ${SOURCEDIR} "${SOURCEDIR}/*.cu")
 foreach (filename ${cufiles})
     set(infile "${SOURCEDIR}/${filename}")
-    set(ptxfile "${CMAKE_BINARY_DIR}/generated/${filename}.ptx")
+    set(fatbinfile "${CMAKE_BINARY_DIR}/generated/${filename}.fatbin")
     set(outfile "${CMAKE_BINARY_DIR}/generated/${filename}.c")
     get_filename_component(varname ${filename} NAME_WE)
     add_custom_command(
-            OUTPUT "${ptxfile}"
+            OUTPUT "${fatbinfile}"
             DEPENDS ${infile}
-            COMMAND nvcc "--use_fast_math" "-lineinfo" "-arch" "compute_30" "-ptx" "-o" "${ptxfile}" "${infile}")
+            COMMAND nvcc ${NVCC_ARGS} "-fatbin" "-o" "${fatbinfile}" "${infile}")
     add_custom_command(
             OUTPUT "${outfile}"
-            DEPENDS ${ptxfile}
-            COMMAND embed "${ptxfile}" "${outfile}" "${varname}")
+            DEPENDS ${fatbinfile}
+            COMMAND embed "${fatbinfile}" "${outfile}" "${varname}")
     list(APPEND genfiles ${outfile})
 endforeach ()
 

@@ -53,28 +53,28 @@ SettingCollection KernelConfiguration::Settings() const
         result.AddSetting("MinRadius2", 0.125);
         result.AddSetting("DofAmount", 0.01);
         result.AddSetting("LightPos", Vector3<double>(3.0, 4.0, 3.0));
-        result.AddSetting("LightSize", 0.5);
+        result.AddSetting("LightProbability", 0.5);
         result.AddSetting("WhiteClamp", false);
         result.AddSetting("LightBrightnessHue", 0.05);
         result.AddSetting("LightBrightnessSat", 0.7);
         result.AddSetting("LightBrightnessVal", 8.0);
         result.AddSetting("AmbientBrightnessHue", 0.55);
         result.AddSetting("AmbientBrightnessSat", 0.5);
-        result.AddSetting("AmbientBrightnessVal", 1.0);
+        result.AddSetting("AmbientBrightnessVal", 0.4);
         result.AddSetting("MaxIters", 32);
         result.AddSetting("Bailout", 1024.0);
         result.AddSetting("DeMultiplier", 0.95);
         result.AddSetting("RandSeedInitSteps", 8);
         result.AddSetting("MaxRayDist", 16.0);
-        result.AddSetting("MaxRaySteps", 32);
-        result.AddSetting("NumRayBounces", 5);
+        result.AddSetting("MaxRaySteps", 64);
+        result.AddSetting("NumRayBounces", 3);
         result.AddSetting("QualityFirstRay", 4.0);
         result.AddSetting("QualityRestRay", 128.0);
     }
     else if (name == "mandelbrot")
     {
         result.AddSetting("pos", Vector2<double>(0.0, 0.0));
-        result.AddSetting("zoom", 1.0f);
+        result.AddSetting("zoom", 1.0);
         result.AddSetting("julia", Vector2<double>(0.0, 0.0));
         result.AddSetting("juliaenabled", false);
     }
@@ -140,7 +140,7 @@ std::vector<std::unique_ptr<UiSetting>> KernelConfiguration::UiSettings() const
         settings.push_back(std::make_pair("MinRadius2", 0.25));
         settings.push_back(std::make_pair("DofAmount", -1.0));
         settings.push_back(std::make_pair("LightPos", 0.5));
-        settings.push_back(std::make_pair("LightSize", -0.2));
+        settings.push_back(std::make_pair("LightProbability", 0.1));
         settings.push_back(std::make_pair("WhiteClamp", 0));
         settings.push_back(std::make_pair("LightBrightnessHue", 0.05));
         settings.push_back(std::make_pair("LightBrightnessSat", -0.25));
