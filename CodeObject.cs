@@ -54,7 +54,7 @@ namespace Clam4
         {
             string source = LoadResourceString(resourceName);
             Headers(out var names, out var sources);
-            using (var compiler = new CudaRuntimeCompiler(source, resourceName, names, sources))
+            using (var compiler = new CudaRuntimeCompiler(source, resourceName, sources, names))
             {
                 var error = false;
                 try
