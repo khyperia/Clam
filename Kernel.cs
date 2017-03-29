@@ -6,6 +6,8 @@ using ManagedCuda.VectorTypes;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.IO;
+using System.Reflection;
 
 namespace Clam4
 {
@@ -24,16 +26,17 @@ namespace Clam4
         private CudaPageLockedHostMemory_int _cpuMemory;
         private CudaDeviceVariable<int> _imageBuffer;
 
-        protected Kernel(CudaContext context, CodeObject kernel)
+        protected Kernel(CudaContext context, Stream kernel)
         {
-            var ptx = kernel.PTX;
-            if (ptx == null || ptx.Length == 0)
-            {
-                throw new CompilationException();
-            }
-            _kernel = context.LoadKernelPTX(ptx, "Main");
+            _kernel = context.LoadKernelPTX(kernel, "Main");
             _blockSize = _kernel.GetOccupancyMaxPotentialBlockSize().blockSize;
             _stream = new CudaStream();
+        }
+
+        protected static Stream LoadResource(string resourceName)
+        {
+            var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(typeof(Kernel), resourceName);
+            return stream ?? throw new Exception("Resource not found: " + resourceName);
         }
 
         public abstract SettingsCollection Defaults { get; }
@@ -142,7 +145,7 @@ namespace Clam4
 
     internal sealed class Mandelbrot : Kernel
     {
-        public Mandelbrot(CudaContext context) : base(context, new CodeObject("mandelbrot.cu"))
+        public Mandelbrot(CudaContext context) : base(context, LoadResource("mandelbrot.ptx"))
         {
         }
 
@@ -190,7 +193,7 @@ namespace Clam4
         private bool _needsRenorm;
         private int _frame;
 
-        public Mandelbox(CudaContext context) : base(context, new CodeObject("mandelbox.cu"))
+        public Mandelbox(CudaContext context) : base(context, LoadResource("mandelbox.ptx"))
         {
         }
 
