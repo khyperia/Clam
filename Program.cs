@@ -1,13 +1,16 @@
 ﻿using ManagedCuda;
+using ManagedCuda.BasicTypes;
+using System;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace Clam4
 {
     internal class Program
     {
         public static readonly string HelpText = @"Buttons:
-start/stop: this starts and stops the rendering.
-Focus keybindings: when this button is clicked or highlighted, key presess will be registered to controlling the fractal.
+Start/Stop: this starts and stops the rendering.
+Enable keybindings: when this button is clicked or highlighted, key presess will be registered to controlling the fractal.
 Bunches of text/settings: Individual parameters for the fractal. I would avise against manually editing look/up X/Y/Z, as weird things happen.
 
 Keybindings:
@@ -18,9 +21,10 @@ UO or QE: Roll the camera left and right
 RF: Adjust the speed the camera moves at, as well as the focal plane (focus) for depth-of-field.
 NM: Adjust the field-of-view (zoom).";
 
+        [STAThread]
         public static void Main(string[] args)
         {
-            var device = new CudaContext();
+            var device = new CudaContext(0, CUCtxFlags.BlockingSync);
             Kernel render;
             try
             {
@@ -34,7 +38,7 @@ NM: Adjust the field-of-view (zoom).";
             var window = new GuiWindow(render, UiControls.UiWidth);
             var settings = render.Defaults;
             var keyhandler = new KeyTracker(render.KeyHandlers, settings);
-            UiControls.Create(window.Form, settings, keyhandler.OnKeyDown, keyhandler.OnKeyUp, async cancellation =>
+            UiControls.Create(window.Form, settings, keyhandler.OnKeyDown, keyhandler.OnKeyUp, render, async cancellation =>
             {
                 const int concurrentTasks = 1;
                 var tasks = new Task<ImageData>[concurrentTasks];
@@ -48,7 +52,7 @@ NM: Adjust the field-of-view (zoom).";
                             window.Display(image);
                         }
                         keyhandler.OnRender();
-                        tasks[i] = render.Run(settings);
+                        tasks[i] = render.Run(settings, true);
                     }
                 }
             });

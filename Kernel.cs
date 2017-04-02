@@ -33,6 +33,15 @@ namespace Clam4
             _stream = new CudaStream();
         }
 
+        protected Kernel(Kernel toClone)
+        {
+            _kernel = toClone._kernel;
+            _blockSize = toClone._blockSize;
+            _stream = new CudaStream();
+        }
+
+        public abstract Kernel Clone();
+
         protected static Stream LoadResource(string resourceName)
         {
             var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(typeof(Kernel), resourceName);
@@ -71,11 +80,11 @@ namespace Clam4
             _screenSize = size;
         }
 
-        public Task<ImageData> Run(SettingsCollection settings)
+        public Task<ImageData> Run(SettingsCollection settings, bool download)
         {
             var screenSize = _screenSize;
             var imageBuffer = _imageBuffer;
-            var cpuMemory = _cpuMemory;
+            var cpuMemory = download ? _cpuMemory : null;
             var args = GetArgs(_kernel, settings, screenSize, _stream);
             // assume args[0] is image buffer
             if (args[0] != null)
@@ -89,7 +98,7 @@ namespace Clam4
             _kernel.GridDimensions = new dim3((launchSize + _blockSize - 1) / _blockSize);
             _kernel.RunAsync(_stream.Stream, args);
 
-            cpuMemory.AsyncCopyFromDevice(imageBuffer, _stream.Stream);
+            cpuMemory?.AsyncCopyFromDevice(imageBuffer, _stream.Stream);
             var task = new TaskCompletionSource<ImageData>();
             CUstreamCallback func = CallbackData.Go;
             GCHandle handle = GCHandle.Alloc(new CallbackData(func, cpuMemory, task, screenSize));
@@ -118,10 +127,17 @@ namespace Clam4
                 {
                     throw new CudaException(status);
                 }
-                int size = _cpuMemory.Size;
-                var imageData = new ImageData(_size.Width, _size.Height, size);
-                Marshal.Copy(_cpuMemory.PinnedHostPointer, imageData.Buffer, 0, size);
-                _task.SetResult(imageData);
+                if (_cpuMemory == null)
+                {
+                    _task.SetResult(new ImageData());
+                }
+                else
+                {
+                    int size = _cpuMemory.Size;
+                    var imageData = new ImageData(_size.Width, _size.Height, size);
+                    Marshal.Copy(_cpuMemory.PinnedHostPointer, imageData.Buffer, 0, size);
+                    _task.SetResult(imageData);
+                }
             }
 
             public static void Go(CUstream stream, CUResult status, IntPtr userdata)
@@ -148,6 +164,12 @@ namespace Clam4
         public Mandelbrot(CudaContext context) : base(context, LoadResource("mandelbrot.ptx"))
         {
         }
+
+        private Mandelbrot(Mandelbrot toClone) : base(toClone)
+        {
+        }
+
+        public override Kernel Clone() => new Mandelbrot(this);
 
         protected override object[] GetArgs(CudaKernel kernel, SettingsCollection settings, Size screenSize, CudaStream stream)
         {
@@ -196,6 +218,12 @@ namespace Clam4
         public Mandelbox(CudaContext context) : base(context, LoadResource("mandelbox.ptx"))
         {
         }
+
+        private Mandelbox(Mandelbox toClone) : base(toClone)
+        {
+        }
+
+        public override Kernel Clone() => new Mandelbox(this);
 
         public override SettingsCollection Defaults
         {

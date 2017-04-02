@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -41,11 +42,25 @@ namespace Clam4
             _kernel.Resize(CorrectOffset(_form.ClientSize));
         }
 
-        private void OnResize(object sender, EventArgs e) => _kernel.Resize(CorrectOffset(_form.ClientSize));
+        private void OnResize(object sender, EventArgs e)
+        {
+            var size = CorrectOffset(_form.ClientSize);
+            if (size.Width > 0 && size.Height > 0)
+            {
+                _kernel.Resize(size);
+            }
+        }
 
         private Size CorrectOffset(Size size)
         {
-            size.Width -= _xOffset;
+            if (size.Width > _xOffset)
+            {
+                size.Width -= _xOffset;
+            }
+            else
+            {
+                size.Width = 0;
+            }
             return size;
         }
 
@@ -115,27 +130,29 @@ namespace Clam4
     {
         internal static readonly int UiWidth = 300;
 
-        internal static void Create(Control form, SettingsCollection settings, Func<Keys, bool> onKeyDown, Func<Keys, bool> onKeyUp, Action<CancellationToken> run)
+        internal static void Create(
+            Control form,
+            SettingsCollection settings,
+            Func<Keys, bool> onKeyDown,
+            Func<Keys, bool> onKeyUp,
+            Kernel kernel,
+            Action<CancellationToken> run)
         {
             CancellationTokenSource cancellationTokenSource = null;
-            var uiWidthMinusScroll = UiWidth - 20;
-            var ySpace = 1;
-            var yPos = ySpace + 5;
-            var yStride = 20;
-            var yHeight = yStride - ySpace * 2;
-            var yIdx = 0;
-            var xSpace = 5;
-            var widthFull = uiWidthMinusScroll - xSpace * 2;
-            var xPos = xSpace;
-            var widthHalf = uiWidthMinusScroll / 2 - xSpace * 2;
-            var xPosHalf = uiWidthMinusScroll / 2 + xSpace;
+
+            var outerContainer = new TableLayoutPanel()
+            {
+                AutoScroll = false,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Bottom,
+                Height = form.ClientSize.Height,
+                Width = UiWidth,
+                ColumnCount = 1,
+                RowCount = 0,
+            };
 
             var help = new Button()
             {
-                Left = xPos,
-                Top = yPos + yStride * yIdx++,
-                Width = widthFull,
-                Height = yHeight,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Text = "Help (keybindings, etc)",
             };
             help.Click += (o, e) =>
@@ -145,15 +162,13 @@ namespace Clam4
                     MessageBox.Show(Program.HelpText, "Help");
                 });
             };
-            form.Controls.Add(help);
+            outerContainer.Controls.Add(help);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var startStop = new Button()
             {
-                Left = xPos,
-                Top = yPos + yStride * yIdx++,
-                Width = widthFull,
-                Height = yHeight,
-                Text = "start/stop",
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Start",
             };
             startStop.Click += (o, e) =>
             {
@@ -161,23 +176,94 @@ namespace Clam4
                 {
                     cancellationTokenSource = new CancellationTokenSource();
                     run(cancellationTokenSource.Token);
+                    startStop.Text = "Stop";
                 }
                 else
                 {
                     cancellationTokenSource.Cancel();
                     cancellationTokenSource.Dispose();
                     cancellationTokenSource = null;
+                    startStop.Text = "Start";
                 }
             };
-            form.Controls.Add(startStop);
+            outerContainer.Controls.Add(startStop);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var saveState = new Button()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Save state",
+            };
+            saveState.Click += (o, e) =>
+            {
+                using (var dialog = new SaveFileDialog()
+                {
+                    FileName = "settings",
+                    DefaultExt = ".clam4"
+                })
+                {
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        settings.Save(dialog.FileName);
+                    }
+                }
+            };
+            outerContainer.Controls.Add(saveState);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var loadState = new Button()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Load state",
+            };
+            loadState.Click += (o, e) =>
+            {
+                using (var dialog = new OpenFileDialog()
+                {
+                    FileName = "settings",
+                    DefaultExt = ".clam4"
+                })
+                {
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        settings.Load(dialog.FileName);
+                    }
+                }
+            };
+            outerContainer.Controls.Add(loadState);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var headlessRenderButton = new Button()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Run headless render",
+            };
+            headlessRenderButton.Click += (o, e) =>
+            {
+                if (cancellationTokenSource != null)
+                {
+                    MessageBox.Show("Do not start a headless render while the active render is running (press Stop)", "Error");
+                    return;
+                }
+                using (var dialog = new SaveFileDialog()
+                {
+                    FileName = "render",
+                    DefaultExt = ".png"
+                })
+                {
+                    if (dialog.ShowDialog() == DialogResult.OK)
+                    {
+                        CreateHeadless(dialog.FileName, kernel.Clone(), settings.Clone());
+                    }
+                }
+            };
+            outerContainer.Controls.Add(headlessRenderButton);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var focus = new Button()
             {
-                Left = xPos,
-                Top = yPos + yStride * yIdx++,
-                Width = widthFull,
-                Height = yHeight,
-                Text = "Focus keybindings",
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Enable keybindings",
             };
             focus.Click += (o, e) =>
             {
@@ -211,19 +297,19 @@ namespace Clam4
                     e.Handled = true;
                 }
             };
-            form.Controls.Add(focus);
+            outerContainer.Controls.Add(focus);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var scroll = new Panel()
+            var scroll = new TableLayoutPanel()
             {
                 AutoScroll = true,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Bottom,
-                Left = 0,
-                Top = yPos + yStride * yIdx++,
-                Width = UiWidth,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                ColumnCount = 2,
+                RowCount = 0,
             };
-            scroll.Height = form.ClientSize.Height - scroll.Top;
+            scroll.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            scroll.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-            yIdx = 0;
             foreach (var setting in settings)
             {
                 var key = setting.Key;
@@ -237,20 +323,16 @@ namespace Clam4
 
                 var label = new Label()
                 {
-                    Left = xPos,
-                    Top = yPos + yStride * yIdx,
-                    Width = widthHalf,
-                    Height = yHeight,
+                    AutoSize = true,
+                    Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                    TextAlign = ContentAlignment.MiddleRight,
                     Text = key,
                 };
                 scroll.Controls.Add(label);
 
                 var text = new TextBox()
                 {
-                    Left = xPosHalf,
-                    Top = yPos + yStride * yIdx++,
-                    Width = widthHalf,
-                    Height = yHeight,
+                    Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                     Text = setting.Value.ToString(),
                 };
                 var changing = false;
@@ -303,7 +385,170 @@ namespace Clam4
                 };
                 scroll.Controls.Add(text);
             }
-            form.Controls.Add(scroll);
+            outerContainer.Controls.Add(scroll);
+            outerContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            form.Controls.Add(outerContainer);
+        }
+
+        private static void CreateHeadless(string filename, Kernel kernel, SettingsCollection settings)
+        {
+            var form = new Form()
+            {
+                Text = "Clam4 Headless Render"
+            };
+            var outerContainer = new TableLayoutPanel()
+            {
+                AutoScroll = false,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Width = form.ClientSize.Width,
+                Height = form.ClientSize.Height,
+                ColumnCount = 2,
+                RowCount = 0,
+            };
+
+            var filenameLabel = new Label()
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Text = "Save as",
+            };
+            outerContainer.Controls.Add(filenameLabel);
+
+            var filenameText = new TextBox()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = filename,
+            };
+            outerContainer.Controls.Add(filenameText);
+
+            var widthLabel = new Label()
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Text = "Width",
+            };
+            outerContainer.Controls.Add(widthLabel);
+
+            var widthText = new TextBox()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "1000",
+            };
+            outerContainer.Controls.Add(widthText);
+
+            var heightLabel = new Label()
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Text = "Height",
+            };
+            outerContainer.Controls.Add(heightLabel);
+
+            var heightText = new TextBox()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "1000",
+            };
+            outerContainer.Controls.Add(heightText);
+
+            var framesLabel = new Label()
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleRight,
+                Text = "Frames",
+            };
+            outerContainer.Controls.Add(framesLabel);
+
+            var framesText = new TextBox()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "100",
+            };
+            outerContainer.Controls.Add(framesText);
+
+            var progressBar = new Label()
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "",
+            };
+            outerContainer.Controls.Add(progressBar);
+            outerContainer.SetColumnSpan(progressBar, 2);
+
+            var goButton = new Button()
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Go!",
+            };
+            outerContainer.Controls.Add(goButton);
+            outerContainer.SetColumnSpan(goButton, 2);
+            TimeEstimator timeEstimator;
+            void Progress(double value)
+            {
+                progressBar.Text = $"{(value * 100):F2}% complete, {timeEstimator.Estimate(value)} left";
+            };
+
+            var cancel = false;
+            goButton.Click += async (o, e) =>
+            {
+                if (int.TryParse(widthText.Text, out var width) &&
+                    int.TryParse(heightText.Text, out var height) &&
+                    int.TryParse(framesText.Text, out var frames))
+                {
+                    goButton.Enabled = false;
+                    var queue = new Queue<Task<ImageData>>();
+                    timeEstimator = new TimeEstimator();
+                    Progress(0);
+                    int progressCounter = 0;
+                    kernel.Resize(new Size(width, height));
+                    for (var i = 0; i < frames - 1 && !cancel; i++)
+                    {
+                        queue.Enqueue(kernel.Run(settings, false));
+                        if (queue.Count > 3)
+                        {
+                            await queue.Dequeue();
+                            Progress((double)(++progressCounter) / frames);
+                        }
+                    }
+                    if (!cancel)
+                    {
+                        queue.Enqueue(kernel.Run(settings, true));
+                    }
+                    while (queue.Count > (cancel ? 0 : 1))
+                    {
+                        await queue.Dequeue();
+                        Progress((double)(++progressCounter) / frames);
+                    }
+                    if (cancel)
+                    {
+                        return;
+                    }
+                    var result = await queue.Dequeue();
+                    Progress(1);
+                    var bitmap = new Bitmap(result.Width, result.Height, PixelFormat.Format32bppRgb);
+                    var locked = bitmap.LockBits(new Rectangle(new Point(0, 0), bitmap.Size), ImageLockMode.WriteOnly, bitmap.PixelFormat);
+                    var lockedCount = (locked.Stride * locked.Height) / sizeof(int);
+                    var length = Math.Min(result.Buffer.Length, lockedCount);
+                    Marshal.Copy(result.Buffer, 0, locked.Scan0, length);
+                    bitmap.UnlockBits(locked);
+                    bitmap.Save(filename);
+                    progressBar.Text = "Finished";
+                }
+            };
+
+            form.FormClosing += (o, e) =>
+            {
+                cancel = true;
+            };
+
+            form.Controls.Add(outerContainer);
+
+            form.Show();
         }
     }
 }
