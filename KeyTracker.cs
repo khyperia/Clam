@@ -19,6 +19,8 @@ namespace Clam4
             _stopwatch = Stopwatch.StartNew();
         }
 
+        public SettingsCollection Settings => _settings;
+
         public bool OnKeyDown(Keys keys)
         {
             lock (lock_object)

@@ -126,9 +126,13 @@ namespace Clam4
             const Keys right = Keys.D;
             const Keys left = Keys.A;
             const Keys pitchUp = Keys.I;
+            const Keys pitchUpTwo = Keys.Up;
             const Keys pitchDown = Keys.K;
+            const Keys pitchDownTwo = Keys.Down;
             const Keys yawLeft = Keys.J;
+            const Keys yawLeftTwo = Keys.Left;
             const Keys yawRight = Keys.L;
+            const Keys yawRightTwo = Keys.Right;
             const Keys rollLeftOne = Keys.U;
             const Keys rollLeftTwo = Keys.Q;
             const Keys rollRightOne = Keys.O;
@@ -157,19 +161,19 @@ namespace Clam4
             {
                 pos = pos - float3.Cross(look, up) * moveSpeed;
             }
-            else if (key == pitchUp)
+            else if (key == pitchUp || key == pitchUpTwo)
             {
                 look = look + up * turnSpeed;
             }
-            else if (key == pitchDown)
+            else if (key == pitchDown || key == pitchDownTwo)
             {
                 look = look - up * turnSpeed;
             }
-            else if (key == yawRight)
+            else if (key == yawRight || key == yawRightTwo)
             {
                 look = look + float3.Cross(look, up) * turnSpeed;
             }
-            else if (key == yawLeft)
+            else if (key == yawLeft || key == yawLeftTwo)
             {
                 look = look - float3.Cross(look, up) * turnSpeed;
             }
