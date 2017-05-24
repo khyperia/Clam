@@ -5,20 +5,17 @@
     <TargetFramework>net46</TargetFramework>
     <DebugType>full</DebugType>
     <DebugSymbols>true</DebugSymbols>
-    <Optimize>true</Optimize>
+    <Optimize Condition="'$(Configuration)'=='Debug'">False</Optimize>
+    <Optimize Condition="'$(Configuration)'!='Debug'">True</Optimize>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="mandelbrot.ptx" />
-    <EmbeddedResource Include="mandelbox.ptx" />
+    <EmbeddedResource Include="mandelbrot.cl" />
+    <EmbeddedResource Include="mandelbox.cl" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ManagedCuda-80" Version="8.0.13" />
+    <PackageReference Include="Cloo.clSharp" Version="0.9.1.1" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
-  <Target Name="BuildMandelbox" BeforeTargets="BeforeBuild" Inputs="mandelbrot.cu;mandelbox.cu" Outputs="mandelbrot.ptx;mandelbox.ptx">
-    <Exec Command="call &quot;C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat&quot; &amp;&amp; nvcc --use_fast_math --generate-line-info --gpu-architecture=sm_30 --ptx -o mandelbox.ptx mandelbox.cu" />
-    <Exec Command="call &quot;C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat&quot; &amp;&amp; nvcc --use_fast_math --generate-line-info --gpu-architecture=sm_30 --ptx -o mandelbrot.ptx mandelbrot.cu" />
-  </Target>
 </Project>

@@ -1,13 +1,13 @@
 ﻿using System;
-using System.Runtime.InteropServices;
-using ManagedCuda;
-using ManagedCuda.BasicTypes;
-using ManagedCuda.VectorTypes;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
 using System.Reflection;
+using Cloo;
+using System.Collections.Generic;
+using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace Clam4
 {
@@ -17,151 +17,156 @@ namespace Clam4
         {
         }
 
-        private readonly CudaKernel _kernel;
-        private readonly int _blockSize;
+        private readonly ComputeKernel _kernel;
+        private readonly long _blockSize;
 
-        private readonly CudaStream _stream;
+        private readonly ComputeCommandQueue _stream;
+        private readonly ComputeEventList _events;
 
         private Size _screenSize;
-        private CudaPageLockedHostMemory_int _cpuMemory;
-        private CudaDeviceVariable<int> _imageBuffer;
+        private ComputeBuffer<int> _imageBuffer;
 
-        protected Kernel(CudaContext context, Stream kernel)
+        public static ComputeContext GetContext()
         {
-            _kernel = context.LoadKernelPTX(kernel, "Main");
-            _blockSize = _kernel.GetOccupancyMaxPotentialBlockSize().blockSize;
-            _stream = new CudaStream();
+            var p = 0;
+            foreach (var platform in ComputePlatform.Platforms)
+            {
+                var d = 0;
+                foreach (var dev in platform.Devices)
+                {
+                    Console.WriteLine($"{p} {d++} = {dev.Name}");
+                }
+                p++;
+            }
+            var device = ComputePlatform.Platforms[0].Devices[0];
+            Console.WriteLine(device.Name);
+            return new ComputeContext(new[] { device }, new ComputeContextPropertyList(device.Platform), null, IntPtr.Zero);
+        }
+
+        protected Kernel(ComputeContext context, string kernel)
+        {
+            var program = new ComputeProgram(context, kernel);
+            //var options = "-Werror -cl-fast-relaxed-math -cl-strict-aliasing";
+            var options = "-Werror -cl-fast-relaxed-math";
+            program.Build(context.Devices, options, (prog, intptr) =>
+            {
+                var log = program.GetBuildLog(context.Devices[0]).Trim();
+                if (!string.IsNullOrEmpty(log))
+                {
+                    MessageBox.Show(log, "OpenCL compiler error");
+                }
+            }, IntPtr.Zero);
+            _kernel = program.CreateKernel("Main");
+            _blockSize = context.Devices[0].MaxWorkGroupSize;
+            _stream = new ComputeCommandQueue(context, context.Devices[0], ComputeCommandQueueFlags.OutOfOrderExecution);
+            _events = new ComputeEventList();
         }
 
         protected Kernel(Kernel toClone)
         {
             _kernel = toClone._kernel;
             _blockSize = toClone._blockSize;
-            _stream = new CudaStream();
+            _stream = new ComputeCommandQueue(toClone._stream.Context, toClone._stream.Device, ComputeCommandQueueFlags.OutOfOrderExecution);
+            _events = new ComputeEventList();
         }
 
         public abstract Kernel Clone();
 
-        protected static Stream LoadResource(string resourceName)
+        protected static string LoadResource(string resourceName)
         {
             var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(typeof(Kernel), resourceName);
-            return stream ?? throw new Exception("Resource not found: " + resourceName);
+            stream = stream ?? throw new Exception("Resource not found: " + resourceName);
+            using (var reader = new StreamReader(stream))
+            {
+                return reader.ReadToEnd();
+            }
         }
 
         public abstract SettingsCollection Defaults { get; }
         public abstract IKeyHandler[] KeyHandlers { get; }
-        protected abstract object[] GetArgs(CudaKernel kernel, SettingsCollection settings, Size screenSize, CudaStream stream);
+        protected abstract void SetArgs(ComputeKernel kernel, ComputeBuffer<int> screen, SettingsCollection settings, Size screenSize, ComputeCommandQueue stream);
 
-        protected static CudaDeviceVariable<T> BufferOfSize<T>(ref CudaDeviceVariable<T> buffer, Size size) where T : struct
+        protected ComputeBuffer<T> BufferOfSize<T>(ref ComputeBuffer<T> buffer, Size size, ComputeMemoryFlags flags) where T : struct
         {
-            return BufferOfSize(ref buffer, (SizeT)size.Width * (SizeT)size.Height);
+            return BufferOfSize(ref buffer, (long)size.Width * size.Height, flags);
         }
 
-        protected static CudaDeviceVariable<T> BufferOfSize<T>(ref CudaDeviceVariable<T> buffer, SizeT size) where T : struct
+        protected ComputeBuffer<T> BufferOfSize<T>(ref ComputeBuffer<T> buffer, long size, ComputeMemoryFlags flags) where T : struct
         {
             if (buffer == null || buffer.Size != size)
             {
                 buffer?.Dispose();
-                buffer = new CudaDeviceVariable<T>(size);
+                buffer = new ComputeBuffer<T>(_stream.Context, flags, size);
             }
             return buffer;
         }
 
         public virtual void Resize(Size size)
         {
-            var imageBuffer = BufferOfSize(ref _imageBuffer, size);
-
-            if (_cpuMemory == null || _cpuMemory.Size != imageBuffer.Size)
-            {
-                _cpuMemory?.Dispose();
-                _cpuMemory = new CudaPageLockedHostMemory_int(imageBuffer.Size);
-            }
+            var imageBuffer = BufferOfSize(ref _imageBuffer, size, ComputeMemoryFlags.ReadWrite | ComputeMemoryFlags.AllocateHostPointer);
 
             _screenSize = size;
         }
 
-        public Task<ImageData> Run(SettingsCollection settings, bool download)
+        private void RemoveDeadEvents()
         {
-            var screenSize = _screenSize;
-            var imageBuffer = _imageBuffer;
-            var cpuMemory = download ? _cpuMemory : null;
-            var args = GetArgs(_kernel, settings, screenSize, _stream);
-            // assume args[0] is image buffer
-            if (args[0] != null)
+            lock (_events)
             {
-                throw new Exception("args[0] not null");
+                while (_events.Count > 0)
+                {
+                    if (_events[0].Status != ComputeCommandExecutionStatus.Complete)
+                    {
+                        break;
+                    }
+                    _events[0].Dispose();
+                    _events.RemoveAt(0);
+                }
             }
-            args[0] = imageBuffer.DevicePointer;
-
-            var launchSize = screenSize.Width * screenSize.Height;
-            _kernel.BlockDimensions = new dim3(_blockSize);
-            _kernel.GridDimensions = new dim3((launchSize + _blockSize - 1) / _blockSize);
-            _kernel.RunAsync(_stream.Stream, args);
-
-            cpuMemory?.AsyncCopyFromDevice(imageBuffer, _stream.Stream);
-            var task = new TaskCompletionSource<ImageData>();
-            CUstreamCallback func = CallbackData.Go;
-            GCHandle handle = GCHandle.Alloc(new CallbackData(func, cpuMemory, task, screenSize));
-            _stream.AddCallback(func, GCHandle.ToIntPtr(handle), CUStreamAddCallbackFlags.None);
-            return task.Task;
         }
 
-        private class CallbackData
+        public Task<ImageData> Run(SettingsCollection settings, bool download)
         {
-            private readonly CUstreamCallback _streamCallback;
-            private readonly CudaPageLockedHostMemory_int _cpuMemory;
-            private readonly TaskCompletionSource<ImageData> _task;
-            private readonly Size _size;
+            RemoveDeadEvents();
 
-            public CallbackData(CUstreamCallback streamCallback, CudaPageLockedHostMemory_int cpuMemory, TaskCompletionSource<ImageData> task, Size size)
+            var screenSize = _screenSize;
+            var imageBuffer = _imageBuffer;
+            SetArgs(_kernel, imageBuffer, settings, screenSize, _stream);
+
+            var launchSize = (long)screenSize.Width * screenSize.Height;
+            var localSize = _blockSize;
+            var globalSize = (launchSize + localSize - 1) / localSize * localSize;
+            _stream.Execute(_kernel, new[] { 0L }, new[] { globalSize }, new[] { localSize }, _events);
+
+            if (!download)
             {
-                _streamCallback = streamCallback;
-                _cpuMemory = cpuMemory;
-                _task = task;
-                _size = size;
+                return Task.FromResult(new ImageData());
             }
 
-            private void Run(CUResult status)
-            {
-                if (status != CUResult.Success)
-                {
-                    throw new CudaException(status);
-                }
-                if (_cpuMemory == null)
-                {
-                    _task.SetResult(new ImageData());
-                }
-                else
-                {
-                    int size = _cpuMemory.Size;
-                    var imageData = new ImageData(_size.Width, _size.Height, size);
-                    Marshal.Copy(_cpuMemory.PinnedHostPointer, imageData.Buffer, 0, size);
-                    _task.SetResult(imageData);
-                }
-            }
+            var mappedImageBuffer = _stream.Map(imageBuffer, false, ComputeMemoryMappingFlags.Read, 0, launchSize, _events);
+            //_stream.ReadFromBuffer(imageBuffer, ref buffer, false, _events);
 
-            public static void Go(CUstream stream, CUResult status, IntPtr userdata)
+            var task = new TaskCompletionSource<ImageData>();
+            var finish = _events.Last;
+            var buggyCloo = 0;
+            finish.Aborted += (obj, status) => task.TrySetException(new Exception(status.Status.ToString()));
+            finish.Completed += (obj, status) =>
             {
-                var handle = GCHandle.FromIntPtr(userdata);
-                try
+                if (status.Event != finish && Interlocked.Exchange(ref buggyCloo, 1) != 0)
                 {
-                    ((CallbackData)handle.Target).Run(status);
+                    throw new Exception("Cloo is doing weird things");
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Exception in kernel callback handler! - " + e);
-                }
-                finally
-                {
-                    handle.Free();
-                }
-            }
+                var result = new ImageData(screenSize.Width, screenSize.Height, (int)launchSize);
+                Marshal.Copy(mappedImageBuffer, result.Buffer, 0, result.Buffer.Length);
+                _stream.Unmap(imageBuffer, ref mappedImageBuffer, _events);
+                task.SetResult(result);
+            };
+            return task.Task;
         }
     }
 
     internal sealed class Mandelbrot : Kernel
     {
-        public Mandelbrot(CudaContext context) : base(context, LoadResource("mandelbrot.ptx"))
+        public Mandelbrot(ComputeContext context) : base(context, LoadResource("mandelbrot.cl"))
         {
         }
 
@@ -171,23 +176,21 @@ namespace Clam4
 
         public override Kernel Clone() => new Mandelbrot(this);
 
-        protected override object[] GetArgs(CudaKernel kernel, SettingsCollection settings, Size screenSize, CudaStream stream)
+        protected override void SetArgs(ComputeKernel kernel, ComputeBuffer<int> screen, SettingsCollection settings, Size screenSize, ComputeCommandQueue stream)
         {
             var posX = (float)(double)settings["posX"];
             var posY = (float)(double)settings["posY"];
             var zoom = (float)(double)settings["zoom"];
 
-            return new object[]
-            {
-                null,
-                screenSize.Width / -2,
-                screenSize.Height / -2,
-                screenSize.Width,
-                screenSize.Height,
-                posX,
-                posY,
-                zoom
-            };
+            int arg = 0;
+            kernel.SetMemoryArgument(arg++, screen);
+            kernel.SetValueArgument(arg++, screenSize.Width / -2);
+            kernel.SetValueArgument(arg++, screenSize.Height / -2);
+            kernel.SetValueArgument(arg++, screenSize.Width);
+            kernel.SetValueArgument(arg++, screenSize.Height);
+            kernel.SetValueArgument(arg++, posX);
+            kernel.SetValueArgument(arg++, posY);
+            kernel.SetValueArgument(arg++, zoom);
         }
 
         public override SettingsCollection Defaults =>
@@ -207,15 +210,26 @@ namespace Clam4
 
     internal sealed class Mandelbox : Kernel
     {
-        private CudaDeviceVariable<MandelboxCfg> _cfg;
-        private CudaPageLockedHostMemory<MandelboxCfg> _cfgCpu;
-        private CudaDeviceVariable<float4> _scratchBuf;
-        private CudaDeviceVariable<uint2> _randBuf;
+        struct Float4
+        {
+            float x;
+            float y;
+            float z;
+            float w;
+        }
+        struct Uint2
+        {
+            int x;
+            int y;
+        }
+        private ComputeBuffer<MandelboxCfg> _cfg;
+        private ComputeBuffer<Float4> _scratchBuf;
+        private ComputeBuffer<Uint2> _randBuf;
         private MandelboxCfg _oldConfig;
         private bool _needsRenorm;
         private int _frame;
 
-        public Mandelbox(CudaContext context) : base(context, LoadResource("mandelbox.ptx"))
+        public Mandelbox(ComputeContext context) : base(context, LoadResource("mandelbox.cl"))
         {
         }
 
@@ -301,11 +315,11 @@ namespace Clam4
         public override void Resize(Size size)
         {
             base.Resize(size);
-            BufferOfSize(ref _randBuf, size);
-            BufferOfSize(ref _scratchBuf, size);
+            BufferOfSize(ref _scratchBuf, size, ComputeMemoryFlags.ReadWrite);
+            BufferOfSize(ref _randBuf, size, ComputeMemoryFlags.ReadWrite);
         }
 
-        protected override object[] GetArgs(CudaKernel kernel, SettingsCollection settings, Size screenSize, CudaStream stream)
+        protected override void SetArgs(ComputeKernel kernel, ComputeBuffer<int> screen, SettingsCollection settings, Size screenSize, ComputeCommandQueue stream)
         {
             if (_needsRenorm)
             {
@@ -318,23 +332,22 @@ namespace Clam4
                 _oldConfig = config;
                 if (_cfg == null)
                 {
-                    _cfg = new CudaDeviceVariable<MandelboxCfg>(kernel, "CfgArr");
-                    _cfgCpu = new CudaPageLockedHostMemory<MandelboxCfg>(1);
+                    _cfg = new ComputeBuffer<MandelboxCfg>(kernel.Context, ComputeMemoryFlags.ReadOnly, 1);
                 }
-                Marshal.StructureToPtr(_oldConfig, _cfgCpu.PinnedHostPointer, false);
-                _cfgCpu.AsyncCopyToDevice(_cfg, stream.Stream);
+                stream.WriteToBuffer(new[] { config }, _cfg, true, null);
                 _frame = 0;
             }
 
-            return new object[]
-            {
-                null,
-                screenSize.Width / -2,
-                screenSize.Height / -2,
-                screenSize.Width,
-                screenSize.Height,
-                _frame++,
-            };
+            int arg = 0;
+            kernel.SetMemoryArgument(arg++, screen);
+            kernel.SetMemoryArgument(arg++, _cfg);
+            kernel.SetMemoryArgument(arg++, _scratchBuf);
+            kernel.SetMemoryArgument(arg++, _randBuf);
+            kernel.SetValueArgument(arg++, screenSize.Width / -2);
+            kernel.SetValueArgument(arg++, screenSize.Height / -2);
+            kernel.SetValueArgument(arg++, screenSize.Width);
+            kernel.SetValueArgument(arg++, screenSize.Height);
+            kernel.SetValueArgument(arg++, _frame++);
         }
 
         private MandelboxCfg GetCfg(SettingsCollection settings)
@@ -343,19 +356,7 @@ namespace Clam4
             foreach (var field in cfg.GetType().GetFields())
             {
                 var name = field.Name;
-                object value;
-                if (name == "scratch")
-                {
-                    value = _scratchBuf.DevicePointer;
-                }
-                else if (name == "randbuf")
-                {
-                    value = _randBuf.DevicePointer;
-                }
-                else
-                {
-                    value = settings[name];
-                }
+                var value = settings[name];
                 field.SetValue(cfg, value);
             }
             return (MandelboxCfg)cfg;
@@ -363,8 +364,6 @@ namespace Clam4
 
         struct MandelboxCfg
         {
-            public CUdeviceptr scratch;
-            public CUdeviceptr randbuf;
             public float posX;
             public float posY;
             public float posZ;

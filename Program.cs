@@ -1,5 +1,4 @@
-﻿using ManagedCuda;
-using ManagedCuda.BasicTypes;
+﻿using Cloo;
 using System;
 using System.Windows.Forms;
 
@@ -26,12 +25,11 @@ NM: Adjust the field-of-view (zoom).";
         [STAThread]
         public static void Main(string[] args)
         {
-            var device = new CudaContext(0, CUCtxFlags.BlockingSync);
             Kernel kernel;
             try
             {
                 //kernel = new Mandelbrot(device);
-                kernel = new Mandelbox(device);
+                kernel = new Mandelbox(Kernel.GetContext());
             }
             catch (Kernel.CompilationException)
             {

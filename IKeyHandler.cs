@@ -1,5 +1,4 @@
-﻿using ManagedCuda.VectorTypes;
-using System;
+﻿using System;
 using System.Windows.Forms;
 
 namespace Clam4
@@ -113,9 +112,9 @@ namespace Clam4
 
         public bool Handle(Keys key, double dt, SettingsCollection settings)
         {
-            float3 pos = new float3((float)settings[_posX], (float)settings[_posY], (float)settings[_posZ]);
-            float3 look = new float3((float)settings[_lookX], (float)settings[_lookY], (float)settings[_lookZ]);
-            float3 up = new float3((float)settings[_upX], (float)settings[_upY], (float)settings[_upZ]);
+            Float3 pos = new Float3((float)settings[_posX], (float)settings[_posY], (float)settings[_posZ]);
+            Float3 look = new Float3((float)settings[_lookX], (float)settings[_lookY], (float)settings[_lookZ]);
+            Float3 up = new Float3((float)settings[_upX], (float)settings[_upY], (float)settings[_upZ]);
             float moveSpeed = (float)settings[_moveSpeed] * (float)dt;
             float turnSpeed = (float)settings[_fov] * (float)dt;
             float rollSpeed = (float)dt;
@@ -155,11 +154,11 @@ namespace Clam4
             }
             else if (key == right)
             {
-                pos = pos + float3.Cross(look, up) * moveSpeed;
+                pos = pos + Float3.Cross(look, up) * moveSpeed;
             }
             else if (key == left)
             {
-                pos = pos - float3.Cross(look, up) * moveSpeed;
+                pos = pos - Float3.Cross(look, up) * moveSpeed;
             }
             else if (key == pitchUp || key == pitchUpTwo)
             {
@@ -171,56 +170,54 @@ namespace Clam4
             }
             else if (key == yawRight || key == yawRightTwo)
             {
-                look = look + float3.Cross(look, up) * turnSpeed;
+                look = look + Float3.Cross(look, up) * turnSpeed;
             }
             else if (key == yawLeft || key == yawLeftTwo)
             {
-                look = look - float3.Cross(look, up) * turnSpeed;
+                look = look - Float3.Cross(look, up) * turnSpeed;
             }
             else if (key == rollRightOne || key == rollRightTwo)
             {
-                up = up + float3.Cross(look, up) * rollSpeed;
+                up = up + Float3.Cross(look, up) * rollSpeed;
             }
             else if (key == rollLeftOne || key == rollLeftTwo)
             {
-                up = up - float3.Cross(look, up) * rollSpeed;
+                up = up - Float3.Cross(look, up) * rollSpeed;
             }
             else
             {
                 return false;
             }
-            look.Normalize();
-            up = float3.Cross(float3.Cross(look, up), look);
-            up.Normalize();
-            settings[_posX] = pos.x;
-            settings[_posY] = pos.y;
-            settings[_posZ] = pos.z;
-            settings[_lookX] = look.x;
-            settings[_lookY] = look.y;
-            settings[_lookZ] = look.z;
-            settings[_upX] = up.x;
-            settings[_upY] = up.y;
-            settings[_upZ] = up.z;
+            look = look.Normalized;
+            up = Float3.Cross(Float3.Cross(look, up), look).Normalized;
+            settings[_posX] = pos.X;
+            settings[_posY] = pos.Y;
+            settings[_posZ] = pos.Z;
+            settings[_lookX] = look.X;
+            settings[_lookY] = look.Y;
+            settings[_lookZ] = look.Z;
+            settings[_upX] = up.X;
+            settings[_upY] = up.Y;
+            settings[_upZ] = up.Z;
             return true;
         }
 
         public void NormalizeLookUp(SettingsCollection settings)
         {
-            float3 pos = new float3((float)settings[_posX], (float)settings[_posY], (float)settings[_posZ]);
-            float3 look = new float3((float)settings[_lookX], (float)settings[_lookY], (float)settings[_lookZ]);
-            float3 up = new float3((float)settings[_upX], (float)settings[_upY], (float)settings[_upZ]);
-            look.Normalize();
-            up = float3.Cross(float3.Cross(look, up), look);
-            up.Normalize();
-            settings[_posX] = pos.x;
-            settings[_posY] = pos.y;
-            settings[_posZ] = pos.z;
-            settings[_lookX] = look.x;
-            settings[_lookY] = look.y;
-            settings[_lookZ] = look.z;
-            settings[_upX] = up.x;
-            settings[_upY] = up.y;
-            settings[_upZ] = up.z;
+            Float3 pos = new Float3((float)settings[_posX], (float)settings[_posY], (float)settings[_posZ]);
+            Float3 look = new Float3((float)settings[_lookX], (float)settings[_lookY], (float)settings[_lookZ]);
+            Float3 up = new Float3((float)settings[_upX], (float)settings[_upY], (float)settings[_upZ]);
+            look = look.Normalized;
+            up = Float3.Cross(Float3.Cross(look, up), look).Normalized;
+            settings[_posX] = pos.X;
+            settings[_posY] = pos.Y;
+            settings[_posZ] = pos.Z;
+            settings[_lookX] = look.X;
+            settings[_lookY] = look.Y;
+            settings[_lookZ] = look.Z;
+            settings[_upX] = up.X;
+            settings[_upY] = up.Y;
+            settings[_upZ] = up.Z;
         }
     }
 

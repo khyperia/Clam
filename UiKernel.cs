@@ -45,7 +45,7 @@ namespace Clam4
             };
             if (this.InvokeRequired)
             {
-                this.BeginInvoke(action);
+                this.Invoke(action);
             }
             else
             {
