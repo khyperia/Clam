@@ -93,18 +93,16 @@ namespace Clam4
 
         protected ComputeBuffer<T> BufferOfSize<T>(ref ComputeBuffer<T> buffer, long size, ComputeMemoryFlags flags) where T : struct
         {
-            if (buffer == null || buffer.Size != size)
+            if (buffer == null || buffer.Count != size)
             {
-                buffer?.Dispose();
+                //buffer?.Dispose();
                 buffer = new ComputeBuffer<T>(_stream.Context, flags, size);
             }
             return buffer;
         }
 
-        public virtual void Resize(Size size)
+        public void Resize(Size size)
         {
-            var imageBuffer = BufferOfSize(ref _imageBuffer, size, ComputeMemoryFlags.ReadWrite | ComputeMemoryFlags.AllocateHostPointer);
-
             _screenSize = size;
         }
 
@@ -124,12 +122,22 @@ namespace Clam4
             }
         }
 
-        public Task<ImageData> Run(SettingsCollection settings, bool download)
+        private Task ToTask(ComputeEventList events)
+        {
+            var task = new TaskCompletionSource<int>();
+            var finish = _events.Last;
+            finish.Aborted += (obj, status) => task.TrySetException(new Exception(status.Status.ToString()));
+            finish.Completed += (obj, status) => task.SetResult(0);
+            return task.Task;
+        }
+
+        public async Task<ImageData> Run(SettingsCollection settings, bool download)
         {
             RemoveDeadEvents();
 
             var screenSize = _screenSize;
-            var imageBuffer = _imageBuffer;
+            var imageBuffer = BufferOfSize(ref _imageBuffer, screenSize, ComputeMemoryFlags.ReadWrite | ComputeMemoryFlags.AllocateHostPointer);
+
             SetArgs(_kernel, imageBuffer, settings, screenSize, _stream);
 
             var launchSize = (long)screenSize.Width * screenSize.Height;
@@ -139,28 +147,16 @@ namespace Clam4
 
             if (!download)
             {
-                return Task.FromResult(new ImageData());
+                return new ImageData();
             }
 
             var mappedImageBuffer = _stream.Map(imageBuffer, false, ComputeMemoryMappingFlags.Read, 0, launchSize, _events);
             //_stream.ReadFromBuffer(imageBuffer, ref buffer, false, _events);
-
-            var task = new TaskCompletionSource<ImageData>();
-            var finish = _events.Last;
-            var buggyCloo = 0;
-            finish.Aborted += (obj, status) => task.TrySetException(new Exception(status.Status.ToString()));
-            finish.Completed += (obj, status) =>
-            {
-                if (status.Event != finish && Interlocked.Exchange(ref buggyCloo, 1) != 0)
-                {
-                    throw new Exception("Cloo is doing weird things");
-                }
-                var result = new ImageData(screenSize.Width, screenSize.Height, (int)launchSize);
-                Marshal.Copy(mappedImageBuffer, result.Buffer, 0, result.Buffer.Length);
-                _stream.Unmap(imageBuffer, ref mappedImageBuffer, _events);
-                task.SetResult(result);
-            };
-            return task.Task;
+            await ToTask(_events);
+            var result = new ImageData(screenSize.Width, screenSize.Height, (int)launchSize);
+            Marshal.Copy(mappedImageBuffer, result.Buffer, 0, result.Buffer.Length);
+            _stream.Unmap(imageBuffer, ref mappedImageBuffer, _events);
+            return result;
         }
     }
 
@@ -312,22 +308,19 @@ namespace Clam4
                 new KeyScale(Keys.N, Keys.M, "fov", -0.5),
             };
 
-        public override void Resize(Size size)
-        {
-            base.Resize(size);
-            BufferOfSize(ref _scratchBuf, size, ComputeMemoryFlags.ReadWrite);
-            BufferOfSize(ref _randBuf, size, ComputeMemoryFlags.ReadWrite);
-        }
-
         protected override void SetArgs(ComputeKernel kernel, ComputeBuffer<int> screen, SettingsCollection settings, Size screenSize, ComputeCommandQueue stream)
         {
+            var oldScratchBuf = _scratchBuf;
+            var scratchBuf = BufferOfSize(ref _scratchBuf, screenSize, ComputeMemoryFlags.ReadWrite);
+            var randBuf = BufferOfSize(ref _randBuf, screenSize, ComputeMemoryFlags.ReadWrite);
+
             if (_needsRenorm)
             {
                 _keyCamera.NormalizeLookUp(settings);
                 _needsRenorm = false;
             }
             var config = GetCfg(settings);
-            if (!_oldConfig.Equals(config))
+            if (!_oldConfig.Equals(config) || oldScratchBuf != scratchBuf)
             {
                 _oldConfig = config;
                 if (_cfg == null)
@@ -341,8 +334,8 @@ namespace Clam4
             int arg = 0;
             kernel.SetMemoryArgument(arg++, screen);
             kernel.SetMemoryArgument(arg++, _cfg);
-            kernel.SetMemoryArgument(arg++, _scratchBuf);
-            kernel.SetMemoryArgument(arg++, _randBuf);
+            kernel.SetMemoryArgument(arg++, scratchBuf);
+            kernel.SetMemoryArgument(arg++, randBuf);
             kernel.SetValueArgument(arg++, screenSize.Width / -2);
             kernel.SetValueArgument(arg++, screenSize.Height / -2);
             kernel.SetValueArgument(arg++, screenSize.Width);
