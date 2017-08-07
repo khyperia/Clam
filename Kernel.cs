@@ -1,13 +1,12 @@
 ﻿using System;
-using System.Drawing;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using System.IO;
 using System.Reflection;
-using Cloo;
-using System.Collections.Generic;
-using System.Threading;
 using System.Runtime.InteropServices;
+using Cloo;
+using Eto.Drawing;
+using Eto.Forms;
+using System.Collections.Concurrent;
 
 namespace Clam4
 {
@@ -101,9 +100,12 @@ namespace Clam4
             return buffer;
         }
 
-        public void Resize(Size size)
+        public Size Resize(Size size)
         {
+            Console.WriteLine("Resize: " + size.Width + "," + size.Height);
+            var oldSize = _screenSize;
             _screenSize = size;
+            return oldSize;
         }
 
         private void RemoveDeadEvents()
@@ -122,12 +124,35 @@ namespace Clam4
             }
         }
 
+        private static readonly ConcurrentDictionary<IntPtr, TaskCompletionSource<int>> _taskDict = new ConcurrentDictionary<IntPtr, TaskCompletionSource<int>>();
+
+        private static readonly ComputeCommandStatusChanged _onAbort = (obj, status) =>
+        {
+            TaskCompletionSource<int> value;
+            if (!_taskDict.TryRemove(status.Event.Handle.Value, out value))
+            {
+                throw new Exception("TaskDict did not contain event");
+            }
+            value.SetException(new Exception(status.Status.ToString()));
+        };
+
+        private static readonly ComputeCommandStatusChanged _onComplete = (obj, status) =>
+        {
+            TaskCompletionSource<int> value;
+            if (!_taskDict.TryRemove(status.Event.Handle.Value, out value))
+            {
+                throw new Exception("TaskDict did not contain event");
+            }
+            value.SetResult(0);
+        };
+
         private Task ToTask(ComputeEventList events)
         {
             var task = new TaskCompletionSource<int>();
             var finish = _events.Last;
-            finish.Aborted += (obj, status) => task.TrySetException(new Exception(status.Status.ToString()));
-            finish.Completed += (obj, status) => task.SetResult(0);
+            _taskDict.TryAdd(finish.Handle.Value, task);
+            finish.Aborted += _onAbort;
+            finish.Completed += _onComplete;
             return task.Task;
         }
 
@@ -147,6 +172,7 @@ namespace Clam4
 
             if (!download)
             {
+                await ToTask(_events);
                 return new ImageData();
             }
 

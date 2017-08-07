@@ -13,9 +13,8 @@
     <EmbeddedResource Include="mandelbox.cl" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="System.ValueTuple" Version="4.3.1" />
     <PackageReference Include="Cloo.clSharp" Version="0.9.1.1" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="System.Windows.Forms" />
+    <PackageReference Include="Eto.Platform.Wpf" Version="2.3.0" />
   </ItemGroup>
 </Project>

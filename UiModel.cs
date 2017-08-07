@@ -1,7 +1,11 @@
-﻿using System;
+﻿using Eto.Drawing;
+using Eto.Forms;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace Clam4
 {
@@ -11,6 +15,7 @@ namespace Clam4
         private readonly KeyTracker _keyTracker;
 
         private CancellationTokenSource _cancelRun;
+        private (int width, int height, int frames, string filename, Button goButton)? _headless;
 
         public UiModel(UiKernel uiKernel, KeyTracker keyTracker)
         {
@@ -30,10 +35,23 @@ namespace Clam4
 
         public bool IsRunning => _cancelRun != null;
 
+        private static async Task FlushTasks(Task<ImageData>[] tasks)
+        {
+            for (var i = 0; i < tasks.Length; i++)
+            {
+                if (tasks[i] != null)
+                {
+                    await tasks[i];
+                    tasks[i] = null;
+                }
+            }
+        }
+
         private async void Run(CancellationToken cancellation)
         {
             const int concurrentTasks = 1;
             var tasks = new Task<ImageData>[concurrentTasks];
+            var oldSize = default(Size);
             while (!cancellation.IsCancellationRequested)
             {
                 for (var i = 0; i < tasks.Length; i++)
@@ -43,18 +61,89 @@ namespace Clam4
                         var image = await tasks[i];
                         _uiKernel.Display(image);
                     }
+                    var newSize = UiKernel.DisplaySize;
+                    if (oldSize != newSize)
+                    {
+                        Console.WriteLine($"{oldSize} {newSize} {oldSize != newSize}");
+                        oldSize = newSize;
+                        await FlushTasks(tasks);
+                        UiKernel.Kernel.Resize(newSize);
+                    }
                     _keyTracker.OnRender();
                     tasks[i] = Kernel.Run(Settings, true);
+                }
+                if (_headless.HasValue)
+                {
+                    await FlushTasks(tasks);
+                    var headless = _headless.Value;
+                    _headless = null;
+                    await RunHeadlessImpl(headless.width, headless.height, headless.frames, headless.filename, headless.goButton);
                 }
             }
         }
 
-        public void Help()
+        public void RunHeadless(int width, int height, int frames, string filename, Button goButton)
         {
-            Task.Run(() =>
+            _headless = (width, height, frames, filename, goButton);
+        }
+
+        private async Task RunHeadlessImpl(int width, int height, int frames, string filename, Button goButton)
+        {
+            var timeEstimator = new TimeEstimator();
+
+            void Progress(double value)
             {
-                MessageBox.Show(Program.HelpText, "Help");
-            });
+                goButton.Text = $"{(value * 100):F2}% complete, {timeEstimator.Estimate(value)} left";
+            };
+
+            // should already be disabled
+            goButton.Enabled = false;
+            var queue = new Queue<Task<ImageData>>();
+            Progress(0);
+            var progressCounter = 0;
+            var oldSize = Kernel.Resize(new Size(width, height));
+            for (var i = 0; i < frames - 1 && !_cancelRun.IsCancellationRequested; i++)
+            {
+                queue.Enqueue(Kernel.Run(Settings, false));
+                if (queue.Count > 3)
+                {
+                    await queue.Dequeue();
+                    Progress((double)(++progressCounter) / frames);
+                }
+            }
+            if (!_cancelRun.IsCancellationRequested)
+            {
+                queue.Enqueue(Kernel.Run(Settings, true));
+            }
+            while (queue.Count > (_cancelRun.IsCancellationRequested ? 0 : 1))
+            {
+                await queue.Dequeue();
+                Progress((double)(++progressCounter) / frames);
+            }
+            if (_cancelRun.IsCancellationRequested)
+            {
+                while (queue.Count > 0)
+                {
+                    await queue.Dequeue();
+                }
+                return;
+            }
+            var result = await queue.Dequeue();
+            Progress(1);
+            var bitmap = new Bitmap(result.Width, result.Height, PixelFormat.Format32bppRgb);
+            using (var locked = bitmap.Lock())
+            {
+                Marshal.Copy(result.Buffer, 0, locked.Data, result.Width * result.Height);
+            }
+            var directory = Path.GetDirectoryName(filename);
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            bitmap.Save(filename, ImageFormat.Png);
+            Kernel.Resize(oldSize);
+            goButton.Enabled = true;
+            goButton.Text = "Go!";
         }
 
         public bool StartStop()
@@ -71,56 +160,6 @@ namespace Clam4
                 _cancelRun = new CancellationTokenSource();
                 Run(_cancelRun.Token);
                 return true;
-            }
-        }
-
-        public void RunHeadless()
-        {
-            if (_cancelRun != null)
-            {
-                MessageBox.Show("Do not start a headless render while the active render is running (press Stop)", "Error");
-                return;
-            }
-            using (var dialog = new SaveFileDialog()
-            {
-                FileName = "render",
-                DefaultExt = ".png"
-            })
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    UiView.CreateHeadless(dialog.FileName, Kernel.Clone(), Settings.Clone());
-                }
-            }
-        }
-
-        public void SaveState()
-        {
-            using (var dialog = new SaveFileDialog()
-            {
-                FileName = "settings",
-                DefaultExt = ".clam4"
-            })
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    Settings.Save(dialog.FileName);
-                }
-            }
-        }
-
-        public void LoadState()
-        {
-            using (var dialog = new OpenFileDialog()
-            {
-                FileName = "settings",
-                DefaultExt = ".clam4"
-            })
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    Settings.Load(dialog.FileName);
-                }
             }
         }
 

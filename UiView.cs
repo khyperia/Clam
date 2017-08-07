@@ -1,52 +1,39 @@
-﻿using System;
+﻿using Eto.Drawing;
+using Eto.Forms;
+using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace Clam4
 {
     internal static class UiView
     {
-        internal static readonly int UiWidth = 300;
-
-        internal static Form Create(UiModel model)
+        public static Form Create(UiModel model)
         {
-            var form = new Form()
+            return new Form()
             {
-                Text = "Clam4",
-                Width = 600 + UiWidth,
-                Height = 400,
-                KeyPreview = true,
+                Title = "Clam4",
+                Content = MainView(model),
+                Width = 1000,
+                Height = 600,
             };
+        }
 
-            var outerContainer = new TableLayoutPanel()
-            {
-                AutoScroll = false,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Bottom,
-                Height = form.ClientSize.Height,
-                Width = UiWidth,
-                ColumnCount = 1,
-                RowCount = 0,
-            };
+        private static Control MainView(UiModel model)
+        {
+            var panel = new List<Control>();
 
-            var help = new Button()
+            var help = new Button((o, e) => MessageBox.Show(Program.HelpText, "Help"))
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Text = "Help (keybindings, etc)",
             };
-            help.Click += (o, e) => model.Help();
-            outerContainer.Controls.Add(help);
-            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panel.Add(help);
 
-            var startStop = new Button()
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "Start",
-            };
-            startStop.Click += (o, e) =>
+            Button startStop = null;
+            startStop = new Button((o, e) =>
             {
                 if (model.StartStop())
                 {
@@ -56,80 +43,38 @@ namespace Clam4
                 {
                     startStop.Text = "Start";
                 }
-            };
-            outerContainer.Controls.Add(startStop);
-            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-            var saveState = new Button()
+            })
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Text = "Start",
+            };
+            panel.Add(startStop);
+
+            var settingsFilename = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Clam4", "settings.clam4");
+            var settingsDirectory = Path.GetDirectoryName(settingsFilename);
+            var saveState = new Button((o, e) =>
+            {
+                if (!Directory.Exists(settingsDirectory))
+                {
+                    Directory.CreateDirectory(settingsDirectory);
+                }
+                model.Settings.Save(settingsFilename);
+            })
+            {
                 Text = "Save state",
             };
-            saveState.Click += (o, e) => model.SaveState();
-            outerContainer.Controls.Add(saveState);
-            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panel.Add(saveState);
 
-            var loadState = new Button()
+            var loadState = new Button((o, e) => model.Settings.Load(settingsFilename))
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Text = "Load state",
             };
-            loadState.Click += (o, e) => model.LoadState();
-            outerContainer.Controls.Add(loadState);
-            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panel.Add(loadState);
 
-            var headlessRenderButton = new Button()
+            var focusThing = new Button()
             {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "Run headless render",
+                Text = "Control camera (focus)",
             };
-            headlessRenderButton.Click += (o, e) => model.RunHeadless();
-            outerContainer.Controls.Add(headlessRenderButton);
-            outerContainer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-            model.UiKernel.Click += (o, e) => model.UiKernel.Select();
-            form.KeyDown += (o, e) =>
-            {
-                if (e.KeyCode == Keys.Escape)
-                {
-                    e.Handled = true;
-                    model.UiKernel.Select();
-                    return;
-                }
-            };
-            model.UiKernel.PreviewKeyDown += (o, e) =>
-            {
-                var code = e.KeyCode;
-                var isArrow = code == Keys.Up || code == Keys.Down || code == Keys.Left || code == Keys.Right;
-                if (isArrow)
-                {
-                    e.IsInputKey = true;
-                }
-            };
-            model.UiKernel.KeyDown += (o, e) =>
-            {
-                if (model.OnKeyDown(e.KeyCode))
-                {
-                    e.Handled = true;
-                }
-            };
-            model.UiKernel.KeyUp += (o, e) =>
-            {
-                if (model.OnKeyUp(e.KeyCode))
-                {
-                    e.Handled = true;
-                }
-            };
-
-            var scroll = new TableLayoutPanel()
-            {
-                AutoScroll = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                ColumnCount = 2,
-                RowCount = 0,
-            };
-            scroll.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            scroll.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Add(focusThing);
 
             foreach (var setting in model.Settings)
             {
@@ -137,22 +82,18 @@ namespace Clam4
 
                 var label = new Label()
                 {
-                    AutoSize = true,
-                    Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                    TextAlign = ContentAlignment.MiddleRight,
+                    TextAlignment = TextAlignment.Right,
                     Text = key,
                 };
-                scroll.Controls.Add(label);
 
                 var text = new TextBox()
                 {
-                    Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                     Text = setting.Value.ToString(),
                 };
                 var changing = false;
                 model.Settings.OnChange += (changedKey, changedValue) =>
                 {
-                    if (changing || text.Focused)
+                    if (changing || text.HasFocus)
                     {
                         return;
                     }
@@ -171,181 +112,123 @@ namespace Clam4
                     }
                     model.SetSetting(key, text.Text);
                 };
-                scroll.Controls.Add(text);
+                panel.Add(HorizontalExpandAll(label, text));
             }
-            outerContainer.Controls.Add(scroll);
-            outerContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            form.Controls.Add(outerContainer);
 
-            model.UiKernel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            model.UiKernel.Top = 0;
-            model.UiKernel.Height = form.ClientSize.Height;
-            model.UiKernel.Left = UiWidth;
-            model.UiKernel.Width = form.ClientSize.Width - UiWidth;
-            form.Controls.Add(model.UiKernel);
+            Headless(panel, model);
 
-            return form;
+            var wholePanel = Vertical(panel.ToArray());
+            wholePanel.MinimumSize = new Size(300, -1);
+            var scroll = new Scrollable { Content = wholePanel };
+            var wholeWindow = HorizontalExpandLast(scroll, model.UiKernel.ImageView);
+            Keybinds(wholeWindow, focusThing, model);
+            return wholeWindow;
         }
 
-        public static void CreateHeadless(string filename, Kernel kernel, SettingsCollection settings)
+        private static void Headless(List<Control> panel, UiModel model)
         {
-            var form = new Form()
-            {
-                Text = "Clam4 Headless Render"
-            };
-            var outerContainer = new TableLayoutPanel()
-            {
-                AutoScroll = false,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Width = form.ClientSize.Width,
-                Height = form.ClientSize.Height,
-                ColumnCount = 2,
-                RowCount = 0,
-            };
+            panel.Add(new Label { Text = "Headless render" });
+            var filenameText = new TextBox() { Text = "render.png" };
+            panel.Add(HorizontalExpandLast(new Label { Text = "Save as" }, filenameText));
+            var widthText = new TextBox() { Text = "1000" };
+            panel.Add(HorizontalExpandLast(new Label { Text = "Width" }, widthText));
+            var heightText = new TextBox() { Text = "1000" };
+            panel.Add(HorizontalExpandLast(new Label { Text = "Height" }, heightText));
+            var framesText = new TextBox() { Text = "100" };
+            panel.Add(HorizontalExpandLast(new Label { Text = "Frames" }, framesText));
+            Button goButton = null;
 
-            var filenameLabel = new Label()
+            panel.Add(goButton = new Button((o, e) =>
             {
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                TextAlign = ContentAlignment.MiddleRight,
-                Text = "Save as",
-            };
-            outerContainer.Controls.Add(filenameLabel);
-
-            var filenameText = new TextBox()
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = filename,
-            };
-            outerContainer.Controls.Add(filenameText);
-
-            var widthLabel = new Label()
-            {
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                TextAlign = ContentAlignment.MiddleRight,
-                Text = "Width",
-            };
-            outerContainer.Controls.Add(widthLabel);
-
-            var widthText = new TextBox()
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "1000",
-            };
-            outerContainer.Controls.Add(widthText);
-
-            var heightLabel = new Label()
-            {
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                TextAlign = ContentAlignment.MiddleRight,
-                Text = "Height",
-            };
-            outerContainer.Controls.Add(heightLabel);
-
-            var heightText = new TextBox()
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "1000",
-            };
-            outerContainer.Controls.Add(heightText);
-
-            var framesLabel = new Label()
-            {
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                TextAlign = ContentAlignment.MiddleRight,
-                Text = "Frames",
-            };
-            outerContainer.Controls.Add(framesLabel);
-
-            var framesText = new TextBox()
-            {
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "100",
-            };
-            outerContainer.Controls.Add(framesText);
-
-            var progressBar = new Label()
-            {
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "",
-            };
-            outerContainer.Controls.Add(progressBar);
-            outerContainer.SetColumnSpan(progressBar, 2);
-
-            var goButton = new Button()
-            {
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-                Text = "Go!",
-            };
-            outerContainer.Controls.Add(goButton);
-            outerContainer.SetColumnSpan(goButton, 2);
-            TimeEstimator timeEstimator;
-            void Progress(double value)
-            {
-                progressBar.Text = $"{(value * 100):F2}% complete, {timeEstimator.Estimate(value)} left";
-            };
-
-            var cancel = false;
-            goButton.Click += async (o, e) =>
-            {
+                var filename = filenameText.Text;
+                if (!Path.IsPathRooted(filename))
+                {
+                    filename = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Clam4", filename);
+                }
                 if (int.TryParse(widthText.Text, out var width) &&
                     int.TryParse(heightText.Text, out var height) &&
                     int.TryParse(framesText.Text, out var frames))
                 {
                     goButton.Enabled = false;
-                    var queue = new Queue<Task<ImageData>>();
-                    timeEstimator = new TimeEstimator();
-                    Progress(0);
-                    int progressCounter = 0;
-                    kernel.Resize(new Size(width, height));
-                    for (var i = 0; i < frames - 1 && !cancel; i++)
-                    {
-                        queue.Enqueue(kernel.Run(settings, false));
-                        if (queue.Count > 3)
-                        {
-                            await queue.Dequeue();
-                            Progress((double)(++progressCounter) / frames);
-                        }
-                    }
-                    if (!cancel)
-                    {
-                        queue.Enqueue(kernel.Run(settings, true));
-                    }
-                    while (queue.Count > (cancel ? 0 : 1))
-                    {
-                        await queue.Dequeue();
-                        Progress((double)(++progressCounter) / frames);
-                    }
-                    if (cancel)
-                    {
-                        return;
-                    }
-                    var result = await queue.Dequeue();
-                    Progress(1);
-                    var bitmap = new Bitmap(result.Width, result.Height, PixelFormat.Format32bppRgb);
-                    var locked = bitmap.LockBits(new Rectangle(new Point(0, 0), bitmap.Size), ImageLockMode.WriteOnly, bitmap.PixelFormat);
-                    var lockedCount = (locked.Stride * locked.Height) / sizeof(int);
-                    var length = Math.Min(result.Buffer.Length, lockedCount);
-                    Marshal.Copy(result.Buffer, 0, locked.Scan0, length);
-                    bitmap.UnlockBits(locked);
-                    bitmap.Save(filename);
-                    progressBar.Text = "Finished";
+                    model.RunHeadless(width, height, frames, filename, goButton);
+                }
+            })
+            {
+                Text = "Go!"
+            });
+        }
+
+        private static void Keybinds(Control window, Control focusThing, UiModel model)
+        {
+            //model.UiKernel.Click += (o, e) => model.UiKernel.Select();
+            window.KeyDown += (o, e) =>
+            {
+                if (e.Key == Keys.Escape)
+                {
+                    e.Handled = true;
+                    focusThing.Focus();
+                    return;
                 }
             };
-
-            form.FormClosing += (o, e) =>
+            // model.UiKernel.ImageView.PreviewKeyDown += (o, e) =>
+            // {
+            //     var code = e.KeyCode;
+            //     var isArrow = code == Keys.Up || code == Keys.Down || code == Keys.Left || code == Keys.Right;
+            //     if (isArrow)
+            //     {
+            //         e.IsInputKey = true;
+            //     }
+            // };
+            focusThing.KeyDown += (o, e) =>
             {
-                cancel = true;
+                if (model.OnKeyDown(e.Key))
+                {
+                    e.Handled = true;
+                }
             };
+            focusThing.KeyUp += (o, e) =>
+            {
+                if (model.OnKeyUp(e.Key))
+                {
+                    e.Handled = true;
+                }
+            };
+        }
 
-            form.Controls.Add(outerContainer);
-
-            form.Show();
+        private static StackLayout Vertical(params Control[] controls)
+            => Stack(false, controls.Select(c => new StackLayoutItem(c)));
+        private static StackLayout VerticalExpandAll(params Control[] controls)
+            => Stack(false, controls.Select(c => new StackLayoutItem(c, true)));
+        private static StackLayout VerticalExpandFirst(params Control[] controls)
+            => Stack(false, controls.Select((c, i) => new StackLayoutItem(c, i == 0)));
+        private static StackLayout VerticalExpandLast(params Control[] controls)
+            => Stack(false, controls.Select((c, i) => new StackLayoutItem(c, i == controls.Length - 1)));
+        private static StackLayout Horizontal(params Control[] controls)
+            => Stack(true, controls.Select(c => new StackLayoutItem(c)));
+        private static StackLayout HorizontalExpandAll(params Control[] controls)
+            => Stack(true, controls.Select(c => new StackLayoutItem(c, true)));
+        private static StackLayout HorizontalExpandFirst(params Control[] controls)
+            => Stack(true, controls.Select((c, i) => new StackLayoutItem(c, i == 0)));
+        private static StackLayout HorizontalExpandLast(params Control[] controls)
+            => Stack(true, controls.Select((c, i) => new StackLayoutItem(c, i == controls.Length - 1)));
+        private static StackLayout Stack(bool horizontal, IEnumerable<StackLayoutItem> controls)
+        {
+            var stack = new StackLayout();
+            if (horizontal)
+            {
+                stack.Orientation = Orientation.Horizontal;
+                stack.VerticalContentAlignment = VerticalAlignment.Stretch;
+            }
+            else
+            {
+                stack.Orientation = Orientation.Vertical;
+                stack.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            };
+            foreach (var control in controls)
+            {
+                stack.Items.Add(control);
+            }
+            return stack;
         }
     }
 }

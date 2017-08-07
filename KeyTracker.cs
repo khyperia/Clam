@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using Eto.Forms;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Windows.Forms;
 
 namespace Clam4
 {

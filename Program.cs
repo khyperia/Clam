@@ -1,6 +1,6 @@
 ﻿using Cloo;
+using Eto.Forms;
 using System;
-using System.Windows.Forms;
 
 namespace Clam4
 {
@@ -35,12 +35,13 @@ NM: Adjust the field-of-view (zoom).";
             {
                 return;
             }
+            var app = new Application();
             var kernelControl = new UiKernel(kernel);
             var settings = kernel.Defaults;
             var keyTracker = new KeyTracker(kernel.KeyHandlers, settings);
             var model = new UiModel(kernelControl, keyTracker);
             var form = UiView.Create(model);
-            Application.Run(form);
+            app.Run(form);
         }
     }
 }
