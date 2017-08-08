@@ -52,7 +52,9 @@ namespace Clam4
                 var log = program.GetBuildLog(context.Devices[0]).Trim();
                 if (!string.IsNullOrEmpty(log))
                 {
-                    MessageBox.Show(log, "OpenCL compiler error");
+                    // We don't have a UI context, so MessageBox fails
+                    Console.WriteLine("OpenCL compiler log (maybe error?)");
+                    Console.WriteLine(log);
                 }
             }, IntPtr.Zero);
             _kernel = program.CreateKernel("Main");

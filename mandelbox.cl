@@ -45,7 +45,7 @@ struct MandelboxCfg
 #define __kernel
 #endif
 
-typedef __global struct MandelboxCfg *Cfg;
+typedef __private struct MandelboxCfg *Cfg;
 
 static float4 comp_mul(float4 left, float4 right)
 {
@@ -61,9 +61,9 @@ struct Random
     ulong seed;
 };
 
-static unsigned int Random_MWC64X(struct Random *this)
+static uint Random_MWC64X(struct Random *this)
 {
-    unsigned int c = this->seed >> 32, x = this->seed & 0xFFFFFFFF;
+    uint c = this->seed >> 32, x = this->seed & 0xFFFFFFFF;
     this->seed = x * ((ulong)4294883355U) + c;
     return x ^ c;
 }
@@ -99,7 +99,7 @@ static struct Random new_Random(Cfg cfg, __global uint2 *randBufferArr, int idx,
 
 static void Random_Save(struct Random this, __global uint2 *randBufferArr, int idx)
 {
-    randBufferArr[idx] = (uint2)((unsigned int)(this.seed >> 32), (unsigned int)this.seed);
+    randBufferArr[idx] = (uint2)((uint)(this.seed >> 32), (uint)this.seed);
 }
 
 static float2 Random_Circle(struct Random *this)
@@ -395,12 +395,15 @@ static float3 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Rando
     return rayColor;
 }
 
-static unsigned int PackPixel(Cfg cfg, float3 pixel)
+static uint PackPixel(Cfg cfg, float3 pixel)
 {
-    const float gamma_correct = 1 / 2.2f;
-    pixel.x = pow(pixel.x, gamma_correct);
-    pixel.y = pow(pixel.y, gamma_correct);
-    pixel.z = pow(pixel.z, gamma_correct);
+    //const float gamma_correct = 1 / 2.2f;
+    //pixel.x = pow(pixel.x, gamma_correct);
+    //pixel.y = pow(pixel.y, gamma_correct);
+    //pixel.z = pow(pixel.z, gamma_correct);
+    pixel.x = sqrt(pixel.x);
+    pixel.y = sqrt(pixel.y);
+    pixel.z = sqrt(pixel.z);
     if (cfg->WhiteClamp)
     {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
@@ -414,14 +417,14 @@ static unsigned int PackPixel(Cfg cfg, float3 pixel)
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
     pixel = pixel * 255;
-    return ((unsigned int)255 << 24) | ((unsigned int)(unsigned char)pixel.x << 16) |
-        ((unsigned int)(unsigned char)pixel.y << 8) | ((unsigned int)(unsigned char)pixel.z);
+    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 16) |
+        ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z);
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
 __kernel void Main(
-    __global unsigned int *screenPixels,
-    __global struct MandelboxCfg *cfg,
+    __global uint *screenPixels,
+    __global struct MandelboxCfg *cfg_global,
     __global float4 *scratchBuf_arg,
     __global uint2 *randBuf_arg,
     int screenX,
@@ -440,6 +443,8 @@ __kernel void Main(
     }
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
     y = height - (y + 1);
+    struct MandelboxCfg local_copy = *cfg_global;
+    struct MandelboxCfg *cfg = &local_copy;
     struct Random rand = new_Random(cfg, randBuf_arg, idx, frame <= 0);
     struct Ray ray = Camera(cfg, x, y, screenX, screenY, width, height, &rand);
     float3 color = Trace(cfg, ray, width, height, &rand);

@@ -16,5 +16,6 @@
     <PackageReference Include="System.ValueTuple" Version="4.3.1" />
     <PackageReference Include="Cloo.clSharp" Version="0.9.1.1" />
     <PackageReference Include="Eto.Platform.Wpf" Version="2.3.0" />
+    <PackageReference Include="Eto.Platform.Gtk3" Version="2.3.0" />
   </ItemGroup>
 </Project>

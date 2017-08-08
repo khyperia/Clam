@@ -55,6 +55,7 @@ namespace Clam4
                 Marshal.Copy(data.Buffer, 0, pixels.Data, _bitmap.Width * _bitmap.Height);
             }
             data.Dispose();
+            ImageView.Invalidate();
         }
     }
 }

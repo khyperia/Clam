@@ -118,8 +118,8 @@ namespace Clam4
             Headless(panel, model);
 
             var wholePanel = Vertical(panel.ToArray());
-            wholePanel.MinimumSize = new Size(300, -1);
             var scroll = new Scrollable { Content = wholePanel };
+            scroll.MinimumSize = new Size(300, -1);
             var wholeWindow = HorizontalExpandLast(scroll, model.UiKernel.ImageView);
             Keybinds(wholeWindow, focusThing, model);
             return wholeWindow;

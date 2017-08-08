@@ -64,7 +64,6 @@ namespace Clam4
                     var newSize = UiKernel.DisplaySize;
                     if (oldSize != newSize)
                     {
-                        Console.WriteLine($"{oldSize} {newSize} {oldSize != newSize}");
                         oldSize = newSize;
                         await FlushTasks(tasks);
                         UiKernel.Kernel.Resize(newSize);
@@ -77,7 +76,7 @@ namespace Clam4
                     await FlushTasks(tasks);
                     var headless = _headless.Value;
                     _headless = null;
-                    await RunHeadlessImpl(headless.width, headless.height, headless.frames, headless.filename, headless.goButton);
+                    await RunHeadlessImpl(headless.width, headless.height, headless.frames, headless.filename, headless.goButton, cancellation);
                 }
             }
         }
@@ -87,7 +86,7 @@ namespace Clam4
             _headless = (width, height, frames, filename, goButton);
         }
 
-        private async Task RunHeadlessImpl(int width, int height, int frames, string filename, Button goButton)
+        private async Task RunHeadlessImpl(int width, int height, int frames, string filename, Button goButton, CancellationToken cancellation)
         {
             var timeEstimator = new TimeEstimator();
 
@@ -102,7 +101,7 @@ namespace Clam4
             Progress(0);
             var progressCounter = 0;
             var oldSize = Kernel.Resize(new Size(width, height));
-            for (var i = 0; i < frames - 1 && !_cancelRun.IsCancellationRequested; i++)
+            for (var i = 0; i < frames - 1 && !cancellation.IsCancellationRequested; i++)
             {
                 queue.Enqueue(Kernel.Run(Settings, false));
                 if (queue.Count > 3)
@@ -111,16 +110,16 @@ namespace Clam4
                     Progress((double)(++progressCounter) / frames);
                 }
             }
-            if (!_cancelRun.IsCancellationRequested)
+            if (!cancellation.IsCancellationRequested)
             {
                 queue.Enqueue(Kernel.Run(Settings, true));
             }
-            while (queue.Count > (_cancelRun.IsCancellationRequested ? 0 : 1))
+            while (queue.Count > (cancellation.IsCancellationRequested ? 0 : 1))
             {
                 await queue.Dequeue();
                 Progress((double)(++progressCounter) / frames);
             }
-            if (_cancelRun.IsCancellationRequested)
+            if (cancellation.IsCancellationRequested)
             {
                 while (queue.Count > 0)
                 {
