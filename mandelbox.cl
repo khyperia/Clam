@@ -19,25 +19,23 @@ struct MandelboxCfg
     float LightPosX;
     float LightPosY;
     float LightPosZ;
-    int WhiteClamp;
-    float LightBrightnessHue;
-    float LightBrightnessSat;
-    float LightBrightnessVal;
-    float AmbientBrightnessHue;
-    float AmbientBrightnessSat;
-    float AmbientBrightnessVal;
-    float ReflectBrightnessHue;
-    float ReflectBrightnessSat;
-    float ReflectBrightnessVal;
-    int MaxIters;
+    float LightBrightnessR;
+    float LightBrightnessG;
+    float LightBrightnessB;
+    float AmbientBrightnessR;
+    float AmbientBrightnessG;
+    float AmbientBrightnessB;
+    float ReflectBrightness;
     float Bailout;
     float DeMultiplier;
-    int RandSeedInitSteps;
     float MaxRayDist;
-    int MaxRaySteps;
-    int NumRayBounces;
     float QualityFirstRay;
     float QualityRestRay;
+    int WhiteClamp;
+    int MaxIters;
+    int RandSeedInitSteps;
+    int MaxRaySteps;
+    int NumRayBounces;
 };
 
 #ifndef __OPENCL_VERSION__
@@ -180,31 +178,6 @@ static struct Ray Camera(Cfg cfg, int x, int y, int screenX, int screenY, int wi
     return result;
 }
 
-static float3 HueToRGB(float hue, float saturation, float value)
-{
-    hue *= 3;
-    float frac = fmod(hue, 1.0f);
-    float3 color;
-    switch ((int)hue)
-    {
-    case 0:
-        color = (float3)(1 - frac, frac, 0);
-        break;
-    case 1:
-        color = (float3)(0, 1 - frac, frac);
-        break;
-    case 2:
-        color = (float3)(frac, 0, 1 - frac);
-        break;
-    default:
-        color = (float3)(1, 1, 1);
-        break;
-    }
-    saturation = value * (1 - saturation);
-    color = color * (value - saturation) + (float3)(saturation, saturation, saturation);
-    return color;
-}
-
 static float4 Mandelbulb(float4 z, const float Power)
 {
     const float r = length(z.xyz);
@@ -314,21 +287,6 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float3 AmbientBrightness(Cfg cfg)
-{
-    return HueToRGB(cfg->AmbientBrightnessHue, cfg->AmbientBrightnessSat, cfg->AmbientBrightnessVal);
-}
-
-static float3 LightBrightness(Cfg cfg)
-{
-    return HueToRGB(cfg->LightBrightnessHue, cfg->LightBrightnessSat, cfg->LightBrightnessVal);
-}
-
-static float3 ReflectBrightness(Cfg cfg)
-{
-    return HueToRGB(cfg->ReflectBrightnessHue, cfg->ReflectBrightnessSat, cfg->ReflectBrightnessVal);
-}
-
 static float3 LightPos(Cfg cfg)
 {
     return (float3)(cfg->LightPosX, cfg->LightPosY, cfg->LightPosZ);
@@ -339,16 +297,17 @@ Specular(Cfg cfg, float3 incoming, float3 outgoing, float3 normal)
 {
     const float3 half_vec = normalize(incoming + outgoing);
     const float dot_prod = fabs(dot(half_vec, normal));
-    const float hardness = 128.0f;
+    const int hardness = 128;
     //const float base_reflection = 0.7f; // TODO: Make configurable.
-    const float base_reflection = cfg->ReflectBrightnessVal;
-    const float spec = pow(sinpi(dot_prod * 0.5f), hardness);
+    const float base_reflection = cfg->ReflectBrightness;
+    const float spec = pown(sinpi(dot_prod * 0.5f), hardness);
     return spec * (1 - base_reflection) + base_reflection;
 }
 
-static float3 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Random *rand)
+// (ambient, light1)
+static float2 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Random *rand)
 {
-    float3 rayColor = (float3)(0, 0, 0);
+    float2 rayColor = (float2)(0, 0);
     float reflectionColor = 1.0f;
     bool firstRay = true;
     const float maxDist = cfg->MaxRayDist;
@@ -360,10 +319,8 @@ static float3 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Rando
         const float distance = Cast(cfg, ray, quality, maxDist, &normal);
         if (distance > maxDist)
         {
-            float3 color = firstRay
-                ? (float3)(0.3f, 0.3f, 0.3f)
-                : AmbientBrightness(cfg);
-            rayColor += color * reflectionColor;
+            float color = firstRay ? 0.3f : 1.0f; // TODO
+            rayColor.x += color * reflectionColor;
             break;
         }
         // incorporates lambertian lighting
@@ -385,7 +342,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Rando
                 const float dimmingFactor =
                     (normalDotProd * reflectionColor * Specular(cfg, toLight, -ray.dir, normal)) /
                     (lightDist * lightDist);
-                rayColor += LightBrightness(cfg) * dimmingFactor;
+                rayColor.y += dimmingFactor;
             }
         }
         reflectionColor *= Specular(cfg, newDir, -ray.dir, normal);
@@ -401,9 +358,7 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     //pixel.x = pow(pixel.x, gamma_correct);
     //pixel.y = pow(pixel.y, gamma_correct);
     //pixel.z = pow(pixel.z, gamma_correct);
-    pixel.x = sqrt(pixel.x);
-    pixel.y = sqrt(pixel.y);
-    pixel.z = sqrt(pixel.z);
+    pixel = sqrt(fmax(pixel, 0.0f));
     if (cfg->WhiteClamp)
     {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
@@ -419,6 +374,22 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     pixel = pixel * 255;
     return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 16) |
         ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z);
+}
+
+static float3 AmbientBrightness(Cfg cfg)
+{
+    return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB);
+}
+
+static float3 LightBrightness(Cfg cfg)
+{
+    return (float3)(cfg->LightBrightnessR, cfg->LightBrightnessG, cfg->LightBrightnessB);
+}
+
+static float3 RotateToColors(Cfg cfg, float3 components)
+{
+    return AmbientBrightness(cfg) * components.x
+        + LightBrightness(cfg) * components.y;
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
@@ -447,14 +418,16 @@ __kernel void Main(
     struct MandelboxCfg *cfg = &local_copy;
     struct Random rand = new_Random(cfg, randBuf_arg, idx, frame <= 0);
     struct Ray ray = Camera(cfg, x, y, screenX, screenY, width, height, &rand);
-    float3 color = Trace(cfg, ray, width, height, &rand);
+    float2 colorComponentsTwo = Trace(cfg, ray, width, height, &rand);
+    float3 colorComponents = (float3)(colorComponentsTwo.x, colorComponentsTwo.y, 0.0f);
     __global float4 *scratch = &scratchBuf_arg[idx];
     float4 oldColor = frame > 0 ? *scratch : (float4)(0, 0, 0, 0);
     float newWeight = oldColor.w + 1;
-    float3 newColor = (color + oldColor.xyz * oldColor.w) / newWeight;
+    float3 newColor = (colorComponents + oldColor.xyz * oldColor.w) / newWeight;
     *scratch = (float4)(newColor.x, newColor.y, newColor.z, newWeight);
 
-    int packedColor = PackPixel(cfg, newColor);
+    float3 realColor = RotateToColors(cfg, newColor);
+    int packedColor = PackPixel(cfg, realColor);
     screenPixels[idx] = packedColor;
     Random_Save(rand, randBuf_arg, idx);
 }

@@ -37,7 +37,7 @@ namespace Clam4
                 }
                 p++;
             }
-            var device = ComputePlatform.Platforms[0].Devices[0];
+            var device = ComputePlatform.Platforms[0].Devices[1];
             Console.WriteLine(device.Name);
             return new ComputeContext(new[] { device }, new ComputeContextPropertyList(device.Platform), null, IntPtr.Zero);
         }
@@ -289,15 +289,13 @@ namespace Clam4
                     ["LightPosY"] = 4.0f,
                     ["LightPosZ"] = 3.0f,
                     ["WhiteClamp"] = 0,
-                    ["LightBrightnessHue"] = 0.05f,
-                    ["LightBrightnessSat"] = 0.7f,
-                    ["LightBrightnessVal"] = 8.0f,
-                    ["AmbientBrightnessHue"] = 0.55f,
-                    ["AmbientBrightnessSat"] = 0.7f,
-                    ["AmbientBrightnessVal"] = 0.4f,
-                    ["ReflectBrightnessHue"] = 0.5f,
-                    ["ReflectBrightnessSat"] = 0.0f,
-                    ["ReflectBrightnessVal"] = 0.95f,
+                    ["LightBrightnessR"] = 9.0f,
+                    ["LightBrightnessG"] = 2.0f,
+                    ["LightBrightnessB"] = 2.0f,
+                    ["AmbientBrightnessR"] = 0.55f,
+                    ["AmbientBrightnessG"] = 0.9f,
+                    ["AmbientBrightnessB"] = 0.9f,
+                    ["ReflectBrightness"] = 0.95f,
                     ["MaxIters"] = 32,
                     ["Bailout"] = 1024.0f,
                     ["DeMultiplier"] = 0.95f,
@@ -404,25 +402,23 @@ namespace Clam4
             public float LightPosX;
             public float LightPosY;
             public float LightPosZ;
-            public int WhiteClamp;
-            public float LightBrightnessHue;
-            public float LightBrightnessSat;
-            public float LightBrightnessVal;
-            public float AmbientBrightnessHue;
-            public float AmbientBrightnessSat;
-            public float AmbientBrightnessVal;
-            public float ReflectBrightnessHue;
-            public float ReflectBrightnessSat;
-            public float ReflectBrightnessVal;
-            public int MaxIters;
+            public float LightBrightnessR;
+            public float LightBrightnessG;
+            public float LightBrightnessB;
+            public float AmbientBrightnessR;
+            public float AmbientBrightnessG;
+            public float AmbientBrightnessB;
+            public float ReflectBrightness;
             public float Bailout;
             public float DeMultiplier;
-            public int RandSeedInitSteps;
             public float MaxRayDist;
-            public int MaxRaySteps;
-            public int NumRayBounces;
             public float QualityFirstRay;
             public float QualityRestRay;
+            public int WhiteClamp;
+            public int MaxIters;
+            public int RandSeedInitSteps;
+            public int MaxRaySteps;
+            public int NumRayBounces;
         };
     }
 }
