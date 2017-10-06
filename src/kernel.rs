@@ -137,7 +137,7 @@ impl Kernel {
         download: bool,
     ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Box<Error>> {
         self.set_args(settings)?;
-        let lws = 1024;
+        let lws = 256;
         self.kernel
             .cmd()
             .queue(&self.queue)

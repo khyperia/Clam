@@ -347,7 +347,7 @@ static float3 RotateToColors(Cfg cfg, float2 components)
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
-    //pixel = sqrt(fmax(pixel, 0.0f));
+    pixel = sqrt(fmax(pixel, 0.0f));
     if (cfg->WhiteClamp)
     {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
@@ -398,23 +398,6 @@ __kernel void Main(
     *scratch = newColor;
 
     float3 realColor = RotateToColors(cfg, newColor);
-    if (x % 10 < 5)
-    {
-        if (y % 2)
-        {
-            realColor = (float3)(1,1,1);
-        }
-        else
-        {
-            realColor = (float3)(0,0,0);
-        }
-    }
-    else
-    {
-        float x = 0.7320428479728127; // correct on image
-        //float x = 0.5; // correct on screen
-        realColor = (float3)(x,x,x);
-    }
     int packedColor = PackPixel(cfg, realColor);
     screenPixels[idx] = packedColor;
 }

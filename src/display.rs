@@ -19,10 +19,20 @@ pub fn display(
     event_send: mpsc::Sender<ScreenEvent>,
 ) -> Result<(), Box<Error>> {
     let mut events_loop = glutin::EventsLoop::new();
-    let window = glutin::WindowBuilder::new();
-    let context = glutin::ContextBuilder::new().with_vsync(true);
+    let window = glutin::WindowBuilder::new()
+        .with_dimensions(width, height)
+        .with_title("clam5");
+    let context = glutin::ContextBuilder::new().with_srgb(true).with_vsync(
+        true,
+    );
     let display = glium::Display::new(window, context, &events_loop)?;
     let mut texture: Option<texture2d::Texture2d> = None;
+    if let Some((new_width, new_height)) = display.gl_window().get_inner_size_pixels() {
+        // On HiDPI screens, this might be different than what was passed in
+        if new_width != width || new_height != height {
+            event_send.send(ScreenEvent::Resize(new_width, new_height))?;
+        }
+    }
     loop {
         let mut closed = false;
         events_loop.poll_events(|ev| match ev {
@@ -91,7 +101,18 @@ pub fn display(
         //target.clear_color_srgb(0.3, 0.0, 0.3, 1.0);
         if let Some(ref texture) = texture {
             let to_draw = texture.as_surface();
-            to_draw.fill(&target, glium::uniforms::MagnifySamplerFilter::Nearest);
+            let (width, height) = to_draw.get_dimensions();
+            let blit_target = glium::BlitTarget {
+                left: 0,
+                bottom: height,
+                width: width as i32,
+                height: -(height as i32),
+            };
+            to_draw.blit_whole_color_to(
+                &target,
+                &blit_target,
+                glium::uniforms::MagnifySamplerFilter::Nearest,
+            );
         }
         target.finish().unwrap();
     }
