@@ -215,6 +215,7 @@ fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), 
 pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Box<Error>> {
     let mut settings = Settings::new();
     Kernel::init_settings(&mut settings);
+    ::settings::load_settings(&mut settings, "settings.clam5")?;
     let mut kernel = Kernel::new(width, height)?;
     for ray in 0..(rpp - 1) {
         let _ = kernel.run(&settings, false)?;

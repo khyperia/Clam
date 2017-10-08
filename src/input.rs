@@ -1,7 +1,7 @@
 use glium::glutin::VirtualKeyCode as Key;
-use settings::SettingValue;
-use settings::Settings;
+use settings::*;
 use std::collections::HashMap;
+use std::error::Error;
 use std::time::Instant;
 
 pub struct Input {
@@ -17,6 +17,10 @@ impl Input {
         if !self.pressed_keys.contains_key(&key) {
             self.pressed_keys.insert(key, time);
             self.run(settings, time);
+            match self.run_down(key, settings) {
+                Ok(()) => (),
+                Err(err) => println!("Error handing key down event: {}", err),
+            }
         }
     }
 
@@ -30,6 +34,21 @@ impl Input {
     pub fn integrate(&mut self, settings: &mut Settings) {
         let now = Instant::now();
         self.run(settings, now);
+    }
+
+    fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Box<Error>> {
+        match key {
+            Key::T => {
+                load_settings(settings, "settings.clam5")?;
+                println!("Settings loaded");
+            }
+            Key::P => {
+                save_settings(settings, "settings.clam5")?;
+                println!("Settings saved");
+            }
+            _ => (),
+        }
+        Ok(())
     }
 
     fn run(&mut self, settings: &mut Settings, now: Instant) {

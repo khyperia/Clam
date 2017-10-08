@@ -14,7 +14,7 @@ use std::thread;
 use std::env::args;
 
 fn render() {
-    match kernel::headless(1000, 1000, 2) {
+    match kernel::headless(4000, 4000, 10) {
         Ok(()) => (),
         Err(err) => println!("{}", err),
     }
