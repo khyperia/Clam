@@ -15,8 +15,8 @@ pub enum ScreenEvent {
 pub fn display(
     width: u32,
     height: u32,
-    image_stream: mpsc::Receiver<glium::texture::RawImage2d<u8>>,
-    event_send: mpsc::Sender<ScreenEvent>,
+    image_stream: &mpsc::Receiver<glium::texture::RawImage2d<u8>>,
+    event_send: &mpsc::Sender<ScreenEvent>,
 ) -> Result<(), Box<Error>> {
     let mut events_loop = glutin::EventsLoop::new();
     let window = glutin::WindowBuilder::new()
@@ -35,41 +35,43 @@ pub fn display(
     }
     loop {
         let mut closed = false;
-        events_loop.poll_events(|ev| match ev {
-            glutin::Event::WindowEvent { event, .. } => {
-                match event {
-                    glutin::WindowEvent::Closed => closed = true,
-                    glutin::WindowEvent::Resized(width, height) => {
-                        match event_send.send(ScreenEvent::Resize(width, height)) {
-                            Ok(()) => (),
-                            Err(_) => closed = true,
-                        }
+        events_loop.poll_events(|ev| if let glutin::Event::WindowEvent { event, .. } = ev {
+            match event {
+                glutin::WindowEvent::Closed => closed = true,
+                glutin::WindowEvent::Resized(width, height) => {
+                    match event_send.send(ScreenEvent::Resize(width, height)) {
+                        Ok(()) => (),
+                        Err(_) => closed = true,
                     }
-                    glutin::WindowEvent::KeyboardInput {
-                        input: glutin::KeyboardInput {
-                            state,
-                            virtual_keycode: Some(keycode),
-                            ..
-                        },
-                        ..
-                    } => {
-                        let screen_event = match state {
-                            glutin::ElementState::Pressed => {
-                                ScreenEvent::KeyDown(keycode, Instant::now())
-                            }
-                            glutin::ElementState::Released => {
-                                ScreenEvent::KeyUp(keycode, Instant::now())
-                            }
-                        };
-                        match event_send.send(screen_event) {
-                            Ok(()) => (),
-                            Err(_) => closed = true,
-                        }
-                    }
-                    _ => (),
                 }
+                glutin::WindowEvent::KeyboardInput {
+                    input: glutin::KeyboardInput {
+                        state,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
+                    ..
+                } => {
+                    match keycode {
+                        glutin::VirtualKeyCode::Escape => closed = true,
+                        _ => {
+                            let screen_event = match state {
+                                glutin::ElementState::Pressed => {
+                                    ScreenEvent::KeyDown(keycode, Instant::now())
+                                }
+                                glutin::ElementState::Released => {
+                                    ScreenEvent::KeyUp(keycode, Instant::now())
+                                }
+                            };
+                            match event_send.send(screen_event) {
+                                Ok(()) => (),
+                                Err(_) => closed = true,
+                            }
+                        }
+                    }
+                }
+                _ => (),
             }
-            _ => (),
         });
         if closed {
             return Ok(());

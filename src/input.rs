@@ -146,10 +146,10 @@ impl Input {
     ) {
         let mut value = Self::get_f32(settings, &key).unwrap();
         if let Some(dt) = self.is_pressed(now, increase) {
-            value = value * scale.powf(dt);
+            value *= scale.powf(dt);
         }
         if let Some(dt) = self.is_pressed(now, decrease) {
-            value = value * scale.powf(-dt);
+            value *= scale.powf(-dt);
         }
         settings.insert(key, SettingValue::F32(value));
     }

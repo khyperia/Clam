@@ -86,13 +86,13 @@ pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
 impl MandelboxCfg {
     pub fn read(&mut self, settings: &Settings) {
         for (key, value) in settings {
-            match value {
-                &SettingValue::F32(new) => {
+            match *value {
+                SettingValue::F32(new) => {
                     if let Some(old) = self.get_f32_mut(key) {
                         *old = new;
                     }
                 }
-                &SettingValue::U32(new) => {
+                SettingValue::U32(new) => {
                     if let Some(old) = self.get_u32_mut(key) {
                         *old = new;
                     }

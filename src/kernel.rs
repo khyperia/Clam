@@ -88,7 +88,7 @@ impl Kernel {
     }
 
     fn set_args(&mut self, settings: &Settings) -> Result<(), Box<Error>> {
-        let old_cfg = self.cpu_cfg.clone();
+        let old_cfg = self.cpu_cfg;
         self.cpu_cfg.read(settings);
         if old_cfg != self.cpu_cfg {
             let to_write = [self.cpu_cfg];
@@ -168,8 +168,8 @@ impl Kernel {
 pub fn interactive(
     width: u32,
     height: u32,
-    send: mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
-    screen_events: mpsc::Receiver<display::ScreenEvent>,
+    send: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
+    screen_events: &mpsc::Receiver<display::ScreenEvent>,
 ) -> Result<(), Box<Error>> {
     let mut settings = Settings::new();
     Kernel::init_settings(&mut settings);
@@ -204,7 +204,7 @@ pub fn interactive(
 fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), Box<Error>> {
     use png::HasParameters;
     let file = ::std::fs::File::create(path)?;
-    let ref mut w = ::std::io::BufWriter::new(file);
+    let w = &mut ::std::io::BufWriter::new(file);
     let mut encoder = png::Encoder::new(w, image.width, image.height);
     encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;

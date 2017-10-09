@@ -29,14 +29,14 @@ fn interactive() {
     thread::spawn(move || match kernel::interactive(
         width,
         height,
-        send_image,
-        recv_screen_event,
+        &send_image,
+        &recv_screen_event,
     ) {
         Ok(()) => (),
         Err(err) => println!("{}", err),
     });
 
-    match display::display(width, height, recv_image, send_screen_event) {
+    match display::display(width, height, &recv_image, &send_screen_event) {
         Ok(()) => (),
         Err(err) => println!("{}", err),
     };
