@@ -42,6 +42,7 @@ NM: Adjust the field-of-view (zoom).";
             var model = new UiModel(kernelControl, keyTracker);
             var form = UiView.Create(model);
             app.Run(form);
+            Console.WriteLine("Exiting");
         }
     }
 }

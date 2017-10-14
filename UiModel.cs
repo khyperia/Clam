@@ -15,6 +15,7 @@ namespace Clam4
         private readonly KeyTracker _keyTracker;
 
         private CancellationTokenSource _cancelRun;
+        private Task _cancelRunTask;
         private (int width, int height, int frames, string filename, Button goButton)? _headless;
 
         public UiModel(UiKernel uiKernel, KeyTracker keyTracker)
@@ -47,7 +48,7 @@ namespace Clam4
             }
         }
 
-        private async void Run(CancellationToken cancellation)
+        private async Task Run(CancellationToken cancellation)
         {
             const int concurrentTasks = 1;
             var tasks = new Task<ImageData>[concurrentTasks];
@@ -139,25 +140,38 @@ namespace Clam4
             {
                 Directory.CreateDirectory(directory);
             }
-            bitmap.Save(filename, ImageFormat.Png);
+            //bitmap.Save(filename, ImageFormat.Png);
             Kernel.Resize(oldSize);
             goButton.Enabled = true;
             goButton.Text = "Go!";
         }
 
-        public bool StartStop()
+        public async Task Stop()
         {
-            if (IsRunning)
+            if (_cancelRun != null)
             {
                 _cancelRun.Cancel();
                 _cancelRun.Dispose();
                 _cancelRun = null;
+            }
+            if (_cancelRunTask != null)
+            {
+                await _cancelRunTask;
+                _cancelRunTask = null;
+            }
+        }
+
+        public async Task<bool> StartStop()
+        {
+            if (IsRunning)
+            {
+                await Stop();
                 return false;
             }
             else
             {
                 _cancelRun = new CancellationTokenSource();
-                Run(_cancelRun.Token);
+                _cancelRunTask = Run(_cancelRun.Token);
                 return true;
             }
         }

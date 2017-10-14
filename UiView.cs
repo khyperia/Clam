@@ -33,9 +33,10 @@ namespace Clam4
             panel.Add(help);
 
             Button startStop = null;
-            startStop = new Button((o, e) =>
+            startStop = new Button(async (o, e) =>
             {
-                if (model.StartStop())
+                startStop.Enabled = false;
+                if (await model.StartStop())
                 {
                     startStop.Text = "Stop";
                 }
@@ -43,6 +44,7 @@ namespace Clam4
                 {
                     startStop.Text = "Start";
                 }
+                startStop.Enabled = true;
             })
             {
                 Text = "Start",
@@ -160,7 +162,6 @@ namespace Clam4
 
         private static void Keybinds(Control window, Control focusThing, UiModel model)
         {
-            //model.UiKernel.Click += (o, e) => model.UiKernel.Select();
             window.KeyDown += (o, e) =>
             {
                 if (e.Key == Keys.Escape)
@@ -170,15 +171,6 @@ namespace Clam4
                     return;
                 }
             };
-            // model.UiKernel.ImageView.PreviewKeyDown += (o, e) =>
-            // {
-            //     var code = e.KeyCode;
-            //     var isArrow = code == Keys.Up || code == Keys.Down || code == Keys.Left || code == Keys.Right;
-            //     if (isArrow)
-            //     {
-            //         e.IsInputKey = true;
-            //     }
-            // };
             focusThing.KeyDown += (o, e) =>
             {
                 if (model.OnKeyDown(e.Key))
@@ -192,6 +184,10 @@ namespace Clam4
                 {
                     e.Handled = true;
                 }
+            };
+            window.UnLoad += (o, e) =>
+            {
+                model.Stop().Wait();
             };
         }
 

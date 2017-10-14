@@ -7,6 +7,7 @@ using Cloo;
 using Eto.Drawing;
 using Eto.Forms;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace Clam4
 {
@@ -27,17 +28,26 @@ namespace Clam4
 
         public static ComputeContext GetContext()
         {
+            var i = 0;
             var p = 0;
             foreach (var platform in ComputePlatform.Platforms)
             {
                 var d = 0;
                 foreach (var dev in platform.Devices)
                 {
-                    Console.WriteLine($"{p} {d++} = {dev.Name}");
+                    Console.WriteLine($"CLAM4_DEVICE={i++} => platform {p} device {d++}: {dev.Name}");
                 }
                 p++;
             }
-            var device = ComputePlatform.Platforms[0].Devices[1];
+            ComputeDevice device;
+            if (int.TryParse(Environment.GetEnvironmentVariable("CLAM4_DEVICE"), out var index))
+            {
+                device = ComputePlatform.Platforms.SelectMany(plat => plat.Devices).ElementAt(index);
+            }
+            else
+            {
+                device = ComputePlatform.Platforms[0].Devices[0];
+            }
             Console.WriteLine(device.Name);
             return new ComputeContext(new[] { device }, new ComputeContextPropertyList(device.Platform), null, IntPtr.Zero);
         }
