@@ -37,11 +37,6 @@ struct MandelboxCfg
     int NumRayBounces;
 };
 
-#ifndef __OPENCL_VERSION__
-#define __global
-#define __kernel
-#endif
-
 typedef __private struct MandelboxCfg *Cfg;
 
 static float4 comp_mul(float4 left, float4 right)
@@ -55,21 +50,20 @@ static float4 comp_mul(float4 left, float4 right)
 
 struct Random
 {
-    float seed;
+    ulong seed;
 };
 
 static float Random_Next(struct Random *this)
 {
-    float floored;
-    this->seed = fract(this->seed * this->seed * 1024.0, &floored);
-    return this->seed;
+    this->seed = (this->seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1);
+    return (this->seed >> 16) / 4294967296.0f;
 }
 
-static struct Random new_Random(Cfg cfg, uint idx, uint frame)
+static struct Random new_Random(uint idx, uint frame, uint global_size)
 {
     struct Random result;
-    frame += 100;
-    result.seed = (frame * (uint)get_global_size(0) + idx) / 1000000000.0;
+    ulong seed = idx + global_size * frame;
+    result.seed = seed;
     for (int i = 0; i < 8; i++)
     {
         Random_Next(&result);
@@ -79,8 +73,8 @@ static struct Random new_Random(Cfg cfg, uint idx, uint frame)
 
 static float2 Random_Circle(struct Random *this)
 {
-    float2 polar = (float2)(Random_Next(this) * 6.28318531f, sqrt(Random_Next(this)));
-    return (float2)(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
+    float2 polar = (float2)(Random_Next(this) * 2.0f, sqrt(Random_Next(this)));
+    return (float2)(cospi(polar.x) * polar.y, sinpi(polar.x) * polar.y);
 }
 
 static float2 Random_Normal(struct Random *this)
@@ -88,15 +82,15 @@ static float2 Random_Normal(struct Random *this)
     // Box-Muller transform
     // returns two normally-distributed independent variables
     float mul = sqrt(-2 * log2(Random_Next(this)));
-    float angle = 6.28318530718f * Random_Next(this);
-    return mul * (float2)(cos(angle), sin(angle));
+    float angle = 2.0f * Random_Next(this);
+    return mul * (float2)(cospi(angle), sinpi(angle));
 }
 
 static float3 Random_Sphere(struct Random *this)
 {
     float2 temp = Random_Normal(this);
     float3 result = (float3)(temp.x, temp.y, Random_Normal(this).x);
-    result.x += (dot(result, result) == 0); // ensure nonzero
+    result.x += (dot(result, result) == 0.0f); // ensure nonzero
     return normalize(result);
 }
 
@@ -141,12 +135,12 @@ static void Ray_Dof(Cfg cfg, struct Ray *this, float focalPlane, struct Random *
     this->pos = focalPosition - this->dir * focalPlane;
 }
 
-static struct Ray Camera(Cfg cfg, int x, int y, int width, int height, struct Random *rand)
+static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struct Random *rand)
 {
     float3 origin = (float3)(cfg->posX, cfg->posY, cfg->posZ);
     float3 look = (float3)(cfg->lookX, cfg->lookY, cfg->lookZ);
     float3 up = (float3)(cfg->upX, cfg->upY, cfg->upZ);
-    float2 screenCoords = (float2)((float)(x - width / 2), (float)(y - height / 2));
+    float2 screenCoords = (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
     //screenCoords += (float2)(Random_Next(rand) - 0.5f, Random_Next(rand) - 0.5f);
     float fov = cfg->fov * 2 / (width + height);
     float3 direction = RayDir(look, up, screenCoords, fov);
@@ -155,6 +149,7 @@ static struct Ray Camera(Cfg cfg, int x, int y, int width, int height, struct Ra
     return result;
 }
 
+/*
 static float4 Mandelbulb(float4 z, const float Power)
 {
     const float r = length(z.xyz);
@@ -171,6 +166,7 @@ static float4 Mandelbulb(float4 z, const float Power)
         zr * (float3)(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
     return (float4)(z3.x, z3.y, z3.z, dr);
 }
+*/
 
 static float4 BoxfoldD(Cfg cfg, float4 z)
 {
@@ -179,6 +175,7 @@ static float4 BoxfoldD(Cfg cfg, float4 z)
     return (float4)(znew.x, znew.y, znew.z, z.w);
 }
 
+/*
 static float4 ContBoxfoldD(float4 z)
 {
     float3 znew = z.xyz;
@@ -190,6 +187,7 @@ static float4 ContBoxfoldD(float4 z)
     res = znew - res;
     return (float4)(res.x, res.y, res.z, z.w);
 }
+*/
 
 static float4 SpherefoldD(Cfg cfg, float4 z)
 {
@@ -197,11 +195,13 @@ static float4 SpherefoldD(Cfg cfg, float4 z)
     return z;
 }
 
+/*
 static float4 ContSpherefoldD(Cfg cfg, float4 z)
 {
     z *= cfg->MinRadius2 / dot(z.xyz, z.xyz) + cfg->FixedRadius2;
     return z;
 }
+*/
 
 static float4 TScaleD(Cfg cfg, float4 z)
 {
@@ -259,7 +259,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     *normal = (float3)((dppn + dpnp) - (dnpp + dnnn),
         (dppn + dnpp) - (dpnp + dnnn),
         (dpnp + dnpp) - (dppn + dnnn));
-    normal->x += (dot(*normal, *normal) == 0); // ensure nonzero
+    normal->x += (dot(*normal, *normal) == 0.0f); // ensure nonzero
     *normal = normalize(*normal);
     return totalDistance;
 }
@@ -282,7 +282,7 @@ Specular(Cfg cfg, float3 incoming, float3 outgoing, float3 normal)
 }
 
 // (ambient, light1)
-static float2 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Random *rand)
+static float2 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random *rand)
 {
     float2 rayColor = (float2)(0, 0);
     float reflectionColor = 1.0f;
@@ -313,8 +313,8 @@ static float2 Trace(Cfg cfg, struct Ray ray, int width, int height, struct Rando
         if (normalDotProd > 0)
         {
             float3 discard_normal;
-            const float distance = Cast(cfg, new_Ray(newPos, toLight), quality, lightDist, &discard_normal);
-            if (distance >= lightDist)
+            const float light_distance = Cast(cfg, new_Ray(newPos, toLight), quality, lightDist, &discard_normal);
+            if (light_distance >= lightDist)
             {
                 const float dimmingFactor =
                     (normalDotProd * reflectionColor * Specular(cfg, toLight, -ray.dir, normal)) /
@@ -347,7 +347,7 @@ static float3 RotateToColors(Cfg cfg, float2 components)
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
-    pixel = sqrt(fmax(pixel, 0.0f));
+    pixel = sqrt(max(pixel, 0.0f));
     if (cfg->WhiteClamp)
     {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
@@ -368,28 +368,28 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 __kernel void Main(
     __global uchar *data,
     __global struct MandelboxCfg *cfg_global,
-    int width,
-    int height,
-    int frame
+    uint width,
+    uint height,
+    uint frame
 )
 {
     uint mem_offset = 0;
     __global uint *screenPixels = (__global uint *)(data + mem_offset);
-    mem_offset += width * height * sizeof(uint);
+    mem_offset += width * height * (uint)sizeof(uint);
     __global float2 *scratchBuf_arg = (__global float2 *)(data + mem_offset);
+    struct MandelboxCfg local_copy = *cfg_global;
+    struct MandelboxCfg *cfg = &local_copy;
 
-    int idx = get_global_id(0);
-    int x = idx % width;
-    int y = idx / width;
+    uint idx = (uint)get_global_id(0);
+    uint x = idx % width;
+    uint y = idx / width;
     if (y >= height)
     {
         return;
     }
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
     y = height - (y + 1);
-    struct MandelboxCfg local_copy = *cfg_global;
-    struct MandelboxCfg *cfg = &local_copy;
-    struct Random rand = new_Random(cfg, idx, frame);
+    struct Random rand = new_Random(idx, frame, get_global_size(0));
     struct Ray ray = Camera(cfg, x, y, width, height, &rand);
     float2 colorComponents = Trace(cfg, ray, width, height, &rand);
     __global float2 *scratch = &scratchBuf_arg[idx];
@@ -398,6 +398,6 @@ __kernel void Main(
     *scratch = newColor;
 
     float3 realColor = RotateToColors(cfg, newColor);
-    int packedColor = PackPixel(cfg, realColor);
+    uint packedColor = PackPixel(cfg, realColor);
     screenPixels[idx] = packedColor;
 }

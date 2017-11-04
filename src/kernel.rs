@@ -6,6 +6,7 @@ use mandelbox_cfg::MandelboxCfg;
 use ocl;
 use ocl_core::types::abs::AsMem;
 use png;
+use progress::Progress;
 use settings::Settings;
 use std::error::Error;
 use std::sync::mpsc;
@@ -29,10 +30,13 @@ impl Kernel {
     fn new(width: u32, height: u32) -> Result<Kernel, Box<Error>> {
         let context = Self::make_context()?;
         let program = ocl::Program::builder().src(MANDELBOX).build(&context)?;
-        // if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
-        //     program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog) {
-        //     println!("{}", log);
-        // }
+        if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
+            program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog) {
+            let log = log.trim();
+            if !log.is_empty() {
+                println!("{}", log);
+            }
+        }
         let queue = ocl::Queue::new(&context, context.devices()[0], None)?;
         println!("{}", queue.device().name());
         let kernel = ocl::Kernel::new("Main", &program)?;
@@ -137,11 +141,10 @@ impl Kernel {
         download: bool,
     ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Box<Error>> {
         self.set_args(settings)?;
-        let lws = 256;
+        let lws = 1024;
         self.kernel
             .cmd()
             .queue(&self.queue)
-            .lws(lws)
             .gws((self.width * self.height + lws - 1) / lws * lws)
             .enq()?;
         self.frame += 1;
@@ -217,11 +220,17 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Box<Error>> {
     Kernel::init_settings(&mut settings);
     ::settings::load_settings(&mut settings, "settings.clam5")?;
     let mut kernel = Kernel::new(width, height)?;
+    let progress = Progress::new();
+    let progress_count = (rpp / 20).min(4).max(16);
     for ray in 0..(rpp - 1) {
         let _ = kernel.run(&settings, false)?;
-        if ray > 0 && ray % 16 == 0 {
+        if ray > 0 && ray % progress_count == 0 {
             kernel.sync()?;
-            println!("{:.2}%", ray as f32 / rpp as f32);
+            let value = ray as f32 / rpp as f32;
+            let mut seconds = progress.time(value);
+            let minutes = (seconds / 60.0) as u32;
+            seconds -= (minutes * 60) as f32;
+            println!("{:.2}%, {}:{:.2} left", 100.0 * value, minutes, seconds);
         }
     }
     kernel.sync()?;

@@ -38,11 +38,11 @@ impl Input {
 
     fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Box<Error>> {
         match key {
-            Key::T => {
+            Key::P => {
                 load_settings(settings, "settings.clam5")?;
                 println!("Settings loaded");
             }
-            Key::P => {
+            Key::Y => {
                 save_settings(settings, "settings.clam5")?;
                 println!("Settings saved");
             }
