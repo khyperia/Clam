@@ -79,7 +79,7 @@ pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
     quality_rest_ray: 64.0,
     white_clamp: 1,
     max_iters: 64,
-    max_ray_steps: 64,
+    max_ray_steps: 256,
     num_ray_bounces: 3,
 };
 

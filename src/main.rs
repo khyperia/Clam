@@ -23,9 +23,7 @@ fn try_render(args: &[String]) -> Result<(), Box<std::error::Error>> {
             "1080p" | "2k" => kernel::headless(1920, 1080, rpp),
             pix => kernel::headless(pix.parse()?, pix.parse()?, rpp),
         }
-    }
-    else
-    {
+    } else {
         kernel::headless(args[0].parse()?, args[1].parse()?, args[2].parse()?)
     }
 }
@@ -63,9 +61,7 @@ fn main() {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && arguments[0] == "--render" {
         render(&arguments[1..]);
-    }
-    else
-    {
+    } else {
         interactive();
     }
 }

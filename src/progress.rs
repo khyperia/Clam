@@ -6,9 +6,7 @@ pub struct Progress {
 
 impl Progress {
     pub fn new() -> Progress {
-        Progress {
-            start: Instant::now(),
-        }
+        Progress { start: Instant::now() }
     }
 
     pub fn time(&self, value: f32) -> f32 {

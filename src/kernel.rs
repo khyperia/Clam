@@ -31,7 +31,8 @@ impl Kernel {
         let context = Self::make_context()?;
         let program = ocl::Program::builder().src(MANDELBOX).build(&context)?;
         if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
-            program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog) {
+            program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog)
+        {
             let log = log.trim();
             if !log.is_empty() {
                 println!("{}", log);
