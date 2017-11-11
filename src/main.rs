@@ -10,8 +10,6 @@ mod mandelbox_cfg;
 mod progress;
 mod settings;
 
-use std::sync::mpsc;
-use std::thread;
 use std::env::args;
 
 fn try_render(args: &[String]) -> Result<(), Box<std::error::Error>> {
@@ -36,22 +34,10 @@ fn render(args: &[String]) {
 }
 
 fn interactive() {
-    let (send_image, recv_image) = mpsc::channel();
-    let (send_screen_event, recv_screen_event) = mpsc::channel();
     let width = 200;
     let height = 200;
 
-    thread::spawn(move || match kernel::interactive(
-        width,
-        height,
-        &send_image,
-        &recv_screen_event,
-    ) {
-        Ok(()) => (),
-        Err(err) => println!("{}", err),
-    });
-
-    match display::display(width, height, &recv_image, &send_screen_event) {
+    match display::display(width, height) {
         Ok(()) => (),
         Err(err) => println!("{}", err),
     };

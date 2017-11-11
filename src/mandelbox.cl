@@ -1,3 +1,5 @@
+#define FOG 0
+
 struct MandelboxCfg
 {
     float posX;
@@ -274,7 +276,7 @@ Specular(Cfg cfg, float3 incoming, float3 outgoing, float3 normal)
 {
     const float3 half_vec = normalize(incoming + outgoing);
     const float dot_prod = fabs(dot(half_vec, normal));
-    const int hardness = 128;
+    const int hardness = 512;
     //const float base_reflection = 0.7f; // TODO: Make configurable.
     const float base_reflection = cfg->ReflectBrightness;
     const float spec = pown(sinpi(dot_prod * 0.5f), hardness);
@@ -287,39 +289,64 @@ static float2 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
     float2 rayColor = (float2)(0, 0);
     float reflectionColor = 1.0f;
     bool firstRay = true;
-    const float maxDist = cfg->MaxRayDist;
     for (int i = 0; i < cfg->NumRayBounces; i++)
     {
         const float quality = firstRay ? cfg->QualityFirstRay *
             ((width + height) / (2 * cfg->fov)) : cfg->QualityRestRay;
+        #if FOG
+        const float fogDist = -log2(Random_Next(rand));
+        const float maxDist = min(cfg->MaxRayDist, fogDist);
+        #else
+        const float maxDist = cfg->MaxRayDist;
+        #endif
         float3 normal;
-        const float distance = Cast(cfg, ray, quality, maxDist, &normal);
-        if (distance > maxDist)
+        float distance = Cast(cfg, ray, quality, maxDist, &normal);
+
+        if (distance > cfg->MaxRayDist)
         {
             float color = firstRay ? 0.3f : 1.0f; // TODO
             rayColor.x += color * reflectionColor;
             break;
         }
-        // incorporates lambertian lighting
-        const float3 newDir = normalize(Random_Sphere(rand) + normal);
-        const float3 newPos = Ray_At(ray, distance);
 
-        // direct lighting
+        #if FOG
+        distance = min(distance, fogDist);
+        #endif
+
+        float3 newDir = Random_Sphere(rand);
+        const float3 newPos = Ray_At(ray, distance);
         // TODO: Soft shadows, shuffle lightPos a bit
         const float3 toLightVec = LightPos(cfg) - newPos;
         const float lightDist = length(toLightVec);
         const float3 toLight = toLightVec * (1 / lightDist);
-        const float normalDotProd = dot(normal, toLight);
+
+        float directLightingAmount = reflectionColor / (lightDist * lightDist);
+
+        float normalDotProd;
+        #if FOG
+        if (distance >= fogDist)
+        {
+            normalDotProd = 1.0f;
+            rayColor.x += reflectionColor * 0.2f;
+            reflectionColor *= 0.8f;
+        }
+        else
+        #endif
+        {
+            normalDotProd = dot(normal, toLight);
+            // incorporates lambertian lighting
+            newDir = normalize(newDir + normal);
+            directLightingAmount *= normalDotProd * Specular(cfg, toLight, -ray.dir, normal);
+        }
+
+        // direct lighting
         if (normalDotProd > 0)
         {
             float3 discard_normal;
             const float light_distance = Cast(cfg, new_Ray(newPos, toLight), quality, lightDist, &discard_normal);
             if (light_distance >= lightDist)
             {
-                const float dimmingFactor =
-                    (normalDotProd * reflectionColor * Specular(cfg, toLight, -ray.dir, normal)) /
-                    (lightDist * lightDist);
-                rayColor.y += dimmingFactor;
+                rayColor.y += directLightingAmount;
             }
         }
         reflectionColor *= Specular(cfg, newDir, -ray.dir, normal);
@@ -361,7 +388,7 @@ static uint PackPixel(Cfg cfg, float3 pixel)
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
     pixel = pixel * 255;
-    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 16) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z);
+    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 16);
 }
 
 // type: -1 is preview, 0 is init, 1 is continue

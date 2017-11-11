@@ -62,13 +62,9 @@ impl Input {
 
     fn is_pressed(&self, now: Instant, key: Key) -> Option<f32> {
         if let Some(&old) = self.pressed_keys.get(&key) {
-            let (dt, sign) = if now < old {
-                (old.duration_since(now), true)
-            } else {
-                (now.duration_since(old), false)
-            };
+            let dt = now.duration_since(old);
             let flt = dt.as_secs() as f32 + dt.subsec_nanos() as f32 * 1e-9;
-            Some(if sign { -flt } else { flt })
+            Some(flt)
         } else {
             None
         }

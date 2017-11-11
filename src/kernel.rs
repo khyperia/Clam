@@ -174,6 +174,7 @@ pub fn interactive(
     height: u32,
     send: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
     screen_events: &mpsc::Receiver<display::ScreenEvent>,
+    events_loop: Option<glium::glutin::EventsLoopProxy>,
 ) -> Result<(), Box<Error>> {
     let mut settings = Settings::new();
     Kernel::init_settings(&mut settings);
@@ -202,6 +203,9 @@ pub fn interactive(
             Ok(()) => (),
             Err(_) => return Ok(()),
         };
+        if let Some(ref events_loop) = events_loop {
+            events_loop.wakeup()?
+        }
     }
 }
 
