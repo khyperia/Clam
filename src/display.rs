@@ -114,7 +114,7 @@ impl Display {
     }
 
     fn update_window_size(display: &glium::Display, width: &mut u32, height: &mut u32) {
-        if let Some((new_width, new_height)) = display.gl_window().get_inner_size_pixels() {
+        if let Some((new_width, new_height)) = display.gl_window().get_inner_size() {
             // On HiDPI screens, this might be different than what was passed in
             *width = new_width;
             *height = new_height;

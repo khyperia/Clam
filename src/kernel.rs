@@ -143,11 +143,12 @@ impl Kernel {
     ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Box<Error>> {
         self.set_args(settings)?;
         let lws = 1024;
-        self.kernel
+        let to_launch = self.kernel
             .cmd()
             .queue(&self.queue)
-            .gws((self.width * self.height + lws - 1) / lws * lws)
-            .enq()?;
+            .gws((self.width * self.height + lws - 1) / lws * lws);
+        // enq() is unsafe, even though the Rust code is safe (unsafe due to untrusted GPU code)
+        unsafe { to_launch.enq() }?;
         self.frame += 1;
         if download {
             let mut vec = vec![0u8; self.width as usize * self.height as usize * 4];
