@@ -8,7 +8,7 @@ use input::Input;
 
 pub enum SettingValue {
     U32(u32),
-    F32(f32),
+    F32(f32, f32),
 }
 
 pub type Settings = HashMap<String, SettingValue>;
@@ -18,7 +18,7 @@ pub fn save_settings(settings: &Settings, file: &str) -> Result<(), Box<Error>> 
     let mut writer = ::std::io::BufWriter::new(&file);
     for (key, value) in settings {
         match *value {
-            SettingValue::F32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
+            SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
             SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
         }
     }
@@ -34,7 +34,7 @@ pub fn load_settings(settings: &mut Settings, file: &str) -> Result<(), Box<Erro
         let key = split[1].trim();
         let value = split[0].trim();
         match settings[key] {
-            SettingValue::F32(_) => settings.insert(key.into(), SettingValue::F32(value.parse()?)),
+            SettingValue::F32(_, change) => settings.insert(key.into(), SettingValue::F32(value.parse()?, change)),
             SettingValue::U32(_) => settings.insert(key.into(), SettingValue::U32(value.parse()?)),
         };
     }
@@ -49,8 +49,8 @@ pub fn settings_status(settings: &Settings, input: &Input) -> String {
     for key in keys {
         let prefix = if ind == input.index { "* " } else { "  " };
         match settings[key] {
+            SettingValue::F32(value, _) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
             SettingValue::U32(value) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
-            SettingValue::F32(value) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
         }
         ind += 1;
     }

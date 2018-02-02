@@ -87,7 +87,7 @@ impl MandelboxCfg {
     pub fn read(&mut self, settings: &Settings) {
         for (key, value) in settings {
             match *value {
-                SettingValue::F32(new) => {
+                SettingValue::F32(new, _) => {
                     if let Some(old) = self.get_f32_mut(key) {
                         *old = new;
                     }
@@ -115,75 +115,75 @@ impl MandelboxCfg {
     }
 
     pub fn write(&mut self, settings: &mut Settings) {
-        settings.insert("pos_x".into(), SettingValue::F32(self.pos_x));
-        settings.insert("pos_y".into(), SettingValue::F32(self.pos_y));
-        settings.insert("pos_z".into(), SettingValue::F32(self.pos_z));
-        settings.insert("look_x".into(), SettingValue::F32(self.look_x));
-        settings.insert("look_y".into(), SettingValue::F32(self.look_y));
-        settings.insert("look_z".into(), SettingValue::F32(self.look_z));
-        settings.insert("up_x".into(), SettingValue::F32(self.up_x));
-        settings.insert("up_y".into(), SettingValue::F32(self.up_y));
-        settings.insert("up_z".into(), SettingValue::F32(self.up_z));
-        settings.insert("fov".into(), SettingValue::F32(self.fov));
+        settings.insert("pos_x".into(), SettingValue::F32(self.pos_x, 1.0));
+        settings.insert("pos_y".into(), SettingValue::F32(self.pos_y, 1.0));
+        settings.insert("pos_z".into(), SettingValue::F32(self.pos_z, 1.0));
+        settings.insert("look_x".into(), SettingValue::F32(self.look_x, 1.0));
+        settings.insert("look_y".into(), SettingValue::F32(self.look_y, 1.0));
+        settings.insert("look_z".into(), SettingValue::F32(self.look_z, 1.0));
+        settings.insert("up_x".into(), SettingValue::F32(self.up_x, 1.0));
+        settings.insert("up_y".into(), SettingValue::F32(self.up_y, 1.0));
+        settings.insert("up_z".into(), SettingValue::F32(self.up_z, 1.0));
+        settings.insert("fov".into(), SettingValue::F32(self.fov, -1.0));
         settings.insert(
             "focal_distance".into(),
-            SettingValue::F32(self.focal_distance),
+            SettingValue::F32(self.focal_distance, -1.0),
         );
-        settings.insert("scale".into(), SettingValue::F32(self.scale));
+        settings.insert("scale".into(), SettingValue::F32(self.scale, -0.5));
         settings.insert(
             "folding_limit".into(),
-            SettingValue::F32(self.folding_limit),
+            SettingValue::F32(self.folding_limit, -0.5),
         );
         settings.insert(
             "fixed_radius_2".into(),
-            SettingValue::F32(self.fixed_radius_2),
+            SettingValue::F32(self.fixed_radius_2, -0.5),
         );
-        settings.insert("min_radius_2".into(), SettingValue::F32(self.min_radius_2));
-        settings.insert("dof_amount".into(), SettingValue::F32(self.dof_amount));
-        settings.insert("light_pos_x".into(), SettingValue::F32(self.light_pos_x));
-        settings.insert("light_pos_y".into(), SettingValue::F32(self.light_pos_y));
-        settings.insert("light_pos_z".into(), SettingValue::F32(self.light_pos_z));
+        settings.insert("min_radius_2".into(), SettingValue::F32(self.min_radius_2, -0.5));
+        settings.insert("dof_amount".into(), SettingValue::F32(self.dof_amount, -0.5));
+        settings.insert("light_pos_x".into(), SettingValue::F32(self.light_pos_x, 0.5));
+        settings.insert("light_pos_y".into(), SettingValue::F32(self.light_pos_y, 0.5));
+        settings.insert("light_pos_z".into(), SettingValue::F32(self.light_pos_z, 0.5));
         settings.insert(
             "light_brightness_r".into(),
-            SettingValue::F32(self.light_brightness_r),
+            SettingValue::F32(self.light_brightness_r, -0.5),
         );
         settings.insert(
             "light_brightness_g".into(),
-            SettingValue::F32(self.light_brightness_g),
+            SettingValue::F32(self.light_brightness_g, -0.5),
         );
         settings.insert(
             "light_brightness_b".into(),
-            SettingValue::F32(self.light_brightness_b),
+            SettingValue::F32(self.light_brightness_b, -0.5),
         );
         settings.insert(
             "ambient_brightness_r".into(),
-            SettingValue::F32(self.ambient_brightness_r),
+            SettingValue::F32(self.ambient_brightness_r, -0.25),
         );
         settings.insert(
             "ambient_brightness_g".into(),
-            SettingValue::F32(self.ambient_brightness_g),
+            SettingValue::F32(self.ambient_brightness_g, -0.25),
         );
         settings.insert(
             "ambient_brightness_b".into(),
-            SettingValue::F32(self.ambient_brightness_b),
+            SettingValue::F32(self.ambient_brightness_b, -0.25),
         );
         settings.insert(
             "reflect_brightness".into(),
-            SettingValue::F32(self.reflect_brightness),
+            SettingValue::F32(self.reflect_brightness, 0.125),
         );
-        settings.insert("bailout".into(), SettingValue::F32(self.bailout));
+        settings.insert("bailout".into(), SettingValue::F32(self.bailout, -1.0));
         settings.insert(
             "de_multiplier".into(),
-            SettingValue::F32(self.de_multiplier),
+            SettingValue::F32(self.de_multiplier, 0.125),
         );
-        settings.insert("max_ray_dist".into(), SettingValue::F32(self.max_ray_dist));
+        settings.insert("max_ray_dist".into(), SettingValue::F32(self.max_ray_dist, -0.5));
         settings.insert(
             "quality_first_ray".into(),
-            SettingValue::F32(self.quality_first_ray),
+            SettingValue::F32(self.quality_first_ray, -0.5),
         );
         settings.insert(
             "quality_rest_ray".into(),
-            SettingValue::F32(self.quality_rest_ray),
+            SettingValue::F32(self.quality_rest_ray, -0.5),
         );
         settings.insert("white_clamp".into(), SettingValue::U32(self.white_clamp));
         settings.insert("max_iters".into(), SettingValue::U32(self.max_iters));

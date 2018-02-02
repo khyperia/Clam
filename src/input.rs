@@ -50,6 +50,31 @@ impl Input {
                 save_settings(settings, "settings.clam5")?;
                 println!("Settings saved");
             }
+            Key::Up => {
+                if self.index == 0 {
+                    self.index = settings.len() - 1;
+                } else {
+                    self.index -= 1;
+                }
+            }
+            Key::Down => {
+                self.index += 1;
+                if self.index >= settings.len() {
+                    self.index = 0;
+                }
+            }
+            Key::Left => {
+                let key = &self.sorted_keys(settings)[self.index];
+                if let SettingValue::U32(value) = settings[key] {
+                    settings.insert(key.clone(), SettingValue::U32(value - 1));
+                }
+            }
+            Key::Right => {
+                let key = &self.sorted_keys(settings)[self.index];
+                if let SettingValue::U32(value) = settings[key] {
+                    settings.insert(key.clone(), SettingValue::U32(value - 1));
+                }
+            }
             _ => (),
         }
         Ok(())
@@ -57,8 +82,8 @@ impl Input {
 
     fn run(&mut self, settings: &mut Settings, now: Instant) {
         self.camera_3d(settings, now);
-        self.exp_setting(settings, now, "focal_distance".into(), Key::R, Key::F, 2.0);
-        self.exp_setting(settings, now, "fov".into(), Key::N, Key::M, 2.0);
+        self.exp_setting(settings, now, "focal_distance".into(), Key::R, Key::F);
+        self.exp_setting(settings, now, "fov".into(), Key::N, Key::M);
         self.manual_control(settings, now);
         for value in self.pressed_keys.values_mut() {
             *value = now;
@@ -77,7 +102,7 @@ impl Input {
 
     fn get_f32(settings: &Settings, key: &str) -> Option<f32> {
         match settings.get(key) {
-            Some(&SettingValue::F32(val)) => Some(val),
+            Some(&SettingValue::F32(val, _)) => Some(val),
             _ => None,
         }
     }
@@ -143,46 +168,45 @@ impl Input {
         key: String,
         increase: Key,
         decrease: Key,
-        scale: f32,
     ) {
-        let mut value = Self::get_f32(settings, &key).unwrap();
+        let (mut value, change) = match settings[&key] {
+            SettingValue::F32(value, change) => (value, -change + 1.0),
+            _ => return,
+        };
         if let Some(dt) = self.is_pressed(now, increase) {
-            value *= scale.powf(dt);
+            value *= change.powf(dt);
         }
         if let Some(dt) = self.is_pressed(now, decrease) {
-            value *= scale.powf(-dt);
+            value *= change.powf(-dt);
         }
-        settings.insert(key, SettingValue::F32(value));
+        settings.insert(key, SettingValue::F32(value, -change + 1.0));
+    }
+
+    fn sorted_keys(&self, settings: &Settings) -> Vec<String> {
+        let mut keys = settings.keys().map(|x| x.clone()).collect::<Vec<_>>();
+        keys.sort();
+        keys
     }
 
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
-        let mut keys = settings.keys().map(|x| x.clone()).collect::<Vec<_>>();
-        keys.sort();
-        if let Some(dt) = self.is_pressed(now, Key::Up) {
-            if self.index == 0 {
-                self.index = keys.len() - 1;
-            } else {
-                self.index -= 1;
-            }
-        }
-        if let Some(dt) = self.is_pressed(now, Key::Down) {
-            self.index += 1;
-            if self.index >= keys.len() {
-                self.index = 0;
-            }
-        }
         if let Some(dt) = self.is_pressed(now, Key::Left) {
-            let key = &keys[self.index];
-            match settings[key] {
-                SettingValue::F32(value) => settings.insert(key.clone(), SettingValue::F32(value - dt)),
-                SettingValue::U32(value) => settings.insert(key.clone(), SettingValue::U32(value - 1)),
+            let key = &self.sorted_keys(settings)[self.index];
+            if let SettingValue::F32(value, change) = settings[key] {
+                if change < 0.0 {
+                    settings.insert(key.clone(), SettingValue::F32(value * (-change + 1.0).powf(-dt), change));
+                } else {
+                    settings.insert(key.clone(), SettingValue::F32(value - dt * change, change));
+                }
             };
         }
         if let Some(dt) = self.is_pressed(now, Key::Right) {
-            let key = &keys[self.index];
-            match settings[key] {
-                SettingValue::F32(value) => settings.insert(key.clone(), SettingValue::F32(value + dt)),
-                SettingValue::U32(value) => settings.insert(key.clone(), SettingValue::U32(value + 1)),
+            let key = &self.sorted_keys(settings)[self.index];
+            if let SettingValue::F32(value, change) = settings[key] {
+                if change < 0.0 {
+                    settings.insert(key.clone(), SettingValue::F32(value * (-change + 1.0).powf(dt), change));
+                } else {
+                    settings.insert(key.clone(), SettingValue::F32(value + dt * change, change));
+                }
             };
         }
     }
@@ -202,17 +226,17 @@ impl Vector {
 
     fn read(settings: &Settings, x: &str, y: &str, z: &str) -> Option<Vector> {
         match (settings.get(x), settings.get(y), settings.get(z)) {
-            (Some(&SettingValue::F32(x)),
-             Some(&SettingValue::F32(y)),
-             Some(&SettingValue::F32(z))) => Some(Self::new(x, y, z)),
+            (Some(&SettingValue::F32(x, _)),
+             Some(&SettingValue::F32(y, _)),
+             Some(&SettingValue::F32(z, _))) => Some(Self::new(x, y, z)),
             _ => None,
         }
     }
 
     fn write(&self, settings: &mut Settings, x: &str, y: &str, z: &str) {
-        settings.insert(x.into(), SettingValue::F32(self.x));
-        settings.insert(y.into(), SettingValue::F32(self.y));
-        settings.insert(z.into(), SettingValue::F32(self.z));
+        settings.insert(x.into(), SettingValue::F32(self.x, 1.0));
+        settings.insert(y.into(), SettingValue::F32(self.y, 1.0));
+        settings.insert(z.into(), SettingValue::F32(self.z, 1.0));
     }
 
     pub fn len2(&self) -> f32 {
