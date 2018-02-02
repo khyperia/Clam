@@ -4,6 +4,8 @@ use std::io::Write;
 use std::io::BufRead;
 use std::fmt::Write as FmtWrite;
 
+use input::Input;
+
 pub enum SettingValue {
     U32(u32),
     F32(f32),
@@ -39,15 +41,18 @@ pub fn load_settings(settings: &mut Settings, file: &str) -> Result<(), Box<Erro
     Ok(())
 }
 
-pub fn settings_status(settings: &Settings) -> String {
+pub fn settings_status(settings: &Settings, input: &Input) -> String {
     let mut keys = settings.keys().collect::<Vec<_>>();
     keys.sort();
     let mut builder = String::new();
+    let mut ind = 0;
     for key in keys {
+        let prefix = if ind == input.index { "* " } else { "  " };
         match settings[key] {
-            SettingValue::U32(value) => write!(&mut builder, "{} = {}\n", key, value).unwrap(),
-            SettingValue::F32(value) => write!(&mut builder, "{} = {}\n", key, value).unwrap(),
+            SettingValue::U32(value) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
+            SettingValue::F32(value) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
         }
+        ind += 1;
     }
 
     return builder;

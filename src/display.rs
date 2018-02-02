@@ -28,6 +28,23 @@ struct ClamDisplay {
     recv_status: mpsc::Receiver<String>,
 }
 
+fn find_font() -> Result<::std::fs::File, Box<Error>> {
+    let locations = [
+        "/usr/share/fonts/TTF/FiraMono-Regular.ttf",
+        "/usr/share/fonts/TTF/FiraSans-Regular.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
+    ];
+    for location in &locations {
+        match ::std::fs::File::open(location) {
+            Ok(file) => return Ok(file),
+            Err(_) => (),
+        }
+    }
+    return Err("No font found".into());
+}
+
 impl ClamDisplay {
     fn keyboard_input(
         &self,
@@ -201,7 +218,7 @@ impl ClamDisplay {
         let text_system = glium_text_rusttype::TextSystem::new(&display);
         let font_texture = glium_text_rusttype::FontTexture::new(
             &display,
-            ::std::fs::File::open("/usr/share/fonts/TTF/FiraMono-Regular.ttf")?,
+            find_font()?,
             FONT_SIZE,
             glium_text_rusttype::FontTexture::ascii_character_list(),
         ).unwrap();

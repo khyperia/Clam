@@ -6,11 +6,15 @@ use std::time::Instant;
 
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
+    pub index: usize,
 }
 
 impl Input {
     pub fn new() -> Input {
-        Input { pressed_keys: HashMap::new() }
+        Input {
+            pressed_keys: HashMap::new(),
+            index: 0,
+        }
     }
 
     pub fn key_down(&mut self, key: Key, time: Instant, settings: &mut Settings) {
@@ -55,6 +59,7 @@ impl Input {
         self.camera_3d(settings, now);
         self.exp_setting(settings, now, "focal_distance".into(), Key::R, Key::F, 2.0);
         self.exp_setting(settings, now, "fov".into(), Key::N, Key::M, 2.0);
+        self.manual_control(settings, now);
         for value in self.pressed_keys.values_mut() {
             *value = now;
         }
@@ -148,6 +153,38 @@ impl Input {
             value *= scale.powf(-dt);
         }
         settings.insert(key, SettingValue::F32(value));
+    }
+
+    fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
+        let mut keys = settings.keys().map(|x| x.clone()).collect::<Vec<_>>();
+        keys.sort();
+        if let Some(dt) = self.is_pressed(now, Key::Up) {
+            if self.index == 0 {
+                self.index = keys.len() - 1;
+            } else {
+                self.index -= 1;
+            }
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Down) {
+            self.index += 1;
+            if self.index >= keys.len() {
+                self.index = 0;
+            }
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Left) {
+            let key = &keys[self.index];
+            match settings[key] {
+                SettingValue::F32(value) => settings.insert(key.clone(), SettingValue::F32(value - dt)),
+                SettingValue::U32(value) => settings.insert(key.clone(), SettingValue::U32(value - 1)),
+            };
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Right) {
+            let key = &keys[self.index];
+            match settings[key] {
+                SettingValue::F32(value) => settings.insert(key.clone(), SettingValue::F32(value + dt)),
+                SettingValue::U32(value) => settings.insert(key.clone(), SettingValue::U32(value + 1)),
+            };
+        }
     }
 }
 

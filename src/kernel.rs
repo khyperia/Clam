@@ -199,7 +199,7 @@ pub fn interactive(
             }
         }
 
-        let status = settings_status(&settings);
+        let status = settings_status(&settings, &input);
         match send_status.send(status) {
             Ok(()) => (),
             Err(_) => return Ok(()),
