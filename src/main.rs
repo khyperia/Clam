@@ -1,4 +1,5 @@
 extern crate glium;
+extern crate glium_text_rusttype;
 extern crate ocl;
 extern crate ocl_core;
 extern crate png;

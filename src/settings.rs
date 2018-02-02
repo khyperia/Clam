@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::Write;
 use std::io::BufRead;
+use std::fmt::Write as FmtWrite;
 
 pub enum SettingValue {
     U32(u32),
@@ -36,4 +37,18 @@ pub fn load_settings(settings: &mut Settings, file: &str) -> Result<(), Box<Erro
         };
     }
     Ok(())
+}
+
+pub fn settings_status(settings: &Settings) -> String {
+    let mut keys = settings.keys().collect::<Vec<_>>();
+    keys.sort();
+    let mut builder = String::new();
+    for key in keys {
+        match settings[key] {
+            SettingValue::U32(value) => write!(&mut builder, "{} = {}\n", key, value).unwrap(),
+            SettingValue::F32(value) => write!(&mut builder, "{} = {}\n", key, value).unwrap(),
+        }
+    }
+
+    return builder;
 }

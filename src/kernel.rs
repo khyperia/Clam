@@ -7,7 +7,7 @@ use ocl;
 use ocl_core::types::abs::AsMem;
 use png;
 use progress::Progress;
-use settings::Settings;
+use settings::{Settings, settings_status};
 use std::error::Error;
 use std::sync::mpsc;
 
@@ -173,7 +173,8 @@ impl Kernel {
 pub fn interactive(
     width: u32,
     height: u32,
-    send: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
+    send_image: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
+    send_status: &mpsc::Sender<String>,
     screen_events: &mpsc::Receiver<display::ScreenEvent>,
     events_loop: Option<glium::glutin::EventsLoopProxy>,
 ) -> Result<(), Box<Error>> {
@@ -198,9 +199,15 @@ pub fn interactive(
             }
         }
 
+        let status = settings_status(&settings);
+        match send_status.send(status) {
+            Ok(()) => (),
+            Err(_) => return Ok(()),
+        };
+
         input.integrate(&mut settings);
         let image = kernel.run(&settings, true)?.unwrap();
-        match send.send(image) {
+        match send_image.send(image) {
             Ok(()) => (),
             Err(_) => return Ok(()),
         };

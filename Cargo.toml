@@ -5,6 +5,7 @@ authors = ["khyperia <khyperia@live.com>"]
 
 [dependencies]
 glium = { version = "*", default-features = false, features = ["glutin"] }
+glium_text_rusttype = { version = "*", default-features = false }
 ocl = { version = "*", default-features = false }
 ocl-core = { version = "*", default-features = false }
 png = { version = "*", default-features = false, features = ["png-encoding"] }

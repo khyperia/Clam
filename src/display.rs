@@ -2,6 +2,7 @@ use glium::Surface;
 use glium::glutin;
 use glium::texture::texture2d;
 use glium;
+use glium_text_rusttype;
 use kernel;
 use std::error::Error;
 use std::sync::mpsc;
@@ -14,14 +15,20 @@ pub enum ScreenEvent {
     KeyUp(glutin::VirtualKeyCode, Instant),
 }
 
-struct Display {
+const FONT_SIZE: u32 = 24;
+
+struct ClamDisplay {
     display: glium::Display,
     texture: Option<texture2d::Texture2d>,
+    text_system: glium_text_rusttype::TextSystem,
+    font_texture: glium_text_rusttype::FontTexture,
+    status: String,
     send_screen_event: mpsc::Sender<ScreenEvent>,
     recv_image: mpsc::Receiver<glium::texture::RawImage2d<'static, u8>>,
+    recv_status: mpsc::Receiver<String>,
 }
 
-impl Display {
+impl ClamDisplay {
     fn keyboard_input(
         &self,
         keycode: glutin::VirtualKeyCode,
@@ -72,7 +79,49 @@ impl Display {
         glutin::ControlFlow::Continue
     }
 
-    fn draw(&self, target: &glium::Frame) {
+    fn update_status(&mut self) -> glutin::ControlFlow {
+        loop {
+            let status = match self.recv_status.try_recv() {
+                Ok(status) => status,
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => return glutin::ControlFlow::Break,
+            };
+            self.status = status;
+        }
+        glutin::ControlFlow::Continue
+    }
+
+    fn draw_text(&self, target: &mut glium::Frame, width: u32, height: u32) {
+        let mut text = glium_text_rusttype::TextDisplay::new(
+            &self.text_system,
+            &self.font_texture,
+            &self.status,
+        );
+        let mut text_height = 0.0;
+        for line in self.status.lines() {
+            text.set_text(line);
+            text_height += text.get_height();
+            let upscale = 2;
+            let x_scale = (upscale * FONT_SIZE) as f32 / width as f32;
+            let y_scale = (upscale * FONT_SIZE) as f32 / height as f32;
+
+            let matrix = [
+                [x_scale, 0.0, 0.0, 0.0],
+                [0.0, y_scale, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [-1.0, 1.0 - text_height * y_scale, 0.0, 1.0],
+            ];
+            glium_text_rusttype::draw(
+                &text,
+                &self.text_system,
+                target,
+                matrix,
+                (1.0, 0.5, 0.0, 1.0),
+            ).unwrap();
+        }
+    }
+
+    fn draw(&self, target: &mut glium::Frame) {
         if let Some(ref texture) = self.texture {
             let to_draw = texture.as_surface();
             let (width, height) = to_draw.get_dimensions();
@@ -87,6 +136,7 @@ impl Display {
                 &blit_target,
                 glium::uniforms::MagnifySamplerFilter::Nearest,
             );
+            self.draw_text(target, width, height);
         }
     }
 
@@ -94,8 +144,11 @@ impl Display {
         if self.update_tex() == glutin::ControlFlow::Break {
             return glutin::ControlFlow::Break;
         }
-        let target = self.display.draw();
-        self.draw(&target);
+        if self.update_status() == glutin::ControlFlow::Break {
+            return glutin::ControlFlow::Break;
+        }
+        let mut target = self.display.draw();
+        self.draw(&mut target);
         target.finish().unwrap();
         glutin::ControlFlow::Continue
     }
@@ -125,35 +178,54 @@ impl Display {
         width: u32,
         height: u32,
         send_image: mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
+        send_status: mpsc::Sender<String>,
         recv_screen_event: mpsc::Receiver<ScreenEvent>,
         proxy: glutin::EventsLoopProxy,
     ) {
-        thread::spawn(move || {
-            match kernel::interactive(width, height, &send_image, &recv_screen_event, Some(proxy)) {
-                Ok(()) => (),
-                Err(err) => println!("{}", err),
-            }
+        thread::spawn(move || match kernel::interactive(
+            width,
+            height,
+            &send_image,
+            &send_status,
+            &recv_screen_event,
+            Some(proxy),
+        ) {
+            Ok(()) => (),
+            Err(err) => println!("{}", err),
         });
     }
 
-    fn new(mut width: u32, mut height: u32) -> Result<(Display, glutin::EventsLoop), Box<Error>> {
+    fn new(mut width: u32, mut height: u32) -> Result<(ClamDisplay, glutin::EventsLoop), Box<Error>> {
         let events_loop = glutin::EventsLoop::new();
         let display = Self::create_window(&events_loop, width, height)?;
+        let text_system = glium_text_rusttype::TextSystem::new(&display);
+        let font_texture = glium_text_rusttype::FontTexture::new(
+            &display,
+            ::std::fs::File::open("/usr/share/fonts/TTF/FiraMono-Regular.ttf")?,
+            FONT_SIZE,
+            glium_text_rusttype::FontTexture::ascii_character_list(),
+        ).unwrap();
         let (send_image, recv_image) = mpsc::channel();
+        let (send_status, recv_status) = mpsc::channel();
         let (send_screen_event, recv_screen_event) = mpsc::channel();
         Self::update_window_size(&display, &mut width, &mut height);
         Self::launch_kernel(
             width,
             height,
             send_image,
+            send_status,
             recv_screen_event,
             events_loop.create_proxy(),
         );
-        let result = Display {
+        let result = ClamDisplay {
             display: display,
             texture: None,
+            status: "".into(),
+            text_system: text_system,
+            font_texture: font_texture,
             send_screen_event: send_screen_event,
             recv_image: recv_image,
+            recv_status: recv_status,
         };
         Ok((result, events_loop))
     }
@@ -188,7 +260,7 @@ impl Display {
 }
 
 pub fn display(width: u32, height: u32) -> Result<(), Box<Error>> {
-    let (mut display, mut events_loop) = Display::new(width, height)?;
+    let (mut display, mut events_loop) = ClamDisplay::new(width, height)?;
     events_loop.run_forever(move |ev| display.run(ev));
     Ok(())
 }
