@@ -1,17 +1,27 @@
+use input::Input;
+use mandelbox_cfg::DEFAULT_CFG;
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::Write;
-use std::io::BufRead;
 use std::fmt::Write as FmtWrite;
+use std::io::BufRead;
+use std::io::Write;
 
-use input::Input;
-
+#[derive(Copy, Clone)]
 pub enum SettingValue {
     U32(u32),
     F32(f32, f32),
 }
 
 pub type Settings = HashMap<String, SettingValue>;
+
+pub fn init_settings() -> Settings {
+    let mut settings = Settings::new();
+    let mut default = DEFAULT_CFG;
+    default.normalize();
+    default.write(&mut settings);
+    settings
+}
+
 
 pub fn save_settings(settings: &Settings, file: &str) -> Result<(), Box<Error>> {
     let file = ::std::fs::File::create(file)?;

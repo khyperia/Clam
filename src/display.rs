@@ -3,16 +3,16 @@ use glium::glutin;
 use glium::texture::texture2d;
 use glium;
 use glium_text_rusttype;
+use input;
 use kernel;
+use settings;
 use std::error::Error;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
 pub enum ScreenEvent {
     Resize(u32, u32),
-    KeyDown(glutin::VirtualKeyCode, Instant),
-    KeyUp(glutin::VirtualKeyCode, Instant),
 }
 
 const FONT_SIZE: u32 = 24;
@@ -22,10 +22,9 @@ struct ClamDisplay {
     texture: Option<texture2d::Texture2d>,
     text_system: glium_text_rusttype::TextSystem,
     font_texture: glium_text_rusttype::FontTexture,
-    status: String,
+    settings_input: Arc<Mutex<(settings::Settings, input::Input)>>,
     send_screen_event: mpsc::Sender<ScreenEvent>,
     recv_image: mpsc::Receiver<glium::texture::RawImage2d<'static, u8>>,
-    recv_status: mpsc::Receiver<String>,
 }
 
 fn find_font() -> Result<::std::fs::File, Box<Error>> {
@@ -54,14 +53,13 @@ impl ClamDisplay {
         match keycode {
             glutin::VirtualKeyCode::Escape => glutin::ControlFlow::Break,
             _ => {
-                let screen_event = match state {
-                    glutin::ElementState::Pressed => ScreenEvent::KeyDown(keycode, Instant::now()),
-                    glutin::ElementState::Released => ScreenEvent::KeyUp(keycode, Instant::now()),
-                };
-                match self.send_screen_event.send(screen_event) {
-                    Ok(()) => glutin::ControlFlow::Continue,
-                    Err(_) => glutin::ControlFlow::Break,
+                let mut locked = self.settings_input.lock().unwrap();
+                let (ref mut settings, ref mut input) = *locked;
+                match state {
+                    glutin::ElementState::Pressed => input.key_down(keycode, Instant::now(), settings),
+                    glutin::ElementState::Released => input.key_up(keycode, Instant::now(), settings),
                 }
+                glutin::ControlFlow::Continue
             }
         }
     }
@@ -96,26 +94,22 @@ impl ClamDisplay {
         glutin::ControlFlow::Continue
     }
 
-    fn update_status(&mut self) -> glutin::ControlFlow {
-        loop {
-            let status = match self.recv_status.try_recv() {
-                Ok(status) => status,
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => return glutin::ControlFlow::Break,
-            };
-            self.status = status;
-        }
-        glutin::ControlFlow::Continue
+    fn get_status(&self) -> String {
+        let mut locked = self.settings_input.lock().unwrap();
+        let (ref mut settings, ref mut input) = *locked;
+        input.integrate(settings);
+        settings::settings_status(settings, input)
     }
 
     fn draw_text(&self, target: &mut glium::Frame, width: u32, height: u32) {
+        let status = self.get_status();
         let mut text = glium_text_rusttype::TextDisplay::new(
             &self.text_system,
             &self.font_texture,
-            &self.status,
+            &status,
         );
         let mut text_height = 0.0;
-        for line in self.status.lines() {
+        for line in status.lines() {
             text.set_text(line);
             text_height += text.get_height();
             let upscale = 2;
@@ -161,9 +155,6 @@ impl ClamDisplay {
         if self.update_tex() == glutin::ControlFlow::Break {
             return glutin::ControlFlow::Break;
         }
-        if self.update_status() == glutin::ControlFlow::Break {
-            return glutin::ControlFlow::Break;
-        }
         let mut target = self.display.draw();
         self.draw(&mut target);
         target.finish().unwrap();
@@ -194,16 +185,16 @@ impl ClamDisplay {
     fn launch_kernel(
         width: u32,
         height: u32,
+        settings_input: Arc<Mutex<(settings::Settings, input::Input)>>,
         send_image: mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
-        send_status: mpsc::Sender<String>,
         recv_screen_event: mpsc::Receiver<ScreenEvent>,
         proxy: glutin::EventsLoopProxy,
     ) {
         thread::spawn(move || match kernel::interactive(
             width,
             height,
+            settings_input,
             &send_image,
-            &send_status,
             &recv_screen_event,
             Some(proxy),
         ) {
@@ -222,27 +213,26 @@ impl ClamDisplay {
             FONT_SIZE,
             glium_text_rusttype::FontTexture::ascii_character_list(),
         ).unwrap();
+        let settings_input = Arc::new(Mutex::new((settings::init_settings(), input::Input::new())));
         let (send_image, recv_image) = mpsc::channel();
-        let (send_status, recv_status) = mpsc::channel();
         let (send_screen_event, recv_screen_event) = mpsc::channel();
         Self::update_window_size(&display, &mut width, &mut height);
         Self::launch_kernel(
             width,
             height,
+            settings_input.clone(),
             send_image,
-            send_status,
             recv_screen_event,
             events_loop.create_proxy(),
         );
         let result = ClamDisplay {
             display: display,
             texture: None,
-            status: "".into(),
             text_system: text_system,
             font_texture: font_texture,
+            settings_input: settings_input,
             send_screen_event: send_screen_event,
             recv_image: recv_image,
-            recv_status: recv_status,
         };
         Ok((result, events_loop))
     }
@@ -265,7 +255,12 @@ impl ClamDisplay {
                             ..
                         },
                     ..
-                } => self.keyboard_input(keycode, state),
+                } => {
+                    if self.keyboard_input(keycode, state) == glutin::ControlFlow::Break {
+                        return glutin::ControlFlow::Break;
+                    }
+                    self.update_and_draw()
+                },
                 glutin::WindowEvent::Refresh => self.update_and_draw(),
                 _ => glutin::ControlFlow::Continue,
             },

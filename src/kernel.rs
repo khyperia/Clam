@@ -1,15 +1,14 @@
 use display;
 use glium;
 use input::Input;
-use mandelbox_cfg::DEFAULT_CFG;
 use mandelbox_cfg::MandelboxCfg;
 use ocl;
 use ocl_core::types::abs::AsMem;
 use png;
 use progress::Progress;
-use settings::{Settings, settings_status};
+use settings::Settings;
 use std::error::Error;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
 const DATA_WORDS: u32 = 3;
@@ -76,12 +75,6 @@ impl Kernel {
             Some(e) => Err(e.into()),
             None => Err("No OpenCL devices found".into()),
         }
-    }
-
-    fn init_settings(settings: &mut Settings) {
-        let mut default = DEFAULT_CFG;
-        default.normalize();
-        default.write(settings);
     }
 
     fn resize(&mut self, width: u32, height: u32) -> Result<(), Box<Error>> {
@@ -173,15 +166,12 @@ impl Kernel {
 pub fn interactive(
     width: u32,
     height: u32,
+    settings_input: Arc<Mutex<(Settings, Input)>>,
     send_image: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
-    send_status: &mpsc::Sender<String>,
     screen_events: &mpsc::Receiver<display::ScreenEvent>,
     events_loop: Option<glium::glutin::EventsLoopProxy>,
 ) -> Result<(), Box<Error>> {
-    let mut settings = Settings::new();
-    Kernel::init_settings(&mut settings);
     let mut kernel = Kernel::new(width, height)?;
-    let mut input = Input::new();
     loop {
         loop {
             let event = match screen_events.try_recv() {
@@ -192,20 +182,15 @@ pub fn interactive(
 
             match event {
                 display::ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
-                display::ScreenEvent::KeyDown(key, time) => {
-                    input.key_down(key, time, &mut settings)
-                }
-                display::ScreenEvent::KeyUp(key, time) => input.key_up(key, time, &mut settings),
             }
         }
 
-        let status = settings_status(&settings, &input);
-        match send_status.send(status) {
-            Ok(()) => (),
-            Err(_) => return Ok(()),
+        let settings = {
+            let mut locked = settings_input.lock().unwrap();
+            let (ref mut settings, ref mut input) = *locked;
+            input.integrate(settings);
+            (*settings).clone()
         };
-
-        input.integrate(&mut settings);
         let image = kernel.run(&settings, true)?.unwrap();
         match send_image.send(image) {
             Ok(()) => (),
@@ -229,8 +214,7 @@ fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), 
 }
 
 pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Box<Error>> {
-    let mut settings = Settings::new();
-    Kernel::init_settings(&mut settings);
+    let mut settings = ::settings::init_settings();
     ::settings::load_settings(&mut settings, "settings.clam5")?;
     let mut kernel = Kernel::new(width, height)?;
     let progress = Progress::new();
