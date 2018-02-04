@@ -372,9 +372,8 @@ static float3 RotateToColors(Cfg cfg, float2 components)
         + LightBrightness(cfg) * components.y;
 }
 
-static uint PackPixel(Cfg cfg, float3 pixel)
+static uint PackPixel(Cfg cfg, float3 pixel, uint output_linear)
 {
-    pixel = sqrt(max(pixel, 0.0f));
     if (cfg->WhiteClamp)
     {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
@@ -382,11 +381,18 @@ static uint PackPixel(Cfg cfg, float3 pixel)
         {
             pixel *= 1.0f / maxVal;
         }
+        pixel = max(pixel, 0.0f);
     }
     else
     {
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
+
+    if (!output_linear)
+    {
+        pixel = powr(pixel, 1 / 2.2f);
+    }
+
     pixel = pixel * 255;
     return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 16);
 }
@@ -397,7 +403,8 @@ __kernel void Main(
     __global struct MandelboxCfg *cfg_global,
     uint width,
     uint height,
-    uint frame
+    uint frame,
+    uint output_linear
 )
 {
     uint mem_offset = 0;
@@ -425,6 +432,12 @@ __kernel void Main(
     *scratch = newColor;
 
     float3 realColor = RotateToColors(cfg, newColor);
-    uint packedColor = PackPixel(cfg, realColor);
+    uint packedColor = PackPixel(cfg, realColor, output_linear);
     screenPixels[idx] = packedColor;
+    if (x % 10 < 5)
+        screenPixels[idx] = PackPixel(cfg, (float3)(0.5, 0.5, 0.5), output_linear);
+    else if (y % 2 == 0)
+        screenPixels[idx] = PackPixel(cfg, (float3)(0, 0, 0), output_linear);
+    else
+        screenPixels[idx] = PackPixel(cfg, (float3)(1, 1, 1), output_linear);
 }

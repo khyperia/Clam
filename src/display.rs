@@ -169,7 +169,7 @@ impl ClamDisplay {
         let window = glutin::WindowBuilder::new()
             .with_dimensions(width, height)
             .with_title("clam5");
-        let context = glutin::ContextBuilder::new().with_srgb(true);
+        let context = glutin::ContextBuilder::new();
         let display = glium::Display::new(window, context, events_loop)?;
         Ok(display)
     }

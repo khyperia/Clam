@@ -85,7 +85,7 @@ impl Kernel {
         Ok(())
     }
 
-    fn set_args(&mut self, settings: &Settings) -> Result<(), Box<Error>> {
+    fn set_args(&mut self, settings: &Settings, output_linear: bool) -> Result<(), Box<Error>> {
         let old_cfg = self.cpu_cfg;
         self.cpu_cfg.read(settings);
         if old_cfg != self.cpu_cfg {
@@ -125,6 +125,10 @@ impl Kernel {
                 4,
                 ocl::enums::KernelArg::Scalar(self.frame),
             )?;
+            self.kernel.set_arg_unchecked(
+                5,
+                ocl::enums::KernelArg::Scalar(if output_linear { 1u32 } else { 0u32 }),
+            )?;
         };
         Ok(())
     }
@@ -133,8 +137,9 @@ impl Kernel {
         &mut self,
         settings: &Settings,
         download: bool,
+        output_linear: bool,
     ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Box<Error>> {
-        self.set_args(settings)?;
+        self.set_args(settings, output_linear)?;
         let lws = 1024;
         let to_launch = self.kernel
             .cmd()
@@ -191,7 +196,7 @@ pub fn interactive(
             input.integrate(settings);
             (*settings).clone()
         };
-        let image = kernel.run(&settings, true)?.unwrap();
+        let image = kernel.run(&settings, true, true)?.unwrap();
         match send_image.send(image) {
             Ok(()) => (),
             Err(_) => return Ok(()),
@@ -220,7 +225,7 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Box<Error>> {
     let progress = Progress::new();
     let progress_count = (rpp / 20).min(4).max(16);
     for ray in 0..(rpp - 1) {
-        let _ = kernel.run(&settings, false)?;
+        let _ = kernel.run(&settings, false, false)?;
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync()?;
             let value = ray as f32 / rpp as f32;
@@ -232,7 +237,7 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Box<Error>> {
     }
     kernel.sync()?;
     println!("Last ray...");
-    let image = kernel.run(&settings, true)?.unwrap();
+    let image = kernel.run(&settings, true, false)?.unwrap();
     println!("render done, saving");
     save_image(&image, "render.png")?;
     println!("done");
