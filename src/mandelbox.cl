@@ -434,10 +434,4 @@ __kernel void Main(
     float3 realColor = RotateToColors(cfg, newColor);
     uint packedColor = PackPixel(cfg, realColor, output_linear);
     screenPixels[idx] = packedColor;
-    if (x % 10 < 5)
-        screenPixels[idx] = PackPixel(cfg, (float3)(0.5, 0.5, 0.5), output_linear);
-    else if (y % 2 == 0)
-        screenPixels[idx] = PackPixel(cfg, (float3)(0, 0, 0), output_linear);
-    else
-        screenPixels[idx] = PackPixel(cfg, (float3)(1, 1, 1), output_linear);
 }
