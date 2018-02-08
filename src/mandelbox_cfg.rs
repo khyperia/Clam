@@ -22,12 +22,18 @@ pub struct MandelboxCfg {
     fixed_radius_2: f32,
     min_radius_2: f32,
     dof_amount: f32,
-    light_pos_x: f32,
-    light_pos_y: f32,
-    light_pos_z: f32,
-    light_brightness_r: f32,
-    light_brightness_g: f32,
-    light_brightness_b: f32,
+    light_pos_1_x: f32,
+    light_pos_1_y: f32,
+    light_pos_1_z: f32,
+    light_brightness_1_r: f32,
+    light_brightness_1_g: f32,
+    light_brightness_1_b: f32,
+    light_pos_2_x: f32,
+    light_pos_2_y: f32,
+    light_pos_2_z: f32,
+    light_brightness_2_r: f32,
+    light_brightness_2_g: f32,
+    light_brightness_2_b: f32,
     ambient_brightness_r: f32,
     ambient_brightness_g: f32,
     ambient_brightness_b: f32,
@@ -62,12 +68,18 @@ pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
     fixed_radius_2: 1.0,
     min_radius_2: 0.125,
     dof_amount: 0.001,
-    light_pos_x: 3.0,
-    light_pos_y: 3.5,
-    light_pos_z: 2.5,
-    light_brightness_r: 5.0,
-    light_brightness_g: 4.0,
-    light_brightness_b: 3.0,
+    light_pos_1_x: 3.0,
+    light_pos_1_y: 3.5,
+    light_pos_1_z: 2.5,
+    light_brightness_1_r: 5.0,
+    light_brightness_1_g: 4.0,
+    light_brightness_1_b: 3.0,
+    light_pos_2_x: 0.0,
+    light_pos_2_y: 4.0,
+    light_pos_2_z: 3.0,
+    light_brightness_2_r: 2.0,
+    light_brightness_2_g: 1.0,
+    light_brightness_2_b: 3.0,
     ambient_brightness_r: 0.3,
     ambient_brightness_g: 0.3,
     ambient_brightness_b: 0.6,
@@ -140,20 +152,35 @@ impl MandelboxCfg {
         );
         settings.insert("min_radius_2".into(), SettingValue::F32(self.min_radius_2, -0.5));
         settings.insert("dof_amount".into(), SettingValue::F32(self.dof_amount, -0.5));
-        settings.insert("light_pos_x".into(), SettingValue::F32(self.light_pos_x, 0.5));
-        settings.insert("light_pos_y".into(), SettingValue::F32(self.light_pos_y, 0.5));
-        settings.insert("light_pos_z".into(), SettingValue::F32(self.light_pos_z, 0.5));
+        settings.insert("light_pos_1_x".into(), SettingValue::F32(self.light_pos_1_x, 0.5));
+        settings.insert("light_pos_1_y".into(), SettingValue::F32(self.light_pos_1_y, 0.5));
+        settings.insert("light_pos_1_z".into(), SettingValue::F32(self.light_pos_1_z, 0.5));
         settings.insert(
-            "light_brightness_r".into(),
-            SettingValue::F32(self.light_brightness_r, -0.5),
+            "light_brightness_1_r".into(),
+            SettingValue::F32(self.light_brightness_1_r, -0.5),
         );
         settings.insert(
-            "light_brightness_g".into(),
-            SettingValue::F32(self.light_brightness_g, -0.5),
+            "light_brightness_1_g".into(),
+            SettingValue::F32(self.light_brightness_1_g, -0.5),
         );
         settings.insert(
-            "light_brightness_b".into(),
-            SettingValue::F32(self.light_brightness_b, -0.5),
+            "light_brightness_1_b".into(),
+            SettingValue::F32(self.light_brightness_1_b, -0.5),
+        );
+        settings.insert("light_pos_2_x".into(), SettingValue::F32(self.light_pos_2_x, 0.5));
+        settings.insert("light_pos_2_y".into(), SettingValue::F32(self.light_pos_2_y, 0.5));
+        settings.insert("light_pos_2_z".into(), SettingValue::F32(self.light_pos_2_z, 0.5));
+        settings.insert(
+            "light_brightness_2_r".into(),
+            SettingValue::F32(self.light_brightness_2_r, -0.5),
+        );
+        settings.insert(
+            "light_brightness_2_g".into(),
+            SettingValue::F32(self.light_brightness_2_g, -0.5),
+        );
+        settings.insert(
+            "light_brightness_2_b".into(),
+            SettingValue::F32(self.light_brightness_2_b, -0.5),
         );
         settings.insert(
             "ambient_brightness_r".into(),
@@ -266,12 +293,18 @@ impl MandelboxCfg {
             "fixed_radius_2" => &mut self.fixed_radius_2,
             "min_radius_2" => &mut self.min_radius_2,
             "dof_amount" => &mut self.dof_amount,
-            "light_pos_x" => &mut self.light_pos_x,
-            "light_pos_y" => &mut self.light_pos_y,
-            "light_pos_z" => &mut self.light_pos_z,
-            "light_brightness_r" => &mut self.light_brightness_r,
-            "light_brightness_g" => &mut self.light_brightness_g,
-            "light_brightness_b" => &mut self.light_brightness_b,
+            "light_pos_1_x" => &mut self.light_pos_1_x,
+            "light_pos_1_y" => &mut self.light_pos_1_y,
+            "light_pos_1_z" => &mut self.light_pos_1_z,
+            "light_brightness_1_r" => &mut self.light_brightness_1_r,
+            "light_brightness_1_g" => &mut self.light_brightness_1_g,
+            "light_brightness_1_b" => &mut self.light_brightness_1_b,
+            "light_pos_2_x" => &mut self.light_pos_2_x,
+            "light_pos_2_y" => &mut self.light_pos_2_y,
+            "light_pos_2_z" => &mut self.light_pos_2_z,
+            "light_brightness_2_r" => &mut self.light_brightness_2_r,
+            "light_brightness_2_g" => &mut self.light_brightness_2_g,
+            "light_brightness_2_b" => &mut self.light_brightness_2_b,
             "ambient_brightness_r" => &mut self.ambient_brightness_r,
             "ambient_brightness_g" => &mut self.ambient_brightness_g,
             "ambient_brightness_b" => &mut self.ambient_brightness_b,

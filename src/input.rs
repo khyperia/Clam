@@ -72,7 +72,7 @@ impl Input {
             Key::Right => {
                 let key = &self.sorted_keys(settings)[self.index];
                 if let SettingValue::U32(value) = settings[key] {
-                    settings.insert(key.clone(), SettingValue::U32(value - 1));
+                    settings.insert(key.clone(), SettingValue::U32(value + 1));
                 }
             }
             _ => (),

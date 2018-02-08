@@ -11,7 +11,7 @@ use std::error::Error;
 use std::sync::{mpsc, Arc, Mutex};
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
-const DATA_WORDS: u32 = 3;
+const DATA_WORDS: u32 = 5;
 
 struct Kernel {
     context: ocl::Context,
