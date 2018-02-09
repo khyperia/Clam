@@ -45,6 +45,31 @@ struct MandelboxCfg
 
 typedef __private struct MandelboxCfg *Cfg;
 
+static float3 LightPos1(Cfg cfg)
+{
+    return (float3)(cfg->LightPos1X, cfg->LightPos1Y, cfg->LightPos1Z);
+}
+
+static float3 LightPos2(Cfg cfg)
+{
+    return (float3)(cfg->LightPos2X, cfg->LightPos2Y, cfg->LightPos2Z);
+}
+
+static float3 LightBrightness1(Cfg cfg)
+{
+    return (float3)(cfg->LightBrightness1R, cfg->LightBrightness1G, cfg->LightBrightness1B);
+}
+
+static float3 LightBrightness2(Cfg cfg)
+{
+    return (float3)(cfg->LightBrightness2R, cfg->LightBrightness2G, cfg->LightBrightness2B);
+}
+
+static float3 AmbientBrightness(Cfg cfg)
+{
+    return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB);
+}
+
 static float4 comp_mul(float4 left, float4 right)
 {
     return (float4)(
@@ -98,6 +123,13 @@ static float3 Random_Sphere(struct Random *this)
     float3 result = (float3)(temp.x, temp.y, Random_Normal(this).x);
     result.x += (dot(result, result) == 0.0f); // ensure nonzero
     return normalize(result);
+}
+
+static float3 Random_Lambertian(struct Random *this, float3 normal)
+{
+    float3 result = Random_Sphere(this);
+    result = normalize(result + normal);
+    return result;
 }
 
 struct Ray
@@ -270,51 +302,43 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float3 LightPos1(Cfg cfg)
+static float LightReflected(Cfg cfg, float3 incoming, float3 outgoing, float3 normal)
 {
-    return (float3)(cfg->LightPos1X, cfg->LightPos1Y, cfg->LightPos1Z);
-}
-
-static float3 LightPos2(Cfg cfg)
-{
-    return (float3)(cfg->LightPos2X, cfg->LightPos2Y, cfg->LightPos2Z);
-}
-
-static float
-Specular(Cfg cfg, float3 incoming, float3 outgoing, float3 normal)
-{
+    float incident_angle_weakening = dot(normal, incoming);
     const float3 half_vec = normalize(incoming + outgoing);
     const float dot_prod = fabs(dot(half_vec, normal));
     const int hardness = 512;
-    //const float base_reflection = 0.7f; // TODO: Make configurable.
     const float base_reflection = cfg->ReflectBrightness;
     const float spec = pown(sinpi(dot_prod * 0.5f), hardness);
-    return spec * (1 - base_reflection) + base_reflection;
+    const float brdf = spec * (1 - base_reflection) + base_reflection;
+    return brdf * incident_angle_weakening;
 }
 
-static float TraceLight(Cfg cfg, float quality, float3 pos, float3 normal, float3 negativeRayDir, float3 lightPos)
+static float TraceLight(Cfg cfg, float quality, float3 pos, float3 normal, float3 outgoingRay, float3 lightPos)
 {
     const float3 toLightVec = lightPos - pos;
     const float lightDist = length(toLightVec);
     const float3 toLight = toLightVec * (1 / lightDist);
 
+    // reduce brightness by radius^2
     float directLightingAmount = 1.0f / (lightDist * lightDist);
 
-    float normalDotProd = dot(normal, toLight);
-    directLightingAmount *= normalDotProd * Specular(cfg, toLight, negativeRayDir, normal);
+    directLightingAmount *= LightReflected(cfg, toLight, outgoingRay, normal);
 
-    // direct lighting
-    if (normalDotProd > 0)
+    // if <0, then the light is below the surface
+    if (directLightingAmount < 0)
     {
-        float3 discard_normal;
-        const float light_distance = Cast(cfg, new_Ray(pos, toLight), quality, lightDist, &discard_normal);
-        if (light_distance >= lightDist)
-        {
-            return directLightingAmount;
-        }
+        return 0.0f;
     }
 
-    return 0.0f;
+    float3 discard_normal;
+    const float light_distance = Cast(cfg, new_Ray(pos, toLight), quality, lightDist, &discard_normal);
+    if (light_distance < lightDist)
+    {
+        return 0.0f;
+    }
+
+    return directLightingAmount;
 }
 
 // (ambient, light1, light2)
@@ -322,14 +346,15 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 {
     float3 rayColor = (float3)(0, 0, 0);
     float reflectionColor = 1.0f;
-    bool firstRay = true;
     for (int i = 0; i < cfg->NumRayBounces; i++)
     {
-        const float quality = firstRay ? cfg->QualityFirstRay *
-            ((width + height) / (2 * cfg->fov)) : cfg->QualityRestRay;
-        const float maxDist = cfg->MaxRayDist;
+        const bool firstRay = i == 0;
+        const float firstRayQuality = cfg->QualityFirstRay * ((width + height) / (2 * cfg->fov));
+
+        const float quality = firstRay ? firstRayQuality : cfg->QualityRestRay;
+
         float3 normal;
-        float distance = Cast(cfg, ray, quality, maxDist, &normal);
+        float distance = Cast(cfg, ray, quality, cfg->MaxRayDist, &normal);
 
         if (distance > cfg->MaxRayDist)
         {
@@ -338,35 +363,16 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
             break;
         }
 
-        float3 newDir = Random_Sphere(rand);
-        // incorporates lambertian lighting
-        newDir = normalize(newDir + normal);
-
         const float3 newPos = Ray_At(ray, distance);
 
-	rayColor.y += reflectionColor * TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos1(cfg));
-	rayColor.z += reflectionColor * TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos2(cfg));
+        rayColor.y += reflectionColor * TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos1(cfg));
+        rayColor.z += reflectionColor * TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos2(cfg));
 
-        reflectionColor *= Specular(cfg, newDir, -ray.dir, normal);
+        float3 newDir = Random_Lambertian(rand, normal);
+        reflectionColor *= LightReflected(cfg, newDir, -ray.dir, normal);
         ray = new_Ray(newPos, newDir);
-        firstRay = false;
     }
     return rayColor;
-}
-
-static float3 AmbientBrightness(Cfg cfg)
-{
-    return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB);
-}
-
-static float3 LightBrightness1(Cfg cfg)
-{
-    return (float3)(cfg->LightBrightness1R, cfg->LightBrightness1G, cfg->LightBrightness1B);
-}
-
-static float3 LightBrightness2(Cfg cfg)
-{
-    return (float3)(cfg->LightBrightness2R, cfg->LightBrightness2G, cfg->LightBrightness2B);
 }
 
 static float3 RotateToColors(Cfg cfg, float3 components)
@@ -374,6 +380,16 @@ static float3 RotateToColors(Cfg cfg, float3 components)
     return AmbientBrightness(cfg) * components.x
         + LightBrightness1(cfg) * components.y
         + LightBrightness2(cfg) * components.z;
+}
+
+static float GammaCompression(float value)
+{
+    // http://mimosa-pudica.net/fast-gamma/
+    float a = 0.00279491f;
+    float b = 1.15907984f;
+    //float c = b * native_rsqrt(1.0f + a) - 1.0f;
+    float c = 0.15746346551f;
+    return (b * native_rsqrt(value + a) - c) * value;
 }
 
 static uint PackPixel(Cfg cfg, float3 pixel, uint output_linear)
@@ -394,7 +410,9 @@ static uint PackPixel(Cfg cfg, float3 pixel, uint output_linear)
 
     if (!output_linear)
     {
-        pixel = powr(pixel, 1 / 2.2f);
+        pixel.x = GammaCompression(pixel.x);
+        pixel.y = GammaCompression(pixel.y);
+        pixel.z = GammaCompression(pixel.z);
     }
 
     pixel = pixel * 255;
@@ -427,7 +445,7 @@ __kernel void Main(
     }
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
     y = height - (y + 1);
-    struct Random rand = new_Random(idx, frame, get_global_size(0));
+    struct Random rand = new_Random(idx, frame, width * height);
     struct Ray ray = Camera(cfg, x, y, width, height, &rand);
     float3 colorComponents = Trace(cfg, ray, width, height, &rand);
     __global float3 *scratch = &scratchBuf_arg[idx];
