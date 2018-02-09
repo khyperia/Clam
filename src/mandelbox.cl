@@ -57,17 +57,17 @@ static float3 LightPos2(Cfg cfg)
 
 static float3 LightBrightness1(Cfg cfg)
 {
-    return (float3)(cfg->LightBrightness1R, cfg->LightBrightness1G, cfg->LightBrightness1B);
+    return (float3)(cfg->LightBrightness1R, cfg->LightBrightness1G, cfg->LightBrightness1B) / cfg->ReflectBrightness;
 }
 
 static float3 LightBrightness2(Cfg cfg)
 {
-    return (float3)(cfg->LightBrightness2R, cfg->LightBrightness2G, cfg->LightBrightness2B);
+    return (float3)(cfg->LightBrightness2R, cfg->LightBrightness2G, cfg->LightBrightness2B) / cfg->ReflectBrightness;
 }
 
 static float3 AmbientBrightness(Cfg cfg)
 {
-    return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB);
+    return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB) / cfg->ReflectBrightness;
 }
 
 static float4 comp_mul(float4 left, float4 right)
@@ -385,10 +385,10 @@ static float3 RotateToColors(Cfg cfg, float3 components)
 static float GammaCompression(float value)
 {
     // http://mimosa-pudica.net/fast-gamma/
-    float a = 0.00279491f;
-    float b = 1.15907984f;
+    const float a = 0.00279491f;
+    const float b = 1.15907984f;
     //float c = b * native_rsqrt(1.0f + a) - 1.0f;
-    float c = 0.15746346551f;
+    const float c = 0.15746346551f;
     return (b * native_rsqrt(value + a) - c) * value;
 }
 

@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["khyperia <khyperia@live.com>"]
 
 [dependencies]
+failure = "*"
 glium = { version = "*", default-features = false, features = ["glutin"] }
 glium_text_rusttype = { version = "*", default-features = false }
-ocl = { version = "*", default-features = false }
-ocl-core = { version = "*", default-features = false }
+ocl = { git = "https://github.com/cogciprocate/ocl", default-features = false }
+ocl-core = { git = "https://github.com/cogciprocate/ocl", default-features = false }
 png = { version = "*", default-features = false, features = ["png-encoding"] }

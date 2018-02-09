@@ -1,3 +1,4 @@
+extern crate failure;
 extern crate glium;
 extern crate glium_text_rusttype;
 extern crate ocl;
@@ -12,8 +13,9 @@ mod progress;
 mod settings;
 
 use std::env::args;
+use failure::Error;
 
-fn try_render(args: &[String]) -> Result<(), Box<std::error::Error>> {
+fn try_render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
         let rpp = args[1].parse()?;
         match &*args[0] {

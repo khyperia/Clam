@@ -6,7 +6,8 @@ use glium_text_rusttype;
 use input;
 use kernel;
 use settings;
-use std::error::Error;
+use failure;
+use failure::Error;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -27,7 +28,7 @@ struct ClamDisplay {
     recv_image: mpsc::Receiver<glium::texture::RawImage2d<'static, u8>>,
 }
 
-fn find_font() -> Result<::std::fs::File, Box<Error>> {
+fn find_font() -> Result<::std::fs::File, Error> {
     let locations = [
         "/usr/share/fonts/TTF/FiraMono-Regular.ttf",
         "/usr/share/fonts/TTF/FiraSans-Regular.ttf",
@@ -41,7 +42,7 @@ fn find_font() -> Result<::std::fs::File, Box<Error>> {
             Err(_) => (),
         }
     }
-    return Err("No font found".into());
+    return Err(failure::err_msg("No font found"));
 }
 
 impl ClamDisplay {
@@ -165,12 +166,12 @@ impl ClamDisplay {
         events_loop: &glutin::EventsLoop,
         width: u32,
         height: u32,
-    ) -> Result<glium::Display, Box<Error>> {
+    ) -> Result<glium::Display, Error> {
         let window = glutin::WindowBuilder::new()
             .with_dimensions(width, height)
             .with_title("clam5");
         let context = glutin::ContextBuilder::new();
-        let display = glium::Display::new(window, context, events_loop)?;
+        let display = glium::Display::new(window, context, events_loop).unwrap(); // TODO: don't unwrap
         Ok(display)
     }
 
@@ -203,7 +204,7 @@ impl ClamDisplay {
         });
     }
 
-    fn new(mut width: u32, mut height: u32) -> Result<(ClamDisplay, glutin::EventsLoop), Box<Error>> {
+    fn new(mut width: u32, mut height: u32) -> Result<(ClamDisplay, glutin::EventsLoop), Error> {
         let events_loop = glutin::EventsLoop::new();
         let display = Self::create_window(&events_loop, width, height)?;
         let text_system = glium_text_rusttype::TextSystem::new(&display);
@@ -271,7 +272,7 @@ impl ClamDisplay {
     }
 }
 
-pub fn display(width: u32, height: u32) -> Result<(), Box<Error>> {
+pub fn display(width: u32, height: u32) -> Result<(), Error> {
     let (mut display, mut events_loop) = ClamDisplay::new(width, height)?;
     events_loop.run_forever(move |ev| display.run(ev));
     Ok(())

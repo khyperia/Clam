@@ -1,7 +1,7 @@
 use glium::glutin::VirtualKeyCode as Key;
 use settings::*;
 use std::collections::HashMap;
-use std::error::Error;
+use failure::Error;
 use std::time::Instant;
 
 pub struct Input {
@@ -40,7 +40,7 @@ impl Input {
         self.run(settings, now);
     }
 
-    fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Box<Error>> {
+    fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Error> {
         match key {
             Key::P => {
                 load_settings(settings, "settings.clam5")?;

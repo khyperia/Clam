@@ -1,7 +1,7 @@
 use input::Input;
 use mandelbox_cfg::DEFAULT_CFG;
 use std::collections::HashMap;
-use std::error::Error;
+use failure::Error;
 use std::fmt::Write as FmtWrite;
 use std::io::BufRead;
 use std::io::Write;
@@ -23,7 +23,7 @@ pub fn init_settings() -> Settings {
 }
 
 
-pub fn save_settings(settings: &Settings, file: &str) -> Result<(), Box<Error>> {
+pub fn save_settings(settings: &Settings, file: &str) -> Result<(), Error> {
     let file = ::std::fs::File::create(file)?;
     let mut writer = ::std::io::BufWriter::new(&file);
     for (key, value) in settings {
@@ -35,7 +35,7 @@ pub fn save_settings(settings: &Settings, file: &str) -> Result<(), Box<Error>> 
     Ok(())
 }
 
-pub fn load_settings(settings: &mut Settings, file: &str) -> Result<(), Box<Error>> {
+pub fn load_settings(settings: &mut Settings, file: &str) -> Result<(), Error> {
     let file = ::std::fs::File::open(file)?;
     let reader = ::std::io::BufReader::new(&file);
     for line in reader.lines() {

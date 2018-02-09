@@ -1,4 +1,6 @@
 use display;
+use failure::Error;
+use failure;
 use glium;
 use input::Input;
 use mandelbox_cfg::MandelboxCfg;
@@ -7,7 +9,9 @@ use ocl_core::types::abs::AsMem;
 use png;
 use progress::Progress;
 use settings::Settings;
-use std::error::Error;
+use std::env;
+use std::fs::File;
+use std::io::prelude::*;
 use std::sync::{mpsc, Arc, Mutex};
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
@@ -25,22 +29,51 @@ struct Kernel {
     frame: u32,
 }
 
+fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
+    if let Ok(path) = env::var("CLAM5_BINARY") {
+        if let ocl::enums::ProgramInfoResult::Binaries(binaries) = program.info(ocl::enums::ProgramInfo::Binaries)? {
+            if binaries.len() != 1 {
+                let mut i = 0;
+                for binary in binaries {
+                    let mut file = File::create(format!("{}.{}", &path, i))?;
+                    file.write_all(&binary[..])?;
+                    i += 1;
+                }
+            } else {
+                let mut file = File::create(format!("{}", &path))?;
+                file.write_all(&binaries[0][..])?;
+            }
+            println!("Dumped binaries");
+        }
+    }
+    Ok(())
+}
+
 impl Kernel {
-    fn new(width: u32, height: u32) -> Result<Kernel, Box<Error>> {
+    fn new(width: u32, height: u32) -> Result<Kernel, Error> {
         let context = Self::make_context()?;
-        let program = ocl::Program::builder().src(MANDELBOX).build(&context)?;
+        let device = context.devices()[0];
+        let device_name = device.name()?;
+        let program = {
+            let mut builder = ocl::Program::builder().src(MANDELBOX);
+            if device_name.contains("GeForce") {
+                builder = builder.cmplr_opt("-cl-nv-verbose");
+            }
+            builder.build(&context)?
+        };
+        println!("Using GPU: {}", device_name);
         if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
-            program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog)
+            program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog)?
         {
             let log = log.trim();
             if !log.is_empty() {
                 println!("{}", log);
             }
         }
-        let queue = ocl::Queue::new(&context, context.devices()[0], None)?;
-        println!("{}", queue.device().name());
+        dump_binary(&program)?;
+        let queue = ocl::Queue::new(&context, device, None)?;
         let kernel = ocl::Kernel::new("Main", &program)?;
-        let cfg = ocl::Buffer::builder().context(&context).dims(1).build()?;
+        let cfg = ocl::Buffer::builder().context(&context).len(1).build()?;
         Ok(Kernel {
             context: context,
             queue: queue,
@@ -54,7 +87,7 @@ impl Kernel {
         })
     }
 
-    fn make_context() -> Result<ocl::Context, Box<Error>> {
+    fn make_context() -> Result<ocl::Context, Error> {
         let mut last_err = None;
         for platform in ocl::Platform::list() {
             match ocl::Context::builder()
@@ -73,11 +106,11 @@ impl Kernel {
         }
         match last_err {
             Some(e) => Err(e.into()),
-            None => Err("No OpenCL devices found".into()),
+            None => Err(failure::err_msg("No OpenCL devices found")),
         }
     }
 
-    fn resize(&mut self, width: u32, height: u32) -> Result<(), Box<Error>> {
+    fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.width = width;
         self.height = height;
         self.data = None;
@@ -85,7 +118,7 @@ impl Kernel {
         Ok(())
     }
 
-    fn set_args(&mut self, settings: &Settings, output_linear: bool) -> Result<(), Box<Error>> {
+    fn set_args(&mut self, settings: &Settings, output_linear: bool) -> Result<(), Error> {
         let old_cfg = self.cpu_cfg;
         self.cpu_cfg.read(settings);
         if old_cfg != self.cpu_cfg {
@@ -98,7 +131,7 @@ impl Kernel {
             None => {
                 let data = ocl::Buffer::builder()
                     .context(&self.context)
-                    .dims(self.width * self.height * DATA_WORDS * 4)
+                    .len(self.width * self.height * DATA_WORDS * 4)
                     .build()?;
                 self.data = Some(data);
                 self.data.as_ref().unwrap()
@@ -138,7 +171,7 @@ impl Kernel {
         settings: &Settings,
         download: bool,
         output_linear: bool,
-    ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Box<Error>> {
+    ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Error> {
         self.set_args(settings, output_linear)?;
         let lws = 1024;
         let to_launch = self.kernel
@@ -175,7 +208,7 @@ pub fn interactive(
     send_image: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
     screen_events: &mpsc::Receiver<display::ScreenEvent>,
     events_loop: Option<glium::glutin::EventsLoopProxy>,
-) -> Result<(), Box<Error>> {
+) -> Result<(), Error> {
     let mut kernel = Kernel::new(width, height)?;
     loop {
         loop {
@@ -207,7 +240,7 @@ pub fn interactive(
     }
 }
 
-fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), Box<Error>> {
+fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), Error> {
     use png::HasParameters;
     let file = ::std::fs::File::create(path)?;
     let w = &mut ::std::io::BufWriter::new(file);
@@ -218,7 +251,7 @@ fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), 
     Ok(())
 }
 
-pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Box<Error>> {
+pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = ::settings::init_settings();
     ::settings::load_settings(&mut settings, "settings.clam5")?;
     let mut kernel = Kernel::new(width, height)?;
