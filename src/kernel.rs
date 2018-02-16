@@ -5,7 +5,6 @@ use glium;
 use input::Input;
 use mandelbox_cfg::MandelboxCfg;
 use ocl;
-use ocl_core::types::abs::AsMem;
 use png;
 use progress::Progress;
 use settings::Settings;
@@ -72,7 +71,13 @@ impl Kernel {
         }
         dump_binary(&program)?;
         let queue = ocl::Queue::new(&context, device, None)?;
-        let kernel = ocl::Kernel::new("Main", &program)?;
+        let kernel = ocl::Kernel::new("Main", &program)?
+            .arg_buf_named::<u8, ocl::Buffer<u8>>("data", None)
+            .arg_buf_named::<MandelboxCfg, ocl::Buffer<MandelboxCfg>>("cfg", None)
+            .arg_scl_named::<u32>("width", None)
+            .arg_scl_named::<u32>("height", None)
+            .arg_scl_named::<u32>("frame", None)
+            .arg_scl_named::<u32>("output_linear", None);
         let cfg = ocl::Buffer::builder().context(&context).len(1).build()?;
         Ok(Kernel {
             context: context,
@@ -137,32 +142,12 @@ impl Kernel {
                 self.data.as_ref().unwrap()
             }
         };
-        unsafe {
-            self.kernel.set_arg_unchecked::<usize>(
-                0,
-                ocl::enums::KernelArg::Mem(data.as_mem()),
-            )?;
-            self.kernel.set_arg_unchecked::<usize>(
-                1,
-                ocl::enums::KernelArg::Mem(self.cfg.as_mem()),
-            )?;
-            self.kernel.set_arg_unchecked(
-                2,
-                ocl::enums::KernelArg::Scalar(self.width),
-            )?;
-            self.kernel.set_arg_unchecked(
-                3,
-                ocl::enums::KernelArg::Scalar(self.height),
-            )?;
-            self.kernel.set_arg_unchecked(
-                4,
-                ocl::enums::KernelArg::Scalar(self.frame),
-            )?;
-            self.kernel.set_arg_unchecked(
-                5,
-                ocl::enums::KernelArg::Scalar(if output_linear { 1u32 } else { 0u32 }),
-            )?;
-        };
+        self.kernel.set_arg_buf_named("data", Some(data))?;
+        self.kernel.set_arg_buf_named("cfg", Some(&self.cfg))?;
+        self.kernel.set_arg_scl_named("width", self.width as u32)?;
+        self.kernel.set_arg_scl_named("height", self.height as u32)?;
+        self.kernel.set_arg_scl_named("frame", self.frame as u32)?;
+        self.kernel.set_arg_scl_named("output_linear", if output_linear { 1u32 } else { 0u32 })?;
         Ok(())
     }
 
