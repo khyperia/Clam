@@ -1,7 +1,7 @@
-use display;
+use display::Image;
+use display::ScreenEvent;
 use failure::Error;
 use failure;
-use glium;
 use input::Input;
 use mandelbox_cfg::MandelboxCfg;
 use ocl;
@@ -30,13 +30,13 @@ struct Kernel {
 
 fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
     if let Ok(path) = env::var("CLAM5_BINARY") {
-        if let ocl::enums::ProgramInfoResult::Binaries(binaries) = program.info(ocl::enums::ProgramInfo::Binaries)? {
+        if let ocl::enums::ProgramInfoResult::Binaries(binaries) =
+            program.info(ocl::enums::ProgramInfo::Binaries)?
+        {
             if binaries.len() != 1 {
-                let mut i = 0;
-                for binary in binaries {
+                for (i, binary) in binaries.iter().enumerate() {
                     let mut file = File::create(format!("{}.{}", &path, i))?;
                     file.write_all(&binary[..])?;
-                    i += 1;
                 }
             } else {
                 let mut file = File::create(format!("{}", &path))?;
@@ -54,9 +54,11 @@ impl Kernel {
         let device = context.devices()[0];
         let device_name = device.name()?;
         let program = {
-            let mut builder = ocl::Program::builder().src(MANDELBOX);
+            let mut builder = ocl::Program::builder();
+            builder.source(MANDELBOX);
+            builder.devices(device);
             if device_name.contains("GeForce") {
-                builder = builder.cmplr_opt("-cl-nv-verbose");
+                builder.cmplr_opt("-cl-nv-verbose");
             }
             builder.build(&context)?
         };
@@ -71,23 +73,26 @@ impl Kernel {
         }
         dump_binary(&program)?;
         let queue = ocl::Queue::new(&context, device, None)?;
-        let kernel = ocl::Kernel::new("Main", &program)?
-            .arg_buf_named::<u8, ocl::Buffer<u8>>("data", None)
-            .arg_buf_named::<MandelboxCfg, ocl::Buffer<MandelboxCfg>>("cfg", None)
-            .arg_scl_named::<u32>("width", None)
-            .arg_scl_named::<u32>("height", None)
-            .arg_scl_named::<u32>("frame", None)
-            .arg_scl_named::<u32>("output_linear", None);
         let cfg = ocl::Buffer::builder().context(&context).len(1).build()?;
+        let kernel = ocl::Kernel::builder()
+            .program(&program)
+            .name("Main")
+            .arg(None::<&ocl::Buffer<u8>>)
+            .arg(&cfg)
+            .arg(0u32)
+            .arg(0u32)
+            .arg(0u32)
+            .arg(0u32)
+            .build()?;
         Ok(Kernel {
-            context: context,
-            queue: queue,
-            kernel: kernel,
+            context,
+            queue,
+            kernel,
             data: None,
             cpu_cfg: MandelboxCfg::default(),
-            cfg: cfg,
-            width: width,
-            height: height,
+            cfg,
+            width,
+            height,
             frame: 0,
         })
     }
@@ -98,7 +103,8 @@ impl Kernel {
             match ocl::Context::builder()
                 .platform(platform)
                 .devices(ocl::DeviceType::new().gpu())
-                .build() {
+                .build()
+            {
                 Ok(ok) => return Ok(ok),
                 Err(e) => last_err = Some(e),
             }
@@ -142,12 +148,13 @@ impl Kernel {
                 self.data.as_ref().unwrap()
             }
         };
-        self.kernel.set_arg_buf_named("data", Some(data))?;
-        self.kernel.set_arg_buf_named("cfg", Some(&self.cfg))?;
-        self.kernel.set_arg_scl_named("width", self.width as u32)?;
-        self.kernel.set_arg_scl_named("height", self.height as u32)?;
-        self.kernel.set_arg_scl_named("frame", self.frame as u32)?;
-        self.kernel.set_arg_scl_named("output_linear", if output_linear { 1u32 } else { 0u32 })?;
+        self.kernel.set_arg(0, data)?;
+        self.kernel.set_arg(1, &self.cfg)?;
+        self.kernel.set_arg(2, self.width as u32)?;
+        self.kernel.set_arg(3, self.height as u32)?;
+        self.kernel.set_arg(4, self.frame as u32)?;
+        self.kernel
+            .set_arg(5, if output_linear { 1u32 } else { 0u32 })?;
         Ok(())
     }
 
@@ -156,13 +163,13 @@ impl Kernel {
         settings: &Settings,
         download: bool,
         output_linear: bool,
-    ) -> Result<Option<glium::texture::RawImage2d<'static, u8>>, Error> {
+    ) -> Result<Option<Image>, Error> {
         self.set_args(settings, output_linear)?;
         let lws = 1024;
         let to_launch = self.kernel
             .cmd()
             .queue(&self.queue)
-            .gws((self.width * self.height + lws - 1) / lws * lws);
+            .global_work_size((self.width * self.height + lws - 1) / lws * lws);
         // enq() is unsafe, even though the Rust code is safe (unsafe due to untrusted GPU code)
         unsafe { to_launch.enq() }?;
         self.frame += 1;
@@ -174,7 +181,7 @@ impl Kernel {
                 .read(&mut vec)
                 .queue(&self.queue)
                 .enq()?;
-            let image = glium::texture::RawImage2d::from_raw_rgba(vec, (self.width, self.height));
+            let image = Image::new(vec, self.width, self.height);
             Ok(Some(image))
         } else {
             Ok(None)
@@ -189,10 +196,9 @@ impl Kernel {
 pub fn interactive(
     width: u32,
     height: u32,
-    settings_input: Arc<Mutex<(Settings, Input)>>,
-    send_image: &mpsc::Sender<glium::texture::RawImage2d<'static, u8>>,
-    screen_events: &mpsc::Receiver<display::ScreenEvent>,
-    events_loop: Option<glium::glutin::EventsLoopProxy>,
+    settings_input: &Arc<Mutex<(Settings, Input)>>,
+    send_image: &mpsc::Sender<Image>,
+    screen_events: &mpsc::Receiver<ScreenEvent>,
 ) -> Result<(), Error> {
     let mut kernel = Kernel::new(width, height)?;
     loop {
@@ -204,7 +210,7 @@ pub fn interactive(
             };
 
             match event {
-                display::ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
+                ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
             }
         }
 
@@ -219,13 +225,10 @@ pub fn interactive(
             Ok(()) => (),
             Err(_) => return Ok(()),
         };
-        if let Some(ref events_loop) = events_loop {
-            events_loop.wakeup()?
-        }
     }
 }
 
-fn save_image(image: &glium::texture::RawImage2d<u8>, path: &str) -> Result<(), Error> {
+fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     use png::HasParameters;
     let file = ::std::fs::File::create(path)?;
     let w = &mut ::std::io::BufWriter::new(file);

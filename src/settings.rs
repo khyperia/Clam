@@ -22,7 +22,6 @@ pub fn init_settings() -> Settings {
     settings
 }
 
-
 pub fn save_settings(settings: &Settings, file: &str) -> Result<(), Error> {
     let file = ::std::fs::File::create(file)?;
     let mut writer = ::std::io::BufWriter::new(&file);
@@ -44,7 +43,9 @@ pub fn load_settings(settings: &mut Settings, file: &str) -> Result<(), Error> {
         let key = split[1].trim();
         let value = split[0].trim();
         match settings[key] {
-            SettingValue::F32(_, change) => settings.insert(key.into(), SettingValue::F32(value.parse()?, change)),
+            SettingValue::F32(_, change) => {
+                settings.insert(key.into(), SettingValue::F32(value.parse()?, change))
+            }
             SettingValue::U32(_) => settings.insert(key.into(), SettingValue::U32(value.parse()?)),
         };
     }
@@ -55,15 +56,17 @@ pub fn settings_status(settings: &Settings, input: &Input) -> String {
     let mut keys = settings.keys().collect::<Vec<_>>();
     keys.sort();
     let mut builder = String::new();
-    let mut ind = 0;
-    for key in keys {
+    for (ind, key) in keys.iter().enumerate() {
         let prefix = if ind == input.index { "* " } else { "  " };
-        match settings[key] {
-            SettingValue::F32(value, _) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
-            SettingValue::U32(value) => write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap(),
+        match settings[*key] {
+            SettingValue::F32(value, _) => {
+                write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap()
+            }
+            SettingValue::U32(value) => {
+                write!(&mut builder, "{}{} = {}\n", prefix, key, value).unwrap()
+            }
         }
-        ind += 1;
     }
 
-    return builder;
+    builder
 }

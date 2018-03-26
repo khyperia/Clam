@@ -1,8 +1,7 @@
 extern crate failure;
-extern crate glium;
-extern crate glium_text_rusttype;
 extern crate ocl;
 extern crate png;
+extern crate sdl2;
 
 mod display;
 mod input;

@@ -1,7 +1,8 @@
-use glium::glutin::VirtualKeyCode as Key;
+use failure::Error;
+use sdl2::keyboard::Scancode as Key;
 use settings::*;
 use std::collections::HashMap;
-use failure::Error;
+use std::collections::hash_map::Entry;
 use std::time::Instant;
 
 pub struct Input {
@@ -18,8 +19,13 @@ impl Input {
     }
 
     pub fn key_down(&mut self, key: Key, time: Instant, settings: &mut Settings) {
-        if !self.pressed_keys.contains_key(&key) {
-            self.pressed_keys.insert(key, time);
+        let new_key = if let Entry::Vacant(entry) = self.pressed_keys.entry(key) {
+            entry.insert(time);
+            true
+        } else {
+            false
+        };
+        if new_key {
             self.run(settings, time);
             match self.run_down(key, settings) {
                 Ok(()) => (),
@@ -183,7 +189,7 @@ impl Input {
     }
 
     fn sorted_keys(&self, settings: &Settings) -> Vec<String> {
-        let mut keys = settings.keys().map(|x| x.clone()).collect::<Vec<_>>();
+        let mut keys = settings.keys().cloned().collect::<Vec<_>>();
         keys.sort();
         keys
     }
@@ -193,7 +199,10 @@ impl Input {
             let key = &self.sorted_keys(settings)[self.index];
             if let SettingValue::F32(value, change) = settings[key] {
                 if change < 0.0 {
-                    settings.insert(key.clone(), SettingValue::F32(value * (-change + 1.0).powf(-dt), change));
+                    settings.insert(
+                        key.clone(),
+                        SettingValue::F32(value * (-change + 1.0).powf(-dt), change),
+                    );
                 } else {
                     settings.insert(key.clone(), SettingValue::F32(value - dt * change, change));
                 }
@@ -203,7 +212,10 @@ impl Input {
             let key = &self.sorted_keys(settings)[self.index];
             if let SettingValue::F32(value, change) = settings[key] {
                 if change < 0.0 {
-                    settings.insert(key.clone(), SettingValue::F32(value * (-change + 1.0).powf(dt), change));
+                    settings.insert(
+                        key.clone(),
+                        SettingValue::F32(value * (-change + 1.0).powf(dt), change),
+                    );
                 } else {
                     settings.insert(key.clone(), SettingValue::F32(value + dt * change, change));
                 }
@@ -221,14 +233,16 @@ pub struct Vector {
 
 impl Vector {
     pub fn new(x: f32, y: f32, z: f32) -> Vector {
-        Vector { x: x, y: y, z: z }
+        Vector { x, y, z }
     }
 
     fn read(settings: &Settings, x: &str, y: &str, z: &str) -> Option<Vector> {
         match (settings.get(x), settings.get(y), settings.get(z)) {
-            (Some(&SettingValue::F32(x, _)),
-             Some(&SettingValue::F32(y, _)),
-             Some(&SettingValue::F32(z, _))) => Some(Self::new(x, y, z)),
+            (
+                Some(&SettingValue::F32(x, _)),
+                Some(&SettingValue::F32(y, _)),
+                Some(&SettingValue::F32(z, _)),
+            ) => Some(Self::new(x, y, z)),
             _ => None,
         }
     }

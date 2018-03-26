@@ -150,11 +150,26 @@ impl MandelboxCfg {
             "fixed_radius_2".into(),
             SettingValue::F32(self.fixed_radius_2, -0.5),
         );
-        settings.insert("min_radius_2".into(), SettingValue::F32(self.min_radius_2, -0.5));
-        settings.insert("dof_amount".into(), SettingValue::F32(self.dof_amount, -0.5));
-        settings.insert("light_pos_1_x".into(), SettingValue::F32(self.light_pos_1_x, 0.5));
-        settings.insert("light_pos_1_y".into(), SettingValue::F32(self.light_pos_1_y, 0.5));
-        settings.insert("light_pos_1_z".into(), SettingValue::F32(self.light_pos_1_z, 0.5));
+        settings.insert(
+            "min_radius_2".into(),
+            SettingValue::F32(self.min_radius_2, -0.5),
+        );
+        settings.insert(
+            "dof_amount".into(),
+            SettingValue::F32(self.dof_amount, -0.5),
+        );
+        settings.insert(
+            "light_pos_1_x".into(),
+            SettingValue::F32(self.light_pos_1_x, 0.5),
+        );
+        settings.insert(
+            "light_pos_1_y".into(),
+            SettingValue::F32(self.light_pos_1_y, 0.5),
+        );
+        settings.insert(
+            "light_pos_1_z".into(),
+            SettingValue::F32(self.light_pos_1_z, 0.5),
+        );
         settings.insert(
             "light_brightness_1_r".into(),
             SettingValue::F32(self.light_brightness_1_r, -0.5),
@@ -167,9 +182,18 @@ impl MandelboxCfg {
             "light_brightness_1_b".into(),
             SettingValue::F32(self.light_brightness_1_b, -0.5),
         );
-        settings.insert("light_pos_2_x".into(), SettingValue::F32(self.light_pos_2_x, 0.5));
-        settings.insert("light_pos_2_y".into(), SettingValue::F32(self.light_pos_2_y, 0.5));
-        settings.insert("light_pos_2_z".into(), SettingValue::F32(self.light_pos_2_z, 0.5));
+        settings.insert(
+            "light_pos_2_x".into(),
+            SettingValue::F32(self.light_pos_2_x, 0.5),
+        );
+        settings.insert(
+            "light_pos_2_y".into(),
+            SettingValue::F32(self.light_pos_2_y, 0.5),
+        );
+        settings.insert(
+            "light_pos_2_z".into(),
+            SettingValue::F32(self.light_pos_2_z, 0.5),
+        );
         settings.insert(
             "light_brightness_2_r".into(),
             SettingValue::F32(self.light_brightness_2_r, -0.5),
@@ -203,7 +227,10 @@ impl MandelboxCfg {
             "de_multiplier".into(),
             SettingValue::F32(self.de_multiplier, 0.125),
         );
-        settings.insert("max_ray_dist".into(), SettingValue::F32(self.max_ray_dist, -0.5));
+        settings.insert(
+            "max_ray_dist".into(),
+            SettingValue::F32(self.max_ray_dist, -0.5),
+        );
         settings.insert(
             "quality_first_ray".into(),
             SettingValue::F32(self.quality_first_ray, -0.5),
