@@ -82,7 +82,6 @@ impl Kernel {
             .arg(0u32)
             .arg(0u32)
             .arg(0u32)
-            .arg(0u32)
             .build()?;
         Ok(Kernel {
             context,
@@ -129,7 +128,7 @@ impl Kernel {
         Ok(())
     }
 
-    fn set_args(&mut self, settings: &Settings, output_linear: bool) -> Result<(), Error> {
+    fn set_args(&mut self, settings: &Settings) -> Result<(), Error> {
         let old_cfg = self.cpu_cfg;
         self.cpu_cfg.read(settings);
         if old_cfg != self.cpu_cfg {
@@ -153,18 +152,11 @@ impl Kernel {
         self.kernel.set_arg(2, self.width as u32)?;
         self.kernel.set_arg(3, self.height as u32)?;
         self.kernel.set_arg(4, self.frame as u32)?;
-        self.kernel
-            .set_arg(5, if output_linear { 1u32 } else { 0u32 })?;
         Ok(())
     }
 
-    fn run(
-        &mut self,
-        settings: &Settings,
-        download: bool,
-        output_linear: bool,
-    ) -> Result<Option<Image>, Error> {
-        self.set_args(settings, output_linear)?;
+    fn run(&mut self, settings: &Settings, download: bool) -> Result<Option<Image>, Error> {
+        self.set_args(settings)?;
         let lws = 1024;
         let to_launch = self.kernel
             .cmd()
@@ -220,7 +212,7 @@ pub fn interactive(
             input.integrate(settings);
             (*settings).clone()
         };
-        let image = kernel.run(&settings, true, true)?.unwrap();
+        let image = kernel.run(&settings, true)?.unwrap();
         match send_image.send(image) {
             Ok(()) => (),
             Err(_) => return Ok(()),
@@ -246,7 +238,7 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let progress = Progress::new();
     let progress_count = (rpp / 20).min(4).max(16);
     for ray in 0..(rpp - 1) {
-        let _ = kernel.run(&settings, false, false)?;
+        let _ = kernel.run(&settings, false)?;
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync()?;
             let value = ray as f32 / rpp as f32;
@@ -258,7 +250,7 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     }
     kernel.sync()?;
     println!("Last ray...");
-    let image = kernel.run(&settings, true, false)?.unwrap();
+    let image = kernel.run(&settings, true)?.unwrap();
     println!("render done, saving");
     save_image(&image, "render.png")?;
     println!("done");

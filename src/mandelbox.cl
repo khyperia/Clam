@@ -382,17 +382,47 @@ static float3 RotateToColors(Cfg cfg, float3 components)
         + LightBrightness2(cfg) * components.z;
 }
 
+
+static float3 GammaTest(int x, int y, int width, int height) {
+    float centerValue = (float)x / width;
+    float offset = ((float)(height - y) / height) * (0.5 - fabs(centerValue - 0.5));
+    float result;
+    if (x % 16 < 8) {
+        result = centerValue;
+    } else if (y % 2 == 0) {
+        result = centerValue + offset;
+    } else {
+        result = centerValue - offset;
+    }
+    return (float3)(result, result, result);
+}
+
+// Perfect, original sRGB
+// static float GammaCompression(float value)
+// {
+//     if (value < 0.0031308) {
+//         return 12.92f * value;
+//     } else {
+//         float a = 0.055f;
+//         return (1 + a) * powr(value, 1.0f / 2.4f) - a;
+//     }
+// }
+// http://mimosa-pudica.net/fast-gamma/
 static float GammaCompression(float value)
 {
-    // http://mimosa-pudica.net/fast-gamma/
     const float a = 0.00279491f;
     const float b = 1.15907984f;
     //float c = b * native_rsqrt(1.0f + a) - 1.0f;
     const float c = 0.15746346551f;
     return (b * native_rsqrt(value + a) - c) * value;
 }
+// gamma algorithm "an attempt was made"
+// static float GammaCompression(float value)
+// {
+//     return sqrt(value);
+// }
 
-static uint PackPixel(Cfg cfg, float3 pixel, uint output_linear)
+static uint PackPixel(Cfg cfg, float3 pixel)
 {
     if (cfg->WhiteClamp)
     {
@@ -408,15 +438,12 @@ static uint PackPixel(Cfg cfg, float3 pixel, uint output_linear)
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
 
-    if (!output_linear)
-    {
-        pixel.x = GammaCompression(pixel.x);
-        pixel.y = GammaCompression(pixel.y);
-        pixel.z = GammaCompression(pixel.z);
-    }
+    pixel.x = GammaCompression(pixel.x);
+    pixel.y = GammaCompression(pixel.y);
+    pixel.z = GammaCompression(pixel.z);
 
     pixel = pixel * 255;
-    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 16);
+    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 16) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 0);
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
@@ -425,8 +452,7 @@ __kernel void Main(
     __global struct MandelboxCfg *cfg_global,
     uint width,
     uint height,
-    uint frame,
-    uint output_linear
+    uint frame
 )
 {
     uint mem_offset = 0;
@@ -454,6 +480,7 @@ __kernel void Main(
     *scratch = newColor;
 
     float3 realColor = RotateToColors(cfg, newColor);
-    uint packedColor = PackPixel(cfg, realColor, output_linear);
+    //realColor = GammaTest(x, y, width, height);
+    uint packedColor = PackPixel(cfg, realColor);
     screenPixels[idx] = packedColor;
 }

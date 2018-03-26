@@ -1,12 +1,20 @@
+use sdl2::video::Window;
+use sdl2::video::WindowContext;
 use failure::Error;
+use failure::err_msg;
 use input;
 use kernel;
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
 use sdl2::init;
+use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
+use sdl2::render::Canvas;
+use sdl2::render::TextureCreator;
+use sdl2::ttf;
 use settings;
+use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -52,6 +60,46 @@ fn launch_kernel(
     });
 }
 
+pub fn find_font() -> Result<&'static Path, Error> {
+    let locations: [&'static Path; 5] = [
+        "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
+        "/usr/share/fonts/TTF/FiraSans-Regular.ttf".as_ref(),
+        "C:\\Windows\\Fonts\\arial.ttf".as_ref(),
+        "/usr/share/fonts/TTF/DejaVuSans.ttf".as_ref(),
+        "/usr/share/fonts/TTF/LiberationSans-Regular.ttf".as_ref(),
+    ];
+    for &location in &locations {
+        if location.exists() {
+            return Ok(location);
+        }
+    }
+    return Err(err_msg("No font found"));
+}
+
+fn render_text(
+    font: &ttf::Font,
+    settings_input: &Arc<Mutex<(settings::Settings, input::Input)>>,
+    creator: &TextureCreator<WindowContext>,
+    canvas: &mut Canvas<Window>,
+) -> Result<(), Error> {
+    let mut locked = settings_input.lock().unwrap();
+    let (ref mut settings, ref mut input) = *locked;
+    input.integrate(settings);
+    let text = settings::settings_status(settings, input);
+    let spacing = font.recommended_line_spacing();
+    for (line_index, line) in text.lines().enumerate() {
+        let rendered = font.render(&line).solid(Color::RGB(255, 64, 64))?;
+        let width = rendered.width();
+        let height = rendered.height();
+        let tex = creator.create_texture_from_surface(rendered)?;
+        let y = 10 + line_index as i32 * spacing;
+        canvas
+            .copy(&tex, None, Rect::new(10, y, width, height))
+            .expect("Could not display text");
+    }
+    Ok(())
+}
+
 pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
@@ -60,6 +108,8 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
     let creator = canvas.texture_creator();
     let mut texture = creator.create_texture_streaming(PixelFormatEnum::RGBX8888, width, height)?;
     let mut event_pump = sdl.event_pump().expect("SDL doesn't have event pump");
+    let ttf = ttf::init()?;
+    let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
     let (send_image, image_stream) = mpsc::channel();
     let (event_stream, recv_screen_event) = mpsc::channel();
@@ -125,6 +175,7 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
         canvas
             .copy(&texture, rect, rect)
             .expect("Could not display image");
+        render_text(&font, &settings_input, &creator, &mut canvas)?;
         canvas.present();
     }
 }

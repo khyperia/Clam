@@ -27,10 +27,10 @@ impl Input {
         };
         if new_key {
             self.run(settings, time);
-            match self.run_down(key, settings) {
-                Ok(()) => (),
-                Err(err) => println!("Error handing key down event: {}", err),
-            }
+        }
+        match self.run_down(key, settings) {
+            Ok(()) => (),
+            Err(err) => println!("Error handing key down event: {}", err),
         }
     }
 

@@ -7,4 +7,4 @@ authors = ["khyperia <khyperia@live.com>"]
 failure = "*"
 ocl = { git = "https://github.com/cogciprocate/ocl", default-features = false }
 png = { version = "*", default-features = false, features = ["png-encoding"] }
-sdl2 = "*"
+sdl2 = { version = "*", features = ["ttf"] }
