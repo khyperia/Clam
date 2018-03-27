@@ -385,7 +385,7 @@ static float3 RotateToColors(Cfg cfg, float3 components)
 
 static float3 GammaTest(int x, int y, int width, int height) {
     float centerValue = (float)x / width;
-    float offset = ((float)(height - y) / height) * (0.5 - fabs(centerValue - 0.5));
+    float offset = ((float)(height - y) / height) * (0.5f - fabs(centerValue - 0.5f));
     float result;
     if (x % 16 < 8) {
         result = centerValue;
@@ -400,7 +400,7 @@ static float3 GammaTest(int x, int y, int width, int height) {
 // Perfect, original sRGB
 // static float GammaCompression(float value)
 // {
-//     if (value < 0.0031308) {
+//     if (value < 0.0031308f) {
 //         return 12.92f * value;
 //     } else {
 //         float a = 0.055f;
