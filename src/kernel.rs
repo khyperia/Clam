@@ -7,6 +7,7 @@ use mandelbox_cfg::MandelboxCfg;
 use ocl;
 use png;
 use progress::Progress;
+use sdl2::EventSubsystem;
 use settings::Settings;
 use std::env;
 use std::fs::File;
@@ -191,8 +192,10 @@ pub fn interactive(
     settings_input: &Arc<Mutex<(Settings, Input)>>,
     send_image: &mpsc::Sender<Image>,
     screen_events: &mpsc::Receiver<ScreenEvent>,
+    event_system: &EventSubsystem,
 ) -> Result<(), Error> {
     let mut kernel = Kernel::new(width, height)?;
+    event_system.register_custom_event::<()>().expect("Failed to register custom event");
     loop {
         loop {
             let event = match screen_events.try_recv() {
@@ -217,6 +220,10 @@ pub fn interactive(
             Ok(()) => (),
             Err(_) => return Ok(()),
         };
+        match event_system.push_custom_event(()) {
+            Ok(()) => (),
+            Err(_) => return Ok(()),
+        }
     }
 }
 

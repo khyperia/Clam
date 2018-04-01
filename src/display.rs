@@ -1,9 +1,8 @@
-use sdl2::video::Window;
-use sdl2::video::WindowContext;
 use failure::Error;
 use failure::err_msg;
 use input;
 use kernel;
+use sdl2::EventSubsystem;
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
 use sdl2::init;
@@ -11,8 +10,12 @@ use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
+use sdl2::render::Texture;
 use sdl2::render::TextureCreator;
+use sdl2::ttf::Font;
 use sdl2::ttf;
+use sdl2::video::Window;
+use sdl2::video::WindowContext;
 use settings;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
@@ -45,7 +48,10 @@ fn launch_kernel(
     settings_input: Arc<Mutex<(settings::Settings, input::Input)>>,
     send_image: mpsc::Sender<Image>,
     recv_screen_event: mpsc::Receiver<ScreenEvent>,
+    event_system: EventSubsystem,
 ) {
+    //TODO
+    let event_system = unsafe { &*Box::into_raw(Box::new(event_system)) };
     thread::spawn(move || {
         match kernel::interactive(
             width,
@@ -53,6 +59,7 @@ fn launch_kernel(
             &settings_input,
             &send_image,
             &recv_screen_event,
+            &event_system,
         ) {
             Ok(()) => (),
             Err(err) => println!("{}", err),
@@ -100,14 +107,65 @@ fn render_text(
     Ok(())
 }
 
+fn draw<'a>(
+    canvas: &mut Canvas<Window>,
+    creator: &'a TextureCreator<WindowContext>,
+    font: &Font,
+    image_stream: &mpsc::Receiver<Image>,
+    settings_input: &Arc<Mutex<(settings::Settings, input::Input)>>,
+    texture: &mut Texture<'a>,
+    width: &mut u32,
+    height: &mut u32,
+) -> Result<(), Error> {
+    loop {
+        let image = match image_stream.try_recv() {
+            Ok(image) => image,
+            Err(mpsc::TryRecvError::Empty) => break,
+            Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
+        };
+        if *width != image.width || *height != image.height {
+            *width = image.width;
+            *height = image.height;
+            *texture = creator.create_texture_streaming(None, *width, *height)?;
+        }
+        texture.update(None, &image.data, image.width as usize * 4)?;
+    }
+
+    let rect = Rect::new(0, 0, *width, *height);
+    canvas
+        .copy(&texture, rect, rect)
+        .expect("Could not display image");
+    render_text(&font, &settings_input, &creator, canvas)?;
+    canvas.present();
+    Ok(())
+}
+
+struct What(Instant);
+
+impl What {
+    fn new() -> Self {
+        What(Instant::now())
+    }
+
+    fn aaa(&mut self) -> String {
+        let now = Instant::now();
+        let dt = now.duration_since(self.0);
+        let flt = dt.as_secs() as f64 + dt.subsec_nanos() as f64 * 1e-9;
+        let result = format!("{:?}", flt);
+        self.0 = now;
+        result
+    }
+}
+
 pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
+    let event = sdl.event().expect("SDL does not have event");
+    let mut event_pump = sdl.event_pump().expect("SDL does not have event pump");
     let window = video.window("Scopie", width, height).resizable().build()?;
-    let mut canvas = window.into_canvas().present_vsync().build()?;
+    let mut canvas = window.into_canvas().build()?;
     let creator = canvas.texture_creator();
     let mut texture = creator.create_texture_streaming(PixelFormatEnum::RGBX8888, width, height)?;
-    let mut event_pump = sdl.event_pump().expect("SDL doesn't have event pump");
     let ttf = ttf::init()?;
     let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
@@ -120,62 +178,56 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
         settings_input.clone(),
         send_image,
         recv_screen_event,
+        event,
     );
 
-    loop {
-        while let Some(event) = event_pump.poll_event() {
-            match event {
-                Event::Window {
-                    win_event: WindowEvent::Resized(width, height),
-                    ..
-                } if width > 0 && height > 0 =>
-                {
-                    match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
-                        Ok(()) => (),
-                        Err(_) => return Ok(()),
-                    }
+    let mut what = What::new();
+    for event in event_pump.wait_iter() {
+        println!("{:?}{{\t{:?}", event, what.aaa());
+        match event {
+            Event::Window {
+                win_event: WindowEvent::Resized(width, height),
+                ..
+            } if width > 0 && height > 0 =>
+            {
+                match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
+                    Ok(()) => (),
+                    Err(_) => return Ok(()),
                 }
-                Event::KeyDown {
-                    scancode: Some(scancode),
-                    ..
-                } => {
-                    let mut locked = settings_input.lock().unwrap();
-                    let (ref mut settings, ref mut input) = *locked;
-                    input.key_down(scancode, Instant::now(), settings);
-                }
-                Event::KeyUp {
-                    scancode: Some(scancode),
-                    ..
-                } => {
-                    let mut locked = settings_input.lock().unwrap();
-                    let (ref mut settings, ref mut input) = *locked;
-                    input.key_up(scancode, Instant::now(), settings);
-                }
-                Event::Quit { .. } => return Ok(()),
-                _ => (),
             }
-        }
-
-        loop {
-            let image = match image_stream.try_recv() {
-                Ok(image) => image,
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-            };
-            if width != image.width || height != image.height {
-                width = image.width;
-                height = image.height;
-                texture = creator.create_texture_streaming(None, width, height)?;
+            Event::KeyDown {
+                scancode: Some(scancode),
+                ..
+            } => {
+                let now = Instant::now();
+                let mut locked = settings_input.lock().unwrap();
+                let (ref mut settings, ref mut input) = *locked;
+                input.key_down(scancode, now, settings);
             }
-            texture.update(None, &image.data, image.width as usize * 4)?;
-            //println!("frame");
+            Event::KeyUp {
+                scancode: Some(scancode),
+                ..
+            } => {
+                let now = Instant::now();
+                let mut locked = settings_input.lock().unwrap();
+                let (ref mut settings, ref mut input) = *locked;
+                input.key_up(scancode, now, settings);
+            }
+            Event::Quit { .. } => return Ok(()),
+            Event::User { .. } => draw(
+                &mut canvas,
+                &creator,
+                &font,
+                &image_stream,
+                &settings_input,
+                &mut texture,
+                &mut width,
+                &mut height,
+            )?,
+            _ => (),
         }
-
-        let rect = Rect::new(0, 0, width, height);
-        canvas
-            .copy(&texture, rect, rect)
-            .expect("Could not display image");
-        render_text(&font, &settings_input, &creator, &mut canvas)?;
-        canvas.present();
+        println!("{:?}}}\t{:?}", event, what.aaa());
+        println!("");
     }
+    return Ok(());
 }

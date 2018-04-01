@@ -70,13 +70,21 @@ static float3 AmbientBrightness(Cfg cfg)
     return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB) / cfg->ReflectBrightness;
 }
 
-static float4 comp_mul(float4 left, float4 right)
+static float4 comp_mul4(float4 left, float4 right)
 {
     return (float4)(
         left.x * right.x,
         left.y * right.y,
         left.z * right.z,
         left.w * right.w);
+}
+
+static float3 comp_mul3(float3 left, float3 right)
+{
+    return (float3)(
+        left.x * right.x,
+        left.y * right.y,
+        left.z * right.z);
 }
 
 struct Random
@@ -245,7 +253,7 @@ static float4 TScaleD(Cfg cfg, float4 z)
 {
     const float scale = cfg->Scale;
     const float4 mul = (float4)(scale, scale, scale, fabs(scale));
-    return comp_mul(z, mul);
+    return comp_mul4(z, mul);
 }
 
 static float4 TOffsetD(float4 z, float3 offset)
@@ -275,6 +283,22 @@ static float De(Cfg cfg, float3 offset)
     return length(z.xyz) / z.w;
 }
 
+// (r, g, b, spec)
+static float4 Material(Cfg cfg, float3 offset)
+{
+    float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
+    float orbitTrap = 1000000;
+    int n = 8;
+    do
+    {
+        z = MandelboxD(cfg, z, offset);
+        orbitTrap = min(orbitTrap, length(z));
+    } while (--n);
+
+    float3 color = fabs(normalize(z.xyz));
+    return (float4)(orbitTrap, 1, 1, 1);
+}
+
 static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3 *normal)
 {
     float distance;
@@ -302,7 +326,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float LightReflected(Cfg cfg, float3 incoming, float3 outgoing, float3 normal)
+static float3 LightReflected(Cfg cfg, float3 pos, float3 incoming, float3 outgoing, float3 normal)
 {
     float incident_angle_weakening = dot(normal, incoming);
     const float3 half_vec = normalize(incoming + outgoing);
@@ -311,22 +335,28 @@ static float LightReflected(Cfg cfg, float3 incoming, float3 outgoing, float3 no
     const float base_reflection = cfg->ReflectBrightness;
     const float spec = pown(sinpi(dot_prod * 0.5f), hardness);
     const float brdf = spec * (1 - base_reflection) + base_reflection;
-    return brdf * incident_angle_weakening;
+    const float brightness = brdf * incident_angle_weakening;
+    const float4 material = Material(cfg, pos);
+    return material.xyz * brightness;
 }
 
-static float TraceLight(Cfg cfg, float quality, float3 pos, float3 normal, float3 outgoingRay, float3 lightPos)
+static float3 TraceLight(Cfg cfg, float quality, float3 pos, float3 normal, float3 outgoingRay, float3 lightPos)
 {
     const float3 toLightVec = lightPos - pos;
     const float lightDist = length(toLightVec);
     const float3 toLight = toLightVec * (1 / lightDist);
 
     // reduce brightness by radius^2
-    float directLightingAmount = 1.0f / (lightDist * lightDist);
+    float directLightingAmountSingle = 1.0f / (lightDist * lightDist);
+    float3 directLightingAmount = (float3)(
+        directLightingAmountSingle,
+        directLightingAmountSingle,
+        directLightingAmountSingle);
 
-    directLightingAmount *= LightReflected(cfg, toLight, outgoingRay, normal);
+    directLightingAmount *= LightReflected(cfg, pos, toLight, outgoingRay, normal);
 
     // if <0, then the light is below the surface
-    if (directLightingAmount < 0)
+    if (directLightingAmount.x < 0 || directLightingAmount.y < 0 || directLightingAmount.z < 0)
     {
         return 0.0f;
     }
@@ -345,7 +375,7 @@ static float TraceLight(Cfg cfg, float quality, float3 pos, float3 normal, float
 static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random *rand)
 {
     float3 rayColor = (float3)(0, 0, 0);
-    float reflectionColor = 1.0f;
+    float3 reflectionColor = (float3)(1, 1, 1);
     for (int i = 0; i < cfg->NumRayBounces; i++)
     {
         const bool firstRay = i == 0;
@@ -358,30 +388,27 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 
         if (distance > cfg->MaxRayDist)
         {
-            float color = firstRay ? 0.3f : 1.0f; // TODO
-            rayColor.x += color * reflectionColor;
+            float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
+            float3 color = AmbientBrightness(cfg) * first_reduce;
+            rayColor += comp_mul3(color, reflectionColor);
             break;
         }
 
         const float3 newPos = Ray_At(ray, distance);
 
-        rayColor.y += reflectionColor * TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos1(cfg));
-        rayColor.z += reflectionColor * TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos2(cfg));
+        rayColor += comp_mul3(reflectionColor,
+            LightBrightness1(cfg) *
+            TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos1(cfg)));
+        rayColor += comp_mul3(reflectionColor,
+            LightBrightness2(cfg) *
+            TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos2(cfg)));
 
         float3 newDir = Random_Lambertian(rand, normal);
-        reflectionColor *= LightReflected(cfg, newDir, -ray.dir, normal);
+        reflectionColor *= LightReflected(cfg, newPos, newDir, -ray.dir, normal);
         ray = new_Ray(newPos, newDir);
     }
     return rayColor;
 }
-
-static float3 RotateToColors(Cfg cfg, float3 components)
-{
-    return AmbientBrightness(cfg) * components.x
-        + LightBrightness1(cfg) * components.y
-        + LightBrightness2(cfg) * components.z;
-}
-
 
 static float3 GammaTest(int x, int y, int width, int height) {
     float centerValue = (float)x / width;
@@ -479,8 +506,7 @@ __kernel void Main(
     float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     *scratch = newColor;
 
-    float3 realColor = RotateToColors(cfg, newColor);
-    //realColor = GammaTest(x, y, width, height);
-    uint packedColor = PackPixel(cfg, realColor);
+    //newColor = GammaTest(x, y, width, height);
+    uint packedColor = PackPixel(cfg, newColor);
     screenPixels[idx] = packedColor;
 }
