@@ -126,7 +126,7 @@ fn draw<'a>(
         if *width != image.width || *height != image.height {
             *width = image.width;
             *height = image.height;
-            *texture = creator.create_texture_streaming(None, *width, *height)?;
+            *texture = creator.create_texture_streaming(PixelFormatEnum::ABGR8888, *width, *height)?;
         }
         texture.update(None, &image.data, image.width as usize * 4)?;
     }
@@ -140,23 +140,6 @@ fn draw<'a>(
     Ok(())
 }
 
-struct What(Instant);
-
-impl What {
-    fn new() -> Self {
-        What(Instant::now())
-    }
-
-    fn aaa(&mut self) -> String {
-        let now = Instant::now();
-        let dt = now.duration_since(self.0);
-        let flt = dt.as_secs() as f64 + dt.subsec_nanos() as f64 * 1e-9;
-        let result = format!("{:?}", flt);
-        self.0 = now;
-        result
-    }
-}
-
 pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
@@ -165,7 +148,7 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
     let window = video.window("Scopie", width, height).resizable().build()?;
     let mut canvas = window.into_canvas().build()?;
     let creator = canvas.texture_creator();
-    let mut texture = creator.create_texture_streaming(PixelFormatEnum::RGBX8888, width, height)?;
+    let mut texture = creator.create_texture_streaming(PixelFormatEnum::ABGR8888, width, height)?;
     let ttf = ttf::init()?;
     let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
@@ -181,9 +164,9 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
         event,
     );
 
-    let mut what = What::new();
+    //let mut what = What::new();
     for event in event_pump.wait_iter() {
-        println!("{:?}{{\t{:?}", event, what.aaa());
+        //println!("{:?}{{\t{:?}", event, what.aaa());
         match event {
             Event::Window {
                 win_event: WindowEvent::Resized(width, height),
@@ -226,8 +209,8 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
             )?,
             _ => (),
         }
-        println!("{:?}}}\t{:?}", event, what.aaa());
-        println!("");
+        //println!("{:?}}}\t{:?}", event, what.aaa());
+        //println!("");
     }
     return Ok(());
 }

@@ -272,31 +272,69 @@ static float4 MandelboxD(Cfg cfg, float4 z, float3 offset)
     return z;
 }
 
-static float De(Cfg cfg, float3 offset)
+static float DeSphere(float3 pos, float radius, float3 test) {
+    return length(test - pos) - radius;
+}
+
+static float DeMandelbox(Cfg cfg, float3 offset)
 {
     float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
     int n = max(cfg->MaxIters, 1);
-    do
-    {
+    do {
         z = MandelboxD(cfg, z, offset);
     } while (dot(z.xyz, z.xyz) < cfg->Bailout && --n);
     return length(z.xyz) / z.w;
 }
 
+static float De(Cfg cfg, float3 offset)
+{
+    float mbox = DeMandelbox(cfg, offset);
+    float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
+    float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
+    return min(min(light1, light2), mbox);
+}
+
+struct Material {
+    float3 color;
+    float specular;
+    float3 emissive;
+};
+
 // (r, g, b, spec)
-static float4 Material(Cfg cfg, float3 offset)
+static struct Material Material(Cfg cfg, float3 offset)
 {
     float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
-    float orbitTrap = 1000000;
-    int n = 8;
-    do
-    {
+    int n = max(cfg->MaxIters, 1);
+    float trap = 10000000000;
+    do {
         z = MandelboxD(cfg, z, offset);
-        orbitTrap = min(orbitTrap, length(z));
-    } while (--n);
+        trap = min(trap, length(trap));
+    } while (dot(z.xyz, z.xyz) < cfg->Bailout && --n);
+    float de = length(z.xyz) / z.w;
 
-    float3 color = fabs(normalize(z.xyz));
-    return (float4)(orbitTrap, 1, 1, 1);
+    trap = sin(log2(trap)) * 0.5f + 0.5f;
+    float3 color = (float3)(trap, trap, trap);
+
+    float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
+    float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
+    float minimum = min(min(light1, light2), de);
+
+    struct Material result;
+    if (minimum == de) {
+        result.color = color * cfg->ReflectBrightness;
+        result.specular = 0.2f;
+        result.emissive = (float3)(0, 0, 0);
+    } else if (minimum == light1) {
+        result.color = (float3)(1, 1, 1);
+        result.specular = 0.0f;
+        result.emissive = LightBrightness1(cfg);
+    } else if (minimum == light2) {
+        result.color = (float3)(1, 1, 1);
+        result.specular = 0.0f;
+        result.emissive = LightBrightness2(cfg);
+    }
+
+    return result;
 }
 
 static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3 *normal)
@@ -326,58 +364,11 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float3 LightReflected(Cfg cfg, float3 pos, float3 incoming, float3 outgoing, float3 normal)
-{
-    float incident_angle_weakening = dot(normal, incoming);
-    const float3 half_vec = normalize(incoming + outgoing);
-    const float dot_prod = fabs(dot(half_vec, normal));
-    const int hardness = 512;
-    const float base_reflection = cfg->ReflectBrightness;
-    const float spec = pown(sinpi(dot_prod * 0.5f), hardness);
-    const float brdf = spec * (1 - base_reflection) + base_reflection;
-    const float brightness = brdf * incident_angle_weakening;
-    const float4 material = Material(cfg, pos);
-    return material.xyz * brightness;
-}
-
-static float3 TraceLight(Cfg cfg, float quality, float3 pos, float3 normal, float3 outgoingRay, float3 lightPos)
-{
-    const float3 toLightVec = lightPos - pos;
-    const float lightDist = length(toLightVec);
-    const float3 toLight = toLightVec * (1 / lightDist);
-
-    // reduce brightness by radius^2
-    float directLightingAmountSingle = 1.0f / (lightDist * lightDist);
-    float3 directLightingAmount = (float3)(
-        directLightingAmountSingle,
-        directLightingAmountSingle,
-        directLightingAmountSingle);
-
-    directLightingAmount *= LightReflected(cfg, pos, toLight, outgoingRay, normal);
-
-    // if <0, then the light is below the surface
-    if (directLightingAmount.x < 0 || directLightingAmount.y < 0 || directLightingAmount.z < 0)
-    {
-        return 0.0f;
-    }
-
-    float3 discard_normal;
-    const float light_distance = Cast(cfg, new_Ray(pos, toLight), quality, lightDist, &discard_normal);
-    if (light_distance < lightDist)
-    {
-        return 0.0f;
-    }
-
-    return directLightingAmount;
-}
-
-// (ambient, light1, light2)
 static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random *rand)
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
-    for (int i = 0; i < cfg->NumRayBounces; i++)
-    {
+    for (int i = 0; i < cfg->NumRayBounces; i++) {
         const bool firstRay = i == 0;
         const float firstRayQuality = cfg->QualityFirstRay * ((width + height) / (2 * cfg->fov));
 
@@ -386,8 +377,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
         float3 normal;
         float distance = Cast(cfg, ray, quality, cfg->MaxRayDist, &normal);
 
-        if (distance > cfg->MaxRayDist)
-        {
+        if (distance > cfg->MaxRayDist) {
             float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
             float3 color = AmbientBrightness(cfg) * first_reduce;
             rayColor += comp_mul3(color, reflectionColor);
@@ -396,15 +386,19 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 
         const float3 newPos = Ray_At(ray, distance);
 
-        rayColor += comp_mul3(reflectionColor,
-            LightBrightness1(cfg) *
-            TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos1(cfg)));
-        rayColor += comp_mul3(reflectionColor,
-            LightBrightness2(cfg) *
-            TraceLight(cfg, quality, newPos, normal, -ray.dir, LightPos2(cfg)));
+        struct Material material = Material(cfg, newPos);
+        rayColor += material.emissive;
 
-        float3 newDir = Random_Lambertian(rand, normal);
-        reflectionColor *= LightReflected(cfg, newPos, newDir, -ray.dir, normal);
+        float3 newDir;
+        if (Random_Next(rand) < material.specular) {
+            // specular
+            newDir = ray.dir - 2 * dot(ray.dir, normal) * normal;
+        } else {
+            // diffuse
+            newDir = Random_Lambertian(rand, normal);
+        }
+        float incident_angle_weakening = dot(normal, newDir);
+        reflectionColor *= incident_angle_weakening * material.color;
         ray = new_Ray(newPos, newDir);
     }
     return rayColor;
@@ -470,7 +464,7 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     pixel.z = GammaCompression(pixel.z);
 
     pixel = pixel * 255;
-    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 16) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 0);
+    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 16);
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
