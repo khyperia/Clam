@@ -59,7 +59,7 @@ fn launch_kernel(
             &settings_input,
             &send_image,
             &recv_screen_event,
-            &event_system,
+            event_system,
         ) {
             Ok(()) => (),
             Err(err) => println!("{}", err),
@@ -80,7 +80,7 @@ pub fn find_font() -> Result<&'static Path, Error> {
             return Ok(location);
         }
     }
-    return Err(err_msg("No font found"));
+    Err(err_msg("No font found"))
 }
 
 fn render_text(
@@ -95,7 +95,7 @@ fn render_text(
     let text = settings::settings_status(settings, input);
     let spacing = font.recommended_line_spacing();
     for (line_index, line) in text.lines().enumerate() {
-        let rendered = font.render(&line).solid(Color::RGB(255, 64, 64))?;
+        let rendered = font.render(line).solid(Color::RGB(255, 64, 64))?;
         let width = rendered.width();
         let height = rendered.height();
         let tex = creator.create_texture_from_surface(rendered)?;
@@ -126,16 +126,17 @@ fn draw<'a>(
         if *width != image.width || *height != image.height {
             *width = image.width;
             *height = image.height;
-            *texture = creator.create_texture_streaming(PixelFormatEnum::ABGR8888, *width, *height)?;
+            *texture =
+                creator.create_texture_streaming(PixelFormatEnum::ABGR8888, *width, *height)?;
         }
         texture.update(None, &image.data, image.width as usize * 4)?;
     }
 
     let rect = Rect::new(0, 0, *width, *height);
     canvas
-        .copy(&texture, rect, rect)
+        .copy(texture, rect, rect)
         .expect("Could not display image");
-    render_text(&font, &settings_input, &creator, canvas)?;
+    render_text(font, settings_input, creator, canvas)?;
     canvas.present();
     Ok(())
 }
@@ -212,5 +213,5 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
         //println!("{:?}}}\t{:?}", event, what.aaa());
         //println!("");
     }
-    return Ok(());
+    Ok(())
 }

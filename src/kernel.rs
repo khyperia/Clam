@@ -195,7 +195,9 @@ pub fn interactive(
     event_system: &EventSubsystem,
 ) -> Result<(), Error> {
     let mut kernel = Kernel::new(width, height)?;
-    event_system.register_custom_event::<()>().expect("Failed to register custom event");
+    event_system
+        .register_custom_event::<()>()
+        .expect("Failed to register custom event");
     loop {
         loop {
             let event = match screen_events.try_recv() {

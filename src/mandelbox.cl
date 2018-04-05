@@ -1,5 +1,4 @@
-struct MandelboxCfg
-{
+struct MandelboxCfg {
     float posX;
     float posY;
     float posZ;
@@ -43,7 +42,7 @@ struct MandelboxCfg
     int NumRayBounces;
 };
 
-typedef __private struct MandelboxCfg *Cfg;
+typedef __private struct MandelboxCfg* Cfg;
 
 static float3 LightPos1(Cfg cfg)
 {
@@ -87,12 +86,11 @@ static float3 comp_mul3(float3 left, float3 right)
         left.z * right.z);
 }
 
-struct Random
-{
+struct Random {
     ulong seed;
 };
 
-static float Random_Next(struct Random *this)
+static float Random_Next(struct Random* this)
 {
     this->seed = (this->seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1);
     return (this->seed >> 16) / 4294967296.0f;
@@ -103,20 +101,19 @@ static struct Random new_Random(uint idx, uint frame, uint global_size)
     struct Random result;
     ulong seed = idx + global_size * frame;
     result.seed = seed;
-    for (int i = 0; i < 8; i++)
-    {
+    for (int i = 0; i < 8; i++) {
         Random_Next(&result);
     }
     return result;
 }
 
-static float2 Random_Circle(struct Random *this)
+static float2 Random_Circle(struct Random* this)
 {
     float2 polar = (float2)(Random_Next(this) * 2.0f, sqrt(Random_Next(this)));
     return (float2)(cospi(polar.x) * polar.y, sinpi(polar.x) * polar.y);
 }
 
-static float2 Random_Normal(struct Random *this)
+static float2 Random_Normal(struct Random* this)
 {
     // Box-Muller transform
     // returns two normally-distributed independent variables
@@ -125,7 +122,7 @@ static float2 Random_Normal(struct Random *this)
     return mul * (float2)(cospi(angle), sinpi(angle));
 }
 
-static float3 Random_Sphere(struct Random *this)
+static float3 Random_Sphere(struct Random* this)
 {
     float2 temp = Random_Normal(this);
     float3 result = (float3)(temp.x, temp.y, Random_Normal(this).x);
@@ -133,15 +130,14 @@ static float3 Random_Sphere(struct Random *this)
     return normalize(result);
 }
 
-static float3 Random_Lambertian(struct Random *this, float3 normal)
+static float3 Random_Lambertian(struct Random* this, float3 normal)
 {
     float3 result = Random_Sphere(this);
     result = normalize(result + normal);
     return result;
 }
 
-struct Ray
-{
+struct Ray {
     float3 pos;
     float3 dir;
 };
@@ -159,8 +155,7 @@ static float3 RayDir(float3 forward, float3 up, float2 screenCoords, float fov)
 {
     screenCoords *= -fov;
     float len2 = dot(screenCoords, screenCoords);
-    float3 look =
-        (float3)(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+    float3 look = (float3)(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
     float3 right = cross(forward, up);
     return look.x * right + look.y * up + look.z * forward;
 }
@@ -170,7 +165,7 @@ static float3 Ray_At(struct Ray this, float time)
     return this.pos + this.dir * time;
 }
 
-static void Ray_Dof(Cfg cfg, struct Ray *this, float focalPlane, struct Random *rand)
+static void Ray_Dof(Cfg cfg, struct Ray* this, float focalPlane, struct Random* rand)
 {
     float3 focalPosition = Ray_At(*this, focalPlane);
     float3 xShift = cross((float3)(0, 0, 1), this->dir);
@@ -181,7 +176,7 @@ static void Ray_Dof(Cfg cfg, struct Ray *this, float focalPlane, struct Random *
     this->pos = focalPosition - this->dir * focalPlane;
 }
 
-static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struct Random *rand)
+static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struct Random* rand)
 {
     float3 origin = (float3)(cfg->posX, cfg->posY, cfg->posZ);
     float3 look = (float3)(cfg->lookX, cfg->lookY, cfg->lookZ);
@@ -272,7 +267,8 @@ static float4 MandelboxD(Cfg cfg, float4 z, float3 offset)
     return z;
 }
 
-static float DeSphere(float3 pos, float radius, float3 test) {
+static float DeSphere(float3 pos, float radius, float3 test)
+{
     return length(test - pos) - radius;
 }
 
@@ -337,15 +333,14 @@ static struct Material Material(Cfg cfg, float3 offset)
     return result;
 }
 
-static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3 *normal)
+static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3* normal)
 {
     float distance;
     float totalDistance = 0.0f;
     int i = 0;
     const int maxSteps = max(cfg->MaxRaySteps, 1);
     const float deMultiplier = cfg->DeMultiplier;
-    do
-    {
+    do {
         distance = De(cfg, Ray_At(ray, totalDistance)) * deMultiplier;
         totalDistance += distance;
         i++;
@@ -364,7 +359,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random *rand)
+static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand)
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
@@ -404,7 +399,8 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
     return rayColor;
 }
 
-static float3 GammaTest(int x, int y, int width, int height) {
+static float3 GammaTest(int x, int y, int width, int height)
+{
     float centerValue = (float)x / width;
     float offset = ((float)(height - y) / height) * (0.5f - fabs(centerValue - 0.5f));
     float result;
@@ -445,17 +441,13 @@ static float GammaCompression(float value)
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
-    if (cfg->WhiteClamp)
-    {
+    if (cfg->WhiteClamp) {
         float maxVal = max(max(pixel.x, pixel.y), pixel.z);
-        if (maxVal > 1)
-        {
+        if (maxVal > 1) {
             pixel *= 1.0f / maxVal;
         }
         pixel = max(pixel, 0.0f);
-    }
-    else
-    {
+    } else {
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
 
@@ -469,25 +461,23 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 
 // type: -1 is preview, 0 is init, 1 is continue
 __kernel void Main(
-    __global uchar *data,
-    __global struct MandelboxCfg *cfg_global,
+    __global uchar* data,
+    __global struct MandelboxCfg* cfg_global,
     uint width,
     uint height,
-    uint frame
-)
+    uint frame)
 {
     uint mem_offset = 0;
-    __global uint *screenPixels = (__global uint *)(data + mem_offset);
+    __global uint* screenPixels = (__global uint*)(data + mem_offset);
     mem_offset += width * height * (uint)sizeof(uint);
-    __global float3 *scratchBuf_arg = (__global float3 *)(data + mem_offset);
+    __global float3* scratchBuf_arg = (__global float3*)(data + mem_offset);
     struct MandelboxCfg local_copy = *cfg_global;
-    struct MandelboxCfg *cfg = &local_copy;
+    struct MandelboxCfg* cfg = &local_copy;
 
     uint idx = (uint)get_global_id(0);
     uint x = idx % width;
     uint y = idx / width;
-    if (y >= height)
-    {
+    if (y >= height) {
         return;
     }
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
@@ -495,7 +485,7 @@ __kernel void Main(
     struct Random rand = new_Random(idx, frame, width * height);
     struct Ray ray = Camera(cfg, x, y, width, height, &rand);
     float3 colorComponents = Trace(cfg, ray, width, height, &rand);
-    __global float3 *scratch = &scratchBuf_arg[idx];
+    __global float3* scratch = &scratchBuf_arg[idx];
     float3 oldColor = frame > 0 ? *scratch : (float3)(0, 0, 0);
     float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     *scratch = newColor;
