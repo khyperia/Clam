@@ -63,7 +63,7 @@ impl Kernel {
             }
             builder.build(&context)?
         };
-        println!("Using GPU: {}", device_name);
+        println!("Using device: {}", device_name);
         if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
             program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog)?
         {
@@ -99,6 +99,26 @@ impl Kernel {
 
     fn make_context() -> Result<ocl::Context, Error> {
         let mut last_err = None;
+        let selected = ::std::env::var("CLAM5_DEVICE").ok();
+        let mut i = 0;
+        println!("Devices (pass env var CLAM5_DEVICE={{i}} to select)");
+        for platform in ocl::Platform::list() {
+            println!("Platform: {}", platform.name()?);
+            for device in ocl::Device::list(platform, None)? {
+                match selected {
+                    Some(ref selected) if selected.parse() == Ok(i) => {
+                        return Ok(ocl::Context::builder()
+                            .platform(platform)
+                            .devices(device)
+                            .build()?)
+                    }
+                    Some(ref selected) if selected.parse::<i32>().is_ok() => (),
+                    _ => println!("[{}]: {}", i, device.name()?),
+                }
+                i += 1;
+            }
+        }
+
         for platform in ocl::Platform::list() {
             match ocl::Context::builder()
                 .platform(platform)
@@ -109,12 +129,14 @@ impl Kernel {
                 Err(e) => last_err = Some(e),
             }
         }
+
         for platform in ocl::Platform::list() {
             match ocl::Context::builder().platform(platform).build() {
                 Ok(ok) => return Ok(ok),
                 Err(e) => last_err = Some(e),
             }
         }
+
         match last_err {
             Some(e) => Err(e.into()),
             None => Err(failure::err_msg("No OpenCL devices found")),

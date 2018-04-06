@@ -165,9 +165,7 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
         event,
     );
 
-    //let mut what = What::new();
     for event in event_pump.wait_iter() {
-        //println!("{:?}{{\t{:?}", event, what.aaa());
         match event {
             Event::Window {
                 win_event: WindowEvent::Resized(width, height),
@@ -210,8 +208,6 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
             )?,
             _ => (),
         }
-        //println!("{:?}}}\t{:?}", event, what.aaa());
-        //println!("");
     }
     Ok(())
 }

@@ -39,8 +39,11 @@ struct MandelboxCfg {
     int WhiteClamp;
     int MaxIters;
     int MaxRaySteps;
-    int NumRayBounces;
 };
+
+// When NumRayBounces is a dynamic variable in MandelboxCfg, the intel opencl
+// runtime cannot vectorize the kernel.
+#define NumRayBounces 3
 
 typedef __private struct MandelboxCfg* Cfg;
 
@@ -363,7 +366,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
-    for (int i = 0; i < cfg->NumRayBounces; i++) {
+    for (int i = 0; i < 3; i++) {
         const bool firstRay = i == 0;
         const float firstRayQuality = cfg->QualityFirstRay * ((width + height) / (2 * cfg->fov));
 

@@ -46,7 +46,6 @@ pub struct MandelboxCfg {
     white_clamp: u32,
     max_iters: u32,
     max_ray_steps: u32,
-    num_ray_bounces: u32,
 }
 
 unsafe impl ocl::traits::OclPrm for MandelboxCfg {}
@@ -92,7 +91,6 @@ pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
     white_clamp: 1,
     max_iters: 64,
     max_ray_steps: 256,
-    num_ray_bounces: 3,
 };
 
 impl MandelboxCfg {
@@ -245,10 +243,6 @@ impl MandelboxCfg {
             "max_ray_steps".into(),
             SettingValue::U32(self.max_ray_steps),
         );
-        settings.insert(
-            "num_ray_bounces".into(),
-            SettingValue::U32(self.num_ray_bounces),
-        );
     }
 
     /*
@@ -295,7 +289,6 @@ impl MandelboxCfg {
             "white_clamp" => &self.white_clamp,
             "max_iters" => &self.max_iters,
             "max_ray_steps" => &self.max_ray_steps,
-            "num_ray_bounces" => &self.num_ray_bounces,
             _ => return None,
         };
         Some(val)
@@ -351,7 +344,6 @@ impl MandelboxCfg {
             "white_clamp" => &mut self.white_clamp,
             "max_iters" => &mut self.max_iters,
             "max_ray_steps" => &mut self.max_ray_steps,
-            "num_ray_bounces" => &mut self.num_ray_bounces,
             _ => return None,
         };
         Some(val)
