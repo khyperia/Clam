@@ -5,6 +5,6 @@ authors = ["khyperia <khyperia@live.com>"]
 
 [dependencies]
 failure = "*"
-ocl = { git = "https://github.com/cogciprocate/ocl", default-features = false }
+ocl = { version = "*", default-features = false }
 png = { version = "*", default-features = false, features = ["png-encoding"] }
 sdl2 = { version = "*", features = ["ttf"] }

@@ -72,37 +72,27 @@ static float3 AmbientBrightness(Cfg cfg)
     return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB) / cfg->ReflectBrightness;
 }
 
-static float4 comp_mul4(float4 left, float4 right)
-{
-    return (float4)(
-        left.x * right.x,
-        left.y * right.y,
-        left.z * right.z,
-        left.w * right.w);
-}
-
-static float3 comp_mul3(float3 left, float3 right)
-{
-    return (float3)(
-        left.x * right.x,
-        left.y * right.y,
-        left.z * right.z);
-}
-
 struct Random {
     ulong seed;
 };
 
 static float Random_Next(struct Random* this)
 {
-    this->seed = (this->seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1);
-    return (this->seed >> 16) / 4294967296.0f;
+    uint c = this->seed >> 32;
+    uint x = this->seed & 0xFFFFFFFF;
+    this->seed = x * ((ulong)4294883355U) + c;
+    return (x ^ c) / 4294967296.0f;
 }
+// static float Random_Next(struct Random* this)
+// {
+//     this->seed = (this->seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1);
+//     return (this->seed >> 16) / 4294967296.0f;
+// }
 
 static struct Random new_Random(uint idx, uint frame, uint global_size)
 {
     struct Random result;
-    ulong seed = idx + global_size * frame;
+    ulong seed = (ulong)idx + (ulong)global_size * (ulong)frame;
     result.seed = seed;
     for (int i = 0; i < 8; i++) {
         Random_Next(&result);
@@ -110,32 +100,31 @@ static struct Random new_Random(uint idx, uint frame, uint global_size)
     return result;
 }
 
-static float2 Random_Circle(struct Random* this)
+static float2 Random_Disk(struct Random* this)
 {
     float2 polar = (float2)(Random_Next(this) * 2.0f, sqrt(Random_Next(this)));
     return (float2)(cospi(polar.x) * polar.y, sinpi(polar.x) * polar.y);
 }
 
-static float2 Random_Normal(struct Random* this)
-{
-    // Box-Muller transform
-    // returns two normally-distributed independent variables
-    float mul = sqrt(-2 * log2(Random_Next(this)));
-    float angle = 2.0f * Random_Next(this);
-    return mul * (float2)(cospi(angle), sinpi(angle));
-}
-
 static float3 Random_Sphere(struct Random* this)
 {
-    float2 temp = Random_Normal(this);
-    float3 result = (float3)(temp.x, temp.y, Random_Normal(this).x);
-    result.x += (dot(result, result) == 0.0f); // ensure nonzero
-    return normalize(result);
+    float theta = Random_Next(this);
+    float phi = Random_Next(this);
+    phi = acospi(2 * phi - 1);
+    float x = sinpi(phi) * cospi(theta);
+    float y = sinpi(phi) * sinpi(theta);
+    float z = cospi(phi);
+    return (float3)(x, y, z);
+}
+
+static float3 Random_Ball(struct Random* this)
+{
+    return rootn(Random_Next(this), 3) * Random_Sphere(this);
 }
 
 static float3 Random_Lambertian(struct Random* this, float3 normal)
 {
-    float3 result = Random_Sphere(this);
+    float3 result = Random_Ball(this);
     result = normalize(result + normal);
     return result;
 }
@@ -173,7 +162,7 @@ static void Ray_Dof(Cfg cfg, struct Ray* this, float focalPlane, struct Random* 
     float3 focalPosition = Ray_At(*this, focalPlane);
     float3 xShift = cross((float3)(0, 0, 1), this->dir);
     float3 yShift = cross(this->dir, xShift);
-    float2 offset = Random_Circle(rand);
+    float2 offset = Random_Disk(rand);
     float dofPickup = cfg->DofAmount;
     this->dir = normalize(this->dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
     this->pos = focalPosition - this->dir * focalPlane;
@@ -185,7 +174,6 @@ static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struc
     float3 look = (float3)(cfg->lookX, cfg->lookY, cfg->lookZ);
     float3 up = (float3)(cfg->upX, cfg->upY, cfg->upZ);
     float2 screenCoords = (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
-    //screenCoords += (float2)(Random_Next(rand) - 0.5f, Random_Next(rand) - 0.5f);
     float fov = cfg->fov * 2 / (width + height);
     float3 direction = RayDir(look, up, screenCoords, fov);
     struct Ray result = new_Ray(origin, direction);
@@ -251,7 +239,7 @@ static float4 TScaleD(Cfg cfg, float4 z)
 {
     const float scale = cfg->Scale;
     const float4 mul = (float4)(scale, scale, scale, fabs(scale));
-    return comp_mul4(z, mul);
+    return z * mul;
 }
 
 static float4 TOffsetD(float4 z, float3 offset)
@@ -348,6 +336,16 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
         totalDistance += distance;
         i++;
     } while (totalDistance < maxDist && distance * quality > totalDistance && i < maxSteps);
+
+    // correction step
+    if (distance * quality < totalDistance) {
+        totalDistance -= totalDistance / quality * 2;
+        for (int i = 0; i < 4; i++) {
+            distance = De(cfg, Ray_At(ray, totalDistance)) * deMultiplier;
+            totalDistance += distance - totalDistance / quality;
+        }
+    }
+
     float3 final = Ray_At(ray, totalDistance);
     float delta = max(1e-6f, distance * 0.5f); // aprox. 8.3x float epsilon
     float dnpp = De(cfg, final + (float3)(-delta, delta, delta));
@@ -366,19 +364,15 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
+    float quality = cfg->QualityFirstRay * ((width + height) / (2 * cfg->fov));
     for (int i = 0; i < 3; i++) {
-        const bool firstRay = i == 0;
-        const float firstRayQuality = cfg->QualityFirstRay * ((width + height) / (2 * cfg->fov));
-
-        const float quality = firstRay ? firstRayQuality : cfg->QualityRestRay;
-
         float3 normal;
         float distance = Cast(cfg, ray, quality, cfg->MaxRayDist, &normal);
 
         if (distance > cfg->MaxRayDist) {
-            float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
-            float3 color = AmbientBrightness(cfg) * first_reduce;
-            rayColor += comp_mul3(color, reflectionColor);
+            //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
+            float3 color = AmbientBrightness(cfg);
+            rayColor += color * reflectionColor;
             break;
         }
 
@@ -394,6 +388,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
         } else {
             // diffuse
             newDir = Random_Lambertian(rand, normal);
+            quality = cfg->QualityRestRay;
         }
         float incident_angle_weakening = dot(normal, newDir);
         reflectionColor *= incident_angle_weakening * material.color;
@@ -462,6 +457,30 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 16);
 }
 
+// yay SOA
+static float3 GetScratch(__global uchar* rawData, uint idx, uint size) {
+    __global float* data = (__global float*)rawData;
+    if (idx >= size) { return (float3)(0, 0, 0); }
+    return (float3)(
+        data[idx + size],
+        data[idx + size * 2],
+        data[idx + size * 3]);
+}
+
+static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 value) {
+    __global float* data = (__global float*)rawData;
+    if (idx >= size) { return; }
+    data[idx + size] = value.x;
+    data[idx + size * 2] = value.y;
+    data[idx + size * 3] = value.z;
+}
+
+static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value) {
+    __global uint* data = (__global float*)rawData;
+    if (idx >= size) { return; }
+    data[idx] = value;
+}
+
 // type: -1 is preview, 0 is init, 1 is continue
 __kernel void Main(
     __global uchar* data,
@@ -470,30 +489,29 @@ __kernel void Main(
     uint height,
     uint frame)
 {
-    uint mem_offset = 0;
-    __global uint* screenPixels = (__global uint*)(data + mem_offset);
-    mem_offset += width * height * (uint)sizeof(uint);
-    __global float3* scratchBuf_arg = (__global float3*)(data + mem_offset);
     struct MandelboxCfg local_copy = *cfg_global;
-    struct MandelboxCfg* cfg = &local_copy;
+    Cfg cfg = &local_copy;
 
     uint idx = (uint)get_global_id(0);
     uint x = idx % width;
     uint y = idx / width;
-    if (y >= height) {
-        return;
-    }
+    uint size = width * height;
+
+    // guard against invalid index in Get/SetScratch, and SetScreen. Nowhere else is needed.
+    //if (y >= height) { return; }
+
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
     y = height - (y + 1);
-    struct Random rand = new_Random(idx, frame, width * height);
+
+    float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
+
+    struct Random rand = new_Random(idx, frame, size);
     struct Ray ray = Camera(cfg, x, y, width, height, &rand);
     float3 colorComponents = Trace(cfg, ray, width, height, &rand);
-    __global float3* scratch = &scratchBuf_arg[idx];
-    float3 oldColor = frame > 0 ? *scratch : (float3)(0, 0, 0);
     float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
-    *scratch = newColor;
-
     //newColor = GammaTest(x, y, width, height);
     uint packedColor = PackPixel(cfg, newColor);
-    screenPixels[idx] = packedColor;
+
+    SetScratch(data, idx, size, newColor);
+    SetScreen(data, idx, size, packedColor);
 }
