@@ -2,6 +2,7 @@ use input::Vector;
 use ocl;
 use settings::SettingValue;
 use settings::Settings;
+use std::collections::HashMap;
 
 #[repr(C)]
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
@@ -95,7 +96,10 @@ pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
 
 impl MandelboxCfg {
     pub fn read(&mut self, settings: &Settings) {
-        for (key, value) in settings {
+        for (key, value) in settings.value_map() {
+            if settings.is_const(key) {
+                continue;
+            }
             match *value {
                 SettingValue::F32(new, _) => {
                     if let Some(old) = self.get_f32_mut(key) {
@@ -124,7 +128,7 @@ impl MandelboxCfg {
         self.up_z = up.z;
     }
 
-    pub fn write(&mut self, settings: &mut Settings) {
+    pub fn write(&mut self, settings: &mut HashMap<String, SettingValue>) {
         settings.insert("pos_x".into(), SettingValue::F32(self.pos_x, 1.0));
         settings.insert("pos_y".into(), SettingValue::F32(self.pos_y, 1.0));
         settings.insert("pos_z".into(), SettingValue::F32(self.pos_z, 1.0));
@@ -347,5 +351,51 @@ impl MandelboxCfg {
             _ => return None,
         };
         Some(val)
+    }
+
+    pub fn is_const(key: &str) -> bool {
+        match key {
+            "pos_x" => false,
+            "pos_y" => false,
+            "pos_z" => false,
+            "look_x" => false,
+            "look_y" => false,
+            "look_z" => false,
+            "up_x" => false,
+            "up_y" => false,
+            "up_z" => false,
+            "fov" => false,
+            "focal_distance" => false,
+            "scale" => true,
+            "folding_limit" => true,
+            "fixed_radius_2" => true,
+            "min_radius_2" => true,
+            "dof_amount" => true,
+            "light_pos_1_x" => true,
+            "light_pos_1_y" => true,
+            "light_pos_1_z" => true,
+            "light_brightness_1_r" => true,
+            "light_brightness_1_g" => true,
+            "light_brightness_1_b" => true,
+            "light_pos_2_x" => true,
+            "light_pos_2_y" => true,
+            "light_pos_2_z" => true,
+            "light_brightness_2_r" => true,
+            "light_brightness_2_g" => true,
+            "light_brightness_2_b" => true,
+            "ambient_brightness_r" => true,
+            "ambient_brightness_g" => true,
+            "ambient_brightness_b" => true,
+            "reflect_brightness" => true,
+            "bailout" => true,
+            "de_multiplier" => true,
+            "max_ray_dist" => true,
+            "quality_first_ray" => true,
+            "quality_rest_ray" => true,
+            "white_clamp" => true,
+            "max_iters" => true,
+            "max_ray_steps" => true,
+            _ => false,
+        }
     }
 }

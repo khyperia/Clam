@@ -1,45 +1,166 @@
 struct MandelboxCfg {
-    float posX;
-    float posY;
-    float posZ;
-    float lookX;
-    float lookY;
-    float lookZ;
-    float upX;
-    float upY;
-    float upZ;
-    float fov;
-    float focalDistance;
-    float Scale;
-    float FoldingLimit;
-    float FixedRadius2;
-    float MinRadius2;
-    float DofAmount;
-    float LightPos1X;
-    float LightPos1Y;
-    float LightPos1Z;
-    float LightBrightness1R;
-    float LightBrightness1G;
-    float LightBrightness1B;
-    float LightPos2X;
-    float LightPos2Y;
-    float LightPos2Z;
-    float LightBrightness2R;
-    float LightBrightness2G;
-    float LightBrightness2B;
-    float AmbientBrightnessR;
-    float AmbientBrightnessG;
-    float AmbientBrightnessB;
-    float ReflectBrightness;
-    float Bailout;
-    float DeMultiplier;
-    float MaxRayDist;
-    float QualityFirstRay;
-    float QualityRestRay;
-    int WhiteClamp;
-    int MaxIters;
-    int MaxRaySteps;
+    float _pos_x;
+    float _pos_y;
+    float _pos_z;
+    float _look_x;
+    float _look_y;
+    float _look_z;
+    float _up_x;
+    float _up_y;
+    float _up_z;
+    float _fov;
+    float _focal_distance;
+    float _scale;
+    float _folding_limit;
+    float _fixed_radius_2;
+    float _min_radius_2;
+    float _dof_amount;
+    float _light_pos_1_x;
+    float _light_pos_1_y;
+    float _light_pos_1_z;
+    float _light_brightness_1_r;
+    float _light_brightness_1_g;
+    float _light_brightness_1_b;
+    float _light_pos_2_x;
+    float _light_pos_2_y;
+    float _light_pos_2_z;
+    float _light_brightness_2_r;
+    float _light_brightness_2_g;
+    float _light_brightness_2_b;
+    float _ambient_brightness_r;
+    float _ambient_brightness_g;
+    float _ambient_brightness_b;
+    float _reflect_brightness;
+    float _bailout;
+    float _de_multiplier;
+    float _max_ray_dist;
+    float _quality_first_ray;
+    float _quality_rest_ray;
+    int _white_clamp;
+    int _max_iters;
+    int _max_ray_steps;
 };
+
+#ifndef pos_x
+#define pos_x cfg->_pos_x
+#endif
+#ifndef pos_y
+#define pos_y cfg->_pos_y
+#endif
+#ifndef pos_z
+#define pos_z cfg->_pos_z
+#endif
+#ifndef look_x
+#define look_x cfg->_look_x
+#endif
+#ifndef look_y
+#define look_y cfg->_look_y
+#endif
+#ifndef look_z
+#define look_z cfg->_look_z
+#endif
+#ifndef up_x
+#define up_x cfg->_up_x
+#endif
+#ifndef up_y
+#define up_y cfg->_up_y
+#endif
+#ifndef up_z
+#define up_z cfg->_up_z
+#endif
+#ifndef fov
+#define fov cfg->_fov
+#endif
+#ifndef focal_distance
+#define focal_distance cfg->_focal_distance
+#endif
+#ifndef scale
+#define scale cfg->_scale
+#endif
+#ifndef folding_limit
+#define folding_limit cfg->_folding_limit
+#endif
+#ifndef fixed_radius_2
+#define fixed_radius_2 cfg->_fixed_radius_2
+#endif
+#ifndef min_radius_2
+#define min_radius_2 cfg->_min_radius_2
+#endif
+#ifndef dof_amount
+#define dof_amount cfg->_dof_amount
+#endif
+#ifndef light_pos_1_x
+#define light_pos_1_x cfg->_light_pos_1_x
+#endif
+#ifndef light_pos_1_y
+#define light_pos_1_y cfg->_light_pos_1_y
+#endif
+#ifndef light_pos_1_z
+#define light_pos_1_z cfg->_light_pos_1_z
+#endif
+#ifndef light_brightness_1_r
+#define light_brightness_1_r cfg->_light_brightness_1_r
+#endif
+#ifndef light_brightness_1_g
+#define light_brightness_1_g cfg->_light_brightness_1_g
+#endif
+#ifndef light_brightness_1_b
+#define light_brightness_1_b cfg->_light_brightness_1_b
+#endif
+#ifndef light_pos_2_x
+#define light_pos_2_x cfg->_light_pos_2_x
+#endif
+#ifndef light_pos_2_y
+#define light_pos_2_y cfg->_light_pos_2_y
+#endif
+#ifndef light_pos_2_z
+#define light_pos_2_z cfg->_light_pos_2_z
+#endif
+#ifndef light_brightness_2_r
+#define light_brightness_2_r cfg->_light_brightness_2_r
+#endif
+#ifndef light_brightness_2_g
+#define light_brightness_2_g cfg->_light_brightness_2_g
+#endif
+#ifndef light_brightness_2_b
+#define light_brightness_2_b cfg->_light_brightness_2_b
+#endif
+#ifndef ambient_brightness_r
+#define ambient_brightness_r cfg->_ambient_brightness_r
+#endif
+#ifndef ambient_brightness_g
+#define ambient_brightness_g cfg->_ambient_brightness_g
+#endif
+#ifndef ambient_brightness_b
+#define ambient_brightness_b cfg->_ambient_brightness_b
+#endif
+#ifndef reflect_brightness
+#define reflect_brightness cfg->_reflect_brightness
+#endif
+#ifndef bailout
+#define bailout cfg->_bailout
+#endif
+#ifndef de_multiplier
+#define de_multiplier cfg->_de_multiplier
+#endif
+#ifndef max_ray_dist
+#define max_ray_dist cfg->_max_ray_dist
+#endif
+#ifndef quality_first_ray
+#define quality_first_ray cfg->_quality_first_ray
+#endif
+#ifndef quality_rest_ray
+#define quality_rest_ray cfg->_quality_rest_ray
+#endif
+#ifndef white_clamp
+#define white_clamp cfg->_white_clamp
+#endif
+#ifndef max_iters
+#define max_iters cfg->_max_iters
+#endif
+#ifndef max_ray_steps
+#define max_ray_steps cfg->_max_ray_steps
+#endif
 
 // When NumRayBounces is a dynamic variable in MandelboxCfg, the intel opencl
 // runtime cannot vectorize the kernel.
@@ -49,27 +170,27 @@ typedef __private struct MandelboxCfg* Cfg;
 
 static float3 LightPos1(Cfg cfg)
 {
-    return (float3)(cfg->LightPos1X, cfg->LightPos1Y, cfg->LightPos1Z);
+    return (float3)(light_pos_1_x, light_pos_1_y, light_pos_1_z);
 }
 
 static float3 LightPos2(Cfg cfg)
 {
-    return (float3)(cfg->LightPos2X, cfg->LightPos2Y, cfg->LightPos2Z);
+    return (float3)(light_pos_2_x, light_pos_2_y, light_pos_2_z);
 }
 
 static float3 LightBrightness1(Cfg cfg)
 {
-    return (float3)(cfg->LightBrightness1R, cfg->LightBrightness1G, cfg->LightBrightness1B) / cfg->ReflectBrightness;
+    return (float3)(light_brightness_1_r, light_brightness_1_g, light_brightness_1_b) / reflect_brightness;
 }
 
 static float3 LightBrightness2(Cfg cfg)
 {
-    return (float3)(cfg->LightBrightness2R, cfg->LightBrightness2G, cfg->LightBrightness2B) / cfg->ReflectBrightness;
+    return (float3)(light_brightness_2_r, light_brightness_2_g, light_brightness_2_b) / reflect_brightness;
 }
 
 static float3 AmbientBrightness(Cfg cfg)
 {
-    return (float3)(cfg->AmbientBrightnessR, cfg->AmbientBrightnessG, cfg->AmbientBrightnessB) / cfg->ReflectBrightness;
+    return (float3)(ambient_brightness_r, ambient_brightness_g, ambient_brightness_b) / reflect_brightness;
 }
 
 struct Random {
@@ -92,8 +213,7 @@ static float Random_Next(struct Random* this)
 static struct Random new_Random(uint idx, uint frame, uint global_size)
 {
     struct Random result;
-    ulong seed = (ulong)idx + (ulong)global_size * (ulong)frame;
-    result.seed = seed;
+    result.seed = (ulong)idx + (ulong)global_size * (ulong)frame;
     for (int i = 0; i < 8; i++) {
         Random_Next(&result);
     }
@@ -102,18 +222,17 @@ static struct Random new_Random(uint idx, uint frame, uint global_size)
 
 static float2 Random_Disk(struct Random* this)
 {
-    float2 polar = (float2)(Random_Next(this) * 2.0f, sqrt(Random_Next(this)));
+    const float2 polar = (float2)(Random_Next(this) * 2.0f, sqrt(Random_Next(this)));
     return (float2)(cospi(polar.x) * polar.y, sinpi(polar.x) * polar.y);
 }
 
 static float3 Random_Sphere(struct Random* this)
 {
-    float theta = Random_Next(this);
-    float phi = Random_Next(this);
-    phi = acospi(2 * phi - 1);
-    float x = sinpi(phi) * cospi(theta);
-    float y = sinpi(phi) * sinpi(theta);
-    float z = cospi(phi);
+    const float theta = Random_Next(this);
+    const float phi = acospi(2 * Random_Next(this) - 1);
+    const float x = sinpi(phi) * cospi(theta);
+    const float y = sinpi(phi) * sinpi(theta);
+    const float z = cospi(phi);
     return (float3)(x, y, z);
 }
 
@@ -124,9 +243,7 @@ static float3 Random_Ball(struct Random* this)
 
 static float3 Random_Lambertian(struct Random* this, float3 normal)
 {
-    float3 result = Random_Ball(this);
-    result = normalize(result + normal);
-    return result;
+    return normalize(Random_Ball(this) + normal);
 }
 
 struct Ray {
@@ -143,12 +260,12 @@ static struct Ray new_Ray(float3 pos, float3 dir)
 }
 
 // http://en.wikipedia.org/wiki/Stereographic_projection
-static float3 RayDir(float3 forward, float3 up, float2 screenCoords, float fov)
+static float3 RayDir(float3 forward, float3 up, float2 screenCoords, float calcFov)
 {
-    screenCoords *= -fov;
-    float len2 = dot(screenCoords, screenCoords);
-    float3 look = (float3)(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
-    float3 right = cross(forward, up);
+    screenCoords *= -calcFov;
+    const float len2 = dot(screenCoords, screenCoords);
+    const float3 look = (float3)(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+    const float3 right = cross(forward, up);
     return look.x * right + look.y * up + look.z * forward;
 }
 
@@ -159,25 +276,25 @@ static float3 Ray_At(struct Ray this, float time)
 
 static void Ray_Dof(Cfg cfg, struct Ray* this, float focalPlane, struct Random* rand)
 {
-    float3 focalPosition = Ray_At(*this, focalPlane);
-    float3 xShift = cross((float3)(0, 0, 1), this->dir);
-    float3 yShift = cross(this->dir, xShift);
-    float2 offset = Random_Disk(rand);
-    float dofPickup = cfg->DofAmount;
+    const float3 focalPosition = Ray_At(*this, focalPlane);
+    const float3 xShift = cross((float3)(0, 0, 1), this->dir);
+    const float3 yShift = cross(this->dir, xShift);
+    const float2 offset = Random_Disk(rand);
+    const float dofPickup = dof_amount;
     this->dir = normalize(this->dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
     this->pos = focalPosition - this->dir * focalPlane;
 }
 
 static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struct Random* rand)
 {
-    float3 origin = (float3)(cfg->posX, cfg->posY, cfg->posZ);
-    float3 look = (float3)(cfg->lookX, cfg->lookY, cfg->lookZ);
-    float3 up = (float3)(cfg->upX, cfg->upY, cfg->upZ);
-    float2 screenCoords = (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
-    float fov = cfg->fov * 2 / (width + height);
-    float3 direction = RayDir(look, up, screenCoords, fov);
+    const float3 origin = (float3)(pos_x, pos_y, pos_z);
+    const float3 look = (float3)(look_x, look_y, look_z);
+    const float3 up = (float3)(up_x, up_y, up_z);
+    const float2 screenCoords = (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
+    const float calcFov = fov * 2 / (width + height);
+    const float3 direction = RayDir(look, up, screenCoords, calcFov);
     struct Ray result = new_Ray(origin, direction);
-    Ray_Dof(cfg, &result, cfg->focalDistance, rand);
+    Ray_Dof(cfg, &result, focal_distance, rand);
     return result;
 }
 
@@ -202,8 +319,7 @@ static float4 Mandelbulb(float4 z, const float Power)
 
 static float4 BoxfoldD(Cfg cfg, float4 z)
 {
-    float3 znew = z.xyz;
-    znew = clamp(znew, -cfg->FoldingLimit, cfg->FoldingLimit) * 2.0f - znew;
+    const float3 znew = clamp(z.xyz, -folding_limit, folding_limit) * 2.0f - z.xyz;
     return (float4)(znew.x, znew.y, znew.z, z.w);
 }
 
@@ -223,21 +339,20 @@ static float4 ContBoxfoldD(float4 z)
 
 static float4 SpherefoldD(Cfg cfg, float4 z)
 {
-    z *= cfg->FixedRadius2 / clamp(dot(z.xyz, z.xyz), cfg->MinRadius2, cfg->FixedRadius2);
-    return z;
+    const float factor = fixed_radius_2 / clamp(dot(z.xyz, z.xyz), min_radius_2, fixed_radius_2);
+    return z * factor;
 }
 
 /*
 static float4 ContSpherefoldD(Cfg cfg, float4 z)
 {
-    z *= cfg->MinRadius2 / dot(z.xyz, z.xyz) + cfg->FixedRadius2;
+    z *= min_radius_2 / dot(z.xyz, z.xyz) + fixed_radius_2;
     return z;
 }
 */
 
 static float4 TScaleD(Cfg cfg, float4 z)
 {
-    const float scale = cfg->Scale;
     const float4 mul = (float4)(scale, scale, scale, fabs(scale));
     return z * mul;
 }
@@ -266,18 +381,18 @@ static float DeSphere(float3 pos, float radius, float3 test)
 static float DeMandelbox(Cfg cfg, float3 offset)
 {
     float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
-    int n = max(cfg->MaxIters, 1);
+    int n = max(max_iters, 1);
     do {
         z = MandelboxD(cfg, z, offset);
-    } while (dot(z.xyz, z.xyz) < cfg->Bailout && --n);
+    } while (dot(z.xyz, z.xyz) < bailout && --n);
     return length(z.xyz) / z.w;
 }
 
 static float De(Cfg cfg, float3 offset)
 {
-    float mbox = DeMandelbox(cfg, offset);
-    float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
-    float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
+    const float mbox = DeMandelbox(cfg, offset);
+    const float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
+    const float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
     return min(min(light1, light2), mbox);
 }
 
@@ -291,24 +406,24 @@ struct Material {
 static struct Material Material(Cfg cfg, float3 offset)
 {
     float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
-    int n = max(cfg->MaxIters, 1);
+    int n = max(max_iters, 1);
     float trap = 10000000000;
     do {
         z = MandelboxD(cfg, z, offset);
         trap = min(trap, length(trap));
-    } while (dot(z.xyz, z.xyz) < cfg->Bailout && --n);
-    float de = length(z.xyz) / z.w;
+    } while (dot(z.xyz, z.xyz) < bailout && --n);
+    const float de = length(z.xyz) / z.w;
 
     trap = sin(log2(trap)) * 0.5f + 0.5f;
     float3 color = (float3)(trap, trap, trap);
 
-    float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
-    float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
-    float minimum = min(min(light1, light2), de);
+    const float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
+    const float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
+    const float minimum = min(min(light1, light2), de);
 
     struct Material result;
     if (minimum == de) {
-        result.color = color * cfg->ReflectBrightness;
+        result.color = color * reflect_brightness;
         result.specular = 0.2f;
         result.emissive = (float3)(0, 0, 0);
     } else if (minimum == light1) {
@@ -328,30 +443,28 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
 {
     float distance;
     float totalDistance = 0.0f;
-    int i = 0;
-    const int maxSteps = max(cfg->MaxRaySteps, 1);
-    const float deMultiplier = cfg->DeMultiplier;
+    uint i = max(max_ray_steps, 1);
     do {
-        distance = De(cfg, Ray_At(ray, totalDistance)) * deMultiplier;
+        distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
         totalDistance += distance;
-        i++;
-    } while (totalDistance < maxDist && distance * quality > totalDistance && i < maxSteps);
+        i--;
+    } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
 
     // correction step
     if (distance * quality < totalDistance) {
         totalDistance -= totalDistance / quality * 2;
         for (int i = 0; i < 4; i++) {
-            distance = De(cfg, Ray_At(ray, totalDistance)) * deMultiplier;
+            distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
             totalDistance += distance - totalDistance / quality;
         }
     }
 
-    float3 final = Ray_At(ray, totalDistance);
-    float delta = max(1e-6f, distance * 0.5f); // aprox. 8.3x float epsilon
-    float dnpp = De(cfg, final + (float3)(-delta, delta, delta));
-    float dpnp = De(cfg, final + (float3)(delta, -delta, delta));
-    float dppn = De(cfg, final + (float3)(delta, delta, -delta));
-    float dnnn = De(cfg, final + (float3)(-delta, -delta, -delta));
+    const float3 final = Ray_At(ray, totalDistance);
+    const float delta = max(1e-6f, distance * 0.5f); // aprox. 8.3x float epsilon
+    const float dnpp = De(cfg, final + (float3)(-delta, delta, delta));
+    const float dpnp = De(cfg, final + (float3)(delta, -delta, delta));
+    const float dppn = De(cfg, final + (float3)(delta, delta, -delta));
+    const float dnnn = De(cfg, final + (float3)(-delta, -delta, -delta));
     *normal = (float3)((dppn + dpnp) - (dnpp + dnnn),
         (dppn + dnpp) - (dpnp + dnnn),
         (dpnp + dnpp) - (dppn + dnnn));
@@ -364,14 +477,14 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
-    float quality = cfg->QualityFirstRay * ((width + height) / (2 * cfg->fov));
+    float quality = quality_first_ray * ((width + height) / (2 * fov));
     for (int i = 0; i < 3; i++) {
         float3 normal;
-        float distance = Cast(cfg, ray, quality, cfg->MaxRayDist, &normal);
+        const float distance = Cast(cfg, ray, quality, max_ray_dist, &normal);
 
-        if (distance > cfg->MaxRayDist) {
+        if (distance > max_ray_dist) {
             //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
-            float3 color = AmbientBrightness(cfg);
+            const float3 color = AmbientBrightness(cfg);
             rayColor += color * reflectionColor;
             break;
         }
@@ -388,9 +501,9 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
         } else {
             // diffuse
             newDir = Random_Lambertian(rand, normal);
-            quality = cfg->QualityRestRay;
+            quality = quality_rest_ray;
         }
-        float incident_angle_weakening = dot(normal, newDir);
+        const float incident_angle_weakening = dot(normal, newDir);
         reflectionColor *= incident_angle_weakening * material.color;
         ray = new_Ray(newPos, newDir);
     }
@@ -399,8 +512,8 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 
 static float3 GammaTest(int x, int y, int width, int height)
 {
-    float centerValue = (float)x / width;
-    float offset = ((float)(height - y) / height) * (0.5f - fabs(centerValue - 0.5f));
+    const float centerValue = (float)x / width;
+    const float offset = ((float)(height - y) / height) * (0.5f - fabs(centerValue - 0.5f));
     float result;
     if (x % 16 < 8) {
         result = centerValue;
@@ -439,8 +552,8 @@ static float GammaCompression(float value)
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
-    if (cfg->WhiteClamp) {
-        float maxVal = max(max(pixel.x, pixel.y), pixel.z);
+    if (white_clamp) {
+        const float maxVal = max(max(pixel.x, pixel.y), pixel.z);
         if (maxVal > 1) {
             pixel *= 1.0f / maxVal;
         }
@@ -476,7 +589,7 @@ static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 valu
 }
 
 static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value) {
-    __global uint* data = (__global float*)rawData;
+    __global uint* data = (__global uint*)rawData;
     if (idx >= size) { return; }
     data[idx] = value;
 }
@@ -492,25 +605,23 @@ __kernel void Main(
     struct MandelboxCfg local_copy = *cfg_global;
     Cfg cfg = &local_copy;
 
-    uint idx = (uint)get_global_id(0);
-    uint x = idx % width;
-    uint y = idx / width;
-    uint size = width * height;
+    const uint idx = (uint)get_global_id(0);
+    const uint size = width * height;
+    const uint x = idx % width;
+    // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
+    const uint y = height - (idx / width + 1);
 
     // guard against invalid index in Get/SetScratch, and SetScreen. Nowhere else is needed.
     //if (y >= height) { return; }
 
-    // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
-    y = height - (y + 1);
+    const float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
 
-    float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
-
-    struct Random rand = new_Random(idx, frame, size);
-    struct Ray ray = Camera(cfg, x, y, width, height, &rand);
-    float3 colorComponents = Trace(cfg, ray, width, height, &rand);
-    float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
+    const struct Random rand = new_Random(idx, frame, size);
+    const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
+    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+    const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     //newColor = GammaTest(x, y, width, height);
-    uint packedColor = PackPixel(cfg, newColor);
+    const uint packedColor = PackPixel(cfg, newColor);
 
     SetScratch(data, idx, size, newColor);
     SetScreen(data, idx, size, packedColor);

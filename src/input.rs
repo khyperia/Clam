@@ -49,37 +49,45 @@ impl Input {
     fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Error> {
         match key {
             Key::P => {
-                load_settings(settings, "settings.clam5")?;
+                settings.load("settings.clam5")?;
                 println!("Settings loaded");
             }
             Key::Y => {
-                save_settings(settings, "settings.clam5")?;
+                settings.save("settings.clam5")?;
                 println!("Settings saved");
             }
             Key::Up => {
                 if self.index == 0 {
-                    self.index = settings.len() - 1;
+                    self.index = settings.value_map().len() - 1;
                 } else {
                     self.index -= 1;
                 }
             }
             Key::Down => {
                 self.index += 1;
-                if self.index >= settings.len() {
+                if self.index >= settings.value_map().len() {
                     self.index = 0;
                 }
             }
             Key::Left => {
                 let key = &self.sorted_keys(settings)[self.index];
-                if let SettingValue::U32(value) = settings[key] {
+                if let SettingValue::U32(value) = *settings.get(key).unwrap() {
                     settings.insert(key.clone(), SettingValue::U32(value - 1));
                 }
             }
             Key::Right => {
                 let key = &self.sorted_keys(settings)[self.index];
-                if let SettingValue::U32(value) = settings[key] {
+                if let SettingValue::U32(value) = *settings.get(key).unwrap() {
                     settings.insert(key.clone(), SettingValue::U32(value + 1));
                 }
+            }
+            Key::H => {
+                let key = &self.sorted_keys(settings)[self.index];
+                let is_const = settings.is_const(key);
+                settings.set_const(key, !is_const);
+            }
+            Key::G => {
+                settings.rebuild();
             }
             _ => (),
         }
@@ -175,7 +183,7 @@ impl Input {
         increase: Key,
         decrease: Key,
     ) {
-        let (mut value, change) = match settings[&key] {
+        let (mut value, change) = match *settings.get(&key).unwrap() {
             SettingValue::F32(value, change) => (value, -change + 1.0),
             _ => return,
         };
@@ -189,7 +197,7 @@ impl Input {
     }
 
     fn sorted_keys(&self, settings: &Settings) -> Vec<String> {
-        let mut keys = settings.keys().cloned().collect::<Vec<_>>();
+        let mut keys = settings.value_map().keys().cloned().collect::<Vec<_>>();
         keys.sort();
         keys
     }
@@ -197,7 +205,7 @@ impl Input {
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
         if let Some(dt) = self.is_pressed(now, Key::Left) {
             let key = &self.sorted_keys(settings)[self.index];
-            if let SettingValue::F32(value, change) = settings[key] {
+            if let &SettingValue::F32(value, change) = settings.get(key).unwrap() {
                 if change < 0.0 {
                     settings.insert(
                         key.clone(),
@@ -210,7 +218,7 @@ impl Input {
         }
         if let Some(dt) = self.is_pressed(now, Key::Right) {
             let key = &self.sorted_keys(settings)[self.index];
-            if let SettingValue::F32(value, change) = settings[key] {
+            if let &SettingValue::F32(value, change) = settings.get(key).unwrap() {
                 if change < 0.0 {
                     settings.insert(
                         key.clone(),

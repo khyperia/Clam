@@ -16,7 +16,7 @@ use sdl2::ttf::Font;
 use sdl2::ttf;
 use sdl2::video::Window;
 use sdl2::video::WindowContext;
-use settings;
+use settings::Settings;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -45,7 +45,7 @@ impl Image {
 fn launch_kernel(
     width: u32,
     height: u32,
-    settings_input: Arc<Mutex<(settings::Settings, input::Input)>>,
+    settings_input: Arc<Mutex<(Settings, input::Input)>>,
     send_image: mpsc::Sender<Image>,
     recv_screen_event: mpsc::Receiver<ScreenEvent>,
     event_system: EventSubsystem,
@@ -85,14 +85,16 @@ pub fn find_font() -> Result<&'static Path, Error> {
 
 fn render_text(
     font: &ttf::Font,
-    settings_input: &Arc<Mutex<(settings::Settings, input::Input)>>,
+    settings_input: &Arc<Mutex<(Settings, input::Input)>>,
     creator: &TextureCreator<WindowContext>,
     canvas: &mut Canvas<Window>,
+    spf: f64,
 ) -> Result<(), Error> {
+    let fps_line = format!("{:.2} fps", 1.0 / spf);
     let mut locked = settings_input.lock().unwrap();
     let (ref mut settings, ref mut input) = *locked;
     input.integrate(settings);
-    let text = settings::settings_status(settings, input);
+    let text = format!("{}\n{}", fps_line, settings.status(input));
     let spacing = font.recommended_line_spacing();
     for (line_index, line) in text.lines().enumerate() {
         let rendered = font.render(line).solid(Color::RGB(255, 64, 64))?;
@@ -112,10 +114,12 @@ fn draw<'a>(
     creator: &'a TextureCreator<WindowContext>,
     font: &Font,
     image_stream: &mpsc::Receiver<Image>,
-    settings_input: &Arc<Mutex<(settings::Settings, input::Input)>>,
+    settings_input: &Arc<Mutex<(Settings, input::Input)>>,
     texture: &mut Texture<'a>,
     width: &mut u32,
     height: &mut u32,
+    last_fps: &mut Instant,
+    spf: &mut f64,
 ) -> Result<(), Error> {
     loop {
         let image = match image_stream.try_recv() {
@@ -130,13 +134,19 @@ fn draw<'a>(
                 creator.create_texture_streaming(PixelFormatEnum::ABGR8888, *width, *height)?;
         }
         texture.update(None, &image.data, image.width as usize * 4)?;
+
+        let now = Instant::now();
+        let duration = now.duration_since(*last_fps);
+        *last_fps = now;
+        let time = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
+        *spf = (time + *spf) / 2.0;
     }
 
     let rect = Rect::new(0, 0, *width, *height);
     canvas
         .copy(texture, rect, rect)
         .expect("Could not display image");
-    render_text(font, settings_input, creator, canvas)?;
+    render_text(font, settings_input, creator, canvas, *spf)?;
     canvas.present();
     Ok(())
 }
@@ -153,9 +163,11 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
     let ttf = ttf::init()?;
     let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
+    let mut last_fps = Instant::now();
+    let mut spf = 1.0;
     let (send_image, image_stream) = mpsc::channel();
     let (event_stream, recv_screen_event) = mpsc::channel();
-    let settings_input = Arc::new(Mutex::new((settings::init_settings(), input::Input::new())));
+    let settings_input = Arc::new(Mutex::new((Settings::new(), input::Input::new())));
     launch_kernel(
         width,
         height,
@@ -205,6 +217,8 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
                 &mut texture,
                 &mut width,
                 &mut height,
+                &mut last_fps,
+                &mut spf,
             )?,
             _ => (),
         }

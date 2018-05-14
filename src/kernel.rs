@@ -9,6 +9,7 @@ use png;
 use progress::Progress;
 use sdl2::EventSubsystem;
 use settings::Settings;
+use settings::SettingValue;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
@@ -50,40 +51,14 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
 }
 
 impl Kernel {
-    fn new(width: u32, height: u32) -> Result<Kernel, Error> {
+    fn new(width: u32, height: u32, settings: &Settings) -> Result<Kernel, Error> {
         let context = Self::make_context()?;
         let device = context.devices()[0];
         let device_name = device.name()?;
-        let program = {
-            let mut builder = ocl::Program::builder();
-            builder.source(MANDELBOX);
-            builder.devices(device);
-            if device_name.contains("GeForce") {
-                builder.cmplr_opt("-cl-nv-verbose");
-            }
-            builder.build(&context)?
-        };
         println!("Using device: {}", device_name);
-        if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
-            program.build_info(context.devices()[0], ocl::enums::ProgramBuildInfo::BuildLog)?
-        {
-            let log = log.trim();
-            if !log.is_empty() {
-                println!("{}", log);
-            }
-        }
-        dump_binary(&program)?;
         let queue = ocl::Queue::new(&context, device, None)?;
+        let kernel = Self::rebuild(&queue, settings)?;
         let cfg = ocl::Buffer::builder().context(&context).len(1).build()?;
-        let kernel = ocl::Kernel::builder()
-            .program(&program)
-            .name("Main")
-            .arg(None::<&ocl::Buffer<u8>>)
-            .arg(&cfg)
-            .arg(0u32)
-            .arg(0u32)
-            .arg(0u32)
-            .build()?;
         Ok(Kernel {
             context,
             queue,
@@ -95,6 +70,47 @@ impl Kernel {
             height,
             frame: 0,
         })
+    }
+
+    fn rebuild(queue: &ocl::Queue, settings: &Settings) -> Result<ocl::Kernel, Error> {
+        let program = {
+            let mut builder = ocl::Program::builder();
+            builder.source(MANDELBOX);
+            builder.devices(queue.device());
+            let device_name = queue.device().name()?;
+            if device_name.contains("GeForce") {
+                builder.cmplr_opt("-cl-nv-verbose");
+            }
+            for key in settings.constants() {
+                let value = settings.get(&key).unwrap();
+                match *value {
+                    SettingValue::F32(value, _) => {
+                        builder.cmplr_opt(format!("-D {}={:.16}f", key, value))
+                    }
+                    SettingValue::U32(value) => builder.cmplr_opt(format!("-D {}={}", key, value)),
+                };
+            }
+            builder.build(&queue.context())?
+        };
+        if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
+            program.build_info(queue.device(), ocl::enums::ProgramBuildInfo::BuildLog)?
+        {
+            let log = log.trim();
+            if !log.is_empty() {
+                println!("{}", log);
+            }
+        }
+        dump_binary(&program)?;
+        let kernel = ocl::Kernel::builder()
+            .program(&program)
+            .name("Main")
+            .arg(None::<&ocl::Buffer<u8>>)
+            .arg(None::<&ocl::Buffer<MandelboxCfg>>)
+            .arg(0u32)
+            .arg(0u32)
+            .arg(0u32)
+            .build()?;
+        Ok(kernel)
     }
 
     fn make_context() -> Result<ocl::Context, Error> {
@@ -216,7 +232,7 @@ pub fn interactive(
     screen_events: &mpsc::Receiver<ScreenEvent>,
     event_system: &EventSubsystem,
 ) -> Result<(), Error> {
-    let mut kernel = Kernel::new(width, height)?;
+    let mut kernel = Kernel::new(width, height, &settings_input.lock().unwrap().0)?;
     event_system
         .register_custom_event::<()>()
         .expect("Failed to register custom event");
@@ -237,6 +253,9 @@ pub fn interactive(
             let mut locked = settings_input.lock().unwrap();
             let (ref mut settings, ref mut input) = *locked;
             input.integrate(settings);
+            if settings.check_rebuild() {
+                kernel.kernel = Kernel::rebuild(&kernel.queue, settings)?;
+            }
             (*settings).clone()
         };
         let image = kernel.run(&settings, true)?.unwrap();
@@ -263,9 +282,10 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
 }
 
 pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
-    let mut settings = ::settings::init_settings();
-    ::settings::load_settings(&mut settings, "settings.clam5")?;
-    let mut kernel = Kernel::new(width, height)?;
+    let mut settings = Settings::new();
+    settings.load("settings.clam5")?;
+    settings.all_constants();
+    let mut kernel = Kernel::new(width, height, &settings)?;
     let progress = Progress::new();
     let progress_count = (rpp / 20).min(4).max(16);
     for ray in 0..(rpp - 1) {
