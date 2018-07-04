@@ -29,15 +29,12 @@ pub struct MandelboxCfg {
     light_brightness_1_r: f32,
     light_brightness_1_g: f32,
     light_brightness_1_b: f32,
-    light_pos_2_x: f32,
-    light_pos_2_y: f32,
-    light_pos_2_z: f32,
-    light_brightness_2_r: f32,
-    light_brightness_2_g: f32,
-    light_brightness_2_b: f32,
+    light_radius_1: f32,
     ambient_brightness_r: f32,
     ambient_brightness_g: f32,
     ambient_brightness_b: f32,
+    fog_distance: f32,
+    fog_scatter: f32,
     reflect_brightness: f32,
     bailout: f32,
     de_multiplier: f32,
@@ -74,15 +71,12 @@ pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
     light_brightness_1_r: 5.0,
     light_brightness_1_g: 4.0,
     light_brightness_1_b: 3.0,
-    light_pos_2_x: 0.0,
-    light_pos_2_y: 4.0,
-    light_pos_2_z: 3.0,
-    light_brightness_2_r: 2.0,
-    light_brightness_2_g: 1.0,
-    light_brightness_2_b: 3.0,
+    light_radius_1: 1.0,
     ambient_brightness_r: 0.3,
     ambient_brightness_g: 0.3,
     ambient_brightness_b: 0.6,
+    fog_distance: 50.0,
+    fog_scatter: 1.0,
     reflect_brightness: 0.5,
     bailout: 1024.0,
     de_multiplier: 0.95,
@@ -185,28 +179,8 @@ impl MandelboxCfg {
             SettingValue::F32(self.light_brightness_1_b, -0.5),
         );
         settings.insert(
-            "light_pos_2_x".into(),
-            SettingValue::F32(self.light_pos_2_x, 0.5),
-        );
-        settings.insert(
-            "light_pos_2_y".into(),
-            SettingValue::F32(self.light_pos_2_y, 0.5),
-        );
-        settings.insert(
-            "light_pos_2_z".into(),
-            SettingValue::F32(self.light_pos_2_z, 0.5),
-        );
-        settings.insert(
-            "light_brightness_2_r".into(),
-            SettingValue::F32(self.light_brightness_2_r, -0.5),
-        );
-        settings.insert(
-            "light_brightness_2_g".into(),
-            SettingValue::F32(self.light_brightness_2_g, -0.5),
-        );
-        settings.insert(
-            "light_brightness_2_b".into(),
-            SettingValue::F32(self.light_brightness_2_b, -0.5),
+            "light_radius_1".into(),
+            SettingValue::F32(self.light_radius_1, -0.5),
         );
         settings.insert(
             "ambient_brightness_r".into(),
@@ -219,6 +193,14 @@ impl MandelboxCfg {
         settings.insert(
             "ambient_brightness_b".into(),
             SettingValue::F32(self.ambient_brightness_b, -0.25),
+        );
+        settings.insert(
+            "fog_distance".into(),
+            SettingValue::F32(self.fog_distance, -0.5),
+        );
+        settings.insert(
+            "fog_scatter".into(),
+            SettingValue::F32(self.fog_scatter, 0.25),
         );
         settings.insert(
             "reflect_brightness".into(),
@@ -323,15 +305,12 @@ impl MandelboxCfg {
             "light_brightness_1_r" => &mut self.light_brightness_1_r,
             "light_brightness_1_g" => &mut self.light_brightness_1_g,
             "light_brightness_1_b" => &mut self.light_brightness_1_b,
-            "light_pos_2_x" => &mut self.light_pos_2_x,
-            "light_pos_2_y" => &mut self.light_pos_2_y,
-            "light_pos_2_z" => &mut self.light_pos_2_z,
-            "light_brightness_2_r" => &mut self.light_brightness_2_r,
-            "light_brightness_2_g" => &mut self.light_brightness_2_g,
-            "light_brightness_2_b" => &mut self.light_brightness_2_b,
+            "light_radius_1" => &mut self.light_radius_1,
             "ambient_brightness_r" => &mut self.ambient_brightness_r,
             "ambient_brightness_g" => &mut self.ambient_brightness_g,
             "ambient_brightness_b" => &mut self.ambient_brightness_b,
+            "fog_distance" => &mut self.fog_distance,
+            "fog_scatter" => &mut self.fog_scatter,
             "reflect_brightness" => &mut self.reflect_brightness,
             "bailout" => &mut self.bailout,
             "de_multiplier" => &mut self.de_multiplier,
@@ -377,15 +356,12 @@ impl MandelboxCfg {
             "light_brightness_1_r" => true,
             "light_brightness_1_g" => true,
             "light_brightness_1_b" => true,
-            "light_pos_2_x" => true,
-            "light_pos_2_y" => true,
-            "light_pos_2_z" => true,
-            "light_brightness_2_r" => true,
-            "light_brightness_2_g" => true,
-            "light_brightness_2_b" => true,
+            "light_radius_1" => true,
             "ambient_brightness_r" => true,
             "ambient_brightness_g" => true,
             "ambient_brightness_b" => true,
+            "fog_distance" => true,
+            "fog_scatter" => true,
             "reflect_brightness" => true,
             "bailout" => true,
             "de_multiplier" => true,

@@ -10,8 +10,8 @@ mod mandelbox_cfg;
 mod progress;
 mod settings;
 
-use std::env::args;
 use failure::Error;
+use std::env::args;
 
 fn try_render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
@@ -27,8 +27,30 @@ fn try_render(args: &[String]) -> Result<(), Error> {
     }
 }
 
+fn try_video(args: &[String]) -> Result<(), Error> {
+    if args.len() == 4 {
+        kernel::video(
+            args[0].parse()?,
+            args[1].parse()?,
+            args[2].parse()?,
+            args[3].parse()?,
+        )
+    } else {
+        Err(failure::err_msg(
+            "--video needs four args: [width] [height] [rpp] [frames]",
+        ))
+    }
+}
+
 fn render(args: &[String]) {
     match try_render(args) {
+        Ok(()) => (),
+        Err(err) => println!("{}", err),
+    }
+}
+
+fn video(args: &[String]) {
+    match try_video(args) {
         Ok(()) => (),
         Err(err) => println!("{}", err),
     }
@@ -48,6 +70,8 @@ fn main() {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && arguments[0] == "--render" {
         render(&arguments[1..]);
+    } else if arguments.len() > 2 && arguments[0] == "--video" {
+        video(&arguments[1..]);
     } else {
         interactive();
     }

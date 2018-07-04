@@ -1,14 +1,15 @@
 use failure::Error;
 use input::Input;
-use mandelbox_cfg::DEFAULT_CFG;
 use mandelbox_cfg::MandelboxCfg;
+use mandelbox_cfg::DEFAULT_CFG;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
 use std::io::BufRead;
+use std::io::Lines;
 use std::io::Write;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SettingValue {
     U32(u32),
     F32(f32, f32),
@@ -90,12 +91,28 @@ impl Settings {
         Ok(())
     }
 
-    pub fn load(&mut self, file: &str) -> Result<(), Error> {
-        let file = ::std::fs::File::open(file)?;
-        let reader = ::std::io::BufReader::new(&file);
-        for line in reader.lines() {
+    pub fn save_keyframe(&self, file: &str) -> Result<(), Error> {
+        let file = ::std::fs::OpenOptions::new().append(true).create(true).open(file)?;
+        let mut writer = ::std::io::BufWriter::new(&file);
+        for (key, value) in &self.value_map {
+            match value {
+                &SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
+                &SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
+            }
+        }
+        writeln!(&mut writer, "---")?;
+        Ok(())
+    }
+
+    pub fn load_iter<T: BufRead>(&mut self, lines: &mut Lines<T>) -> Result<(usize, bool), Error> {
+        let mut count = 0;
+        for line in lines {
             let line = line?;
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();
+            if split.len() != 2 {
+                return Ok((count, true));
+            }
+            count += 1;
             let key = split[1].trim();
             let value = split[0].trim();
             match self.value_map[key] {
@@ -105,6 +122,13 @@ impl Settings {
                     .insert(key.into(), SettingValue::U32(value.parse()?)),
             };
         }
+        Ok((count, false))
+    }
+
+    pub fn load(&mut self, file: &str) -> Result<(), Error> {
+        let file = ::std::fs::File::open(file)?;
+        let reader = ::std::io::BufReader::new(&file);
+        self.load_iter(&mut reader.lines())?;
         Ok(())
     }
 
@@ -117,12 +141,16 @@ impl Settings {
             let selected = if ind == input.index { "*" } else { " " };
             let constant = if is_const { "@" } else { " " };
             match self.value_map[*key] {
-                SettingValue::F32(value, _) => {
-                    write!(&mut builder, "{}{}{} = {}\n", selected, constant, key, value).unwrap()
-                }
-                SettingValue::U32(value) => {
-                    write!(&mut builder, "{}{}{} = {}\n", selected, constant, key, value).unwrap()
-                }
+                SettingValue::F32(value, _) => write!(
+                    &mut builder,
+                    "{}{}{} = {}\n",
+                    selected, constant, key, value
+                ).unwrap(),
+                SettingValue::U32(value) => write!(
+                    &mut builder,
+                    "{}{}{} = {}\n",
+                    selected, constant, key, value
+                ).unwrap(),
             }
         }
         builder
@@ -136,5 +164,91 @@ impl Settings {
         let result = self.rebuild;
         self.rebuild = false;
         result
+    }
+}
+
+pub struct KeyframeList {
+    base: Settings,
+    keyframes: Vec<Settings>,
+}
+
+// template<typename T, typename Tscalar>
+// T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
+// {
+//     Tscalar t2 = t * t;
+//     Tscalar t3 = t2 * t;
+//     return (T)((((Tscalar)2 * p1) + (-p0 + p2) * t +
+//         ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
+//         (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2);
+// }
+
+fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
+    let t2 = t * t;
+    let t3 = t2 * t;
+    (((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3) / 2.0)
+}
+
+fn interpolate_u32(prev: u32, cur: u32, next: u32, next2: u32, time: f32) -> u32 {
+    interpolate_f32(prev as f32, cur as f32, next as f32, next2 as f32, time) as u32
+}
+
+fn interpolate(
+    prev: SettingValue,
+    cur: SettingValue,
+    next: SettingValue,
+    next2: SettingValue,
+    time: f32,
+) -> SettingValue {
+    match (prev, cur, next, next2) {
+        (SettingValue::U32(prev), SettingValue::U32(cur), SettingValue::U32(next), SettingValue::U32(next2)) => {
+            SettingValue::U32(interpolate_u32(prev, cur, next, next2, time))
+        }
+        (SettingValue::F32(prev, _), SettingValue::F32(cur, delta), SettingValue::F32(next, _), SettingValue::F32(next2, _)) => {
+            SettingValue::F32(interpolate_f32(prev, cur, next, next2, time), delta)
+        }
+        _ => panic!("Inconsistent keyframe types"),
+    }
+}
+
+impl KeyframeList {
+    pub fn new(file: &str, mut base: Settings) -> Result<KeyframeList, Error> {
+        let file = ::std::fs::File::open(file)?;
+        let reader = ::std::io::BufReader::new(&file);
+        let mut lines = reader.lines();
+        let mut keyframes = Vec::new();
+        loop {
+            let (count, more) = base.load_iter(&mut lines)?;
+            if !more {
+                break;
+            }
+            if count == 0 {
+                continue;
+            }
+            keyframes.push(base.clone());
+        }
+        Ok(KeyframeList { base, keyframes })
+    }
+
+    pub fn interpolate(&mut self, time: f32) -> &Settings {
+        let time = time * (self.keyframes.len() - 1) as f32;
+        let index_cur = time as usize;
+        let time = time - index_cur as f32;
+        let index_prev = if index_cur == 0 { 0 } else { index_cur - 1 };
+        let index_next = (index_cur + 1).min(self.keyframes.len() - 1);
+        let index_next2 = (index_cur + 2).min(self.keyframes.len() - 1);
+        let keys = self.base.value_map.keys().cloned().collect::<Vec<String>>();
+        for key in keys {
+            let prev = self.keyframes[index_prev].get(&key).unwrap().clone();
+            let cur = self.keyframes[index_cur].get(&key).unwrap().clone();
+            let next = self.keyframes[index_next].get(&key).unwrap().clone();
+            let next2 = self.keyframes[index_next2].get(&key).unwrap().clone();
+            let result = interpolate(prev, cur, next, next2, time);
+            self.base.insert(key, result);
+        }
+        let mut default = DEFAULT_CFG;
+        default.read(&self.base);
+        default.normalize();
+        default.write(&mut self.base.value_map);
+        &self.base
     }
 }

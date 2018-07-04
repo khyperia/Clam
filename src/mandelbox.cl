@@ -21,15 +21,12 @@ struct MandelboxCfg {
     float _light_brightness_1_r;
     float _light_brightness_1_g;
     float _light_brightness_1_b;
-    float _light_pos_2_x;
-    float _light_pos_2_y;
-    float _light_pos_2_z;
-    float _light_brightness_2_r;
-    float _light_brightness_2_g;
-    float _light_brightness_2_b;
+    float _light_radius_1;
     float _ambient_brightness_r;
     float _ambient_brightness_g;
     float _ambient_brightness_b;
+    float _fog_distance;
+    float _fog_scatter;
     float _reflect_brightness;
     float _bailout;
     float _de_multiplier;
@@ -107,23 +104,8 @@ struct MandelboxCfg {
 #ifndef light_brightness_1_b
 #define light_brightness_1_b cfg->_light_brightness_1_b
 #endif
-#ifndef light_pos_2_x
-#define light_pos_2_x cfg->_light_pos_2_x
-#endif
-#ifndef light_pos_2_y
-#define light_pos_2_y cfg->_light_pos_2_y
-#endif
-#ifndef light_pos_2_z
-#define light_pos_2_z cfg->_light_pos_2_z
-#endif
-#ifndef light_brightness_2_r
-#define light_brightness_2_r cfg->_light_brightness_2_r
-#endif
-#ifndef light_brightness_2_g
-#define light_brightness_2_g cfg->_light_brightness_2_g
-#endif
-#ifndef light_brightness_2_b
-#define light_brightness_2_b cfg->_light_brightness_2_b
+#ifndef light_radius_1
+#define light_radius_1 cfg->_light_radius_1
 #endif
 #ifndef ambient_brightness_r
 #define ambient_brightness_r cfg->_ambient_brightness_r
@@ -133,6 +115,12 @@ struct MandelboxCfg {
 #endif
 #ifndef ambient_brightness_b
 #define ambient_brightness_b cfg->_ambient_brightness_b
+#endif
+#ifndef fog_distance
+#define fog_distance cfg->_fog_distance
+#endif
+#ifndef fog_scatter
+#define fog_scatter cfg->_fog_scatter 
 #endif
 #ifndef reflect_brightness
 #define reflect_brightness cfg->_reflect_brightness
@@ -173,19 +161,9 @@ static float3 LightPos1(Cfg cfg)
     return (float3)(light_pos_1_x, light_pos_1_y, light_pos_1_z);
 }
 
-static float3 LightPos2(Cfg cfg)
-{
-    return (float3)(light_pos_2_x, light_pos_2_y, light_pos_2_z);
-}
-
 static float3 LightBrightness1(Cfg cfg)
 {
     return (float3)(light_brightness_1_r, light_brightness_1_g, light_brightness_1_b) / reflect_brightness;
-}
-
-static float3 LightBrightness2(Cfg cfg)
-{
-    return (float3)(light_brightness_2_r, light_brightness_2_g, light_brightness_2_b) / reflect_brightness;
 }
 
 static float3 AmbientBrightness(Cfg cfg)
@@ -391,9 +369,8 @@ static float DeMandelbox(Cfg cfg, float3 offset)
 static float De(Cfg cfg, float3 offset)
 {
     const float mbox = DeMandelbox(cfg, offset);
-    const float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
-    const float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
-    return min(min(light1, light2), mbox);
+    const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
+    return min(light1, mbox);
 }
 
 struct Material {
@@ -417,9 +394,8 @@ static struct Material Material(Cfg cfg, float3 offset)
     trap = sin(log2(trap)) * 0.5f + 0.5f;
     float3 color = (float3)(trap, trap, trap);
 
-    const float light1 = DeSphere(LightPos1(cfg), 1.2f, offset);
-    const float light2 = DeSphere(LightPos2(cfg), 1.2f, offset);
-    const float minimum = min(min(light1, light2), de);
+    const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
+    const float minimum = min(light1, de);
 
     struct Material result;
     if (minimum == de) {
@@ -430,16 +406,12 @@ static struct Material Material(Cfg cfg, float3 offset)
         result.color = (float3)(1, 1, 1);
         result.specular = 0.0f;
         result.emissive = LightBrightness1(cfg);
-    } else if (minimum == light2) {
-        result.color = (float3)(1, 1, 1);
-        result.specular = 0.0f;
-        result.emissive = LightBrightness2(cfg);
     }
 
     return result;
 }
 
-static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3* normal)
+static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3* normal, int *num_de)
 {
     float distance;
     float totalDistance = 0.0f;
@@ -447,6 +419,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     do {
         distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
         totalDistance += distance;
+        (*num_de)++;
         i--;
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
 
@@ -455,6 +428,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
         totalDistance -= totalDistance / quality * 2;
         for (int i = 0; i < 4; i++) {
             distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
+            (*num_de)++;
             totalDistance += distance - totalDistance / quality;
         }
     }
@@ -473,16 +447,17 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand)
+static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand, int *num_de)
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
     float quality = quality_first_ray * ((width + height) / (2 * fov));
-    for (int i = 0; i < 3; i++) {
+    for (int photonIndex = 0; photonIndex < 3; photonIndex++) {
         float3 normal;
-        const float distance = Cast(cfg, ray, quality, max_ray_dist, &normal);
+        const float this_fog_distance = -log(Random_Next(rand)) * fog_distance;
+        const float distance = Cast(cfg, ray, quality, min(max_ray_dist, this_fog_distance), &normal, num_de);
 
-        if (distance > max_ray_dist) {
+        if (distance >= max_ray_dist) {
             //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
             const float3 color = AmbientBrightness(cfg);
             rayColor += color * reflectionColor;
@@ -490,6 +465,13 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
         }
 
         const float3 newPos = Ray_At(ray, distance);
+
+        if (distance >= this_fog_distance) {
+            float3 newDir = normalize(fog_scatter * ray.dir + Random_Ball(rand));
+            ray = new_Ray(newPos, newDir);
+            photonIndex--;
+            continue;
+        }
 
         struct Material material = Material(cfg, newPos);
         rayColor += material.emissive;
@@ -616,9 +598,11 @@ __kernel void Main(
 
     const float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
 
-    const struct Random rand = new_Random(idx, frame, size);
+    struct Random rand = new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
-    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+    int num_de = 0;
+    float3 colorComponents = Trace(cfg, ray, width, height, &rand, &num_de);
+    colorComponents = (float3)(num_de, num_de, num_de) / 200.0f;
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     //newColor = GammaTest(x, y, width, height);
     const uint packedColor = PackPixel(cfg, newColor);

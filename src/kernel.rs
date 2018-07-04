@@ -1,15 +1,16 @@
 use display::Image;
 use display::ScreenEvent;
-use failure::Error;
 use failure;
+use failure::Error;
 use input::Input;
 use mandelbox_cfg::MandelboxCfg;
 use ocl;
 use png;
 use progress::Progress;
 use sdl2::EventSubsystem;
-use settings::Settings;
 use settings::SettingValue;
+use settings::Settings;
+use settings::KeyframeList;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
@@ -304,6 +305,34 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let image = kernel.run(&settings, true)?.unwrap();
     println!("render done, saving");
     save_image(&image, "render.png")?;
+    println!("done");
+    Ok(())
+}
+
+fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> Result<(), Error> {
+    for _ in 0..(rpp - 1) {
+        let _ = kernel.run(&settings, false)?;
+    }
+    let image = kernel.run(&settings, true)?.unwrap();
+    save_image(&image, &format!("render{:03}.png", frame))?;
+    Ok(())
+}
+
+pub fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
+    let mut default_settings = Settings::new();
+    default_settings.clear_constants();
+    let mut kernel = Kernel::new(width, height, &default_settings)?;
+    let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
+    let progress = Progress::new();
+    for frame in 0..frames {
+        let settings = keyframes.interpolate(frame as f32 / frames as f32);
+        video_one(frame, rpp, &mut kernel, &settings)?;
+        let value = (frame + 1) as f32 / frames as f32;
+        let mut seconds = progress.time(value);
+        let minutes = (seconds / 60.0) as u32;
+        seconds -= (minutes * 60) as f32;
+        println!("{:.2}%, {}:{:.2} left", 100.0 * value, minutes, seconds);
+    }
     println!("done");
     Ok(())
 }

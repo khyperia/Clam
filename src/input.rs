@@ -1,8 +1,8 @@
 use failure::Error;
 use sdl2::keyboard::Scancode as Key;
 use settings::*;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::time::Instant;
 
 pub struct Input {
@@ -55,6 +55,10 @@ impl Input {
             Key::Y => {
                 settings.save("settings.clam5")?;
                 println!("Settings saved");
+            }
+            Key::V => {
+                settings.save_keyframe("keyframes.clam5")?;
+                println!("Keyframe saved");
             }
             Key::Up => {
                 if self.index == 0 {
