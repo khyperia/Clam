@@ -1,25 +1,18 @@
 use display::Image;
-use display::ScreenEvent;
 use failure;
 use failure::Error;
-use input::Input;
 use mandelbox_cfg::MandelboxCfg;
 use ocl;
-use png;
-use progress::Progress;
-use sdl2::EventSubsystem;
 use settings::SettingValue;
 use settings::Settings;
-use settings::KeyframeList;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::{mpsc, Arc, Mutex};
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
 const DATA_WORDS: u32 = 5;
 
-struct Kernel {
+pub struct Kernel {
     context: ocl::Context,
     queue: ocl::Queue,
     kernel: ocl::Kernel,
@@ -52,7 +45,7 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
 }
 
 impl Kernel {
-    fn new(width: u32, height: u32, settings: &Settings) -> Result<Kernel, Error> {
+    pub fn new(width: u32, height: u32, settings: &Settings) -> Result<Kernel, Error> {
         let context = Self::make_context()?;
         let device = context.devices()[0];
         let device_name = device.name()?;
@@ -71,6 +64,11 @@ impl Kernel {
             height,
             frame: 0,
         })
+    }
+
+    pub fn rebuild_self(&mut self, settings: &Settings) -> Result<(), Error> {
+        self.kernel = Kernel::rebuild(&self.queue, settings)?;
+        Ok(())
     }
 
     fn rebuild(queue: &ocl::Queue, settings: &Settings) -> Result<ocl::Kernel, Error> {
@@ -160,7 +158,7 @@ impl Kernel {
         }
     }
 
-    fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
+    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.width = width;
         self.height = height;
         self.data = None;
@@ -195,7 +193,7 @@ impl Kernel {
         Ok(())
     }
 
-    fn run(&mut self, settings: &Settings, download: bool) -> Result<Option<Image>, Error> {
+    pub fn run(&mut self, settings: &Settings, download: bool) -> Result<Option<Image>, Error> {
         self.set_args(settings)?;
         let lws = 1024;
         let to_launch = self.kernel
@@ -220,119 +218,7 @@ impl Kernel {
         }
     }
 
-    fn sync(&mut self) -> ocl::Result<()> {
+    pub fn sync(&mut self) -> ocl::Result<()> {
         self.queue.finish()
     }
-}
-
-pub fn interactive(
-    width: u32,
-    height: u32,
-    settings_input: &Arc<Mutex<(Settings, Input)>>,
-    send_image: &mpsc::Sender<Image>,
-    screen_events: &mpsc::Receiver<ScreenEvent>,
-    event_system: &EventSubsystem,
-) -> Result<(), Error> {
-    let mut kernel = Kernel::new(width, height, &settings_input.lock().unwrap().0)?;
-    event_system
-        .register_custom_event::<()>()
-        .expect("Failed to register custom event");
-    loop {
-        loop {
-            let event = match screen_events.try_recv() {
-                Ok(event) => event,
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-            };
-
-            match event {
-                ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
-            }
-        }
-
-        let settings = {
-            let mut locked = settings_input.lock().unwrap();
-            let (ref mut settings, ref mut input) = *locked;
-            input.integrate(settings);
-            if settings.check_rebuild() {
-                kernel.kernel = Kernel::rebuild(&kernel.queue, settings)?;
-            }
-            (*settings).clone()
-        };
-        let image = kernel.run(&settings, true)?.unwrap();
-        match send_image.send(image) {
-            Ok(()) => (),
-            Err(_) => return Ok(()),
-        };
-        match event_system.push_custom_event(()) {
-            Ok(()) => (),
-            Err(_) => return Ok(()),
-        }
-    }
-}
-
-fn save_image(image: &Image, path: &str) -> Result<(), Error> {
-    use png::HasParameters;
-    let file = ::std::fs::File::create(path)?;
-    let w = &mut ::std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(w, image.width, image.height);
-    encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
-    let mut writer = encoder.write_header()?;
-    writer.write_image_data(&image.data)?;
-    Ok(())
-}
-
-pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
-    let mut settings = Settings::new();
-    settings.load("settings.clam5")?;
-    settings.all_constants();
-    let mut kernel = Kernel::new(width, height, &settings)?;
-    let progress = Progress::new();
-    let progress_count = (rpp / 20).min(4).max(16);
-    for ray in 0..(rpp - 1) {
-        let _ = kernel.run(&settings, false)?;
-        if ray > 0 && ray % progress_count == 0 {
-            kernel.sync()?;
-            let value = ray as f32 / rpp as f32;
-            let mut seconds = progress.time(value);
-            let minutes = (seconds / 60.0) as u32;
-            seconds -= (minutes * 60) as f32;
-            println!("{:.2}%, {}:{:.2} left", 100.0 * value, minutes, seconds);
-        }
-    }
-    kernel.sync()?;
-    println!("Last ray...");
-    let image = kernel.run(&settings, true)?.unwrap();
-    println!("render done, saving");
-    save_image(&image, "render.png")?;
-    println!("done");
-    Ok(())
-}
-
-fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> Result<(), Error> {
-    for _ in 0..(rpp - 1) {
-        let _ = kernel.run(&settings, false)?;
-    }
-    let image = kernel.run(&settings, true)?.unwrap();
-    save_image(&image, &format!("render{:03}.png", frame))?;
-    Ok(())
-}
-
-pub fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
-    let mut default_settings = Settings::new();
-    default_settings.clear_constants();
-    let mut kernel = Kernel::new(width, height, &default_settings)?;
-    let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
-    let progress = Progress::new();
-    for frame in 0..frames {
-        let settings = keyframes.interpolate(frame as f32 / frames as f32);
-        video_one(frame, rpp, &mut kernel, &settings)?;
-        let value = (frame + 1) as f32 / frames as f32;
-        let mut seconds = progress.time(value);
-        let minutes = (seconds / 60.0) as u32;
-        seconds -= (minutes * 60) as f32;
-        println!("{:.2}%, {}:{:.2} left", 100.0 * value, minutes, seconds);
-    }
-    println!("done");
-    Ok(())
 }

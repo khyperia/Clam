@@ -48,238 +48,68 @@ pub struct MandelboxCfg {
 
 unsafe impl ocl::traits::OclPrm for MandelboxCfg {}
 
-pub const DEFAULT_CFG: MandelboxCfg = MandelboxCfg {
-    pos_x: 0.0,
-    pos_y: 0.0,
-    pos_z: 5.0,
-    look_x: 0.0,
-    look_y: 0.0,
-    look_z: -1.0,
-    up_x: 0.0,
-    up_y: 1.0,
-    up_z: 0.0,
-    fov: 1.0,
-    focal_distance: 3.0,
-    scale: -2.0,
-    folding_limit: 1.0,
-    fixed_radius_2: 1.0,
-    min_radius_2: 0.125,
-    dof_amount: 0.001,
-    light_pos_1_x: 3.0,
-    light_pos_1_y: 3.5,
-    light_pos_1_z: 2.5,
-    light_brightness_1_r: 5.0,
-    light_brightness_1_g: 4.0,
-    light_brightness_1_b: 3.0,
-    light_radius_1: 1.0,
-    ambient_brightness_r: 0.3,
-    ambient_brightness_g: 0.3,
-    ambient_brightness_b: 0.6,
-    fog_distance: 50.0,
-    fog_scatter: 1.0,
-    reflect_brightness: 0.5,
-    bailout: 1024.0,
-    de_multiplier: 0.95,
-    max_ray_dist: 16.0,
-    quality_first_ray: 2.0,
-    quality_rest_ray: 64.0,
-    white_clamp: 1,
-    max_iters: 64,
-    max_ray_steps: 256,
-};
+// name, default_val, rate_of_change
+const DEFAULTS: [(&'static str, f32, f32); 37] = [
+    ("pos_x", 0.0, 1.0),
+    ("pos_y", 0.0, 1.0),
+    ("pos_z", 5.0, 1.0),
+    ("look_x", 0.0, 1.0),
+    ("look_y", 0.0, 1.0),
+    ("look_z", -1.0, 1.0),
+    ("up_x", 0.0, 1.0),
+    ("up_y", 1.0, 1.0),
+    ("up_z", 0.0, 1.0),
+    ("fov", 1.0, -1.0),
+    ("focal_distance", 3.0, -1.0),
+    ("scale", -2.0, -0.25),
+    ("folding_limit", 1.0, -0.5),
+    ("fixed_radius_2", 1.0, -0.5),
+    ("min_radius_2", 0.125, -0.5),
+    ("dof_amount", 0.001, -0.5),
+    ("light_pos_1_x", 3.0, 0.5),
+    ("light_pos_1_y", 3.5, 0.5),
+    ("light_pos_1_z", 2.5, 0.5),
+    ("light_brightness_1_r", 5.0, -0.5),
+    ("light_brightness_1_g", 4.0, -0.5),
+    ("light_brightness_1_b", 3.0, -0.5),
+    ("light_radius_1", 1.0, -0.5),
+    ("ambient_brightness_r", 0.3, -0.25),
+    ("ambient_brightness_g", 0.3, -0.25),
+    ("ambient_brightness_b", 0.6, -0.25),
+    ("fog_distance", 50.0, -0.5),
+    ("fog_scatter", 1.0, 0.25),
+    ("reflect_brightness", 0.5, 0.125),
+    ("bailout", 1024.0, -1.0),
+    ("de_multiplier", 0.95, 0.125),
+    ("max_ray_dist", 16.0, -0.5),
+    ("quality_first_ray", 2.0, -0.5),
+    ("quality_rest_ray", 64.0, -0.5),
+    ("white_clamp", 1.0, 0.0),
+    ("max_iters", 64.0, 0.0),
+    ("max_ray_steps", 256.0, 0.0),
+];
 
 impl MandelboxCfg {
-    pub fn read(&mut self, settings: &Settings) {
-        for (key, value) in settings.value_map() {
-            if settings.is_const(key) {
-                continue;
+    pub fn get_default() -> MandelboxCfg {
+        let mut result = Self::default();
+        for &(name, value, _) in DEFAULTS.iter() {
+            if let Some(val) = result.get_f32_mut(name) {
+                *val = value;
             }
-            match *value {
-                SettingValue::F32(new, _) => {
-                    if let Some(old) = self.get_f32_mut(key) {
-                        *old = new;
-                    }
-                }
-                SettingValue::U32(new) => {
-                    if let Some(old) = self.get_u32_mut(key) {
-                        *old = new;
-                    }
-                }
+            if let Some(val) = result.get_u32_mut(name) {
+                *val = value as u32;
             }
         }
+        result
     }
 
-    pub fn normalize(&mut self) {
-        let mut look = Vector::new(self.look_x, self.look_y, self.look_z);
-        let mut up = Vector::new(self.up_x, self.up_y, self.up_z);
-        look = look.normalized();
-        up = Vector::cross(Vector::cross(look, up), look).normalized();
-        self.look_x = look.x;
-        self.look_y = look.y;
-        self.look_z = look.z;
-        self.up_x = up.x;
-        self.up_y = up.y;
-        self.up_z = up.z;
+    pub fn num_keys() -> usize {
+        DEFAULTS.len()
     }
 
-    pub fn write(&mut self, settings: &mut HashMap<String, SettingValue>) {
-        settings.insert("pos_x".into(), SettingValue::F32(self.pos_x, 1.0));
-        settings.insert("pos_y".into(), SettingValue::F32(self.pos_y, 1.0));
-        settings.insert("pos_z".into(), SettingValue::F32(self.pos_z, 1.0));
-        settings.insert("look_x".into(), SettingValue::F32(self.look_x, 1.0));
-        settings.insert("look_y".into(), SettingValue::F32(self.look_y, 1.0));
-        settings.insert("look_z".into(), SettingValue::F32(self.look_z, 1.0));
-        settings.insert("up_x".into(), SettingValue::F32(self.up_x, 1.0));
-        settings.insert("up_y".into(), SettingValue::F32(self.up_y, 1.0));
-        settings.insert("up_z".into(), SettingValue::F32(self.up_z, 1.0));
-        settings.insert("fov".into(), SettingValue::F32(self.fov, -1.0));
-        settings.insert(
-            "focal_distance".into(),
-            SettingValue::F32(self.focal_distance, -1.0),
-        );
-        settings.insert("scale".into(), SettingValue::F32(self.scale, -0.5));
-        settings.insert(
-            "folding_limit".into(),
-            SettingValue::F32(self.folding_limit, -0.5),
-        );
-        settings.insert(
-            "fixed_radius_2".into(),
-            SettingValue::F32(self.fixed_radius_2, -0.5),
-        );
-        settings.insert(
-            "min_radius_2".into(),
-            SettingValue::F32(self.min_radius_2, -0.5),
-        );
-        settings.insert(
-            "dof_amount".into(),
-            SettingValue::F32(self.dof_amount, -0.5),
-        );
-        settings.insert(
-            "light_pos_1_x".into(),
-            SettingValue::F32(self.light_pos_1_x, 0.5),
-        );
-        settings.insert(
-            "light_pos_1_y".into(),
-            SettingValue::F32(self.light_pos_1_y, 0.5),
-        );
-        settings.insert(
-            "light_pos_1_z".into(),
-            SettingValue::F32(self.light_pos_1_z, 0.5),
-        );
-        settings.insert(
-            "light_brightness_1_r".into(),
-            SettingValue::F32(self.light_brightness_1_r, -0.5),
-        );
-        settings.insert(
-            "light_brightness_1_g".into(),
-            SettingValue::F32(self.light_brightness_1_g, -0.5),
-        );
-        settings.insert(
-            "light_brightness_1_b".into(),
-            SettingValue::F32(self.light_brightness_1_b, -0.5),
-        );
-        settings.insert(
-            "light_radius_1".into(),
-            SettingValue::F32(self.light_radius_1, -0.5),
-        );
-        settings.insert(
-            "ambient_brightness_r".into(),
-            SettingValue::F32(self.ambient_brightness_r, -0.25),
-        );
-        settings.insert(
-            "ambient_brightness_g".into(),
-            SettingValue::F32(self.ambient_brightness_g, -0.25),
-        );
-        settings.insert(
-            "ambient_brightness_b".into(),
-            SettingValue::F32(self.ambient_brightness_b, -0.25),
-        );
-        settings.insert(
-            "fog_distance".into(),
-            SettingValue::F32(self.fog_distance, -0.5),
-        );
-        settings.insert(
-            "fog_scatter".into(),
-            SettingValue::F32(self.fog_scatter, 0.25),
-        );
-        settings.insert(
-            "reflect_brightness".into(),
-            SettingValue::F32(self.reflect_brightness, 0.125),
-        );
-        settings.insert("bailout".into(), SettingValue::F32(self.bailout, -1.0));
-        settings.insert(
-            "de_multiplier".into(),
-            SettingValue::F32(self.de_multiplier, 0.125),
-        );
-        settings.insert(
-            "max_ray_dist".into(),
-            SettingValue::F32(self.max_ray_dist, -0.5),
-        );
-        settings.insert(
-            "quality_first_ray".into(),
-            SettingValue::F32(self.quality_first_ray, -0.5),
-        );
-        settings.insert(
-            "quality_rest_ray".into(),
-            SettingValue::F32(self.quality_rest_ray, -0.5),
-        );
-        settings.insert("white_clamp".into(), SettingValue::U32(self.white_clamp));
-        settings.insert("max_iters".into(), SettingValue::U32(self.max_iters));
-        settings.insert(
-            "max_ray_steps".into(),
-            SettingValue::U32(self.max_ray_steps),
-        );
+    pub fn keys() -> impl Iterator<Item = &'static str> {
+        DEFAULTS.iter().map(|&(x, _, _)| x)
     }
-
-    /*
-    fn get_f32<'a, 'b>(&'a self, key: &'b str) -> Option<&'a f32> {
-        let val = match key {
-            "pos_x" => &self.pos_x,
-            "pos_y" => &self.pos_y,
-            "pos_z" => &self.pos_z,
-            "look_x" => &self.look_x,
-            "look_y" => &self.look_y,
-            "look_z" => &self.look_z,
-            "up_x" => &self.up_x,
-            "up_y" => &self.up_y,
-            "up_z" => &self.up_z,
-            "fov" => &self.fov,
-            "focal_distance" => &self.focal_distance,
-            "scale" => &self.scale,
-            "folding_limit" => &self.folding_limit,
-            "fixed_radius_2" => &self.fixed_radius_2,
-            "min_radius_2" => &self.min_radius_2,
-            "dof_amount" => &self.dof_amount,
-            "light_pos_x" => &self.light_pos_x,
-            "light_pos_y" => &self.light_pos_y,
-            "light_pos_z" => &self.light_pos_z,
-            "light_brightness_r" => &self.light_brightness_r,
-            "light_brightness_g" => &self.light_brightness_g,
-            "light_brightness_b" => &self.light_brightness_b,
-            "ambient_brightness_r" => &self.ambient_brightness_r,
-            "ambient_brightness_g" => &self.ambient_brightness_g,
-            "ambient_brightness_b" => &self.ambient_brightness_b,
-            "reflect_brightness" => &self.reflect_brightness,
-            "bailout" => &self.bailout,
-            "de_multiplier" => &self.de_multiplier,
-            "max_ray_dist" => &self.max_ray_dist,
-            "quality_first_ray" => &self.quality_first_ray,
-            "quality_rest_ray" => &self.quality_rest_ray,
-            _ => return None,
-        };
-        Some(val)
-    }
-
-    fn get_u32<'a, 'b>(&'a self, key: &'b str) -> Option<&'a u32> {
-        let val = match key {
-            "white_clamp" => &self.white_clamp,
-            "max_iters" => &self.max_iters,
-            "max_ray_steps" => &self.max_ray_steps,
-            _ => return None,
-        };
-        Some(val)
-    }
-    */
 
     fn get_f32_mut<'a, 'b>(&'a mut self, key: &'b str) -> Option<&'a mut f32> {
         let val = match key {
@@ -332,6 +162,50 @@ impl MandelboxCfg {
         Some(val)
     }
 
+    pub fn read(&mut self, settings: &Settings) {
+        for (key, value) in settings.value_map() {
+            if settings.is_const(key) {
+                continue;
+            }
+            match *value {
+                SettingValue::F32(new, _) => {
+                    if let Some(old) = self.get_f32_mut(key) {
+                        *old = new;
+                    }
+                }
+                SettingValue::U32(new) => {
+                    if let Some(old) = self.get_u32_mut(key) {
+                        *old = new;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn normalize(&mut self) {
+        let mut look = Vector::new(self.look_x, self.look_y, self.look_z);
+        let mut up = Vector::new(self.up_x, self.up_y, self.up_z);
+        look = look.normalized();
+        up = Vector::cross(Vector::cross(look, up), look).normalized();
+        self.look_x = look.x;
+        self.look_y = look.y;
+        self.look_z = look.z;
+        self.up_x = up.x;
+        self.up_y = up.y;
+        self.up_z = up.z;
+    }
+
+    pub fn write(&mut self, settings: &mut HashMap<String, SettingValue>) {
+        for &(name, _, rate_of_change) in DEFAULTS.iter() {
+            if let Some(&mut val) = self.get_f32_mut(name) {
+                settings.insert(name.into(), SettingValue::F32(val, rate_of_change));
+            }
+            if let Some(&mut val) = self.get_u32_mut(name) {
+                settings.insert(name.into(), SettingValue::U32(val));
+            }
+        }
+    }
+
     pub fn is_const(key: &str) -> bool {
         match key {
             "pos_x" => false,
@@ -345,24 +219,24 @@ impl MandelboxCfg {
             "up_z" => false,
             "fov" => false,
             "focal_distance" => false,
-            "scale" => true,
-            "folding_limit" => true,
-            "fixed_radius_2" => true,
-            "min_radius_2" => true,
-            "dof_amount" => true,
-            "light_pos_1_x" => true,
-            "light_pos_1_y" => true,
-            "light_pos_1_z" => true,
-            "light_brightness_1_r" => true,
-            "light_brightness_1_g" => true,
-            "light_brightness_1_b" => true,
-            "light_radius_1" => true,
-            "ambient_brightness_r" => true,
-            "ambient_brightness_g" => true,
-            "ambient_brightness_b" => true,
-            "fog_distance" => true,
-            "fog_scatter" => true,
-            "reflect_brightness" => true,
+            "scale" => false,
+            "folding_limit" => false,
+            "fixed_radius_2" => false,
+            "min_radius_2" => false,
+            "dof_amount" => false,
+            "light_pos_1_x" => false,
+            "light_pos_1_y" => false,
+            "light_pos_1_z" => false,
+            "light_brightness_1_r" => false,
+            "light_brightness_1_g" => false,
+            "light_brightness_1_b" => false,
+            "light_radius_1" => false,
+            "ambient_brightness_r" => false,
+            "ambient_brightness_g" => false,
+            "ambient_brightness_b" => false,
+            "fog_distance" => false,
+            "fog_scatter" => false,
+            "reflect_brightness" => false,
             "bailout" => true,
             "de_multiplier" => true,
             "max_ray_dist" => true,

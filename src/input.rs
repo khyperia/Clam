@@ -1,4 +1,5 @@
 use failure::Error;
+use mandelbox_cfg::MandelboxCfg;
 use sdl2::keyboard::Scancode as Key;
 use settings::*;
 use std::collections::hash_map::Entry;
@@ -16,6 +17,20 @@ impl Input {
             pressed_keys: HashMap::new(),
             index: 0,
         }
+    }
+
+    fn help() {
+        println!("Keybindings:");
+        // free:
+        // QET
+        // G
+        // X
+        println!("WASD, [space]Z, IJKL, OU: move camera");
+        println!("RF: focal distance/move speed");
+        println!("NM: field of view");
+        println!("Y: Write settings to disk. P: Read settings. V: Write keyframe.");
+        println!("up/down/left/right: Adjust settings");
+        println!("C: Toggle constant. B: Recompile kernel with new constants.");
     }
 
     pub fn key_down(&mut self, key: Key, time: Instant, settings: &mut Settings) {
@@ -48,6 +63,9 @@ impl Input {
 
     fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Error> {
         match key {
+            Key::H => {
+                Self::help();
+            }
             Key::P => {
                 settings.load("settings.clam5")?;
                 println!("Settings loaded");
@@ -62,35 +80,35 @@ impl Input {
             }
             Key::Up => {
                 if self.index == 0 {
-                    self.index = settings.value_map().len() - 1;
+                    self.index = MandelboxCfg::num_keys() - 1;
                 } else {
                     self.index -= 1;
                 }
             }
             Key::Down => {
                 self.index += 1;
-                if self.index >= settings.value_map().len() {
+                if self.index >= MandelboxCfg::num_keys() {
                     self.index = 0;
                 }
             }
             Key::Left => {
-                let key = &self.sorted_keys(settings)[self.index];
+                let key = MandelboxCfg::keys().nth(self.index).unwrap();
                 if let SettingValue::U32(value) = *settings.get(key).unwrap() {
-                    settings.insert(key.clone(), SettingValue::U32(value - 1));
+                    settings.insert(key.into(), SettingValue::U32(value - 1));
                 }
             }
             Key::Right => {
-                let key = &self.sorted_keys(settings)[self.index];
+                let key = MandelboxCfg::keys().nth(self.index).unwrap();
                 if let SettingValue::U32(value) = *settings.get(key).unwrap() {
-                    settings.insert(key.clone(), SettingValue::U32(value + 1));
+                    settings.insert(key.into(), SettingValue::U32(value + 1));
                 }
             }
-            Key::H => {
-                let key = &self.sorted_keys(settings)[self.index];
+            Key::C => {
+                let key = MandelboxCfg::keys().nth(self.index).unwrap();
                 let is_const = settings.is_const(key);
                 settings.set_const(key, !is_const);
             }
-            Key::G => {
+            Key::B => {
                 settings.rebuild();
             }
             _ => (),
@@ -200,38 +218,25 @@ impl Input {
         settings.insert(key, SettingValue::F32(value, -change + 1.0));
     }
 
-    fn sorted_keys(&self, settings: &Settings) -> Vec<String> {
-        let mut keys = settings.value_map().keys().cloned().collect::<Vec<_>>();
-        keys.sort();
-        keys
-    }
-
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
-        if let Some(dt) = self.is_pressed(now, Key::Left) {
-            let key = &self.sorted_keys(settings)[self.index];
+        let mut do_control = |dt| {
+            let key = MandelboxCfg::keys().nth(self.index).unwrap();
             if let &SettingValue::F32(value, change) = settings.get(key).unwrap() {
                 if change < 0.0 {
                     settings.insert(
-                        key.clone(),
-                        SettingValue::F32(value * (-change + 1.0).powf(-dt), change),
-                    );
-                } else {
-                    settings.insert(key.clone(), SettingValue::F32(value - dt * change, change));
-                }
-            };
-        }
-        if let Some(dt) = self.is_pressed(now, Key::Right) {
-            let key = &self.sorted_keys(settings)[self.index];
-            if let &SettingValue::F32(value, change) = settings.get(key).unwrap() {
-                if change < 0.0 {
-                    settings.insert(
-                        key.clone(),
+                        key.into(),
                         SettingValue::F32(value * (-change + 1.0).powf(dt), change),
                     );
                 } else {
-                    settings.insert(key.clone(), SettingValue::F32(value + dt * change, change));
+                    settings.insert(key.into(), SettingValue::F32(value + dt * change, change));
                 }
             };
+        };
+        if let Some(dt) = self.is_pressed(now, Key::Left) {
+            do_control(-dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Right) {
+            do_control(dt);
         }
     }
 }

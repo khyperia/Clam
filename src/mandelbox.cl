@@ -411,7 +411,7 @@ static struct Material Material(Cfg cfg, float3 offset)
     return result;
 }
 
-static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3* normal, int *num_de)
+static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3* normal)
 {
     float distance;
     float totalDistance = 0.0f;
@@ -419,7 +419,6 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     do {
         distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
         totalDistance += distance;
-        (*num_de)++;
         i--;
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
 
@@ -428,7 +427,6 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
         totalDistance -= totalDistance / quality * 2;
         for (int i = 0; i < 4; i++) {
             distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
-            (*num_de)++;
             totalDistance += distance - totalDistance / quality;
         }
     }
@@ -447,7 +445,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand, int *num_de)
+static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand)
 {
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
@@ -455,7 +453,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
     for (int photonIndex = 0; photonIndex < 3; photonIndex++) {
         float3 normal;
         const float this_fog_distance = -log(Random_Next(rand)) * fog_distance;
-        const float distance = Cast(cfg, ray, quality, min(max_ray_dist, this_fog_distance), &normal, num_de);
+        const float distance = Cast(cfg, ray, quality, min(max_ray_dist, this_fog_distance), &normal);
 
         if (distance >= max_ray_dist) {
             //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
@@ -600,9 +598,7 @@ __kernel void Main(
 
     struct Random rand = new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
-    int num_de = 0;
-    float3 colorComponents = Trace(cfg, ray, width, height, &rand, &num_de);
-    colorComponents = (float3)(num_de, num_de, num_de) / 200.0f;
+    float3 colorComponents = Trace(cfg, ray, width, height, &rand);
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     //newColor = GammaTest(x, y, width, height);
     const uint packedColor = PackPixel(cfg, newColor);

@@ -1,7 +1,6 @@
 use failure::err_msg;
 use failure::Error;
 use input;
-use kernel;
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
 use sdl2::init;
@@ -42,6 +41,16 @@ impl Image {
     }
 }
 
+type KernelFn = Fn(
+        u32,
+        u32,
+        &Arc<Mutex<(Settings, input::Input)>>,
+        &mpsc::Sender<Image>,
+        &mpsc::Receiver<ScreenEvent>,
+        &EventSubsystem,
+    ) -> Result<(), Error>
+    + Sync;
+
 fn launch_kernel(
     width: u32,
     height: u32,
@@ -49,11 +58,12 @@ fn launch_kernel(
     send_image: mpsc::Sender<Image>,
     recv_screen_event: mpsc::Receiver<ScreenEvent>,
     event_system: EventSubsystem,
+    kernel_fn: &'static KernelFn,
 ) {
     //TODO
     let event_system = unsafe { &*Box::into_raw(Box::new(event_system)) };
     thread::spawn(move || {
-        match kernel::interactive(
+        match kernel_fn(
             width,
             height,
             &settings_input,
@@ -62,7 +72,7 @@ fn launch_kernel(
             event_system,
         ) {
             Ok(()) => (),
-            Err(err) => println!("{}", err),
+            Err(err) => println!("Error in kernel thread: {}", err),
         }
     });
 }
@@ -151,7 +161,7 @@ fn draw<'a>(
     Ok(())
 }
 
-pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
+pub fn display(mut width: u32, mut height: u32, kernel_fn: &'static KernelFn) -> Result<(), Error> {
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
     let event = sdl.event().expect("SDL does not have event");
@@ -175,7 +185,23 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
         send_image,
         recv_screen_event,
         event,
+        kernel_fn,
     );
+
+    let mut draw = || {
+        draw(
+            &mut canvas,
+            &creator,
+            &font,
+            &image_stream,
+            &settings_input,
+            &mut texture,
+            &mut width,
+            &mut height,
+            &mut last_fps,
+            &mut spf,
+        )
+    };
 
     for event in event_pump.wait_iter() {
         match event {
@@ -194,32 +220,27 @@ pub fn display(mut width: u32, mut height: u32) -> Result<(), Error> {
                 ..
             } => {
                 let now = Instant::now();
-                let mut locked = settings_input.lock().unwrap();
-                let (ref mut settings, ref mut input) = *locked;
-                input.key_down(scancode, now, settings);
+                {
+                    let mut locked = settings_input.lock().unwrap();
+                    let (ref mut settings, ref mut input) = *locked;
+                    input.key_down(scancode, now, settings);
+                }
+                draw()?;
             }
             Event::KeyUp {
                 scancode: Some(scancode),
                 ..
             } => {
                 let now = Instant::now();
-                let mut locked = settings_input.lock().unwrap();
-                let (ref mut settings, ref mut input) = *locked;
-                input.key_up(scancode, now, settings);
+                {
+                    let mut locked = settings_input.lock().unwrap();
+                    let (ref mut settings, ref mut input) = *locked;
+                    input.key_up(scancode, now, settings);
+                }
+                draw()?;
             }
             Event::Quit { .. } => return Ok(()),
-            Event::User { .. } => draw(
-                &mut canvas,
-                &creator,
-                &font,
-                &image_stream,
-                &settings_input,
-                &mut texture,
-                &mut width,
-                &mut height,
-                &mut last_fps,
-                &mut spf,
-            )?,
+            Event::User { .. } => draw()?,
             _ => (),
         }
     }
