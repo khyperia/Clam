@@ -188,7 +188,9 @@ pub struct KeyframeList {
 fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let t2 = t * t;
     let t3 = t2 * t;
-    (((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+    (((2.0 * p1)
+        + (-p0 + p2) * t
+        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
         + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3) / 2.0)
 }
 

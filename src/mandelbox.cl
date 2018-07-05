@@ -18,10 +18,10 @@ struct MandelboxCfg {
     float _light_pos_1_x;
     float _light_pos_1_y;
     float _light_pos_1_z;
+    float _light_radius_1;
     float _light_brightness_1_r;
     float _light_brightness_1_g;
     float _light_brightness_1_b;
-    float _light_radius_1;
     float _ambient_brightness_r;
     float _ambient_brightness_g;
     float _ambient_brightness_b;
@@ -120,7 +120,7 @@ struct MandelboxCfg {
 #define fog_distance cfg->_fog_distance
 #endif
 #ifndef fog_scatter
-#define fog_scatter cfg->_fog_scatter 
+#define fog_scatter cfg->_fog_scatter
 #endif
 #ifndef reflect_brightness
 #define reflect_brightness cfg->_reflect_brightness
@@ -384,15 +384,15 @@ static struct Material Material(Cfg cfg, float3 offset)
 {
     float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
     int n = max(max_iters, 1);
-    float trap = 10000000000;
     do {
         z = MandelboxD(cfg, z, offset);
-        trap = min(trap, length(trap));
     } while (dot(z.xyz, z.xyz) < bailout && --n);
     const float de = length(z.xyz) / z.w;
 
-    trap = sin(log2(trap)) * 0.5f + 0.5f;
-    float3 color = (float3)(trap, trap, trap);
+    float base_color = n / (float)max_iters * 5;
+    float3 color = (float3)(sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
+    float specular = sinpi(base_color / 2.389120f) * 0.2f + 0.2f;
+    color = color * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
 
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
     const float minimum = min(light1, de);
@@ -400,7 +400,7 @@ static struct Material Material(Cfg cfg, float3 offset)
     struct Material result;
     if (minimum == de) {
         result.color = color * reflect_brightness;
-        result.specular = 0.2f;
+        result.specular = specular;
         result.emissive = (float3)(0, 0, 0);
     } else if (minimum == light1) {
         result.color = (float3)(1, 1, 1);
@@ -423,8 +423,8 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
 
     // correction step
-    if (distance * quality < totalDistance) {
-        totalDistance -= totalDistance / quality * 2;
+    if (distance * quality <= totalDistance) {
+        totalDistance -= totalDistance / quality;
         for (int i = 0; i < 4; i++) {
             distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
             totalDistance += distance - totalDistance / quality;
@@ -551,26 +551,35 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 }
 
 // yay SOA
-static float3 GetScratch(__global uchar* rawData, uint idx, uint size) {
+static float3 GetScratch(__global uchar* rawData, uint idx, uint size)
+{
     __global float* data = (__global float*)rawData;
-    if (idx >= size) { return (float3)(0, 0, 0); }
+    if (idx >= size) {
+        return (float3)(0, 0, 0);
+    }
     return (float3)(
         data[idx + size],
         data[idx + size * 2],
         data[idx + size * 3]);
 }
 
-static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 value) {
+static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 value)
+{
     __global float* data = (__global float*)rawData;
-    if (idx >= size) { return; }
+    if (idx >= size) {
+        return;
+    }
     data[idx + size] = value.x;
     data[idx + size * 2] = value.y;
     data[idx + size * 3] = value.z;
 }
 
-static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value) {
+static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value)
+{
     __global uint* data = (__global uint*)rawData;
-    if (idx >= size) { return; }
+    if (idx >= size) {
+        return;
+    }
     data[idx] = value;
 }
 

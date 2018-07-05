@@ -91,10 +91,7 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync()?;
             let value = ray as f32 / rpp as f32;
-            let mut seconds = progress.time(value);
-            let minutes = (seconds / 60.0) as u32;
-            seconds -= (minutes * 60) as f32;
-            println!("{:.2}%, {}:{:.2} left", 100.0 * value, minutes, seconds);
+            println!("{}", progress.time_str(value));
         }
     }
     kernel.sync()?;
@@ -125,10 +122,7 @@ pub fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error
         let settings = keyframes.interpolate(frame as f32 / frames as f32);
         video_one(frame, rpp, &mut kernel, &settings)?;
         let value = (frame + 1) as f32 / frames as f32;
-        let mut seconds = progress.time(value);
-        let minutes = (seconds / 60.0) as u32;
-        seconds -= (minutes * 60) as f32;
-        println!("{:.2}%, {}:{:.2} left", 100.0 * value, minutes, seconds);
+        println!("{}", progress.time_str(value));
     }
     println!("done");
     Ok(())
