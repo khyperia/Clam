@@ -375,8 +375,8 @@ static float De(Cfg cfg, float3 offset)
 
 struct Material {
     float3 color;
-    float specular;
     float3 emissive;
+    float specular;
 };
 
 // (r, g, b, spec)
@@ -395,14 +395,13 @@ static struct Material Material(Cfg cfg, float3 offset)
     color = color * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
 
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
-    const float minimum = min(light1, de);
 
     struct Material result;
-    if (minimum == de) {
+    if (de < light1) {
         result.color = color * reflect_brightness;
         result.specular = specular;
         result.emissive = (float3)(0, 0, 0);
-    } else if (minimum == light1) {
+    } else {
         result.color = (float3)(1, 1, 1);
         result.specular = 0.0f;
         result.emissive = LightBrightness1(cfg);
@@ -415,7 +414,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
 {
     float distance;
     float totalDistance = 0.0f;
-    uint i = max(max_ray_steps, 1);
+    uint i = (uint)max(max_ray_steps, 1);
     do {
         distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
         totalDistance += distance;
@@ -425,7 +424,7 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     // correction step
     if (distance * quality <= totalDistance) {
         totalDistance -= totalDistance / quality;
-        for (int i = 0; i < 4; i++) {
+        for (int correctStep = 0; correctStep < 4; correctStep++) {
             distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
             totalDistance += distance - totalDistance / quality;
         }
@@ -450,7 +449,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
     float3 rayColor = (float3)(0, 0, 0);
     float3 reflectionColor = (float3)(1, 1, 1);
     float quality = quality_first_ray * ((width + height) / (2 * fov));
-    for (int photonIndex = 0; photonIndex < 3; photonIndex++) {
+    for (int photonIndex = 0; photonIndex < NumRayBounces; photonIndex++) {
         float3 normal;
         const float this_fog_distance = -log(Random_Next(rand)) * fog_distance;
         const float distance = Cast(cfg, ray, quality, min(max_ray_dist, this_fog_distance), &normal);
@@ -472,7 +471,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
         }
 
         struct Material material = Material(cfg, newPos);
-        rayColor += material.emissive;
+        rayColor += reflectionColor * material.emissive;
 
         float3 newDir;
         if (Random_Next(rand) < material.specular) {
@@ -490,6 +489,7 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
     return rayColor;
 }
 
+/*
 static float3 GammaTest(int x, int y, int width, int height)
 {
     const float centerValue = (float)x / width;
@@ -504,6 +504,7 @@ static float3 GammaTest(int x, int y, int width, int height)
     }
     return (float3)(result, result, result);
 }
+*/
 
 // Perfect, original sRGB
 // static float GammaCompression(float value)
@@ -537,7 +538,7 @@ static uint PackPixel(Cfg cfg, float3 pixel)
         if (maxVal > 1) {
             pixel *= 1.0f / maxVal;
         }
-        pixel = max(pixel, 0.0f);
+        pixel = max(pixel, (float3)(0.0f, 0.0f, 0.0f));
     } else {
         pixel = clamp(pixel, 0.0f, 1.0f);
     }

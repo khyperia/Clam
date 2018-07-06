@@ -2,3 +2,5 @@
 render.png
 settings.clam5
 keyframes.clam5
+*.obj
+/test/output
