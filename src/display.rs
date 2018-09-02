@@ -94,6 +94,29 @@ pub fn find_font() -> Result<&'static Path, Error> {
     Err(err_msg("No font found"))
 }
 
+fn render_text_one(
+    font: &ttf::Font,
+    creator: &TextureCreator<WindowContext>,
+    canvas: &mut Canvas<Window>,
+    text: &str,
+    color: Color,
+    offset_x: i32,
+    offset_y: i32,
+) -> Result<(), Error> {
+    let spacing = font.recommended_line_spacing();
+    for (line_index, line) in text.lines().enumerate() {
+        let rendered = font.render(line).solid(color)?;
+        let width = rendered.width();
+        let height = rendered.height();
+        let tex = creator.create_texture_from_surface(rendered)?;
+        let y = 10 + offset_y + line_index as i32 * spacing;
+        canvas
+            .copy(&tex, None, Rect::new(10 + offset_x, y, width, height))
+            .expect("Could not display text");
+    }
+    Ok(())
+}
+
 fn render_text(
     font: &ttf::Font,
     settings_input: &Arc<Mutex<(Settings, input::Input)>>,
@@ -106,17 +129,16 @@ fn render_text(
     let (ref mut settings, ref mut input) = *locked;
     input.integrate(settings);
     let text = format!("{}\n{}", fps_line, settings.status(input));
-    let spacing = font.recommended_line_spacing();
-    for (line_index, line) in text.lines().enumerate() {
-        let rendered = font.render(line).solid(Color::RGB(255, 64, 64))?;
-        let width = rendered.width();
-        let height = rendered.height();
-        let tex = creator.create_texture_from_surface(rendered)?;
-        let y = 10 + line_index as i32 * spacing;
-        canvas
-            .copy(&tex, None, Rect::new(10, y, width, height))
-            .expect("Could not display text");
-    }
+    render_text_one(font, creator, canvas, &text, Color::RGB(0, 0, 0), 1, 1)?;
+    render_text_one(
+        font,
+        creator,
+        canvas,
+        &text,
+        Color::RGB(255, 192, 192),
+        0,
+        0,
+    )?;
     Ok(())
 }
 

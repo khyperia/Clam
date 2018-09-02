@@ -29,6 +29,7 @@ impl Input {
         println!("Y: Write settings to disk. P: Read settings. V: Write keyframe.");
         println!("up/down/left/right: Adjust settings");
         println!("C: Toggle constant. B: Recompile kernel with new constants.");
+        println!("X: Copy position to lightsource position");
     }
 
     pub fn key_down(&mut self, key: Key, time: Instant, settings: &mut Settings) {
@@ -108,6 +109,14 @@ impl Input {
             }
             Key::B => {
                 settings.rebuild();
+            }
+            Key::X => {
+                let x = *settings.get("pos_x").unwrap();
+                let y = *settings.get("pos_y").unwrap();
+                let z = *settings.get("pos_z").unwrap();
+                settings.insert("light_pos_1_x".to_string(), x);
+                settings.insert("light_pos_1_y".to_string(), y);
+                settings.insert("light_pos_1_z".to_string(), z);
             }
             _ => (),
         }

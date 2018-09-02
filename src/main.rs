@@ -73,9 +73,15 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     let file = ::std::fs::File::create(path)?;
     let w = &mut ::std::io::BufWriter::new(file);
     let mut encoder = png::Encoder::new(w, image.width, image.height);
-    encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
+    encoder.set(png::ColorType::RGB).set(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;
-    writer.write_image_data(&image.data)?;
+    let sans_alpha = image
+        .data
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &element)| if index % 4 == 3 { None } else { Some(element) })
+        .collect::<Vec<_>>();
+    writer.write_image_data(&sans_alpha)?;
     Ok(())
 }
 
@@ -128,7 +134,7 @@ pub fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error
     Ok(())
 }
 
-fn try_render(args: &[String]) -> Result<(), Error> {
+fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
         let rpp = args[1].parse()?;
         match &*args[0] {
@@ -137,12 +143,16 @@ fn try_render(args: &[String]) -> Result<(), Error> {
             "1080p" | "2k" => headless(1920, 1080, rpp),
             pix => headless(pix.parse()?, pix.parse()?, rpp),
         }
-    } else {
+    } else if args.len() == 3 {
         headless(args[0].parse()?, args[1].parse()?, args[2].parse()?)
+    } else {
+        Err(failure::err_msg(
+            "--render needs two or three args: [width] [height] [rpp], or, [8k|4k|2k|1080p] [rpp]",
+        ))
     }
 }
 
-fn try_video(args: &[String]) -> Result<(), Error> {
+fn video_cmd(args: &[String]) -> Result<(), Error> {
     if args.len() == 4 {
         video(
             args[0].parse()?,
@@ -157,37 +167,33 @@ fn try_video(args: &[String]) -> Result<(), Error> {
     }
 }
 
-fn render(args: &[String]) {
-    match try_render(args) {
-        Ok(()) => (),
-        Err(err) => println!("{}", err),
-    }
-}
-
-fn video_cmd(args: &[String]) {
-    match try_video(args) {
-        Ok(()) => (),
-        Err(err) => println!("{}", err),
-    }
-}
-
-fn interactive_cmd() {
+fn interactive_cmd() -> Result<(), Error> {
     let width = 200;
     let height = 200;
+    display::display(width, height, &interactive)
+}
 
-    match display::display(width, height, &interactive) {
-        Ok(()) => (),
-        Err(err) => println!("{}", err),
-    };
+fn try_main() -> Result<(), Error> {
+    let arguments = args().skip(1).collect::<Vec<_>>();
+    if arguments.len() > 2 && arguments[0] == "--render" {
+        render(&arguments[1..])?;
+    } else if arguments.len() > 2 && arguments[0] == "--video" {
+        video_cmd(&arguments[1..])?;
+    } else if arguments.len() == 0 {
+        interactive_cmd()?;
+    } else {
+        println!("Usage:");
+        println!("clam5 --render [width] [height] [rpp]");
+        println!("clam5 --render [8k|4k|2k|1080p] [rpp]");
+        println!("clam5 --video [width] [height] [rpp] [frames]");
+        println!("clam5");
+    }
+    Ok(())
 }
 
 fn main() {
-    let arguments = args().skip(1).collect::<Vec<_>>();
-    if arguments.len() > 2 && arguments[0] == "--render" {
-        render(&arguments[1..]);
-    } else if arguments.len() > 2 && arguments[0] == "--video" {
-        video_cmd(&arguments[1..]);
-    } else {
-        interactive_cmd();
+    match try_main() {
+        Ok(()) => (),
+        Err(err) => println!("{}", err),
     }
 }

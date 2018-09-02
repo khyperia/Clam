@@ -196,7 +196,8 @@ impl Kernel {
     pub fn run(&mut self, settings: &Settings, download: bool) -> Result<Option<Image>, Error> {
         self.set_args(settings)?;
         let lws = 1024;
-        let to_launch = self.kernel
+        let to_launch = self
+            .kernel
             .cmd()
             .queue(&self.queue)
             .global_work_size((self.width * self.height + lws - 1) / lws * lws);

@@ -118,9 +118,11 @@ impl Settings {
             let key = split[1].trim();
             let value = split[0].trim();
             match self.value_map[key] {
-                SettingValue::F32(_, change) => self.value_map
+                SettingValue::F32(_, change) => self
+                    .value_map
                     .insert(key.into(), SettingValue::F32(value.parse()?, change)),
-                SettingValue::U32(_) => self.value_map
+                SettingValue::U32(_) => self
+                    .value_map
                     .insert(key.into(), SettingValue::U32(value.parse()?)),
             };
         }
@@ -144,16 +146,12 @@ impl Settings {
             let selected = if ind == input.index { "*" } else { " " };
             let constant = if is_const { "@" } else { " " };
             match self.value_map[key] {
-                SettingValue::F32(value, _) => writeln!(
-                    &mut builder,
-                    "{}{}{} = {}",
-                    selected, constant, key, value
-                ).unwrap(),
-                SettingValue::U32(value) => writeln!(
-                    &mut builder,
-                    "{}{}{} = {}",
-                    selected, constant, key, value
-                ).unwrap(),
+                SettingValue::F32(value, _) => {
+                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, value).unwrap()
+                }
+                SettingValue::U32(value) => {
+                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, value).unwrap()
+                }
             }
         }
         builder
