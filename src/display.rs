@@ -78,12 +78,13 @@ fn launch_kernel(
 }
 
 pub fn find_font() -> Result<&'static Path, Error> {
-    let locations: [&'static Path; 5] = [
+    let locations: [&'static Path; 6] = [
         "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
         "/usr/share/fonts/TTF/FiraSans-Regular.ttf".as_ref(),
         "C:\\Windows\\Fonts\\arial.ttf".as_ref(),
         "/usr/share/fonts/TTF/DejaVuSans.ttf".as_ref(),
         "/usr/share/fonts/TTF/LiberationSans-Regular.ttf".as_ref(),
+        "/Library/Fonts/Andale Mono.ttf".as_ref(),
     ];
     for &location in &locations {
         if location.exists() {
