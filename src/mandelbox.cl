@@ -25,8 +25,6 @@ struct MandelboxCfg {
     float _ambient_brightness_r;
     float _ambient_brightness_g;
     float _ambient_brightness_b;
-    float _fog_distance;
-    float _fog_scatter;
     float _reflect_brightness;
     float _bailout;
     float _de_multiplier;
@@ -116,12 +114,6 @@ struct MandelboxCfg {
 #ifndef ambient_brightness_b
 #define ambient_brightness_b cfg->_ambient_brightness_b
 #endif
-#ifndef fog_distance
-#define fog_distance cfg->_fog_distance
-#endif
-#ifndef fog_scatter
-#define fog_scatter cfg->_fog_scatter
-#endif
 #ifndef reflect_brightness
 #define reflect_brightness cfg->_reflect_brightness
 #endif
@@ -153,6 +145,7 @@ struct MandelboxCfg {
 // When NumRayBounces is a dynamic variable in MandelboxCfg, the intel opencl
 // runtime cannot vectorize the kernel.
 #define NumRayBounces 3
+#define SpeedBoost 3
 
 typedef __private struct MandelboxCfg* Cfg;
 
@@ -444,48 +437,68 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
+static bool CastCheck(Cfg cfg, struct Ray ray, const float quality, float3* position, float3* normal, float3* rayColor, float3 reflectionColor)
+{
+    const float distance = Cast(cfg, ray, quality, max_ray_dist, normal);
+
+    if (distance >= max_ray_dist) {
+        //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
+        const float3 color = AmbientBrightness(cfg);
+        *rayColor += color * reflectionColor;
+        return true;
+    }
+
+    *position = Ray_At(ray, distance);
+    return false;
+}
+
+static struct Ray Bounce(Cfg cfg, float3 newPos, float3 normal, float3 incomingDirection, float3* rayColor, float3* reflectionColor, float* quality, struct Random* rand)
+{
+    struct Material material = Material(cfg, newPos);
+    *rayColor += *reflectionColor * material.emissive;
+
+    float3 newDir;
+    if (Random_Next(rand) < material.specular) {
+        // specular
+        newDir = incomingDirection - 2 * dot(incomingDirection, normal) * normal;
+    } else {
+        // diffuse
+        newDir = Random_Lambertian(rand, normal);
+        *quality = quality_rest_ray;
+    }
+    const float incident_angle_weakening = dot(normal, newDir);
+    *reflectionColor *= incident_angle_weakening * material.color;
+    return new_Ray(newPos, newDir);
+}
+
 static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand)
 {
     float3 rayColor = (float3)(0, 0, 0);
-    float3 reflectionColor = (float3)(1, 1, 1);
     float quality = quality_first_ray * ((width + height) / (2 * fov));
-    for (int photonIndex = 0; photonIndex < NumRayBounces; photonIndex++) {
-        float3 normal;
-        const float this_fog_distance = -log(Random_Next(rand)) * fog_distance;
-        const float distance = Cast(cfg, ray, quality, min(max_ray_dist, this_fog_distance), &normal);
 
-        if (distance >= max_ray_dist) {
-            //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
-            const float3 color = AmbientBrightness(cfg);
-            rayColor += color * reflectionColor;
-            break;
-        }
-
-        const float3 newPos = Ray_At(ray, distance);
-
-        if (distance >= this_fog_distance) {
-            float3 newDir = normalize(fog_scatter * ray.dir + Random_Ball(rand));
-            ray = new_Ray(newPos, newDir);
-            photonIndex--;
-            continue;
-        }
-
-        struct Material material = Material(cfg, newPos);
-        rayColor += reflectionColor * material.emissive;
-
-        float3 newDir;
-        if (Random_Next(rand) < material.specular) {
-            // specular
-            newDir = ray.dir - 2 * dot(ray.dir, normal) * normal;
-        } else {
-            // diffuse
-            newDir = Random_Lambertian(rand, normal);
-            quality = quality_rest_ray;
-        }
-        const float incident_angle_weakening = dot(normal, newDir);
-        reflectionColor *= incident_angle_weakening * material.color;
-        ray = new_Ray(newPos, newDir);
+    float3 startDir = ray.dir;
+    float3 startPos, startNormal;
+    if (CastCheck(cfg, ray, quality, &startPos, &startNormal, &rayColor, (float3)(1, 1, 1)))
+    {
+        return rayColor;
     }
+
+    for (int rayIndex = 0; rayIndex < SpeedBoost; rayIndex++) {
+        float3 reflectionColor = (float3)(1, 1, 1);
+        quality = quality_first_ray * ((width + height) / (2 * fov));
+
+        ray = Bounce(cfg, startPos, startNormal, startDir, &rayColor, &reflectionColor, &quality, rand);
+
+        for (int photonIndex = 0; photonIndex < NumRayBounces - 1; photonIndex++) {
+            float3 position, normal;
+            if (CastCheck(cfg, ray, quality, &position, &normal, &rayColor, reflectionColor))
+            {
+                break;
+            }
+            ray = Bounce(cfg, position, normal, ray.dir, &rayColor, &reflectionColor, &quality, rand);
+        }
+    }
+    rayColor *= 1.0f / SpeedBoost;
     return rayColor;
 }
 

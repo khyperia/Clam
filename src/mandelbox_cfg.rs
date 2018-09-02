@@ -33,8 +33,6 @@ pub struct MandelboxCfg {
     ambient_brightness_r: f32,
     ambient_brightness_g: f32,
     ambient_brightness_b: f32,
-    fog_distance: f32,
-    fog_scatter: f32,
     reflect_brightness: f32,
     bailout: f32,
     de_multiplier: f32,
@@ -49,7 +47,7 @@ pub struct MandelboxCfg {
 unsafe impl ocl::traits::OclPrm for MandelboxCfg {}
 
 // name, default_val, rate_of_change
-const DEFAULTS: [(&'static str, f32, f32); 37] = [
+const DEFAULTS: [(&str, f32, f32); 35] = [
     ("pos_x", 0.0, 1.0),
     ("pos_y", 0.0, 1.0),
     ("pos_z", 5.0, 1.0),
@@ -76,8 +74,6 @@ const DEFAULTS: [(&'static str, f32, f32); 37] = [
     ("ambient_brightness_r", 0.8, -0.25),
     ("ambient_brightness_g", 0.8, -0.25),
     ("ambient_brightness_b", 1.0, -0.25),
-    ("fog_distance", 1000.0, -0.5),
-    ("fog_scatter", 1.0, 0.25),
     ("reflect_brightness", 1.0, 0.125),
     ("bailout", 1024.0, -1.0),
     ("de_multiplier", 0.95, 0.125),
@@ -139,8 +135,6 @@ impl MandelboxCfg {
             "ambient_brightness_r" => &mut self.ambient_brightness_r,
             "ambient_brightness_g" => &mut self.ambient_brightness_g,
             "ambient_brightness_b" => &mut self.ambient_brightness_b,
-            "fog_distance" => &mut self.fog_distance,
-            "fog_scatter" => &mut self.fog_scatter,
             "reflect_brightness" => &mut self.reflect_brightness,
             "bailout" => &mut self.bailout,
             "de_multiplier" => &mut self.de_multiplier,
@@ -234,8 +228,6 @@ impl MandelboxCfg {
             "ambient_brightness_r" => false,
             "ambient_brightness_g" => false,
             "ambient_brightness_b" => false,
-            "fog_distance" => false,
-            "fog_scatter" => false,
             "reflect_brightness" => false,
             "bailout" => true,
             "de_multiplier" => true,

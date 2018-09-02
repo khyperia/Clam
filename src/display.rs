@@ -149,7 +149,8 @@ fn draw<'a>(
         let now = Instant::now();
         let duration = now.duration_since(*last_fps);
         *last_fps = now;
-        let time = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
+        // as_secs returns u64, subsec_nanos returns u32
+        let time = duration.as_secs() as f64 + f64::from(duration.subsec_nanos()) / 1_000_000_000.0;
         *spf = (time + *spf) / 2.0;
     }
 

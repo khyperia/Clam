@@ -35,7 +35,7 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
                     file.write_all(&binary[..])?;
                 }
             } else {
-                let mut file = File::create(format!("{}", &path))?;
+                let mut file = File::create(path.to_string())?;
                 file.write_all(&binaries[0][..])?;
             }
             println!("Dumped binaries");

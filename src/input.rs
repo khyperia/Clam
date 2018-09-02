@@ -6,6 +6,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Instant;
 
+#[derive(Default)]
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
     pub index: usize,
@@ -13,10 +14,7 @@ pub struct Input {
 
 impl Input {
     pub fn new() -> Input {
-        Input {
-            pressed_keys: HashMap::new(),
-            index: 0,
-        }
+        Input::default()
     }
 
     fn help() {
@@ -221,7 +219,7 @@ impl Input {
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
         let mut do_control = |dt| {
             let key = MandelboxCfg::keys().nth(self.index).unwrap();
-            if let &SettingValue::F32(value, change) = settings.get(key).unwrap() {
+            if let SettingValue::F32(value, change) = *settings.get(key).unwrap() {
                 if change < 0.0 {
                     settings.insert(
                         key.into(),

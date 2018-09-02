@@ -14,7 +14,7 @@ pub enum SettingValue {
     F32(f32, f32),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Settings {
     value_map: HashMap<String, SettingValue>,
     constants: HashSet<String>,
@@ -28,7 +28,7 @@ impl Settings {
         let mut default = MandelboxCfg::get_default();
         default.normalize();
         default.write(&mut value_map);
-        for (key, _) in &value_map {
+        for key in value_map.keys() {
             if MandelboxCfg::is_const(key) {
                 constants.insert(key.clone());
             }
@@ -49,7 +49,7 @@ impl Settings {
     }
 
     pub fn all_constants(&mut self) {
-        for (key, _) in &self.value_map {
+        for key in self.value_map.keys() {
             self.constants.insert(key.clone());
         }
     }
@@ -82,9 +82,9 @@ impl Settings {
         let file = ::std::fs::File::create(file)?;
         let mut writer = ::std::io::BufWriter::new(&file);
         for (key, value) in &self.value_map {
-            match value {
-                &SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
-                &SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
+            match *value {
+                SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
+                SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
             }
         }
         Ok(())
@@ -97,9 +97,9 @@ impl Settings {
             .open(file)?;
         let mut writer = ::std::io::BufWriter::new(&file);
         for (key, value) in &self.value_map {
-            match value {
-                &SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
-                &SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
+            match *value {
+                SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
+                SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
             }
         }
         writeln!(&mut writer, "---")?;
@@ -144,14 +144,14 @@ impl Settings {
             let selected = if ind == input.index { "*" } else { " " };
             let constant = if is_const { "@" } else { " " };
             match self.value_map[key] {
-                SettingValue::F32(value, _) => write!(
+                SettingValue::F32(value, _) => writeln!(
                     &mut builder,
-                    "{}{}{} = {}\n",
+                    "{}{}{} = {}",
                     selected, constant, key, value
                 ).unwrap(),
-                SettingValue::U32(value) => write!(
+                SettingValue::U32(value) => writeln!(
                     &mut builder,
-                    "{}{}{} = {}\n",
+                    "{}{}{} = {}",
                     selected, constant, key, value
                 ).unwrap(),
             }
@@ -250,10 +250,10 @@ impl KeyframeList {
         let index_next2 = (index_cur + 2).min(self.keyframes.len() - 1);
         let keys = self.base.value_map.keys().cloned().collect::<Vec<String>>();
         for key in keys {
-            let prev = self.keyframes[index_prev].get(&key).unwrap().clone();
-            let cur = self.keyframes[index_cur].get(&key).unwrap().clone();
-            let next = self.keyframes[index_next].get(&key).unwrap().clone();
-            let next2 = self.keyframes[index_next2].get(&key).unwrap().clone();
+            let prev = *self.keyframes[index_prev].get(&key).unwrap();
+            let cur = *self.keyframes[index_cur].get(&key).unwrap();
+            let next = *self.keyframes[index_next].get(&key).unwrap();
+            let next2 = *self.keyframes[index_next2].get(&key).unwrap();
             let result = interpolate(prev, cur, next, next2, time);
             self.base.insert(key, result);
         }
