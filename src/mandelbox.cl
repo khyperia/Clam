@@ -288,10 +288,9 @@ static float4 Mandelbulb(float4 z, const float Power)
 }
 */
 
-static float4 BoxfoldD(Cfg cfg, float4 z)
+static float3 BoxfoldD(Cfg cfg, float3 z)
 {
-    const float3 znew = clamp(z.xyz, -folding_limit, folding_limit) * 2.0f - z.xyz;
-    return (float4)(znew.x, znew.y, znew.z, z.w);
+    return clamp(z, -folding_limit, folding_limit) * 2.0f - z;
 }
 
 /*
@@ -308,9 +307,10 @@ static float4 ContBoxfoldD(float4 z)
 }
 */
 
-static float4 SpherefoldD(Cfg cfg, float4 z)
+static float3 SpherefoldD(Cfg cfg, float3 z, float* dz)
 {
-    const float factor = fixed_radius_2 / clamp(dot(z.xyz, z.xyz), min_radius_2, fixed_radius_2);
+    const float factor = fixed_radius_2 / clamp(dot(z, z), min_radius_2, fixed_radius_2);
+    *dz *= factor;
     return z * factor;
 }
 
@@ -322,25 +322,26 @@ static float4 ContSpherefoldD(Cfg cfg, float4 z)
 }
 */
 
-static float4 TScaleD(Cfg cfg, float4 z)
+static float3 TScaleD(Cfg cfg, float3 z, float* dz)
 {
-    const float4 mul = (float4)(scale, scale, scale, fabs(scale));
-    return z * mul;
+    *dz *= fabs(scale);
+    return z * scale;
 }
 
-static float4 TOffsetD(float4 z, float3 offset)
+static float3 TOffsetD(float3 z, float* dz, float3 offset)
 {
-    return z + (float4)(offset.x, offset.y, offset.z, 1.0f);
+    *dz += 1.0f;
+    return z + offset;
 }
 
-static float4 MandelboxD(Cfg cfg, float4 z, float3 offset)
+static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset)
 {
     // z = ContBoxfoldD(cfg, z);
     // z = ContSpherefoldD(cfg, z);
     z = BoxfoldD(cfg, z);
-    z = SpherefoldD(cfg, z);
-    z = TScaleD(cfg, z);
-    z = TOffsetD(z, offset);
+    z = SpherefoldD(cfg, z, dz);
+    z = TScaleD(cfg, z, dz);
+    z = TOffsetD(z, dz, offset);
     return z;
 }
 
@@ -349,19 +350,21 @@ static float DeSphere(float3 pos, float radius, float3 test)
     return length(test - pos) - radius;
 }
 
-static float DeMandelbox(Cfg cfg, float3 offset)
+static float DeMandelbox(Cfg cfg, float3 offset, int *n)
 {
-    float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
-    int n = max(max_iters, 1);
+    float3 z = (float3)(offset.x, offset.y, offset.z);
+    float dz = 1.0f;
+    *n = max(max_iters, 1);
     do {
-        z = MandelboxD(cfg, z, offset);
-    } while (dot(z.xyz, z.xyz) < bailout && --n);
-    return length(z.xyz) / z.w;
+        z = MandelboxD(cfg, z, &dz, offset);
+    } while (dot(z, z) < bailout && --*n);
+    return length(z) / dz;
 }
 
 static float De(Cfg cfg, float3 offset)
 {
-    const float mbox = DeMandelbox(cfg, offset);
+    int n;
+    const float mbox = DeMandelbox(cfg, offset, &n);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
     return min(light1, mbox);
 }
@@ -375,12 +378,8 @@ struct Material {
 // (r, g, b, spec)
 static struct Material Material(Cfg cfg, float3 offset)
 {
-    float4 z = (float4)(offset.x, offset.y, offset.z, 1.0f);
-    int n = max(max_iters, 1);
-    do {
-        z = MandelboxD(cfg, z, offset);
-    } while (dot(z.xyz, z.xyz) < bailout && --n);
-    const float de = length(z.xyz) / z.w;
+    int n;
+    const float de = DeMandelbox(cfg, offset, &n);
 
     float base_color = n / (float)max_iters * 5;
     float3 color = (float3)(sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
