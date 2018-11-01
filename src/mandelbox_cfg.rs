@@ -42,12 +42,15 @@ pub struct MandelboxCfg {
     white_clamp: u32,
     max_iters: u32,
     max_ray_steps: u32,
+    num_ray_bounces: u32,
+    speed_boost: u32,
+    render_scale: u32,
 }
 
 unsafe impl ocl::traits::OclPrm for MandelboxCfg {}
 
 // name, default_val, rate_of_change
-const DEFAULTS: [(&str, f32, f32); 35] = [
+const DEFAULTS: [(&str, f32, f32); 38] = [
     ("pos_x", 0.0, 1.0),
     ("pos_y", 0.0, 1.0),
     ("pos_z", 5.0, 1.0),
@@ -83,6 +86,9 @@ const DEFAULTS: [(&str, f32, f32); 35] = [
     ("white_clamp", 1.0, 0.0),
     ("max_iters", 64.0, 0.0),
     ("max_ray_steps", 256.0, 0.0),
+    ("num_ray_bounces", 3.0, 0.0),
+    ("speed_boost", 1.0, 0.0),
+    ("render_scale", 1.0, 0.0),
 ];
 
 impl MandelboxCfg {
@@ -151,6 +157,9 @@ impl MandelboxCfg {
             "white_clamp" => &mut self.white_clamp,
             "max_iters" => &mut self.max_iters,
             "max_ray_steps" => &mut self.max_ray_steps,
+            "num_ray_bounces" => &mut self.num_ray_bounces,
+            "speed_boost" => &mut self.speed_boost,
+            "render_scale" => &mut self.render_scale,
             _ => return None,
         };
         Some(val)
@@ -237,6 +246,9 @@ impl MandelboxCfg {
             "white_clamp" => true,
             "max_iters" => true,
             "max_ray_steps" => true,
+            "num_ray_bounces" => true,
+            "speed_boost" => true,
+            "render_scale" => false,
             _ => false,
         }
     }

@@ -14,7 +14,6 @@ use sdl2::ttf;
 use sdl2::ttf::Font;
 use sdl2::video::Window;
 use sdl2::video::WindowContext;
-use sdl2::EventSubsystem;
 use settings::Settings;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
@@ -45,9 +44,8 @@ type KernelFn = Fn(
         u32,
         u32,
         &Arc<Mutex<(Settings, input::Input)>>,
-        &mpsc::Sender<Image>,
+        &mpsc::SyncSender<Image>,
         &mpsc::Receiver<ScreenEvent>,
-        &EventSubsystem,
     ) -> Result<(), Error>
     + Sync;
 
@@ -55,13 +53,10 @@ fn launch_kernel(
     width: u32,
     height: u32,
     settings_input: Arc<Mutex<(Settings, input::Input)>>,
-    send_image: mpsc::Sender<Image>,
+    send_image: mpsc::SyncSender<Image>,
     recv_screen_event: mpsc::Receiver<ScreenEvent>,
-    event_system: EventSubsystem,
     kernel_fn: &'static KernelFn,
 ) {
-    //TODO
-    let event_system = unsafe { &*Box::into_raw(Box::new(event_system)) };
     thread::spawn(move || {
         match kernel_fn(
             width,
@@ -69,7 +64,6 @@ fn launch_kernel(
             &settings_input,
             &send_image,
             &recv_screen_event,
-            event_system,
         ) {
             Ok(()) => (),
             Err(err) => println!("Error in kernel thread: {}", err),
@@ -122,13 +116,15 @@ fn render_text(
     settings_input: &Arc<Mutex<(Settings, input::Input)>>,
     creator: &TextureCreator<WindowContext>,
     canvas: &mut Canvas<Window>,
-    spf: f64,
+    render_fps: f64,
+    window_fps: f64,
 ) -> Result<(), Error> {
-    let fps_line = format!("{:.2} fps", 1.0 / spf);
+    let fps_line_1 = format!("{:.2} render fps", render_fps);
+    let fps_line_2 = format!("{:.2} window fps", window_fps);
     let mut locked = settings_input.lock().unwrap();
     let (ref mut settings, ref mut input) = *locked;
     input.integrate(settings);
-    let text = format!("{}\n{}", fps_line, settings.status(input));
+    let text = format!("{}\n{}\n{}", fps_line_1, fps_line_2, settings.status(input));
     render_text_one(font, creator, canvas, &text, Color::RGB(0, 0, 0), 1, 1)?;
     render_text_one(
         font,
@@ -142,6 +138,45 @@ fn render_text(
     Ok(())
 }
 
+struct FpsCounter {
+    weight: f64,
+    last_fps: Instant,
+    spf: f64,
+}
+
+impl FpsCounter {
+    fn new(weight: f64) -> Self {
+        Self {
+            weight,
+            last_fps: Instant::now(),
+            spf: 1.0,
+        }
+    }
+
+    fn tick(&mut self) {
+        let now = Instant::now();
+        let duration = now.duration_since(self.last_fps);
+        self.last_fps = now;
+
+        // as_secs returns u64, subsec_nanos returns u32
+        let time = duration.as_secs() as f64 + f64::from(duration.subsec_nanos()) / 1_000_000_000.0;
+
+        let weight = self.weight / self.spf;
+        self.spf = (time + (self.spf * weight)) / (weight + 1.0);
+    }
+
+    fn value(&self) -> f64 {
+        1.0 / self.spf
+    }
+}
+
+struct WindowData {
+    width: u32,
+    height: u32,
+    render_fps: FpsCounter,
+    window_fps: FpsCounter,
+}
+
 fn draw<'a>(
     canvas: &mut Canvas<Window>,
     creator: &'a TextureCreator<WindowContext>,
@@ -149,57 +184,61 @@ fn draw<'a>(
     image_stream: &mpsc::Receiver<Image>,
     settings_input: &Arc<Mutex<(Settings, input::Input)>>,
     texture: &mut Texture<'a>,
-    width: &mut u32,
-    height: &mut u32,
-    last_fps: &mut Instant,
-    spf: &mut f64,
+    window_data: &mut WindowData,
 ) -> Result<(), Error> {
-    loop {
-        let image = match image_stream.try_recv() {
-            Ok(image) => image,
-            Err(mpsc::TryRecvError::Empty) => break,
-            Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-        };
-        if *width != image.width || *height != image.height {
-            *width = image.width;
-            *height = image.height;
-            *texture =
-                creator.create_texture_streaming(PixelFormatEnum::ABGR8888, *width, *height)?;
-        }
-        texture.update(None, &image.data, image.width as usize * 4)?;
+    let image = match image_stream.try_recv() {
+        Ok(image) => Some(image),
+        Err(mpsc::TryRecvError::Empty) => None,
+        Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
+    };
 
-        let now = Instant::now();
-        let duration = now.duration_since(*last_fps);
-        *last_fps = now;
-        // as_secs returns u64, subsec_nanos returns u32
-        let time = duration.as_secs() as f64 + f64::from(duration.subsec_nanos()) / 1_000_000_000.0;
-        *spf = (time + *spf) / 2.0;
+    if let Some(image) = image {
+        window_data.render_fps.tick();
+        if window_data.width != image.width || window_data.height != image.height {
+            window_data.width = image.width;
+            window_data.height = image.height;
+            *texture = creator.create_texture_streaming(
+                PixelFormatEnum::ABGR8888,
+                window_data.width,
+                window_data.height,
+            )?;
+        }
+
+        texture.update(None, &image.data, image.width as usize * 4)?;
     }
 
-    let rect = Rect::new(0, 0, *width, *height);
+    window_data.window_fps.tick();
+
+    let rect = Rect::new(0, 0, window_data.width, window_data.height);
     canvas
         .copy(texture, rect, rect)
         .expect("Could not display image");
-    render_text(font, settings_input, creator, canvas, *spf)?;
+    render_text(
+        font,
+        settings_input,
+        creator,
+        canvas,
+        window_data.render_fps.value(),
+        window_data.window_fps.value(),
+    )?;
     canvas.present();
     Ok(())
 }
 
-pub fn display(mut width: u32, mut height: u32, kernel_fn: &'static KernelFn) -> Result<(), Error> {
+pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<(), Error> {
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
-    let event = sdl.event().expect("SDL does not have event");
     let mut event_pump = sdl.event_pump().expect("SDL does not have event pump");
+
     let window = video.window("Scopie", width, height).resizable().build()?;
-    let mut canvas = window.into_canvas().build()?;
+    let mut canvas = window.into_canvas().present_vsync().build()?;
     let creator = canvas.texture_creator();
     let mut texture = creator.create_texture_streaming(PixelFormatEnum::ABGR8888, width, height)?;
+
     let ttf = ttf::init()?;
     let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
-    let mut last_fps = Instant::now();
-    let mut spf = 1.0;
-    let (send_image, image_stream) = mpsc::channel();
+    let (send_image, image_stream) = mpsc::sync_channel(2);
     let (event_stream, recv_screen_event) = mpsc::channel();
     let settings_input = Arc::new(Mutex::new((Settings::new(), input::Input::new())));
     launch_kernel(
@@ -208,9 +247,15 @@ pub fn display(mut width: u32, mut height: u32, kernel_fn: &'static KernelFn) ->
         settings_input.clone(),
         send_image,
         recv_screen_event,
-        event,
         kernel_fn,
     );
+
+    let mut window_data = WindowData {
+        width,
+        height,
+        render_fps: FpsCounter::new(1.0),
+        window_fps: FpsCounter::new(1.0),
+    };
 
     let mut draw = || {
         draw(
@@ -220,53 +265,50 @@ pub fn display(mut width: u32, mut height: u32, kernel_fn: &'static KernelFn) ->
             &image_stream,
             &settings_input,
             &mut texture,
-            &mut width,
-            &mut height,
-            &mut last_fps,
-            &mut spf,
+            &mut window_data,
         )
     };
 
-    for event in event_pump.wait_iter() {
-        match event {
-            Event::Window {
-                win_event: WindowEvent::Resized(width, height),
-                ..
-            } if width > 0 && height > 0 =>
-            {
-                match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
-                    Ok(()) => (),
-                    Err(_) => return Ok(()),
+    loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Window {
+                    win_event: WindowEvent::Resized(width, height),
+                    ..
                 }
-            }
-            Event::KeyDown {
-                scancode: Some(scancode),
-                ..
-            } => {
-                let now = Instant::now();
+                    if width > 0 && height > 0 =>
                 {
-                    let mut locked = settings_input.lock().unwrap();
-                    let (ref mut settings, ref mut input) = *locked;
-                    input.key_down(scancode, now, settings);
+                    match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
+                        Ok(()) => (),
+                        Err(_) => return Ok(()),
+                    }
                 }
-                draw()?;
-            }
-            Event::KeyUp {
-                scancode: Some(scancode),
-                ..
-            } => {
-                let now = Instant::now();
-                {
-                    let mut locked = settings_input.lock().unwrap();
-                    let (ref mut settings, ref mut input) = *locked;
-                    input.key_up(scancode, now, settings);
+                Event::KeyDown {
+                    scancode: Some(scancode),
+                    ..
+                } => {
+                    let now = Instant::now();
+                    {
+                        let mut locked = settings_input.lock().unwrap();
+                        let (ref mut settings, ref mut input) = *locked;
+                        input.key_down(scancode, now, settings);
+                    }
                 }
-                draw()?;
+                Event::KeyUp {
+                    scancode: Some(scancode),
+                    ..
+                } => {
+                    let now = Instant::now();
+                    {
+                        let mut locked = settings_input.lock().unwrap();
+                        let (ref mut settings, ref mut input) = *locked;
+                        input.key_up(scancode, now, settings);
+                    }
+                }
+                Event::Quit { .. } => return Ok(()),
+                _ => (),
             }
-            Event::Quit { .. } => return Ok(()),
-            Event::User { .. } => draw()?,
-            _ => (),
         }
+        draw()?;
     }
-    Ok(())
 }

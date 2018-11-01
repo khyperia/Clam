@@ -16,7 +16,6 @@ use failure::Error;
 use input::Input;
 use kernel::Kernel;
 use progress::Progress;
-use sdl2::EventSubsystem;
 use settings::KeyframeList;
 use settings::Settings;
 use std::env::args;
@@ -26,14 +25,10 @@ pub fn interactive(
     width: u32,
     height: u32,
     settings_input: &Arc<Mutex<(Settings, Input)>>,
-    send_image: &mpsc::Sender<Image>,
+    send_image: &mpsc::SyncSender<Image>,
     screen_events: &mpsc::Receiver<ScreenEvent>,
-    event_system: &EventSubsystem,
 ) -> Result<(), Error> {
     let mut kernel = Kernel::new(width, height, &settings_input.lock().unwrap().0)?;
-    event_system
-        .register_custom_event::<()>()
-        .expect("Failed to register custom event");
     loop {
         loop {
             let event = match screen_events.try_recv() {
@@ -59,12 +54,8 @@ pub fn interactive(
         let image = kernel.run(&settings, true)?.unwrap();
         match send_image.send(image) {
             Ok(()) => (),
-            Err(_) => return Ok(()),
+            Err(mpsc::SendError(_)) => return Ok(()),
         };
-        match event_system.push_custom_event(()) {
-            Ok(()) => (),
-            Err(_) => return Ok(()),
-        }
     }
 }
 
@@ -138,16 +129,17 @@ fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
         let rpp = args[1].parse()?;
         match &*args[0] {
-            "8k" => headless(3840 * 2, 2160 * 2, rpp),
+            "8k" => headless(7680, 4320, rpp),
             "4k" => headless(3840, 2160, rpp),
-            "1080p" | "2k" => headless(1920, 1080, rpp),
+            "2k" => headless(1920, 1080, rpp),
+            "1k" => headless(960, 540, rpp),
             pix => headless(pix.parse()?, pix.parse()?, rpp),
         }
     } else if args.len() == 3 {
         headless(args[0].parse()?, args[1].parse()?, args[2].parse()?)
     } else {
         Err(failure::err_msg(
-            "--render needs two or three args: [width] [height] [rpp], or, [8k|4k|2k|1080p] [rpp]",
+            "--render needs two or three args: [width] [height] [rpp], or, [8k|4k|2k|1k] [rpp]",
         ))
     }
 }
@@ -173,27 +165,20 @@ fn interactive_cmd() -> Result<(), Error> {
     display::display(width, height, &interactive)
 }
 
-fn try_main() -> Result<(), Error> {
+fn main() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && arguments[0] == "--render" {
         render(&arguments[1..])?;
     } else if arguments.len() > 2 && arguments[0] == "--video" {
         video_cmd(&arguments[1..])?;
-    } else if arguments.len() == 0 {
+    } else if arguments.is_empty() {
         interactive_cmd()?;
     } else {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");
-        println!("clam5 --render [8k|4k|2k|1080p] [rpp]");
+        println!("clam5 --render [8k|4k|2k|1k] [rpp]");
         println!("clam5 --video [width] [height] [rpp] [frames]");
         println!("clam5");
     }
     Ok(())
-}
-
-fn main() {
-    match try_main() {
-        Ok(()) => (),
-        Err(err) => println!("{}", err),
-    }
 }
