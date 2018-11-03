@@ -36,7 +36,6 @@ struct MandelboxCfg {
     int _max_ray_steps;
     int _num_ray_bounces;
     int _speed_boost;
-    int _render_scale;
 };
 
 #ifndef pos_x
@@ -149,9 +148,6 @@ struct MandelboxCfg {
 #endif
 #ifndef speed_boost
 #define speed_boost cfg->_speed_boost
-#endif
-#ifndef render_scale
-#define render_scale cfg->_render_scale
 #endif
 
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
@@ -606,42 +602,18 @@ static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value)
     data[idx] = value;
 }
 
-static void SetScreenScaled(__global uchar* rawData, uint x, uint y, uint width, uint height, uint render_scale_factor, uint value)
-{
-    __global uint* data = (__global uint*)rawData;
-
-    y = (height / render_scale_factor) - (y + 1);
-
-    x *= render_scale_factor;
-    y *= render_scale_factor;
-
-    // fill in surrounding pixels
-    for (uint dy = 0; dy < render_scale_factor; dy++) {
-        for (uint dx = 0; dx < render_scale_factor; dx++) {
-            const uint idx = (y + dy) * width + (x + dx);
-            data[idx] = value;
-        }
-    }
-}
-
 // type: -1 is preview, 0 is init, 1 is continue
 __kernel void Main(
     __global uchar* data,
     __global struct MandelboxCfg* cfg_global,
-    uint original_width,
-    uint original_height,
+    uint width,
+    uint height,
     uint frame)
 {
     struct MandelboxCfg local_copy = *cfg_global;
     Cfg cfg = &local_copy;
 
-    const uint render_scale_factor = render_scale < 1 ? 1 : render_scale;
-
-    const uint width = original_width / render_scale_factor;
-    const uint height = original_height / render_scale_factor;
-
     const uint idx = (uint)get_global_id(0);
-    const uint original_size = original_width * original_height;
     const uint size = width * height;
     const uint x = idx % width;
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
@@ -650,7 +622,7 @@ __kernel void Main(
     // guard against invalid index in Get/SetScratch, and SetScreen. Nowhere else is needed.
     if (y >= height) { return; } // TODO
 
-    const float3 oldColor = frame > 0 ? GetScratch(data, idx, original_size) : (float3)(0, 0, 0);
+    const float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
 
     struct Random rand = new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
@@ -659,10 +631,6 @@ __kernel void Main(
     //newColor = GammaTest(x, y, width, height);
     const uint packedColor = PackPixel(cfg, newColor);
 
-    SetScratch(data, idx, original_size, newColor);
-    if (render_scale_factor > 1) {
-        SetScreenScaled(data, x, y, original_width, original_height, render_scale_factor, packedColor);
-    } else {
-        SetScreen(data, idx, size, packedColor);
-    }
+    SetScratch(data, idx, size, newColor);
+    SetScreen(data, idx, size, packedColor);
 }

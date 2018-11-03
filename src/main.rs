@@ -4,6 +4,7 @@ extern crate png;
 extern crate sdl2;
 
 mod display;
+mod fps_counter;
 mod input;
 mod kernel;
 mod mandelbox_cfg;

@@ -14,7 +14,7 @@ pub enum SettingValue {
     F32(f32, f32),
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct Settings {
     value_map: HashMap<String, SettingValue>,
     constants: HashSet<String>,
@@ -23,16 +23,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Self {
-        let mut value_map = HashMap::new();
-        let mut constants = HashSet::new();
-        let mut default = MandelboxCfg::get_default();
-        default.normalize();
-        default.write(&mut value_map);
-        for key in value_map.keys() {
-            if MandelboxCfg::is_const(key) {
-                constants.insert(key.clone());
-            }
-        }
+        let (value_map, constants) = default_settings::make_defaults();
         Settings {
             value_map,
             constants,
@@ -76,6 +67,20 @@ impl Settings {
 
     pub fn get(&self, key: &str) -> Option<&SettingValue> {
         self.value_map.get(key)
+    }
+
+    pub fn get_f32(&self, key: &str) -> Option<&f32> {
+        match self.get(key) {
+            Some(SettingValue::F32(ref value, _)) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn get_u32(&self, key: &str) -> Option<&u32> {
+        match self.get(key) {
+            Some(SettingValue::U32(ref value)) => Some(value),
+            _ => None,
+        }
     }
 
     pub fn save(&self, file: &str) -> Result<(), Error> {
@@ -136,8 +141,12 @@ impl Settings {
         Ok(())
     }
 
+    pub fn nth(&self, index: usize) -> &'static str {
+        default_settings::nth(index)
+    }
+
     pub fn status(&self, input: &Input) -> String {
-        let keys = MandelboxCfg::keys();
+        let keys = default_settings::keys();
         //let mut keys = self.value_map.keys().collect::<Vec<_>>();
         //keys.sort();
         let mut builder = String::new();
@@ -166,6 +175,74 @@ impl Settings {
         self.rebuild = false;
         result
     }
+}
+
+mod default_settings {
+    use super::SettingValue;
+    use std::collections::HashMap;
+    use std::collections::HashSet;
+
+    pub fn keys() -> impl Iterator<Item = &'static str> {
+        DEFAULTS.iter().map(|&(x, _, _)| x)
+    }
+
+    pub fn make_defaults() -> (HashMap<String, SettingValue>, HashSet<String>) {
+        let mut value_map = HashMap::new();
+        let mut constants = HashSet::new();
+        for &(key, value, is_const) in DEFAULTS.iter() {
+            value_map.insert(key.to_string(), value);
+            if is_const {
+                constants.insert(key.to_string());
+            }
+        }
+        (value_map, constants)
+    }
+
+    pub fn nth(index: usize) -> &'static str {
+        DEFAULTS[index].0
+    }
+
+    // name, value, is_const
+    const DEFAULTS: [(&str, SettingValue, bool); 38] = [
+        ("pos_x", SettingValue::F32(0.0, 1.0), false),
+        ("pos_y", SettingValue::F32(0.0, 1.0), false),
+        ("pos_z", SettingValue::F32(5.0, 1.0), false),
+        ("look_x", SettingValue::F32(0.0, 1.0), false),
+        ("look_y", SettingValue::F32(0.0, 1.0), false),
+        ("look_z", SettingValue::F32(-1.0, 1.0), false),
+        ("up_x", SettingValue::F32(0.0, 1.0), false),
+        ("up_y", SettingValue::F32(1.0, 1.0), false),
+        ("up_z", SettingValue::F32(0.0, 1.0), false),
+        ("fov", SettingValue::F32(1.0, -1.0), false),
+        ("focal_distance", SettingValue::F32(3.0, -1.0), false),
+        ("scale", SettingValue::F32(-2.0, 0.5), false),
+        ("folding_limit", SettingValue::F32(1.0, -0.5), false),
+        ("fixed_radius_2", SettingValue::F32(1.0, -0.5), false),
+        ("min_radius_2", SettingValue::F32(0.125, -0.5), false),
+        ("dof_amount", SettingValue::F32(0.001, -0.5), false),
+        ("light_pos_1_x", SettingValue::F32(3.0, 0.5), false),
+        ("light_pos_1_y", SettingValue::F32(3.5, 0.5), false),
+        ("light_pos_1_z", SettingValue::F32(2.5, 0.5), false),
+        ("light_radius_1", SettingValue::F32(1.0, -0.5), false),
+        ("light_brightness_1_r", SettingValue::F32(5.0, -0.5), false),
+        ("light_brightness_1_g", SettingValue::F32(5.0, -0.5), false),
+        ("light_brightness_1_b", SettingValue::F32(4.0, -0.5), false),
+        ("ambient_brightness_r", SettingValue::F32(0.8, -0.25), false),
+        ("ambient_brightness_g", SettingValue::F32(0.8, -0.25), false),
+        ("ambient_brightness_b", SettingValue::F32(1.0, -0.25), false),
+        ("reflect_brightness", SettingValue::F32(1.0, 0.125), false),
+        ("bailout", SettingValue::F32(1024.0, -1.0), true),
+        ("de_multiplier", SettingValue::F32(0.95, 0.125), true),
+        ("max_ray_dist", SettingValue::F32(16.0, -0.5), true),
+        ("quality_first_ray", SettingValue::F32(2.0, -0.5), true),
+        ("quality_rest_ray", SettingValue::F32(64.0, -0.5), true),
+        ("white_clamp", SettingValue::U32(1), true),
+        ("max_iters", SettingValue::U32(64), true),
+        ("max_ray_steps", SettingValue::U32(256), true),
+        ("num_ray_bounces", SettingValue::U32(3), true),
+        ("speed_boost", SettingValue::U32(1), true),
+        ("render_scale", SettingValue::U32(1), false),
+    ];
 }
 
 pub struct KeyframeList {

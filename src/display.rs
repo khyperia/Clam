@@ -1,5 +1,6 @@
 use failure::err_msg;
 use failure::Error;
+use fps_counter::FpsCounter;
 use input;
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
@@ -18,7 +19,6 @@ use settings::Settings;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::Instant;
 
 pub struct Image {
     pub data: Vec<u8>,
@@ -138,41 +138,9 @@ fn render_text(
     Ok(())
 }
 
-struct FpsCounter {
-    weight: f64,
-    last_fps: Instant,
-    spf: f64,
-}
-
-impl FpsCounter {
-    fn new(weight: f64) -> Self {
-        Self {
-            weight,
-            last_fps: Instant::now(),
-            spf: 1.0,
-        }
-    }
-
-    fn tick(&mut self) {
-        let now = Instant::now();
-        let duration = now.duration_since(self.last_fps);
-        self.last_fps = now;
-
-        // as_secs returns u64, subsec_nanos returns u32
-        let time = duration.as_secs() as f64 + f64::from(duration.subsec_nanos()) / 1_000_000_000.0;
-
-        let weight = self.weight / self.spf;
-        self.spf = (time + (self.spf * weight)) / (weight + 1.0);
-    }
-
-    fn value(&self) -> f64 {
-        1.0 / self.spf
-    }
-}
-
 struct WindowData {
-    width: u32,
-    height: u32,
+    image_width: u32,
+    image_height: u32,
     render_fps: FpsCounter,
     window_fps: FpsCounter,
 }
@@ -194,13 +162,13 @@ fn draw<'a>(
 
     if let Some(image) = image {
         window_data.render_fps.tick();
-        if window_data.width != image.width || window_data.height != image.height {
-            window_data.width = image.width;
-            window_data.height = image.height;
+        if window_data.image_width != image.width || window_data.image_height != image.height {
+            window_data.image_width = image.width;
+            window_data.image_height = image.height;
             *texture = creator.create_texture_streaming(
                 PixelFormatEnum::ABGR8888,
-                window_data.width,
-                window_data.height,
+                window_data.image_width,
+                window_data.image_height,
             )?;
         }
 
@@ -209,9 +177,11 @@ fn draw<'a>(
 
     window_data.window_fps.tick();
 
-    let rect = Rect::new(0, 0, window_data.width, window_data.height);
+    let (output_width, output_height) = canvas.output_size().map_err(failure::err_msg)?;
+    let src = Rect::new(0, 0, window_data.image_width, window_data.image_height);
+    let dest = Rect::new(0, 0, output_width, output_height);
     canvas
-        .copy(texture, rect, rect)
+        .copy(texture, src, dest)
         .expect("Could not display image");
     render_text(
         font,
@@ -251,8 +221,8 @@ pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<
     );
 
     let mut window_data = WindowData {
-        width,
-        height,
+        image_width: width,
+        image_height: height,
         render_fps: FpsCounter::new(1.0),
         window_fps: FpsCounter::new(1.0),
     };
@@ -287,22 +257,20 @@ pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<
                     scancode: Some(scancode),
                     ..
                 } => {
-                    let now = Instant::now();
                     {
                         let mut locked = settings_input.lock().unwrap();
                         let (ref mut settings, ref mut input) = *locked;
-                        input.key_down(scancode, now, settings);
+                        input.key_down(scancode, settings);
                     }
                 }
                 Event::KeyUp {
                     scancode: Some(scancode),
                     ..
                 } => {
-                    let now = Instant::now();
                     {
                         let mut locked = settings_input.lock().unwrap();
                         let (ref mut settings, ref mut input) = *locked;
-                        input.key_up(scancode, now, settings);
+                        input.key_up(scancode, settings);
                     }
                 }
                 Event::Quit { .. } => return Ok(()),

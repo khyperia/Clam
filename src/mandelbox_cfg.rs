@@ -44,75 +44,11 @@ pub struct MandelboxCfg {
     max_ray_steps: u32,
     num_ray_bounces: u32,
     speed_boost: u32,
-    render_scale: u32,
 }
 
 unsafe impl ocl::traits::OclPrm for MandelboxCfg {}
 
-// name, default_val, rate_of_change
-const DEFAULTS: [(&str, f32, f32); 38] = [
-    ("pos_x", 0.0, 1.0),
-    ("pos_y", 0.0, 1.0),
-    ("pos_z", 5.0, 1.0),
-    ("look_x", 0.0, 1.0),
-    ("look_y", 0.0, 1.0),
-    ("look_z", -1.0, 1.0),
-    ("up_x", 0.0, 1.0),
-    ("up_y", 1.0, 1.0),
-    ("up_z", 0.0, 1.0),
-    ("fov", 1.0, -1.0),
-    ("focal_distance", 3.0, -1.0),
-    ("scale", -2.0, 0.5),
-    ("folding_limit", 1.0, -0.5),
-    ("fixed_radius_2", 1.0, -0.5),
-    ("min_radius_2", 0.125, -0.5),
-    ("dof_amount", 0.001, -0.5),
-    ("light_pos_1_x", 3.0, 0.5),
-    ("light_pos_1_y", 3.5, 0.5),
-    ("light_pos_1_z", 2.5, 0.5),
-    ("light_radius_1", 1.0, -0.5),
-    ("light_brightness_1_r", 5.0, -0.5),
-    ("light_brightness_1_g", 5.0, -0.5),
-    ("light_brightness_1_b", 4.0, -0.5),
-    ("ambient_brightness_r", 0.8, -0.25),
-    ("ambient_brightness_g", 0.8, -0.25),
-    ("ambient_brightness_b", 1.0, -0.25),
-    ("reflect_brightness", 1.0, 0.125),
-    ("bailout", 1024.0, -1.0),
-    ("de_multiplier", 0.95, 0.125),
-    ("max_ray_dist", 16.0, -0.5),
-    ("quality_first_ray", 2.0, -0.5),
-    ("quality_rest_ray", 64.0, -0.5),
-    ("white_clamp", 1.0, 0.0),
-    ("max_iters", 64.0, 0.0),
-    ("max_ray_steps", 256.0, 0.0),
-    ("num_ray_bounces", 3.0, 0.0),
-    ("speed_boost", 1.0, 0.0),
-    ("render_scale", 1.0, 0.0),
-];
-
 impl MandelboxCfg {
-    pub fn get_default() -> MandelboxCfg {
-        let mut result = Self::default();
-        for &(name, value, _) in DEFAULTS.iter() {
-            if let Some(val) = result.get_f32_mut(name) {
-                *val = value;
-            }
-            if let Some(val) = result.get_u32_mut(name) {
-                *val = value as u32;
-            }
-        }
-        result
-    }
-
-    pub fn num_keys() -> usize {
-        DEFAULTS.len()
-    }
-
-    pub fn keys() -> impl Iterator<Item = &'static str> {
-        DEFAULTS.iter().map(|&(x, _, _)| x)
-    }
-
     fn get_f32_mut<'a, 'b>(&'a mut self, key: &'b str) -> Option<&'a mut f32> {
         let val = match key {
             "pos_x" => &mut self.pos_x,
@@ -159,7 +95,6 @@ impl MandelboxCfg {
             "max_ray_steps" => &mut self.max_ray_steps,
             "num_ray_bounces" => &mut self.num_ray_bounces,
             "speed_boost" => &mut self.speed_boost,
-            "render_scale" => &mut self.render_scale,
             _ => return None,
         };
         Some(val)
@@ -167,9 +102,6 @@ impl MandelboxCfg {
 
     pub fn read(&mut self, settings: &Settings) {
         for (key, value) in settings.value_map() {
-            if settings.is_const(key) {
-                continue;
-            }
             match *value {
                 SettingValue::F32(new, _) => {
                     if let Some(old) = self.get_f32_mut(key) {
@@ -199,57 +131,16 @@ impl MandelboxCfg {
     }
 
     pub fn write(&mut self, settings: &mut HashMap<String, SettingValue>) {
-        for &(name, _, rate_of_change) in DEFAULTS.iter() {
-            if let Some(&mut val) = self.get_f32_mut(name) {
-                settings.insert(name.into(), SettingValue::F32(val, rate_of_change));
+        for (name, old_value) in settings.iter_mut() {
+            if let Some(&mut new_value) = self.get_f32_mut(&name) {
+                if let SettingValue::F32(x, _) = old_value {
+                    *x = new_value;
+                }
+                //let rate_of_change = match *old_value { SettingValue::F32(_, x) => x, _ => panic!("Incorrect type") };
+                //*old_value = SettingValue::F32(new_value, rate_of_change);
+            } else if let Some(&mut new_value) = self.get_u32_mut(name) {
+                *old_value = SettingValue::U32(new_value);
             }
-            if let Some(&mut val) = self.get_u32_mut(name) {
-                settings.insert(name.into(), SettingValue::U32(val));
-            }
-        }
-    }
-
-    pub fn is_const(key: &str) -> bool {
-        match key {
-            "pos_x" => false,
-            "pos_y" => false,
-            "pos_z" => false,
-            "look_x" => false,
-            "look_y" => false,
-            "look_z" => false,
-            "up_x" => false,
-            "up_y" => false,
-            "up_z" => false,
-            "fov" => false,
-            "focal_distance" => false,
-            "scale" => false,
-            "folding_limit" => false,
-            "fixed_radius_2" => false,
-            "min_radius_2" => false,
-            "dof_amount" => false,
-            "light_pos_1_x" => false,
-            "light_pos_1_y" => false,
-            "light_pos_1_z" => false,
-            "light_radius_1" => false,
-            "light_brightness_1_r" => false,
-            "light_brightness_1_g" => false,
-            "light_brightness_1_b" => false,
-            "ambient_brightness_r" => false,
-            "ambient_brightness_g" => false,
-            "ambient_brightness_b" => false,
-            "reflect_brightness" => false,
-            "bailout" => true,
-            "de_multiplier" => true,
-            "max_ray_dist" => true,
-            "quality_first_ray" => true,
-            "quality_rest_ray" => true,
-            "white_clamp" => true,
-            "max_iters" => true,
-            "max_ray_steps" => true,
-            "num_ray_bounces" => true,
-            "speed_boost" => true,
-            "render_scale" => false,
-            _ => false,
         }
     }
 }

@@ -10,15 +10,16 @@ use std::fs::File;
 use std::io::prelude::*;
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
-const DATA_WORDS: u32 = 5;
+const DATA_WORDS: u32 = 4;
 
 pub struct Kernel {
     context: ocl::Context,
     queue: ocl::Queue,
     kernel: ocl::Kernel,
-    cpu_cfg: MandelboxCfg,
     data: Option<ocl::Buffer<u8>>,
+    cpu_cfg: MandelboxCfg,
     cfg: ocl::Buffer<MandelboxCfg>,
+    old_settings: Settings,
     width: u32,
     height: u32,
     frame: u32,
@@ -60,6 +61,7 @@ impl Kernel {
             data: None,
             cpu_cfg: MandelboxCfg::default(),
             cfg,
+            old_settings: settings.clone(),
             width,
             height,
             frame: 0,
@@ -174,6 +176,10 @@ impl Kernel {
             self.cfg.write(&to_write as &[_]).queue(&self.queue).enq()?;
             self.frame = 0;
         }
+        if *settings != self.old_settings {
+            self.old_settings = settings.clone();
+            self.frame = 0;
+        }
         let data = match self.data {
             Some(ref data) => data,
             None => {
@@ -185,10 +191,13 @@ impl Kernel {
                 self.data.as_ref().unwrap()
             }
         };
+        let render_scale = (*settings.get_u32("render_scale").unwrap()).max(1);
+        let width = self.width / render_scale;
+        let height = self.height / render_scale;
         self.kernel.set_arg(0, data)?;
         self.kernel.set_arg(1, &self.cfg)?;
-        self.kernel.set_arg(2, self.width as u32)?;
-        self.kernel.set_arg(3, self.height as u32)?;
+        self.kernel.set_arg(2, width as u32)?;
+        self.kernel.set_arg(3, height as u32)?;
         self.kernel.set_arg(4, self.frame as u32)?;
         Ok(())
     }
@@ -196,23 +205,27 @@ impl Kernel {
     pub fn run(&mut self, settings: &Settings, download: bool) -> Result<Option<Image>, Error> {
         self.set_args(settings)?;
         let lws = 1024;
+        let render_scale = (*settings.get_u32("render_scale").unwrap()).max(1);
+        let width = self.width / render_scale;
+        let height = self.height / render_scale;
+        let total_size = width * height;
         let to_launch = self
             .kernel
             .cmd()
             .queue(&self.queue)
-            .global_work_size((self.width * self.height + lws - 1) / lws * lws);
+            .global_work_size((total_size + lws - 1) / lws * lws);
         // enq() is unsafe, even though the Rust code is safe (unsafe due to untrusted GPU code)
         unsafe { to_launch.enq() }?;
         self.frame += 1;
         if download {
-            let mut vec = vec![0u8; self.width as usize * self.height as usize * 4];
+            let mut vec = vec![0u8; width as usize * height as usize * 4];
             self.data
                 .as_ref()
                 .unwrap()
                 .read(&mut vec)
                 .queue(&self.queue)
                 .enq()?;
-            let image = Image::new(vec, self.width, self.height);
+            let image = Image::new(vec, width, height);
             Ok(Some(image))
         } else {
             Ok(None)

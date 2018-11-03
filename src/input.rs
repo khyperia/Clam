@@ -1,7 +1,6 @@
 use failure::Error;
-use mandelbox_cfg::MandelboxCfg;
 use sdl2::keyboard::Scancode as Key;
-use settings::*;
+use settings::{Settings, SettingValue};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -32,7 +31,8 @@ impl Input {
         println!("X: Copy position to lightsource position");
     }
 
-    pub fn key_down(&mut self, key: Key, time: Instant, settings: &mut Settings) {
+    pub fn key_down(&mut self, key: Key, settings: &mut Settings) {
+        let time = Instant::now();
         let new_key = if let Entry::Vacant(entry) = self.pressed_keys.entry(key) {
             entry.insert(time);
             true
@@ -48,7 +48,8 @@ impl Input {
         }
     }
 
-    pub fn key_up(&mut self, key: Key, time: Instant, settings: &mut Settings) {
+    pub fn key_up(&mut self, key: Key, settings: &mut Settings) {
+        let time = Instant::now();
         if self.pressed_keys.contains_key(&key) {
             self.run(settings, time);
             self.pressed_keys.remove(&key);
@@ -79,31 +80,33 @@ impl Input {
             }
             Key::Up => {
                 if self.index == 0 {
-                    self.index = MandelboxCfg::num_keys() - 1;
+                    self.index = settings.value_map().len() - 1;
                 } else {
                     self.index -= 1;
                 }
             }
             Key::Down => {
                 self.index += 1;
-                if self.index >= MandelboxCfg::num_keys() {
+                if self.index >= settings.value_map().len() {
                     self.index = 0;
                 }
             }
             Key::Left => {
-                let key = MandelboxCfg::keys().nth(self.index).unwrap();
+                let key = settings.nth(self.index);
                 if let SettingValue::U32(value) = *settings.get(key).unwrap() {
-                    settings.insert(key.into(), SettingValue::U32(value - 1));
+                    if value != 0 {
+                        settings.insert(key.into(), SettingValue::U32(value - 1));
+                    }
                 }
             }
             Key::Right => {
-                let key = MandelboxCfg::keys().nth(self.index).unwrap();
+                let key = settings.nth(self.index);
                 if let SettingValue::U32(value) = *settings.get(key).unwrap() {
                     settings.insert(key.into(), SettingValue::U32(value + 1));
                 }
             }
             Key::C => {
-                let key = MandelboxCfg::keys().nth(self.index).unwrap();
+                let key = settings.nth(self.index);
                 let is_const = settings.is_const(key);
                 settings.set_const(key, !is_const);
             }
@@ -227,7 +230,7 @@ impl Input {
 
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
         let mut do_control = |dt| {
-            let key = MandelboxCfg::keys().nth(self.index).unwrap();
+            let key = settings.nth(self.index);
             if let SettingValue::F32(value, change) = *settings.get(key).unwrap() {
                 if change < 0.0 {
                     settings.insert(
