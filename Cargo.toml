@@ -6,5 +6,5 @@ authors = ["khyperia <khyperia@live.com>"]
 [dependencies]
 failure = "*"
 ocl = { version = "*", default-features = false }
-png = { version = "*", default-features = false, features = ["png-encoding"] }
-sdl2 = { version = "*", features = ["ttf"] }
+png = "*"
+sdl2 = { version = "*", default-features = false, features = ["ttf"] }

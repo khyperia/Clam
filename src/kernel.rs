@@ -78,6 +78,7 @@ impl Kernel {
             let mut builder = ocl::Program::builder();
             builder.source(MANDELBOX);
             builder.devices(queue.device());
+            builder.cmplr_opt("-cl-fast-relaxed-math");
             let device_name = queue.device().name()?;
             if device_name.contains("GeForce") {
                 builder.cmplr_opt("-cl-nv-verbose");

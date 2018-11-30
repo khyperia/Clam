@@ -21,7 +21,7 @@ impl Input {
         // free:
         // QET
         // G
-        // X
+        //
         println!("WASD, [space]Z, IJKL, OU: move camera");
         println!("RF: focal distance/move speed");
         println!("NM: field of view");
@@ -29,6 +29,7 @@ impl Input {
         println!("up/down/left/right: Adjust settings");
         println!("C: Toggle constant. B: Recompile kernel with new constants.");
         println!("X: Copy position to lightsource position");
+        println!("H: Print this message");
     }
 
     pub fn key_down(&mut self, key: Key, settings: &mut Settings) {
