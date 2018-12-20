@@ -26,6 +26,8 @@ struct MandelboxCfg {
     float _ambient_brightness_g;
     float _ambient_brightness_b;
     float _reflect_brightness;
+    float _surface_color_shift;
+    float _surface_color_saturation;
     float _bailout;
     float _de_multiplier;
     float _max_ray_dist;
@@ -118,6 +120,12 @@ struct MandelboxCfg {
 #endif
 #ifndef reflect_brightness
 #define reflect_brightness cfg->_reflect_brightness
+#endif
+#ifndef surface_color_shift
+#define surface_color_shift cfg->_surface_color_shift
+#endif
+#ifndef surface_color_saturation
+#define surface_color_saturation cfg->_surface_color_saturation
 #endif
 #ifndef bailout
 #define bailout cfg->_bailout
@@ -340,11 +348,16 @@ static float3 TOffsetD(float3 z, float* dz, float3 offset)
     return z + offset;
 }
 
-static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset)
+static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color)
 {
     // z = ContBoxfoldD(cfg, z);
     // z = ContSpherefoldD(cfg, z);
     z = BoxfoldD(cfg, z);
+    if (dot(z, z) < min_radius_2) {
+        (*color)--;
+    } else if (dot(z, z) < fixed_radius_2) {
+        (*color)++;
+    }
     z = SpherefoldD(cfg, z, dz);
     z = TScaleD(cfg, z, dz);
     z = TOffsetD(z, dz, offset);
@@ -356,21 +369,23 @@ static float DeSphere(float3 pos, float radius, float3 test)
     return length(test - pos) - radius;
 }
 
-static float DeMandelbox(Cfg cfg, float3 offset, int *n)
+static float DeMandelbox(Cfg cfg, float3 offset, float *color_data)
 {
     float3 z = (float3)(offset.x, offset.y, offset.z);
     float dz = 1.0f;
-    *n = max(max_iters, 1);
+    int n = max(max_iters, 1);
+    int color = 0;
     do {
-        z = MandelboxD(cfg, z, &dz, offset);
-    } while (dot(z, z) < bailout && --*n);
+        z = MandelboxD(cfg, z, &dz, offset, &color);
+    } while (dot(z, z) < bailout && --n);
+    *color_data = color / 8.0f;
     return length(z) / dz;
 }
 
 static float De(Cfg cfg, float3 offset)
 {
-    int n;
-    const float mbox = DeMandelbox(cfg, offset, &n);
+    float color_data;
+    const float mbox = DeMandelbox(cfg, offset, &color_data);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
     return min(light1, mbox);
 }
@@ -384,13 +399,14 @@ struct Material {
 // (r, g, b, spec)
 static struct Material Material(Cfg cfg, float3 offset)
 {
-    int n;
-    const float de = DeMandelbox(cfg, offset, &n);
+    float base_color;
+    const float de = DeMandelbox(cfg, offset, &base_color);
 
-    float base_color = n / (float)max_iters * 5;
+    base_color += surface_color_shift;
     float3 color = (float3)(sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
-    float specular = sinpi(base_color / 2.389120f) * 0.2f + 0.2f;
+    float specular = 0.2f;
     color = color * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
+    color = surface_color_saturation * (color - (float3)(1,1,1)) + (float3)(1,1,1);
 
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
 

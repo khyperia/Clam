@@ -130,6 +130,7 @@ fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
         let rpp = args[1].parse()?;
         match &*args[0] {
+            "16k" => headless(15360, 8640, rpp),
             "8k" => headless(7680, 4320, rpp),
             "4k" => headless(3840, 2160, rpp),
             "2k" => headless(1920, 1080, rpp),
@@ -140,7 +141,7 @@ fn render(args: &[String]) -> Result<(), Error> {
         headless(args[0].parse()?, args[1].parse()?, args[2].parse()?)
     } else {
         Err(failure::err_msg(
-            "--render needs two or three args: [width] [height] [rpp], or, [8k|4k|2k|1k] [rpp]",
+            "--render needs two or three args: [width] [height] [rpp], or, [16k|8k|4k|2k|1k] [rpp]",
         ))
     }
 }

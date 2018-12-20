@@ -203,7 +203,7 @@ mod default_settings {
     }
 
     // name, value, is_const
-    const DEFAULTS: [(&str, SettingValue, bool); 38] = [
+    const DEFAULTS: [(&str, SettingValue, bool); 40] = [
         ("pos_x", SettingValue::F32(0.0, 1.0), false),
         ("pos_y", SettingValue::F32(0.0, 1.0), false),
         ("pos_z", SettingValue::F32(5.0, 1.0), false),
@@ -227,10 +227,12 @@ mod default_settings {
         ("light_brightness_1_r", SettingValue::F32(5.0, -0.5), false),
         ("light_brightness_1_g", SettingValue::F32(5.0, -0.5), false),
         ("light_brightness_1_b", SettingValue::F32(4.0, -0.5), false),
-        ("ambient_brightness_r", SettingValue::F32(0.8, -0.25), false),
-        ("ambient_brightness_g", SettingValue::F32(0.8, -0.25), false),
-        ("ambient_brightness_b", SettingValue::F32(1.0, -0.25), false),
+        ("ambient_brightness_r", SettingValue::F32(0.8, -0.5), false),
+        ("ambient_brightness_g", SettingValue::F32(0.8, -0.5), false),
+        ("ambient_brightness_b", SettingValue::F32(1.0, -0.5), false),
         ("reflect_brightness", SettingValue::F32(1.0, 0.125), false),
+        ("surface_color_shift", SettingValue::F32(0.0, 0.25), false),
+        ("surface_color_saturation", SettingValue::F32(1.0, 0.125), false),
         ("bailout", SettingValue::F32(1024.0, -1.0), true),
         ("de_multiplier", SettingValue::F32(0.95, 0.125), true),
         ("max_ray_dist", SettingValue::F32(16.0, -0.5), true),
