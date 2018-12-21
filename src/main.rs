@@ -130,11 +130,14 @@ fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
         let rpp = args[1].parse()?;
         match &*args[0] {
+            "32k" => headless(30720, 17280, rpp),
             "16k" => headless(15360, 8640, rpp),
             "8k" => headless(7680, 4320, rpp),
             "4k" => headless(3840, 2160, rpp),
             "2k" => headless(1920, 1080, rpp),
             "1k" => headless(960, 540, rpp),
+            "0.5k" => headless(480, 270, rpp),
+            "0.25k" => headless(240, 135, rpp),
             pix => headless(pix.parse()?, pix.parse()?, rpp),
         }
     } else if args.len() == 3 {

@@ -1,4 +1,5 @@
-struct MandelboxCfg {
+struct MandelboxCfg
+{
     float _pos_x;
     float _pos_y;
     float _pos_z;
@@ -15,6 +16,7 @@ struct MandelboxCfg {
     float _fixed_radius_2;
     float _min_radius_2;
     float _dof_amount;
+    float _fog_distance;
     float _light_pos_1_x;
     float _light_pos_1_y;
     float _light_pos_1_z;
@@ -87,6 +89,9 @@ struct MandelboxCfg {
 #endif
 #ifndef dof_amount
 #define dof_amount cfg->_dof_amount
+#endif
+#ifndef fog_distance
+#define fog_distance cfg->_fog_distance
 #endif
 #ifndef light_pos_1_x
 #define light_pos_1_x cfg->_light_pos_1_x
@@ -161,7 +166,7 @@ struct MandelboxCfg {
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
 // opencl runtime cannot vectorize the kernel.
 
-typedef __private struct MandelboxCfg* Cfg;
+typedef __private struct MandelboxCfg const* Cfg;
 
 static float3 LightPos1(Cfg cfg)
 {
@@ -170,15 +175,18 @@ static float3 LightPos1(Cfg cfg)
 
 static float3 LightBrightness1(Cfg cfg)
 {
-    return (float3)(light_brightness_1_r, light_brightness_1_g, light_brightness_1_b) / reflect_brightness;
+    return (float3)(light_brightness_1_r, light_brightness_1_g, light_brightness_1_b) /
+           reflect_brightness;
 }
 
 static float3 AmbientBrightness(Cfg cfg)
 {
-    return (float3)(ambient_brightness_r, ambient_brightness_g, ambient_brightness_b) / reflect_brightness;
+    return (float3)(ambient_brightness_r, ambient_brightness_g, ambient_brightness_b) /
+           reflect_brightness;
 }
 
-struct Random {
+struct Random
+{
     ulong seed;
 };
 
@@ -199,7 +207,8 @@ static struct Random new_Random(uint idx, uint frame, uint global_size)
 {
     struct Random result;
     result.seed = (ulong)idx + (ulong)global_size * (ulong)frame;
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++)
+    {
         Random_Next(&result);
     }
     return result;
@@ -231,7 +240,8 @@ static float3 Random_Lambertian(struct Random* this, float3 normal)
     return normalize(Random_Ball(this) + normal);
 }
 
-struct Ray {
+struct Ray
+{
     float3 pos;
     float3 dir;
 };
@@ -266,7 +276,8 @@ static void Ray_Dof(Cfg cfg, struct Ray* this, float focalPlane, struct Random* 
     const float3 yShift = cross(this->dir, xShift);
     const float2 offset = Random_Disk(rand);
     const float dofPickup = dof_amount;
-    this->dir = normalize(this->dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
+    this->dir =
+        normalize(this->dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
     this->pos = focalPosition - this->dir * focalPlane;
 }
 
@@ -275,7 +286,8 @@ static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struc
     const float3 origin = (float3)(pos_x, pos_y, pos_z);
     const float3 look = (float3)(look_x, look_y, look_z);
     const float3 up = (float3)(up_x, up_y, up_z);
-    const float2 screenCoords = (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
+    const float2 screenCoords =
+        (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
     const float calcFov = fov * 2 / (width + height);
     const float3 direction = RayDir(look, up, screenCoords, calcFov);
     struct Ray result = new_Ray(origin, direction);
@@ -353,9 +365,12 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
     // z = ContBoxfoldD(cfg, z);
     // z = ContSpherefoldD(cfg, z);
     z = BoxfoldD(cfg, z);
-    if (dot(z, z) < min_radius_2) {
+    if (dot(z, z) < min_radius_2)
+    {
         (*color)--;
-    } else if (dot(z, z) < fixed_radius_2) {
+    }
+    else if (dot(z, z) < fixed_radius_2)
+    {
         (*color)++;
     }
     z = SpherefoldD(cfg, z, dz);
@@ -369,13 +384,14 @@ static float DeSphere(float3 pos, float radius, float3 test)
     return length(test - pos) - radius;
 }
 
-static float DeMandelbox(Cfg cfg, float3 offset, float *color_data)
+static float DeMandelbox(Cfg cfg, float3 offset, float* color_data)
 {
     float3 z = (float3)(offset.x, offset.y, offset.z);
     float dz = 1.0f;
     int n = max(max_iters, 1);
     int color = 0;
-    do {
+    do
+    {
         z = MandelboxD(cfg, z, &dz, offset, &color);
     } while (dot(z, z) < bailout && --n);
     *color_data = color / 8.0f;
@@ -390,7 +406,8 @@ static float De(Cfg cfg, float3 offset)
     return min(light1, mbox);
 }
 
-struct Material {
+struct Material
+{
     float3 color;
     float3 emissive;
     float specular;
@@ -403,19 +420,23 @@ static struct Material Material(Cfg cfg, float3 offset)
     const float de = DeMandelbox(cfg, offset, &base_color);
 
     base_color += surface_color_shift;
-    float3 color = (float3)(sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
+    float3 color = (float3)(
+        sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
     float specular = 0.2f;
     color = color * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
-    color = surface_color_saturation * (color - (float3)(1,1,1)) + (float3)(1,1,1);
+    color = surface_color_saturation * (color - (float3)(1, 1, 1)) + (float3)(1, 1, 1);
 
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
 
     struct Material result;
-    if (de < light1) {
+    if (de < light1)
+    {
         result.color = color * reflect_brightness;
         result.specular = specular;
         result.emissive = (float3)(0, 0, 0);
-    } else {
+    }
+    else
+    {
         result.color = (float3)(1, 1, 1);
         result.specular = 0.0f;
         result.emissive = LightBrightness1(cfg);
@@ -429,60 +450,89 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     float distance;
     float totalDistance = 0.0f;
     uint i = (uint)max(max_ray_steps, 1);
-    do {
+    do
+    {
         distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
         totalDistance += distance;
         i--;
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
 
     // correction step
-    if (distance * quality <= totalDistance) {
+    if (distance * quality <= totalDistance)
+    {
         totalDistance -= totalDistance / quality;
-        for (int correctStep = 0; correctStep < 4; correctStep++) {
+        for (int correctStep = 0; correctStep < 4; correctStep++)
+        {
             distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier;
             totalDistance += distance - totalDistance / quality;
         }
     }
 
     const float3 final = Ray_At(ray, totalDistance);
-    const float delta = max(1e-6f, distance * 0.5f); // aprox. 8.3x float epsilon
+    const float delta = max(1e-6f, distance * 0.5f);  // aprox. 8.3x float epsilon
     const float dnpp = De(cfg, final + (float3)(-delta, delta, delta));
     const float dpnp = De(cfg, final + (float3)(delta, -delta, delta));
     const float dppn = De(cfg, final + (float3)(delta, delta, -delta));
     const float dnnn = De(cfg, final + (float3)(-delta, -delta, -delta));
     *normal = (float3)((dppn + dpnp) - (dnpp + dnnn),
-        (dppn + dnpp) - (dpnp + dnnn),
-        (dpnp + dnpp) - (dppn + dnnn));
-    normal->x += (dot(*normal, *normal) == 0.0f); // ensure nonzero
+                       (dppn + dnpp) - (dpnp + dnnn),
+                       (dpnp + dnpp) - (dppn + dnnn));
+    normal->x += (dot(*normal, *normal) == 0.0f);  // ensure nonzero
     *normal = normalize(*normal);
     return totalDistance;
 }
 
-static bool CastCheck(Cfg cfg, struct Ray ray, const float quality, float3* position, float3* normal, float3* rayColor, float3 reflectionColor)
+static bool CastCheck(Cfg cfg,
+                      struct Ray ray,
+                      const float quality,
+                      float3* position,
+                      float3* normal,
+                      float3* rayColor,
+                      float3 reflectionColor,
+                      struct Random* rand)
 {
-    const float distance = Cast(cfg, ray, quality, max_ray_dist, normal);
+    const float fog_dist = -native_log(Random_Next(rand)) * fog_distance;
+    const float distance = Cast(cfg, ray, quality, min(max_ray_dist, fog_dist), normal);
 
-    if (distance >= max_ray_dist) {
-        //float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
+    if (distance >= max_ray_dist)
+    {
+        // float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
         const float3 color = AmbientBrightness(cfg);
         *rayColor += color * reflectionColor;
         return true;
+    }
+    if (distance > fog_dist)
+    {
+        const float3 color = AmbientBrightness(cfg);
+        *rayColor += color * reflectionColor * distance;  // multiply by distance for glowing air?
+        *normal = Random_Sphere(rand);
+        return false;
     }
 
     *position = Ray_At(ray, distance);
     return false;
 }
 
-static struct Ray Bounce(Cfg cfg, float3 newPos, float3 normal, float3 incomingDirection, float3* rayColor, float3* reflectionColor, float* quality, struct Random* rand)
+static struct Ray Bounce(Cfg cfg,
+                         float3 newPos,
+                         float3 normal,
+                         float3 incomingDirection,
+                         float3* rayColor,
+                         float3* reflectionColor,
+                         float* quality,
+                         struct Random* rand)
 {
     struct Material material = Material(cfg, newPos);
     *rayColor += *reflectionColor * material.emissive;
 
     float3 newDir;
-    if (Random_Next(rand) < material.specular) {
+    if (Random_Next(rand) < material.specular)
+    {
         // specular
         newDir = incomingDirection - 2 * dot(incomingDirection, normal) * normal;
-    } else {
+    }
+    else
+    {
         // diffuse
         newDir = Random_Lambertian(rand, normal);
         *quality = quality_rest_ray;
@@ -499,24 +549,28 @@ static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Ran
 
     float3 startDir = ray.dir;
     float3 startPos, startNormal;
-    if (CastCheck(cfg, ray, quality, &startPos, &startNormal, &rayColor, (float3)(1, 1, 1)))
+    if (CastCheck(cfg, ray, quality, &startPos, &startNormal, &rayColor, (float3)(1, 1, 1), rand))
     {
         return rayColor;
     }
 
-    for (int rayIndex = 0; rayIndex < speed_boost; rayIndex++) {
+    for (int rayIndex = 0; rayIndex < speed_boost; rayIndex++)
+    {
         float3 reflectionColor = (float3)(1, 1, 1);
         quality = quality_first_ray * ((width + height) / (2 * fov));
 
-        ray = Bounce(cfg, startPos, startNormal, startDir, &rayColor, &reflectionColor, &quality, rand);
+        ray = Bounce(
+            cfg, startPos, startNormal, startDir, &rayColor, &reflectionColor, &quality, rand);
 
-        for (int photonIndex = 0; photonIndex < num_ray_bounces - 1; photonIndex++) {
+        for (int photonIndex = 0; photonIndex < num_ray_bounces - 1; photonIndex++)
+        {
             float3 position, normal;
-            if (CastCheck(cfg, ray, quality, &position, &normal, &rayColor, reflectionColor))
+            if (CastCheck(cfg, ray, quality, &position, &normal, &rayColor, reflectionColor, rand))
             {
                 break;
             }
-            ray = Bounce(cfg, position, normal, ray.dir, &rayColor, &reflectionColor, &quality, rand);
+            ray =
+                Bounce(cfg, position, normal, ray.dir, &rayColor, &reflectionColor, &quality, rand);
         }
     }
     rayColor *= 1.0f / speed_boost;
@@ -529,51 +583,69 @@ static float3 GammaTest(int x, int y, int width, int height)
     const float centerValue = (float)x / width;
     const float offset = ((float)(height - y) / height) * (0.5f - fabs(centerValue - 0.5f));
     float result;
-    if (x % 16 < 8) {
+    if (x % 16 < 8)
+    {
         result = centerValue;
-    } else if (y % 2 == 0) {
+    }
+    else if (y % 2 == 0)
+    {
         result = centerValue + offset;
-    } else {
+    }
+    else
+    {
         result = centerValue - offset;
     }
     return (float3)(result, result, result);
 }
-*/
+// */
 
 // Perfect, original sRGB
-// static float GammaCompression(float value)
-// {
-//     if (value < 0.0031308f) {
-//         return 12.92f * value;
-//     } else {
-//         float a = 0.055f;
-//         return (1 + a) * powr(value, 1.0f / 2.4f) - a;
-//     }
-// }
+/*
+static float GammaCompression(float value)
+{
+    if (value < 0.0031308f)
+    {
+        return 12.92f * value;
+    }
+    else
+    {
+        float a = 0.055f;
+        return (1 + a) * powr(value, 1.0f / 2.4f) - a;
+    }
+}
+// */
 // http://mimosa-pudica.net/fast-gamma/
+//*
 static float GammaCompression(float value)
 {
     const float a = 0.00279491f;
     const float b = 1.15907984f;
-    //float c = b * native_rsqrt(1.0f + a) - 1.0f;
+    // float c = b * native_rsqrt(1.0f + a) - 1.0f;
     const float c = 0.15746346551f;
     return (b * native_rsqrt(value + a) - c) * value;
 }
+// */
 // gamma algorithm "an attempt was made"
-// static float GammaCompression(float value)
-// {
-//     return sqrt(value);
-// }
+/*
+static float GammaCompression(float value)
+{
+    return sqrt(value);
+}
+// */
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
-    if (white_clamp) {
+    if (white_clamp)
+    {
         const float maxVal = max(max(pixel.x, pixel.y), pixel.z);
-        if (maxVal > 1) {
+        if (maxVal > 1)
+        {
             pixel *= 1.0f / maxVal;
         }
         pixel = max(pixel, (float3)(0.0f, 0.0f, 0.0f));
-    } else {
+    }
+    else
+    {
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
 
@@ -582,26 +654,26 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     pixel.z = GammaCompression(pixel.z);
 
     pixel = pixel * 255;
-    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) | ((uint)(uchar)pixel.z << 16);
+    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
+           ((uint)(uchar)pixel.z << 16);
 }
 
 // yay SOA
 static float3 GetScratch(__global uchar* rawData, uint idx, uint size)
 {
-    __global float* data = (__global float*)rawData;
-    if (idx >= size) {
+    const __global float* data = (__global float*)rawData;
+    if (idx >= size)
+    {
         return (float3)(0, 0, 0);
     }
-    return (float3)(
-        data[idx + size],
-        data[idx + size * 2],
-        data[idx + size * 3]);
+    return (float3)(data[idx + size], data[idx + size * 2], data[idx + size * 3]);
 }
 
 static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 value)
 {
     __global float* data = (__global float*)rawData;
-    if (idx >= size) {
+    if (idx >= size)
+    {
         return;
     }
     data[idx + size] = value.x;
@@ -612,39 +684,40 @@ static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 valu
 static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value)
 {
     __global uint* data = (__global uint*)rawData;
-    if (idx >= size) {
+    if (idx >= size)
+    {
         return;
     }
     data[idx] = value;
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
-__kernel void Main(
-    __global uchar* data,
-    __global struct MandelboxCfg* cfg_global,
-    uint width,
-    uint height,
-    uint frame)
+__kernel void Main(__global uchar* data,
+                   __global struct MandelboxCfg* cfg_global,
+                   uint width,
+                   uint height,
+                   uint frame)
 {
-    struct MandelboxCfg local_copy = *cfg_global;
-    Cfg cfg = &local_copy;
+    const struct MandelboxCfg local_copy = *cfg_global;
+    const Cfg cfg = &local_copy;
 
     const uint idx = (uint)get_global_id(0);
     const uint size = width * height;
     const uint x = idx % width;
-    // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is bottom-left
+    // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is
+    // bottom-left
     const uint y = height - (idx / width + 1);
 
-    // guard against invalid index in Get/SetScratch, and SetScreen. Nowhere else is needed.
-    if (y >= height) { return; } // TODO
+    // guard against invalid index in Get/SetScratch, and SetScreen. Nowhere
+    // else is needed.
 
     const float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
 
     struct Random rand = new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
-    float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
-    //newColor = GammaTest(x, y, width, height);
+    // newColor = GammaTest(x, y, width, height);
     const uint packedColor = PackPixel(cfg, newColor);
 
     SetScratch(data, idx, size, newColor);
