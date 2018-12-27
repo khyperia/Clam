@@ -1,8 +1,8 @@
 use failure::err_msg;
-use interactive::InteractiveKernel;
 use failure::Error;
 use fps_counter::FpsCounter;
 use input;
+use interactive::{DownloadResult, InteractiveKernel};
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
 use sdl2::init;
@@ -26,10 +26,6 @@ pub struct Image {
     pub height: u32,
 }
 
-pub enum ScreenEvent {
-    Resize(u32, u32),
-}
-
 impl Image {
     pub fn new(data: Vec<u8>, width: u32, height: u32) -> Image {
         Image {
@@ -40,7 +36,11 @@ impl Image {
     }
 }
 
-pub fn find_font() -> Result<&'static Path, Error> {
+pub enum ScreenEvent {
+    Resize(u32, u32),
+}
+
+fn find_font() -> Result<&'static Path, Error> {
     let locations: [&'static Path; 6] = [
         "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
         "/usr/share/fonts/TTF/FiraSans-Regular.ttf".as_ref(),
@@ -122,8 +122,25 @@ fn draw<'a>(
     settings_input: &Arc<Mutex<(Settings, input::Input)>>,
     texture: &mut Texture<'a>,
     window_data: &mut WindowData,
-) -> Result<(), Error> {
-    let image = interactive_kernel.download()?;
+) -> Result<bool, Error> {
+    match interactive_kernel.download() {
+        DownloadResult::NoMoreImages => return Ok(false),
+        DownloadResult::NoneAtPresent => (),
+        DownloadResult::Image(image) => {
+            window_data.render_fps.tick();
+            if window_data.image_width != image.width || window_data.image_height != image.height {
+                window_data.image_width = image.width;
+                window_data.image_height = image.height;
+                *texture = creator.create_texture_streaming(
+                    PixelFormatEnum::ABGR8888,
+                    window_data.image_width,
+                    window_data.image_height,
+                )?;
+            }
+
+            texture.update(None, &image.data, image.width as usize * 4)?;
+        }
+    }
     // let image = match image_stream.try_recv() {
     //     Ok(image) => Some(image),
     //     Err(mpsc::TryRecvError::Empty) => None,
@@ -131,18 +148,6 @@ fn draw<'a>(
     // };
 
     //if let Some(image) = image {
-        window_data.render_fps.tick();
-        if window_data.image_width != image.width || window_data.image_height != image.height {
-            window_data.image_width = image.width;
-            window_data.image_height = image.height;
-            *texture = creator.create_texture_streaming(
-                PixelFormatEnum::ABGR8888,
-                window_data.image_width,
-                window_data.image_height,
-            )?;
-        }
-
-        texture.update(None, &image.data, image.width as usize * 4)?;
     //}
 
     window_data.window_fps.tick();
@@ -162,7 +167,7 @@ fn draw<'a>(
         window_data.window_fps.value(),
     )?;
     canvas.present();
-    Ok(())
+    Ok(true)
 }
 
 pub fn display(width: u32, height: u32) -> Result<(), Error> {
@@ -189,27 +194,13 @@ pub fn display(width: u32, height: u32) -> Result<(), Error> {
         window_fps: FpsCounter::new(1.0),
     };
 
-    let mut draw = || {
-        draw(
-            &mut canvas,
-            &creator,
-            &font,
-            &interactive_kernel,
-            &settings_input,
-            &mut texture,
-            &mut window_data,
-        )
-    };
-
     loop {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Window {
                     win_event: WindowEvent::Resized(width, height),
                     ..
-                }
-                    if width > 0 && height > 0 =>
-                {
+                } if width > 0 && height > 0 => {
                     interactive_kernel.resize(width as u32, height as u32);
                     // match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
                     //     Ok(()) => (),
@@ -220,26 +211,32 @@ pub fn display(width: u32, height: u32) -> Result<(), Error> {
                     scancode: Some(scancode),
                     ..
                 } => {
-                    {
-                        let mut locked = settings_input.lock().unwrap();
-                        let (ref mut settings, ref mut input) = *locked;
-                        input.key_down(scancode, settings);
-                    }
+                    let mut locked = settings_input.lock().unwrap();
+                    let (ref mut settings, ref mut input) = *locked;
+                    input.key_down(scancode, settings);
                 }
                 Event::KeyUp {
                     scancode: Some(scancode),
                     ..
                 } => {
-                    {
-                        let mut locked = settings_input.lock().unwrap();
-                        let (ref mut settings, ref mut input) = *locked;
-                        input.key_up(scancode, settings);
-                    }
+                    let mut locked = settings_input.lock().unwrap();
+                    let (ref mut settings, ref mut input) = *locked;
+                    input.key_up(scancode, settings);
                 }
                 Event::Quit { .. } => return Ok(()),
                 _ => (),
             }
         }
-        draw()?;
+        if !draw(
+            &mut canvas,
+            &creator,
+            &font,
+            &interactive_kernel,
+            &settings_input,
+            &mut texture,
+            &mut window_data,
+        )? {
+            return Ok(());
+        }
     }
 }

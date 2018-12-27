@@ -491,8 +491,10 @@ static bool CastCheck(Cfg cfg,
                       float3 reflectionColor,
                       struct Random* rand)
 {
-    const float fog_dist = -native_log(Random_Next(rand)) * fog_distance;
-    const float distance = Cast(cfg, ray, quality, min(max_ray_dist, fog_dist), normal);
+    //const float fog_dist = -native_log(Random_Next(rand)) * fog_distance;
+    //const float max_dist = min(max_ray_dist, fog_dist);
+    const float max_dist = max_ray_dist;
+    const float distance = Cast(cfg, ray, quality, max_dist, normal);
 
     if (distance >= max_ray_dist)
     {
@@ -501,13 +503,13 @@ static bool CastCheck(Cfg cfg,
         *rayColor += color * reflectionColor;
         return true;
     }
-    if (distance > fog_dist)
-    {
-        const float3 color = AmbientBrightness(cfg);
-        *rayColor += color * reflectionColor * distance;  // multiply by distance for glowing air?
-        *normal = Random_Sphere(rand);
-        return false;
-    }
+    //if (distance > fog_dist)
+    //{
+    //    const float3 color = AmbientBrightness(cfg);
+    //    *rayColor += color * reflectionColor * distance;  // multiply by distance for glowing air?
+    //    *normal = Random_Sphere(rand);
+    //    return false;
+    //}
 
     *position = Ray_At(ray, distance);
     return false;

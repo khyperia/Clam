@@ -69,20 +69,6 @@ impl Settings {
         self.value_map.get(key)
     }
 
-    //pub fn get_f32(&self, key: &str) -> Option<&f32> {
-    //    match self.get(key) {
-    //        Some(SettingValue::F32(ref value, _)) => Some(value),
-    //        _ => None,
-    //    }
-    //}
-
-    pub fn get_u32(&self, key: &str) -> Option<&u32> {
-        match self.get(key) {
-            Some(SettingValue::U32(ref value)) => Some(value),
-            _ => None,
-        }
-    }
-
     pub fn save(&self, file: &str) -> Result<(), Error> {
         let file = ::std::fs::File::create(file)?;
         let mut writer = ::std::io::BufWriter::new(&file);

@@ -69,7 +69,7 @@ fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> 
     Ok(())
 }
 
-pub fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
+fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
     let mut default_settings = Settings::new();
     default_settings.clear_constants();
     let mut kernel = Kernel::new(width, height, &default_settings)?;
