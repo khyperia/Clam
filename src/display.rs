@@ -1,4 +1,5 @@
 use failure::err_msg;
+use interactive::InteractiveKernel;
 use failure::Error;
 use fps_counter::FpsCounter;
 use input;
@@ -17,8 +18,7 @@ use sdl2::video::Window;
 use sdl2::video::WindowContext;
 use settings::Settings;
 use std::path::Path;
-use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
+use std::sync::{Arc, Mutex};
 
 pub struct Image {
     pub data: Vec<u8>,
@@ -38,37 +38,6 @@ impl Image {
             height,
         }
     }
-}
-
-type KernelFn = Fn(
-        u32,
-        u32,
-        &Arc<Mutex<(Settings, input::Input)>>,
-        &mpsc::SyncSender<Image>,
-        &mpsc::Receiver<ScreenEvent>,
-    ) -> Result<(), Error>
-    + Sync;
-
-fn launch_kernel(
-    width: u32,
-    height: u32,
-    settings_input: Arc<Mutex<(Settings, input::Input)>>,
-    send_image: mpsc::SyncSender<Image>,
-    recv_screen_event: mpsc::Receiver<ScreenEvent>,
-    kernel_fn: &'static KernelFn,
-) {
-    thread::spawn(move || {
-        match kernel_fn(
-            width,
-            height,
-            &settings_input,
-            &send_image,
-            &recv_screen_event,
-        ) {
-            Ok(()) => (),
-            Err(err) => println!("Error in kernel thread: {}", err),
-        }
-    });
 }
 
 pub fn find_font() -> Result<&'static Path, Error> {
@@ -149,18 +118,19 @@ fn draw<'a>(
     canvas: &mut Canvas<Window>,
     creator: &'a TextureCreator<WindowContext>,
     font: &Font,
-    image_stream: &mpsc::Receiver<Image>,
+    interactive_kernel: &InteractiveKernel,
     settings_input: &Arc<Mutex<(Settings, input::Input)>>,
     texture: &mut Texture<'a>,
     window_data: &mut WindowData,
 ) -> Result<(), Error> {
-    let image = match image_stream.try_recv() {
-        Ok(image) => Some(image),
-        Err(mpsc::TryRecvError::Empty) => None,
-        Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-    };
+    let image = interactive_kernel.download()?;
+    // let image = match image_stream.try_recv() {
+    //     Ok(image) => Some(image),
+    //     Err(mpsc::TryRecvError::Empty) => None,
+    //     Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
+    // };
 
-    if let Some(image) = image {
+    //if let Some(image) = image {
         window_data.render_fps.tick();
         if window_data.image_width != image.width || window_data.image_height != image.height {
             window_data.image_width = image.width;
@@ -173,7 +143,7 @@ fn draw<'a>(
         }
 
         texture.update(None, &image.data, image.width as usize * 4)?;
-    }
+    //}
 
     window_data.window_fps.tick();
 
@@ -195,7 +165,7 @@ fn draw<'a>(
     Ok(())
 }
 
-pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<(), Error> {
+pub fn display(width: u32, height: u32) -> Result<(), Error> {
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
     let mut event_pump = sdl.event_pump().expect("SDL does not have event pump");
@@ -208,17 +178,9 @@ pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<
     let ttf = ttf::init()?;
     let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
-    let (send_image, image_stream) = mpsc::sync_channel(2);
-    let (event_stream, recv_screen_event) = mpsc::channel();
     let settings_input = Arc::new(Mutex::new((Settings::new(), input::Input::new())));
-    launch_kernel(
-        width,
-        height,
-        settings_input.clone(),
-        send_image,
-        recv_screen_event,
-        kernel_fn,
-    );
+
+    let interactive_kernel = InteractiveKernel::new(width, height, settings_input.clone())?;
 
     let mut window_data = WindowData {
         image_width: width,
@@ -232,7 +194,7 @@ pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<
             &mut canvas,
             &creator,
             &font,
-            &image_stream,
+            &interactive_kernel,
             &settings_input,
             &mut texture,
             &mut window_data,
@@ -248,10 +210,11 @@ pub fn display(width: u32, height: u32, kernel_fn: &'static KernelFn) -> Result<
                 }
                     if width > 0 && height > 0 =>
                 {
-                    match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
-                        Ok(()) => (),
-                        Err(_) => return Ok(()),
-                    }
+                    interactive_kernel.resize(width as u32, height as u32);
+                    // match event_stream.send(ScreenEvent::Resize(width as u32, height as u32)) {
+                    //     Ok(()) => (),
+                    //     Err(_) => return Ok(()),
+                    // }
                 }
                 Event::KeyDown {
                     scancode: Some(scancode),

@@ -10,55 +10,15 @@ mod kernel;
 mod mandelbox_cfg;
 mod progress;
 mod settings;
+mod interactive;
 
 use display::Image;
-use display::ScreenEvent;
 use failure::Error;
-use input::Input;
 use kernel::Kernel;
 use progress::Progress;
 use settings::KeyframeList;
 use settings::Settings;
 use std::env::args;
-use std::sync::{mpsc, Arc, Mutex};
-
-pub fn interactive(
-    width: u32,
-    height: u32,
-    settings_input: &Arc<Mutex<(Settings, Input)>>,
-    send_image: &mpsc::SyncSender<Image>,
-    screen_events: &mpsc::Receiver<ScreenEvent>,
-) -> Result<(), Error> {
-    let mut kernel = Kernel::new(width, height, &settings_input.lock().unwrap().0)?;
-    loop {
-        loop {
-            let event = match screen_events.try_recv() {
-                Ok(event) => event,
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-            };
-
-            match event {
-                ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
-            }
-        }
-
-        let settings = {
-            let mut locked = settings_input.lock().unwrap();
-            let (ref mut settings, ref mut input) = *locked;
-            input.integrate(settings);
-            if settings.check_rebuild() {
-                kernel.rebuild_self(settings)?;
-            }
-            (*settings).clone()
-        };
-        let image = kernel.run(&settings, true)?.unwrap();
-        match send_image.send(image) {
-            Ok(()) => (),
-            Err(mpsc::SendError(_)) => return Ok(()),
-        };
-    }
-}
 
 fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     use png::HasParameters;
@@ -77,24 +37,23 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
+fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
     settings.load("settings.clam5")?;
     settings.all_constants();
     let mut kernel = Kernel::new(width, height, &settings)?;
     let progress = Progress::new();
     let progress_count = (rpp / 20).min(4).max(16);
-    for ray in 0..(rpp - 1) {
-        let _ = kernel.run(&settings, false)?;
+    for ray in 0..rpp {
+        let _ = kernel.run(&settings)?;
         if ray > 0 && ray % progress_count == 0 {
-            kernel.sync()?;
+            kernel.sync_renderer()?;
             let value = ray as f32 / rpp as f32;
             println!("{}", progress.time_str(value));
         }
     }
-    kernel.sync()?;
-    println!("Last ray...");
-    let image = kernel.run(&settings, true)?.unwrap();
+    kernel.sync_renderer()?;
+    let image = kernel.download()?;
     println!("render done, saving");
     save_image(&image, "render.png")?;
     println!("done");
@@ -102,10 +61,10 @@ pub fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
 }
 
 fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> Result<(), Error> {
-    for _ in 0..(rpp - 1) {
-        let _ = kernel.run(&settings, false)?;
+    for _ in 0..rpp {
+        let _ = kernel.run(&settings)?;
     }
-    let image = kernel.run(&settings, true)?.unwrap();
+    let image = kernel.download()?;
     save_image(&image, &format!("render{:03}.png", frame))?;
     Ok(())
 }
@@ -167,7 +126,7 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
 fn interactive_cmd() -> Result<(), Error> {
     let width = 200;
     let height = 200;
-    display::display(width, height, &interactive)
+    display::display(width, height)
 }
 
 fn main() -> Result<(), Error> {

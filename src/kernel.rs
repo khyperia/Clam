@@ -8,20 +8,83 @@ use settings::Settings;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
+use std::sync::{Arc, Mutex};
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
 const DATA_WORDS: u32 = 4;
 
+pub struct KernelImage {
+    queue: ocl::Queue,
+    // width, height, scale
+    data: Mutex<(u32, u32, u32, Option<ocl::Buffer<u8>>)>,
+}
+
+impl KernelImage {
+    fn new(queue: ocl::Queue, width: u32, height: u32) -> Self {
+        Self {
+            queue,
+            data: Mutex::new((width, height, 1, None)),
+        }
+    }
+
+    fn size(&self) -> (u32, u32) {
+        let (width, height, scale, _) = *self.data.lock().unwrap();
+        (width / scale, height / scale)
+    }
+
+    fn data(&self) -> Result<ocl::Buffer<u8>, Error> {
+        let (width, height, _, ref mut data) = *self.data.lock().unwrap();
+        if data.is_none() {
+            let new_data = ocl::Buffer::builder()
+                .context(&self.queue.context())
+                .len(width * height * DATA_WORDS * 4)
+                .build()?;
+            *data = Some(new_data);
+        }
+        Ok(data.as_ref().unwrap().clone())
+    }
+
+    fn resize(&self, new_width: u32, new_height: u32) {
+        let (ref mut width, ref mut height, _, ref mut data) = *self.data.lock().unwrap();
+        if *width != new_width || *height != new_height {
+            *width = new_width;
+            *height = new_height;
+            *data = None;
+        }
+    }
+
+    fn rescale(&self, new_scale: u32) {
+        let (_, _, ref mut scale, _) = *self.data.lock().unwrap();
+        *scale = new_scale.max(1);
+    }
+
+    pub fn download(&self) -> Result<Image, Error> {
+        let (ref mut width, ref mut height, ref mut scale, ref mut data) =
+            *self.data.lock().unwrap();
+        let width = *width / *scale;
+        let height = *height / *scale;
+        let mut vec = vec![0u8; width as usize * height as usize * 4];
+
+        data.as_ref()
+            .unwrap()
+            .read(&mut vec)
+            .queue(&self.queue)
+            .enq()?;
+        
+        //self.queue.finish()?;
+
+        let image = Image::new(vec, width, height);
+        Ok(image)
+    }
+}
+
 pub struct Kernel {
-    context: ocl::Context,
     queue: ocl::Queue,
     kernel: ocl::Kernel,
-    data: Option<ocl::Buffer<u8>>,
+    data: Arc<KernelImage>,
     cpu_cfg: MandelboxCfg,
     cfg: ocl::Buffer<MandelboxCfg>,
     old_settings: Settings,
-    width: u32,
-    height: u32,
     frame: u32,
 }
 
@@ -52,18 +115,16 @@ impl Kernel {
         let device_name = device.name()?;
         println!("Using device: {}", device_name);
         let queue = ocl::Queue::new(&context, device, None)?;
+        let download_queue = ocl::Queue::new(&context, device, None)?;
         let kernel = Self::rebuild(&queue, settings)?;
         let cfg = ocl::Buffer::builder().context(&context).len(1).build()?;
         Ok(Kernel {
-            context,
-            queue,
+            queue: download_queue,
             kernel,
-            data: None,
+            data: Arc::new(KernelImage::new(queue, width, height)),
             cpu_cfg: MandelboxCfg::default(),
             cfg,
             old_settings: settings.clone(),
-            width,
-            height,
             frame: 0,
         })
     }
@@ -162,14 +223,12 @@ impl Kernel {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        self.width = width;
-        self.height = height;
-        self.data = None;
+        self.data.resize(width, height);
         self.frame = 0;
         Ok(())
     }
 
-    fn set_args(&mut self, settings: &Settings) -> Result<(), Error> {
+    fn update(&mut self, settings: &Settings) -> Result<(), Error> {
         let old_cfg = self.cpu_cfg;
         self.cpu_cfg.read(settings);
         if old_cfg != self.cpu_cfg {
@@ -177,25 +236,21 @@ impl Kernel {
             self.cfg.write(&to_write as &[_]).queue(&self.queue).enq()?;
             self.frame = 0;
         }
+
         if *settings != self.old_settings {
             self.old_settings = settings.clone();
             self.frame = 0;
         }
-        let data = match self.data {
-            Some(ref data) => data,
-            None => {
-                let data = ocl::Buffer::builder()
-                    .context(&self.context)
-                    .len(self.width * self.height * DATA_WORDS * 4)
-                    .build()?;
-                self.data = Some(data);
-                self.data.as_ref().unwrap()
-            }
-        };
+
         let render_scale = (*settings.get_u32("render_scale").unwrap()).max(1);
-        let width = self.width / render_scale;
-        let height = self.height / render_scale;
-        self.kernel.set_arg(0, data)?;
+        self.data.rescale(render_scale);
+
+        Ok(())
+    }
+
+    fn set_args(&mut self) -> Result<(), Error> {
+        let (width, height) = self.data.size();
+        self.kernel.set_arg(0, self.data.data()?)?;
         self.kernel.set_arg(1, &self.cfg)?;
         self.kernel.set_arg(2, width as u32)?;
         self.kernel.set_arg(3, height as u32)?;
@@ -203,13 +258,11 @@ impl Kernel {
         Ok(())
     }
 
-    pub fn run(&mut self, settings: &Settings, download: bool) -> Result<Option<Image>, Error> {
-        self.set_args(settings)?;
+    fn launch(&mut self) -> Result<(), Error> {
         let lws = 1024;
-        let render_scale = (*settings.get_u32("render_scale").unwrap()).max(1);
-        let width = self.width / render_scale;
-        let height = self.height / render_scale;
+        let (width, height) = self.data.size();
         let total_size = width * height;
+
         let to_launch = self
             .kernel
             .cmd()
@@ -217,23 +270,28 @@ impl Kernel {
             .global_work_size((total_size + lws - 1) / lws * lws);
         // enq() is unsafe, even though the Rust code is safe (unsafe due to untrusted GPU code)
         unsafe { to_launch.enq() }?;
+
         self.frame += 1;
-        if download {
-            let mut vec = vec![0u8; width as usize * height as usize * 4];
-            self.data
-                .as_ref()
-                .unwrap()
-                .read(&mut vec)
-                .queue(&self.queue)
-                .enq()?;
-            let image = Image::new(vec, width, height);
-            Ok(Some(image))
-        } else {
-            Ok(None)
-        }
+
+        Ok(())
     }
 
-    pub fn sync(&mut self) -> ocl::Result<()> {
+    pub fn run(&mut self, settings: &Settings) -> Result<(), Error> {
+        self.update(settings)?;
+        self.set_args()?;
+        self.launch()?;
+        Ok(())
+    }
+
+    pub fn alias_data(&self) -> Arc<KernelImage> {
+        self.data.clone()
+    }
+
+    pub fn download(&mut self) -> Result<Image, Error> {
+        self.data.download()
+    }
+
+    pub fn sync_renderer(&mut self) -> ocl::Result<()> {
         self.queue.finish()
     }
 }
