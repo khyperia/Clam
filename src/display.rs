@@ -185,7 +185,7 @@ pub fn display(width: u32, height: u32) -> Result<(), Error> {
 
     let settings_input = Arc::new(Mutex::new((Settings::new(), input::Input::new())));
 
-    let interactive_kernel = InteractiveKernel::new(width, height, settings_input.clone())?;
+    let interactive_kernel = InteractiveKernel::create(width, height, settings_input.clone())?;
 
     let mut window_data = WindowData {
         image_width: width,

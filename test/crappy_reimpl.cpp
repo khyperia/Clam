@@ -5,17 +5,17 @@ typedef float float3 __attribute__((ext_vector_type(3)));
 
 float acospi(float x)
 {
-    return (float)acos(x) / M_PI;
+    return static_cast<float>(acos(static_cast<double>(x)) / M_PI);
 }
 
 float cospi(float x)
 {
-    return (float)cos(x * M_PI);
+    return static_cast<float>(cos(static_cast<double>(x) * M_PI));
 }
 
 float sinpi(float x)
 {
-    return (float)sin(x * M_PI);
+    return static_cast<float>(sin(static_cast<double>(x) * M_PI));
 }
 
 float sqrt(float x)
@@ -138,7 +138,12 @@ float native_rsqrt(float a)
     return 1 / sqrt(a);
 }
 
+float native_log(float a)
+{
+    return log(a);
+}
+
 float rootn(float x, int y)
 {
-    return (float)pow(x, 1.0f / y);
+    return static_cast<float>(pow(static_cast<double>(x), 1.0 / static_cast<double>(y)));
 }

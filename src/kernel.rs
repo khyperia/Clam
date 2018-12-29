@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
-const DATA_WORDS: u32 = 4;
+const DATA_WORDS: u32 = 6;
 
 struct KernelImage {
     queue: ocl::Queue,
@@ -105,7 +105,7 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
 }
 
 impl Kernel {
-    pub fn new(width: u32, height: u32, settings: &Settings) -> Result<Kernel, Error> {
+    pub fn create(width: u32, height: u32, settings: &Settings) -> Result<Self, Error> {
         let context = Self::make_context()?;
         let device = context.devices()[0];
         let device_name = device.name()?;
@@ -173,21 +173,27 @@ impl Kernel {
 
     fn make_context() -> Result<ocl::Context, Error> {
         let mut last_err = None;
-        let selected = ::std::env::var("CLAM5_DEVICE").ok();
+        let selected = ::std::env::var("CLAM5_DEVICE")
+            .ok()
+            .and_then(|x| x.parse::<u32>().ok());
         let mut i = 0;
         println!("Devices (pass env var CLAM5_DEVICE={{i}} to select)");
         for platform in ocl::Platform::list() {
-            println!("Platform: {}", platform.name()?);
+            println!(
+                "Platform: {} (version: {})",
+                platform.name()?,
+                platform.version()?,
+            );
             for device in ocl::Device::list(platform, None)? {
                 match selected {
-                    Some(ref selected) if selected.parse() == Ok(i) => {
+                    Some(selected) if selected == i => {
                         return Ok(ocl::Context::builder()
                             .platform(platform)
                             .devices(device)
                             .build()?)
                     }
-                    Some(ref selected) if selected.parse::<i32>().is_ok() => (),
-                    _ => println!("[{}]: {}", i, device.name()?),
+                    Some(_) => (),
+                    None => println!("[{}]: {}", i, device.name()?),
                 }
                 i += 1;
             }
@@ -227,8 +233,8 @@ impl Kernel {
         let old_cfg = self.cpu_cfg;
         self.cpu_cfg.read(settings);
         if old_cfg != self.cpu_cfg {
-            let to_write = [self.cpu_cfg];
-            self.cfg.write(&to_write as &[_]).queue(&self.queue).enq()?;
+            let to_write = &[self.cpu_cfg] as &[_];
+            self.cfg.write(to_write).queue(&self.queue).enq()?;
             self.frame = 0;
         }
 
@@ -237,11 +243,8 @@ impl Kernel {
             self.frame = 0;
         }
 
-        match settings.get("render_scale") {
-            Some(&SettingValue::U32(render_scale)) => {
-                self.data.rescale(render_scale);
-            }
-            _ => (),
+        if let Some(&SettingValue::U32(render_scale)) = settings.get("render_scale") {
+            self.data.rescale(render_scale);
         }
 
         Ok(())
@@ -258,7 +261,6 @@ impl Kernel {
     }
 
     fn launch(&mut self) -> Result<(), Error> {
-        let lws = 1024;
         let (width, height) = self.data.size();
         let total_size = width * height;
 
@@ -266,7 +268,7 @@ impl Kernel {
             .kernel
             .cmd()
             .queue(&self.queue)
-            .global_work_size((total_size + lws - 1) / lws * lws);
+            .global_work_size(total_size);
         // enq() is unsafe, even though the Rust code is safe (unsafe due to untrusted GPU code)
         unsafe { to_launch.enq() }?;
 

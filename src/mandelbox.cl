@@ -482,100 +482,60 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     return totalDistance;
 }
 
-static bool CastCheck(Cfg cfg,
-                      struct Ray ray,
-                      const float quality,
-                      float3* position,
-                      float3* normal,
-                      float3* rayColor,
-                      float3 reflectionColor,
-                      struct Random* rand)
-{
-    //const float fog_dist = -native_log(Random_Next(rand)) * fog_distance;
-    //const float max_dist = min(max_ray_dist, fog_dist);
-    const float max_dist = max_ray_dist;
-    const float distance = Cast(cfg, ray, quality, max_dist, normal);
-
-    if (distance >= max_ray_dist)
-    {
-        // float first_reduce = firstRay ? 0.3f : 1.0f; // TODO
-        const float3 color = AmbientBrightness(cfg);
-        *rayColor += color * reflectionColor;
-        return true;
-    }
-    //if (distance > fog_dist)
-    //{
-    //    const float3 color = AmbientBrightness(cfg);
-    //    *rayColor += color * reflectionColor * distance;  // multiply by distance for glowing air?
-    //    *normal = Random_Sphere(rand);
-    //    return false;
-    //}
-
-    *position = Ray_At(ray, distance);
-    return false;
-}
-
-static struct Ray Bounce(Cfg cfg,
-                         float3 newPos,
-                         float3 normal,
-                         float3 incomingDirection,
-                         float3* rayColor,
-                         float3* reflectionColor,
-                         float* quality,
-                         struct Random* rand)
-{
-    struct Material material = Material(cfg, newPos);
-    *rayColor += *reflectionColor * material.emissive;
-
-    float3 newDir;
-    if (Random_Next(rand) < material.specular)
-    {
-        // specular
-        newDir = incomingDirection - 2 * dot(incomingDirection, normal) * normal;
-    }
-    else
-    {
-        // diffuse
-        newDir = Random_Lambertian(rand, normal);
-        *quality = quality_rest_ray;
-    }
-    const float incident_angle_weakening = dot(normal, newDir);
-    *reflectionColor *= incident_angle_weakening * material.color;
-    return new_Ray(newPos, newDir);
-}
-
-static float3 Trace(Cfg cfg, struct Ray ray, uint width, uint height, struct Random* rand)
+static float3 Trace(
+    Cfg cfg, struct Ray ray, const uint width, const uint height, struct Random* rand)
 {
     float3 rayColor = (float3)(0, 0, 0);
+    float3 reflectionColor = (float3)(1, 1, 1);
     float quality = quality_first_ray * ((width + height) / (2 * fov));
 
-    float3 startDir = ray.dir;
-    float3 startPos, startNormal;
-    if (CastCheck(cfg, ray, quality, &startPos, &startNormal, &rayColor, (float3)(1, 1, 1), rand))
+    for (int photonIndex = 0; photonIndex < num_ray_bounces; photonIndex++)
     {
-        return rayColor;
-    }
+        float3 normal;
+        const float fog_dist = -native_log(Random_Next(rand)) * fog_distance;
+        const float max_dist = min(max_ray_dist, fog_dist);
+        const float distance = min(Cast(cfg, ray, quality, max_dist, &normal), fog_dist);
 
-    for (int rayIndex = 0; rayIndex < speed_boost; rayIndex++)
-    {
-        float3 reflectionColor = (float3)(1, 1, 1);
-        quality = quality_first_ray * ((width + height) / (2 * fov));
-
-        ray = Bounce(
-            cfg, startPos, startNormal, startDir, &rayColor, &reflectionColor, &quality, rand);
-
-        for (int photonIndex = 0; photonIndex < num_ray_bounces - 1; photonIndex++)
+        if (distance >= max_ray_dist ||
+            (photonIndex + 1 == num_ray_bounces && distance >= fog_dist))
         {
-            float3 position, normal;
-            if (CastCheck(cfg, ray, quality, &position, &normal, &rayColor, reflectionColor, rand))
-            {
-                break;
-            }
-            ray =
-                Bounce(cfg, position, normal, ray.dir, &rayColor, &reflectionColor, &quality, rand);
+            // went out-of-bounds, or last fog ray didn't hit anything
+            const float3 color = AmbientBrightness(cfg);
+            rayColor += color * reflectionColor;
+            break;
         }
+
+        const float3 newPos = Ray_At(ray, min(distance, fog_dist));
+        float3 newDir;
+
+        if (distance >= fog_dist)
+        {
+            // hit fog, do fog calculations
+            newDir = Random_Sphere(rand);
+        }
+        else
+        {
+            // hit surface, do material calculations
+            const struct Material material = Material(cfg, newPos);
+            rayColor += reflectionColor * material.emissive;  // ~bling~!
+
+            if (Random_Next(rand) < material.specular)
+            {
+                // specular
+                newDir = ray.dir - 2 * dot(ray.dir, normal) * normal;
+            }
+            else
+            {
+                // diffuse
+                newDir = Random_Lambertian(rand, normal);
+                quality = quality_rest_ray;
+            }
+            const float incident_angle_weakening = dot(normal, newDir);
+            reflectionColor *= incident_angle_weakening * material.color;
+        }
+
+        ray = new_Ray(newPos, newDir);
     }
-    rayColor *= 1.0f / speed_boost;
     return rayColor;
 }
 
@@ -664,32 +624,34 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 static float3 GetScratch(__global uchar* rawData, uint idx, uint size)
 {
     const __global float* data = (__global float*)rawData;
-    if (idx >= size)
-    {
-        return (float3)(0, 0, 0);
-    }
     return (float3)(data[idx + size], data[idx + size * 2], data[idx + size * 3]);
 }
 
 static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 value)
 {
     __global float* data = (__global float*)rawData;
-    if (idx >= size)
-    {
-        return;
-    }
     data[idx + size] = value.x;
     data[idx + size * 2] = value.y;
     data[idx + size * 3] = value.z;
 }
 
+static struct Random GetRand(__global uchar* rawData, uint idx, uint size)
+{
+    const __global struct Random* data = (__global struct Random*)rawData;
+    // this is scary: sizeof(random) is bigger than sizeof(float), so divide the
+    // size multiplier by 2
+    return data[idx + size * 2];
+}
+
+static void SetRand(__global uchar* rawData, uint idx, uint size, struct Random value)
+{
+    __global struct Random* data = (__global struct Random*)rawData;
+    data[idx + size * 2] = value;
+}
+
 static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value)
 {
     __global uint* data = (__global uint*)rawData;
-    if (idx >= size)
-    {
-        return;
-    }
     data[idx] = value;
 }
 
@@ -710,12 +672,12 @@ __kernel void Main(__global uchar* data,
     // bottom-left
     const uint y = height - (idx / width + 1);
 
-    // guard against invalid index in Get/SetScratch, and SetScreen. Nowhere
-    // else is needed.
+    // out-of-bounds checks aren't needed, due to the ocl driver being awesome
+    // and supporting exact-size launches
 
     const float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
 
-    struct Random rand = new_Random(idx, frame, size);
+    struct Random rand = frame > 0 ? GetRand(data, idx, size) : new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
     const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
@@ -723,5 +685,6 @@ __kernel void Main(__global uchar* data,
     const uint packedColor = PackPixel(cfg, newColor);
 
     SetScratch(data, idx, size, newColor);
+    SetRand(data, idx, size, rand);
     SetScreen(data, idx, size, packedColor);
 }

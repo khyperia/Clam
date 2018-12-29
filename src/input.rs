@@ -1,6 +1,6 @@
 use failure::Error;
 use sdl2::keyboard::Scancode as Key;
-use settings::{Settings, SettingValue};
+use settings::{SettingValue, Settings};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Instant;

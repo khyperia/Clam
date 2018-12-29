@@ -206,7 +206,7 @@ mod default_settings {
         ("fixed_radius_2", SettingValue::F32(1.0, -0.5), false),
         ("min_radius_2", SettingValue::F32(0.125, -0.5), false),
         ("dof_amount", SettingValue::F32(0.001, -0.5), false),
-        ("fog_distance", SettingValue::F32(1.000, -0.5), false),
+        ("fog_distance", SettingValue::F32(10.0, -1.0), false),
         ("light_pos_1_x", SettingValue::F32(3.0, 0.5), false),
         ("light_pos_1_y", SettingValue::F32(3.5, 0.5), false),
         ("light_pos_1_z", SettingValue::F32(2.5, 0.5), false),

@@ -142,8 +142,6 @@ impl MandelboxCfg {
                 if let SettingValue::F32(x, _) = old_value {
                     *x = new_value;
                 }
-                //let rate_of_change = match *old_value { SettingValue::F32(_, x) => x, _ => panic!("Incorrect type") };
-                //*old_value = SettingValue::F32(new_value, rate_of_change);
             } else if let Some(&mut new_value) = self.get_u32_mut(name) {
                 *old_value = SettingValue::U32(new_value);
             }

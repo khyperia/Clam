@@ -6,11 +6,11 @@ extern crate sdl2;
 mod display;
 mod fps_counter;
 mod input;
+mod interactive;
 mod kernel;
 mod mandelbox_cfg;
 mod progress;
 mod settings;
-mod interactive;
 
 use display::Image;
 use failure::Error;
@@ -41,11 +41,11 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
     settings.load("settings.clam5")?;
     settings.all_constants();
-    let mut kernel = Kernel::new(width, height, &settings)?;
+    let mut kernel = Kernel::create(width, height, &settings)?;
     let progress = Progress::new();
     let progress_count = (rpp / 20).min(4).max(16);
     for ray in 0..rpp {
-        let _ = kernel.run(&settings)?;
+        kernel.run(&settings)?;
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync_renderer()?;
             let value = ray as f32 / rpp as f32;
@@ -62,7 +62,7 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
 
 fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> Result<(), Error> {
     for _ in 0..rpp {
-        let _ = kernel.run(&settings)?;
+        kernel.run(&settings)?;
     }
     let image = kernel.download()?;
     save_image(&image, &format!("render{:03}.png", frame))?;
@@ -72,7 +72,7 @@ fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> 
 fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
     let mut default_settings = Settings::new();
     default_settings.clear_constants();
-    let mut kernel = Kernel::new(width, height, &default_settings)?;
+    let mut kernel = Kernel::create(width, height, &default_settings)?;
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
     for frame in 0..frames {

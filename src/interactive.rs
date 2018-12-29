@@ -18,7 +18,7 @@ pub enum DownloadResult {
 }
 
 impl InteractiveKernel {
-    pub fn new(
+    pub fn create(
         width: u32,
         height: u32,
         settings_input: Arc<Mutex<(Settings, Input)>>,
@@ -27,10 +27,10 @@ impl InteractiveKernel {
         let (image_send, image_recv) = mpsc::sync_channel(2);
 
         thread::spawn(move || {
-            let kernel = Kernel::new(width, height, &settings_input.lock().unwrap().0).unwrap();
-            match Self::run_thread(kernel, screen_recv, image_send, settings_input) {
+            let kernel = Kernel::create(width, height, &settings_input.lock().unwrap().0).unwrap();
+            match Self::run_thread(kernel, &screen_recv, &image_send, &settings_input) {
                 Ok(()) => (),
-                Err(err) => println!("Error in kernel thread: {}", err),
+                Err(err) => panic!("Error in kernel thread: {}", err),
             }
         });
 
@@ -62,9 +62,9 @@ impl InteractiveKernel {
 
     fn run_thread(
         mut kernel: Kernel,
-        screen_events: mpsc::Receiver<ScreenEvent>,
-        send_image: mpsc::SyncSender<Image>,
-        settings_input: Arc<Mutex<(Settings, Input)>>,
+        screen_events: &mpsc::Receiver<ScreenEvent>,
+        send_image: &mpsc::SyncSender<Image>,
+        settings_input: &Arc<Mutex<(Settings, Input)>>,
     ) -> Result<(), Error> {
         loop {
             loop {
