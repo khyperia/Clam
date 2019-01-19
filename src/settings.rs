@@ -1,6 +1,5 @@
 use failure::Error;
 use input::Input;
-use mandelbox_cfg::MandelboxCfg;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
@@ -131,6 +130,14 @@ impl Settings {
         default_settings::nth(index)
     }
 
+    pub fn default_for(key: &str) -> Option<SettingValue> {
+        default_settings::default_for(key)
+    }
+
+    pub fn keys() -> impl Iterator<Item = &'static str> {
+        default_settings::keys()
+    }
+
     pub fn status(&self, input: &Input) -> String {
         let keys = default_settings::keys();
         //let mut keys = self.value_map.keys().collect::<Vec<_>>();
@@ -165,6 +172,8 @@ impl Settings {
 
 mod default_settings {
     use super::SettingValue;
+    use super::Settings;
+    use input::Vector;
     use std::collections::HashMap;
     use std::collections::HashSet;
 
@@ -188,8 +197,51 @@ mod default_settings {
         DEFAULTS[index].0
     }
 
+    pub fn default_for(key: &str) -> Option<SettingValue> {
+        for &(name, value, _) in DEFAULTS.iter() {
+            if name == key {
+                return Some(value);
+            }
+        }
+        None
+    }
+
+    pub fn normalize(settings: &mut Settings) {
+        fn get_f32(settings: &mut Settings, key: &str) -> (f32, f32) {
+            match settings.get(key) {
+                Some(&SettingValue::F32(x, scale)) => (x, scale),
+                _ => panic!("Missing key {}", key),
+            }
+        }
+        let (look_x, look_x_scale) = get_f32(settings, "look_x");
+        let (look_y, look_y_scale) = get_f32(settings, "look_y");
+        let (look_z, look_z_scale) = get_f32(settings, "look_z");
+        let (up_x, up_x_scale) = get_f32(settings, "up_x");
+        let (up_y, up_y_scale) = get_f32(settings, "up_y");
+        let (up_z, up_z_scale) = get_f32(settings, "up_z");
+        let mut look = Vector::new(look_x, look_y, look_z);
+        let mut up = Vector::new(up_x, up_y, up_z);
+        look = look.normalized();
+        up = Vector::cross(Vector::cross(look, up), look).normalized();
+        settings.insert(
+            "look_x".to_string(),
+            SettingValue::F32(look.x, look_x_scale),
+        );
+        settings.insert(
+            "look_y".to_string(),
+            SettingValue::F32(look.y, look_y_scale),
+        );
+        settings.insert(
+            "look_z".to_string(),
+            SettingValue::F32(look.z, look_z_scale),
+        );
+        settings.insert("up_x".to_string(), SettingValue::F32(up.x, up_x_scale));
+        settings.insert("up_y".to_string(), SettingValue::F32(up.y, up_y_scale));
+        settings.insert("up_z".to_string(), SettingValue::F32(up.z, up_z_scale));
+    }
+
     // name, value, is_const
-    const DEFAULTS: [(&str, SettingValue, bool); 41] = [
+    const DEFAULTS: [(&str, SettingValue, bool); 42] = [
         ("pos_x", SettingValue::F32(0.0, 1.0), false),
         ("pos_y", SettingValue::F32(0.0, 1.0), false),
         ("pos_z", SettingValue::F32(5.0, 1.0), false),
@@ -207,6 +259,7 @@ mod default_settings {
         ("min_radius_2", SettingValue::F32(0.125, -0.5), false),
         ("dof_amount", SettingValue::F32(0.001, -0.5), false),
         ("fog_distance", SettingValue::F32(10.0, -1.0), false),
+        ("fog_brightness", SettingValue::F32(1.0, 0.5), false),
         ("light_pos_1_x", SettingValue::F32(3.0, 0.5), false),
         ("light_pos_1_y", SettingValue::F32(3.5, 0.5), false),
         ("light_pos_1_z", SettingValue::F32(2.5, 0.5), false),
@@ -219,7 +272,11 @@ mod default_settings {
         ("ambient_brightness_b", SettingValue::F32(1.0, -0.5), false),
         ("reflect_brightness", SettingValue::F32(1.0, 0.125), false),
         ("surface_color_shift", SettingValue::F32(0.0, 0.25), false),
-        ("surface_color_saturation", SettingValue::F32(1.0, 0.125), false),
+        (
+            "surface_color_saturation",
+            SettingValue::F32(1.0, 0.125),
+            false,
+        ),
         ("bailout", SettingValue::F32(1024.0, -1.0), true),
         ("de_multiplier", SettingValue::F32(0.95, 0.125), true),
         ("max_ray_dist", SettingValue::F32(16.0, -0.5), true),
@@ -322,10 +379,7 @@ impl KeyframeList {
             let result = interpolate(prev, cur, next, next2, time);
             self.base.insert(key, result);
         }
-        let mut default = MandelboxCfg::default();
-        default.read(&self.base);
-        default.normalize();
-        default.write(&mut self.base.value_map);
+        default_settings::normalize(&mut self.base);
         &self.base
     }
 }

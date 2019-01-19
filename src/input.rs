@@ -19,14 +19,14 @@ impl Input {
     fn help() {
         println!("Keybindings:");
         // free:
-        // QET
+        // QE
         // G
         //
         println!("WASD, [space]Z, IJKL, OU: move camera");
         println!("RF: focal distance/move speed");
         println!("NM: field of view");
         println!("Y: Write settings to disk. P: Read settings. V: Write keyframe.");
-        println!("up/down/left/right: Adjust settings");
+        println!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
         println!("C: Toggle constant. B: Recompile kernel with new constants.");
         println!("X: Copy position to lightsource position");
         println!("H: Print this message");
@@ -105,6 +105,27 @@ impl Input {
                 if let SettingValue::U32(value) = *settings.get(key).unwrap() {
                     settings.insert(key.into(), SettingValue::U32(value + 1));
                 }
+            }
+            Key::T => {
+                let key = settings.nth(self.index);
+                let default = Settings::default_for(key).unwrap();
+                let new_value = match *settings.get(key).unwrap() {
+                    SettingValue::U32(value) => {
+                        if value == 0 {
+                            default
+                        } else {
+                            SettingValue::U32(0)
+                        }
+                    }
+                    SettingValue::F32(value, speed) => {
+                        if value == 0.0 {
+                            default
+                        } else {
+                            SettingValue::F32(0.0, speed)
+                        }
+                    }
+                };
+                settings.insert(key.to_string(), new_value);
             }
             Key::C => {
                 let key = settings.nth(self.index);

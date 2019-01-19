@@ -1,8 +1,6 @@
-use input::Vector;
 use ocl;
 use settings::SettingValue;
 use settings::Settings;
-use std::collections::HashMap;
 
 #[repr(C)]
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
@@ -24,6 +22,7 @@ pub struct MandelboxCfg {
     min_radius_2: f32,
     dof_amount: f32,
     fog_distance: f32,
+    fog_brightness: f32,
     light_pos_1_x: f32,
     light_pos_1_y: f32,
     light_pos_1_z: f32,
@@ -71,6 +70,7 @@ impl MandelboxCfg {
             "min_radius_2" => &mut self.min_radius_2,
             "dof_amount" => &mut self.dof_amount,
             "fog_distance" => &mut self.fog_distance,
+            "fog_brightness" => &mut self.fog_brightness,
             "light_pos_1_x" => &mut self.light_pos_1_x,
             "light_pos_1_y" => &mut self.light_pos_1_y,
             "light_pos_1_z" => &mut self.light_pos_1_z,
@@ -119,31 +119,6 @@ impl MandelboxCfg {
                         *old = new;
                     }
                 }
-            }
-        }
-    }
-
-    pub fn normalize(&mut self) {
-        let mut look = Vector::new(self.look_x, self.look_y, self.look_z);
-        let mut up = Vector::new(self.up_x, self.up_y, self.up_z);
-        look = look.normalized();
-        up = Vector::cross(Vector::cross(look, up), look).normalized();
-        self.look_x = look.x;
-        self.look_y = look.y;
-        self.look_z = look.z;
-        self.up_x = up.x;
-        self.up_y = up.y;
-        self.up_z = up.z;
-    }
-
-    pub fn write(&mut self, settings: &mut HashMap<String, SettingValue>) {
-        for (name, old_value) in settings.iter_mut() {
-            if let Some(&mut new_value) = self.get_f32_mut(&name) {
-                if let SettingValue::F32(x, _) = old_value {
-                    *x = new_value;
-                }
-            } else if let Some(&mut new_value) = self.get_u32_mut(name) {
-                *old_value = SettingValue::U32(new_value);
             }
         }
     }

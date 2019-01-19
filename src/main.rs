@@ -37,13 +37,23 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn progress_count(rpp: u32) -> u32 {
+    (rpp / 20).min(4).max(16)
+}
+
+#[cfg(windows)]
+fn progress_count(_: u32) -> u32 {
+    1
+}
+
 fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
     settings.load("settings.clam5")?;
     settings.all_constants();
     let mut kernel = Kernel::create(width, height, &settings)?;
     let progress = Progress::new();
-    let progress_count = (rpp / 20).min(4).max(16);
+    let progress_count = progress_count(rpp);
     for ray in 0..rpp {
         kernel.run(&settings)?;
         if ray > 0 && ray % progress_count == 0 {

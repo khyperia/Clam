@@ -104,8 +104,67 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
     Ok(())
 }
 
+fn generate_rust_struct(settings: &Settings) -> String {
+    let mut result = String::new();
+    result.push_str("pub struct MandelboxCfg {\n");
+    for name in Settings::keys() {
+        if name == "render_scale" {
+            continue;
+        }
+        let value = settings.get(name).unwrap();
+        match value {
+            SettingValue::U32(_) => result.push_str(&format!("    {}: u32,\n", name)),
+            SettingValue::F32(_, _) => result.push_str(&format!("    {}: f32,\n", name)),
+        }
+    }
+    result.push_str("}\n");
+    result
+}
+
+fn generate_header(settings: &Settings) -> String {
+    let mut result = String::new();
+    result.push_str("struct MandelboxCfg\n");
+    result.push_str("{\n");
+    for name in Settings::keys() {
+        if name == "render_scale" {
+            continue;
+        }
+        let value = settings.get(name).unwrap();
+        match value {
+            SettingValue::U32(_) => result.push_str(&format!("    int _{};\n", name)),
+            SettingValue::F32(_, _) => result.push_str(&format!("    float _{};\n", name)),
+        }
+    }
+    result.push_str("};\n\n");
+    for name in Settings::keys() {
+        if name == "render_scale" {
+            continue;
+        }
+        result.push_str(&format!("#ifndef {}\n", name));
+        result.push_str(&format!("#define {} cfg->_{}\n", name, name));
+        result.push_str(&format!("#endif\n"));
+    }
+    result
+}
+
+fn check_header(settings: &Settings) -> bool {
+    let header = generate_header(settings);
+    if !MANDELBOX.starts_with(&header) {
+        println!("Header check failed:");
+        println!("{}", header);
+        println!("-----");
+        println!("{}", generate_rust_struct(settings));
+        false
+    } else {
+        true
+    }
+}
+
 impl Kernel {
     pub fn create(width: u32, height: u32, settings: &Settings) -> Result<Self, Error> {
+        if !check_header(settings) {
+            return Err(failure::err_msg("Header didn't start with proper struct"));
+        }
         let context = Self::make_context()?;
         let device = context.devices()[0];
         let device_name = device.name()?;
@@ -190,7 +249,7 @@ impl Kernel {
                         return Ok(ocl::Context::builder()
                             .platform(platform)
                             .devices(device)
-                            .build()?)
+                            .build()?);
                     }
                     Some(_) => (),
                     None => println!("[{}]: {}", i, device.name()?),

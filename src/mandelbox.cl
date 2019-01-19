@@ -17,6 +17,7 @@ struct MandelboxCfg
     float _min_radius_2;
     float _dof_amount;
     float _fog_distance;
+    float _fog_brightness;
     float _light_pos_1_x;
     float _light_pos_1_y;
     float _light_pos_1_z;
@@ -93,6 +94,9 @@ struct MandelboxCfg
 #ifndef fog_distance
 #define fog_distance cfg->_fog_distance
 #endif
+#ifndef fog_brightness
+#define fog_brightness cfg->_fog_brightness
+#endif
 #ifndef light_pos_1_x
 #define light_pos_1_x cfg->_light_pos_1_x
 #endif
@@ -102,6 +106,9 @@ struct MandelboxCfg
 #ifndef light_pos_1_z
 #define light_pos_1_z cfg->_light_pos_1_z
 #endif
+#ifndef light_radius_1
+#define light_radius_1 cfg->_light_radius_1
+#endif
 #ifndef light_brightness_1_r
 #define light_brightness_1_r cfg->_light_brightness_1_r
 #endif
@@ -110,9 +117,6 @@ struct MandelboxCfg
 #endif
 #ifndef light_brightness_1_b
 #define light_brightness_1_b cfg->_light_brightness_1_b
-#endif
-#ifndef light_radius_1
-#define light_radius_1 cfg->_light_radius_1
 #endif
 #ifndef ambient_brightness_r
 #define ambient_brightness_r cfg->_ambient_brightness_r
@@ -512,6 +516,7 @@ static float3 Trace(
         {
             // hit fog, do fog calculations
             newDir = Random_Sphere(rand);
+            reflectionColor *= fog_brightness;
         }
         else
         {
@@ -535,6 +540,11 @@ static float3 Trace(
         }
 
         ray = new_Ray(newPos, newDir);
+
+        if (dot(reflectionColor, reflectionColor) == 0)
+        {
+            break;
+        }
     }
     return rayColor;
 }
