@@ -11,6 +11,7 @@ mod kernel;
 mod mandelbox_cfg;
 mod progress;
 mod settings;
+mod kernel_compilation;
 
 use display::Image;
 use failure::Error;

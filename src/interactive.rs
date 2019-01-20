@@ -2,6 +2,7 @@ use display::{Image, ScreenEvent};
 use failure::Error;
 use input::Input;
 use kernel::Kernel;
+use kernel_compilation;
 use settings::Settings;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -25,6 +26,8 @@ impl InteractiveKernel {
     ) -> Result<Self, Error> {
         let (screen_send, screen_recv) = mpsc::channel();
         let (image_send, image_recv) = mpsc::sync_channel(2);
+
+        kernel_compilation::watch_src(screen_send.clone())?;
 
         thread::spawn(move || {
             let kernel = Kernel::create(width, height, &settings_input.lock().unwrap().0).unwrap();
@@ -76,6 +79,11 @@ impl InteractiveKernel {
 
                 match event {
                     ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
+                    ScreenEvent::KernelChanged => {
+                        let mut locked = settings_input.lock().unwrap();
+                        let (ref settings, _) = *locked;
+                        kernel.rebuild(settings)?
+                    }
                 }
             }
 
@@ -84,7 +92,7 @@ impl InteractiveKernel {
                 let (ref mut settings, ref mut input) = *locked;
                 input.integrate(settings);
                 if settings.check_rebuild() {
-                    kernel.rebuild_self(settings)?;
+                    kernel.rebuild(settings)?;
                 }
                 (*settings).clone()
             };

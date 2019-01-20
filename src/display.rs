@@ -38,6 +38,7 @@ impl Image {
 
 pub enum ScreenEvent {
     Resize(u32, u32),
+    KernelChanged,
 }
 
 fn find_font() -> Result<&'static Path, Error> {
