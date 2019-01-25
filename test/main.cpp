@@ -25,6 +25,7 @@ struct MandelboxCfg
     float min_radius_2;
     float dof_amount;
     float fog_distance;
+    float fog_brightness;
     float light_pos_1_x;
     float light_pos_1_y;
     float light_pos_1_z;
@@ -36,6 +37,7 @@ struct MandelboxCfg
     float ambient_brightness_g;
     float ambient_brightness_b;
     float reflect_brightness;
+    float surface_color_variance;
     float surface_color_shift;
     float surface_color_saturation;
     float bailout;
@@ -47,53 +49,53 @@ struct MandelboxCfg
     int max_iters;
     int max_ray_steps;
     int num_ray_bounces;
-    int speed_boost;
 };
 
 static struct MandelboxCfg make_default()
 {
     struct MandelboxCfg result;
-    // s/("\([^ ]*\)", SettingValue::.32(\([^,)]*\).*/result.\1 = \2;/g
-    result.pos_x = 0.0;
-    result.pos_y = 0.0;
-    result.pos_z = 5.0;
-    result.look_x = 0.0;
-    result.look_y = 0.0;
-    result.look_z = -1.0;
-    result.up_x = 0.0;
-    result.up_y = 1.0;
-    result.up_z = 0.0;
-    result.fov = 1.0;
-    result.focal_distance = 3.0;
-    result.scale = -2.0;
-    result.folding_limit = 1.0;
-    result.fixed_radius_2 = 1.0;
-    result.min_radius_2 = 0.125;
+    // s/("\([^ ]*\)", SettingValue::.32(\([^,)]*\).*/result.\1 = \2f;/g
+    result.pos_x = 0.0f;
+    result.pos_y = 0.0f;
+    result.pos_z = 5.0f;
+    result.look_x = 0.0f;
+    result.look_y = 0.0f;
+    result.look_z = -1.0f;
+    result.up_x = 0.0f;
+    result.up_y = 1.0f;
+    result.up_z = 0.0f;
+    result.fov = 1.0f;
+    result.focal_distance = 3.0f;
+    result.scale = -2.0f;
+    result.folding_limit = 1.0f;
+    result.fixed_radius_2 = 1.0f;
+    result.min_radius_2 = 0.125f;
     result.dof_amount = 0.001f;
-    result.fog_distance = 10.0;
-    result.light_pos_1_x = 3.0;
-    result.light_pos_1_y = 3.5;
-    result.light_pos_1_z = 2.5;
-    result.light_radius_1 = 1.0;
-    result.light_brightness_1_r = 5.0;
-    result.light_brightness_1_g = 5.0;
-    result.light_brightness_1_b = 4.0;
+    result.fog_distance = 10.0f;
+    result.fog_brightness = 1.0f;
+    result.light_pos_1_x = 3.0f;
+    result.light_pos_1_y = 3.5f;
+    result.light_pos_1_z = 2.5f;
+    result.light_radius_1 = 1.0f;
+    result.light_brightness_1_r = 5.0f;
+    result.light_brightness_1_g = 5.0f;
+    result.light_brightness_1_b = 4.0f;
     result.ambient_brightness_r = 0.8f;
     result.ambient_brightness_g = 0.8f;
     result.ambient_brightness_b = 1.0f;
-    result.reflect_brightness = 1.0;
-    result.surface_color_shift = 0.0;
-    result.surface_color_saturation = 1.0;
-    result.bailout = 1024.0;
+    result.reflect_brightness = 1.0f;
+    result.surface_color_variance = 1.0f;
+    result.surface_color_shift = 0.0f;
+    result.surface_color_saturation = 1.0f;
+    result.bailout = 1024.0f;
     result.de_multiplier = 0.95f;
-    result.max_ray_dist = 16.0;
-    result.quality_first_ray = 2.0;
-    result.quality_rest_ray = 64.0;
+    result.max_ray_dist = 16.0f;
+    result.quality_first_ray = 2.0f;
+    result.quality_rest_ray = 64.0f;
     result.white_clamp = 1;
     result.max_iters = 64;
     result.max_ray_steps = 256;
     result.num_ray_bounces = 3;
-    result.speed_boost = 1;
     return result;
 }
 

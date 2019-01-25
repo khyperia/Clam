@@ -29,6 +29,7 @@ struct MandelboxCfg
     float _ambient_brightness_g;
     float _ambient_brightness_b;
     float _reflect_brightness;
+    float _surface_color_variance;
     float _surface_color_shift;
     float _surface_color_saturation;
     float _bailout;
@@ -40,7 +41,6 @@ struct MandelboxCfg
     int _max_iters;
     int _max_ray_steps;
     int _num_ray_bounces;
-    int _speed_boost;
 };
 
 #ifndef pos_x
@@ -130,6 +130,9 @@ struct MandelboxCfg
 #ifndef reflect_brightness
 #define reflect_brightness cfg->_reflect_brightness
 #endif
+#ifndef surface_color_variance
+#define surface_color_variance cfg->_surface_color_variance
+#endif
 #ifndef surface_color_shift
 #define surface_color_shift cfg->_surface_color_shift
 #endif
@@ -162,9 +165,6 @@ struct MandelboxCfg
 #endif
 #ifndef num_ray_bounces
 #define num_ray_bounces cfg->_num_ray_bounces
-#endif
-#ifndef speed_boost
-#define speed_boost cfg->_speed_boost
 #endif
 
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
@@ -423,6 +423,7 @@ static struct Material Material(Cfg cfg, float3 offset)
     float base_color;
     const float de = DeMandelbox(cfg, offset, &base_color);
 
+    base_color *= surface_color_variance;
     base_color += surface_color_shift;
     float3 color = (float3)(
         sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));

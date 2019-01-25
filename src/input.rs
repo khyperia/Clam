@@ -45,7 +45,7 @@ impl Input {
         }
         match self.run_down(key, settings) {
             Ok(()) => (),
-            Err(err) => println!("Error handing key down event: {}", err),
+            Err(err) => println!("Error handling key down event: {}", err),
         }
     }
 

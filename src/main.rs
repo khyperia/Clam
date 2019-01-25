@@ -8,10 +8,10 @@ mod fps_counter;
 mod input;
 mod interactive;
 mod kernel;
+mod kernel_compilation;
 mod mandelbox_cfg;
 mod progress;
 mod settings;
-mod kernel_compilation;
 
 use display::Image;
 use failure::Error;

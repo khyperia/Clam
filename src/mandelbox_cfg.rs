@@ -34,6 +34,7 @@ pub struct MandelboxCfg {
     ambient_brightness_g: f32,
     ambient_brightness_b: f32,
     reflect_brightness: f32,
+    surface_color_variance: f32,
     surface_color_shift: f32,
     surface_color_saturation: f32,
     bailout: f32,
@@ -45,7 +46,6 @@ pub struct MandelboxCfg {
     max_iters: u32,
     max_ray_steps: u32,
     num_ray_bounces: u32,
-    speed_boost: u32,
 }
 
 unsafe impl ocl::traits::OclPrm for MandelboxCfg {}
@@ -82,6 +82,7 @@ impl MandelboxCfg {
             "ambient_brightness_g" => &mut self.ambient_brightness_g,
             "ambient_brightness_b" => &mut self.ambient_brightness_b,
             "reflect_brightness" => &mut self.reflect_brightness,
+            "surface_color_variance" => &mut self.surface_color_variance,
             "surface_color_shift" => &mut self.surface_color_shift,
             "surface_color_saturation" => &mut self.surface_color_saturation,
             "bailout" => &mut self.bailout,
@@ -100,7 +101,6 @@ impl MandelboxCfg {
             "max_iters" => &mut self.max_iters,
             "max_ray_steps" => &mut self.max_ray_steps,
             "num_ray_bounces" => &mut self.num_ray_bounces,
-            "speed_boost" => &mut self.speed_boost,
             _ => return None,
         };
         Some(val)

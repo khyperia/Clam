@@ -271,6 +271,11 @@ mod default_settings {
         ("ambient_brightness_g", SettingValue::F32(0.8, -0.5), false),
         ("ambient_brightness_b", SettingValue::F32(1.0, -0.5), false),
         ("reflect_brightness", SettingValue::F32(1.0, 0.125), false),
+        (
+            "surface_color_variance",
+            SettingValue::F32(1.0, -0.25),
+            false,
+        ),
         ("surface_color_shift", SettingValue::F32(0.0, 0.25), false),
         (
             "surface_color_saturation",
@@ -286,7 +291,6 @@ mod default_settings {
         ("max_iters", SettingValue::U32(64), true),
         ("max_ray_steps", SettingValue::U32(256), true),
         ("num_ray_bounces", SettingValue::U32(3), true),
-        ("speed_boost", SettingValue::U32(1), true),
         ("render_scale", SettingValue::U32(1), false),
     ];
 }
