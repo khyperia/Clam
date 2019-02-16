@@ -22,12 +22,12 @@ struct MandelboxCfg
     float _light_pos_1_y;
     float _light_pos_1_z;
     float _light_radius_1;
-    float _light_brightness_1_r;
-    float _light_brightness_1_g;
-    float _light_brightness_1_b;
-    float _ambient_brightness_r;
-    float _ambient_brightness_g;
-    float _ambient_brightness_b;
+    float _light_brightness_1_hue;
+    float _light_brightness_1_sat;
+    float _light_brightness_1_val;
+    float _ambient_brightness_hue;
+    float _ambient_brightness_sat;
+    float _ambient_brightness_val;
     float _reflect_brightness;
     float _surface_color_variance;
     float _surface_color_shift;
@@ -109,23 +109,23 @@ struct MandelboxCfg
 #ifndef light_radius_1
 #define light_radius_1 cfg->_light_radius_1
 #endif
-#ifndef light_brightness_1_r
-#define light_brightness_1_r cfg->_light_brightness_1_r
+#ifndef light_brightness_1_hue
+#define light_brightness_1_hue cfg->_light_brightness_1_hue
 #endif
-#ifndef light_brightness_1_g
-#define light_brightness_1_g cfg->_light_brightness_1_g
+#ifndef light_brightness_1_sat
+#define light_brightness_1_sat cfg->_light_brightness_1_sat
 #endif
-#ifndef light_brightness_1_b
-#define light_brightness_1_b cfg->_light_brightness_1_b
+#ifndef light_brightness_1_val
+#define light_brightness_1_val cfg->_light_brightness_1_val
 #endif
-#ifndef ambient_brightness_r
-#define ambient_brightness_r cfg->_ambient_brightness_r
+#ifndef ambient_brightness_hue
+#define ambient_brightness_hue cfg->_ambient_brightness_hue
 #endif
-#ifndef ambient_brightness_g
-#define ambient_brightness_g cfg->_ambient_brightness_g
+#ifndef ambient_brightness_sat
+#define ambient_brightness_sat cfg->_ambient_brightness_sat
 #endif
-#ifndef ambient_brightness_b
-#define ambient_brightness_b cfg->_ambient_brightness_b
+#ifndef ambient_brightness_val
+#define ambient_brightness_val cfg->_ambient_brightness_val
 #endif
 #ifndef reflect_brightness
 #define reflect_brightness cfg->_reflect_brightness
@@ -172,6 +172,31 @@ struct MandelboxCfg
 
 typedef __private struct MandelboxCfg const* Cfg;
 
+static float3 HueToRGB(float hue, float saturation, float value)
+{
+    hue *= 3;
+    float frac = fmod(hue, 1.0f);
+    float3 color;
+    switch ((int)hue)
+    {
+        case 0:
+            color = (float3)(1 - frac, frac, 0);
+            break;
+        case 1:
+            color = (float3)(0, 1 - frac, frac);
+            break;
+        case 2:
+            color = (float3)(frac, 0, 1 - frac);
+            break;
+        default:
+            color = (float3)(1, 1, 1);
+            break;
+    }
+    saturation = value * (1 - saturation);
+    color = color * (value - saturation) + (float3)(saturation, saturation, saturation);
+    return color;
+}
+
 static float3 LightPos1(Cfg cfg)
 {
     return (float3)(light_pos_1_x, light_pos_1_y, light_pos_1_z);
@@ -179,13 +204,13 @@ static float3 LightPos1(Cfg cfg)
 
 static float3 LightBrightness1(Cfg cfg)
 {
-    return (float3)(light_brightness_1_r, light_brightness_1_g, light_brightness_1_b) /
-           reflect_brightness;
+    return HueToRGB(light_brightness_1_hue, light_brightness_1_sat, light_brightness_1_val) /
+        reflect_brightness;
 }
 
 static float3 AmbientBrightness(Cfg cfg)
 {
-    return (float3)(ambient_brightness_r, ambient_brightness_g, ambient_brightness_b) /
+    return HueToRGB(ambient_brightness_hue, ambient_brightness_sat, ambient_brightness_val) /
            reflect_brightness;
 }
 
@@ -201,11 +226,6 @@ static float Random_Next(struct Random* this)
     this->seed = x * ((ulong)4294883355U) + c;
     return (x ^ c) / 4294967296.0f;
 }
-// static float Random_Next(struct Random* this)
-// {
-//     this->seed = (this->seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1);
-//     return (this->seed >> 16) / 4294967296.0f;
-// }
 
 static struct Random new_Random(uint idx, uint frame, uint global_size)
 {
@@ -290,8 +310,9 @@ static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struc
     const float3 origin = (float3)(pos_x, pos_y, pos_z);
     const float3 look = (float3)(look_x, look_y, look_z);
     const float3 up = (float3)(up_x, up_y, up_z);
+    const float2 antialias = (float2)(Random_Next(rand), Random_Next(rand)) - (float2)(0.5f, 0.5f);
     const float2 screenCoords =
-        (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2));
+        (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2)) + antialias;
     const float calcFov = fov * 2 / (width + height);
     const float3 direction = RayDir(look, up, screenCoords, calcFov);
     struct Ray result = new_Ray(origin, direction);
@@ -402,12 +423,18 @@ static float DeMandelbox(Cfg cfg, float3 offset, float* color_data)
     return length(z) / dz;
 }
 
+static float Plane(float3 pos, float3 plane)
+{
+    return dot(pos, normalize(plane)) - length(plane);
+}
+
 static float De(Cfg cfg, float3 offset)
 {
     float color_data;
     const float mbox = DeMandelbox(cfg, offset, &color_data);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
-    return min(light1, mbox);
+    const float cut = Plane(offset, LightPos1(cfg));
+    return max(min(light1, mbox), cut);
 }
 
 struct Material
@@ -427,7 +454,7 @@ static struct Material Material(Cfg cfg, float3 offset)
     base_color += surface_color_shift;
     float3 color = (float3)(
         sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
-    float specular = 0.2f;
+    float specular = 0.0f;
     color = color * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
     color = surface_color_saturation * (color - (float3)(1, 1, 1)) + (float3)(1, 1, 1);
 
