@@ -135,8 +135,8 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
 }
 
 fn interactive_cmd() -> Result<(), Error> {
-    let width = 200;
-    let height = 200;
+    let width = 1920;
+    let height = 1080;
     display::display(width, height)
 }
 
