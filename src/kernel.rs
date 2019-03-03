@@ -2,7 +2,6 @@ use display::Image;
 use failure;
 use failure::Error;
 use kernel_compilation;
-use mandelbox_cfg::MandelboxCfg;
 use ocl;
 use settings::SettingValue;
 use settings::Settings;
@@ -75,29 +74,28 @@ pub struct Kernel {
     queue: ocl::Queue,
     kernel: Option<ocl::Kernel>,
     data: KernelImage,
-    cpu_cfg: MandelboxCfg,
-    cfg: ocl::Buffer<MandelboxCfg>,
+    cpu_cfg: Vec<u8>,
+    cfg: Option<ocl::Buffer<u8>>,
     old_settings: Settings,
     frame: u32,
 }
 
 impl Kernel {
-    pub fn create(width: u32, height: u32, settings: &Settings) -> Result<Self, Error> {
-        if !kernel_compilation::check_header(settings) {
-            return Err(failure::err_msg("Header didn't start with proper struct"));
-        }
+    pub fn create(width: u32, height: u32, settings: &mut Settings) -> Result<Self, Error> {
+        // if !kernel_compilation::check_header(settings) {
+        //     return Err(failure::err_msg("Header didn't start with proper struct"));
+        // }
         let context = Self::make_context()?;
         let device = context.devices()[0];
         let device_name = device.name()?;
         println!("Using device: {}", device_name);
         let queue = ocl::Queue::new(&context, device, None)?;
-        let cfg = ocl::Buffer::builder().context(&context).len(1).build()?;
         let mut result = Kernel {
             queue: queue.clone(),
             kernel: None,
             data: KernelImage::new(queue, width, height),
-            cpu_cfg: MandelboxCfg::default(),
-            cfg,
+            cpu_cfg: Vec::new(),
+            cfg: None,
             old_settings: settings.clone(),
             frame: 0,
         };
@@ -105,7 +103,7 @@ impl Kernel {
         Ok(result)
     }
 
-    pub fn rebuild(&mut self, settings: &Settings) -> Result<(), Error> {
+    pub fn rebuild(&mut self, settings: &mut Settings) -> Result<(), Error> {
         let new_kernel = kernel_compilation::rebuild(&self.queue, settings);
         match new_kernel {
             Ok(k) => {
@@ -176,11 +174,19 @@ impl Kernel {
     }
 
     fn update(&mut self, settings: &Settings) -> Result<(), Error> {
-        let old_cfg = self.cpu_cfg;
-        self.cpu_cfg.read(settings);
-        if old_cfg != self.cpu_cfg {
-            let to_write = &[self.cpu_cfg] as &[_];
-            self.cfg.write(to_write).queue(&self.queue).enq()?;
+        let new_cfg = settings.serialize();
+        if self.cfg.is_none() || new_cfg != self.cpu_cfg {
+            if self.cfg.is_none() || new_cfg.len() != self.cpu_cfg.len() {
+                self.cfg = Some(
+                    ocl::Buffer::builder()
+                        .context(&self.queue.context())
+                        .len(new_cfg.len())
+                        .build()?,
+                );
+            }
+            self.cpu_cfg = new_cfg;
+            let to_write = &self.cpu_cfg as &[_];
+            self.cfg.as_ref().unwrap().write(to_write).queue(&self.queue).enq()?;
             self.frame = 0;
         }
 
@@ -200,7 +206,7 @@ impl Kernel {
         if let Some(ref kernel) = self.kernel {
             let (width, height) = self.data.size();
             kernel.set_arg(0, self.data.data()?)?;
-            kernel.set_arg(1, &self.cfg)?;
+            kernel.set_arg(1, self.cfg.as_ref().unwrap())?;
             kernel.set_arg(2, width as u32)?;
             kernel.set_arg(3, height as u32)?;
             kernel.set_arg(4, self.frame as u32)?;

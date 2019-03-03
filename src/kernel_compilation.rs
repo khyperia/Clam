@@ -1,6 +1,5 @@
 use display::ScreenEvent;
 use failure::Error;
-use mandelbox_cfg::MandelboxCfg;
 use settings::{SettingValue, Settings};
 use std::env;
 use std::fs::File;
@@ -30,62 +29,6 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
         }
     }
     Ok(())
-}
-
-fn generate_rust_struct(settings: &Settings) -> String {
-    let mut result = String::new();
-    result.push_str("pub struct MandelboxCfg {\n");
-    for name in Settings::keys() {
-        if name == "render_scale" {
-            continue;
-        }
-        let value = settings.get(name).unwrap();
-        match value {
-            SettingValue::U32(_) => result.push_str(&format!("    {}: u32,\n", name)),
-            SettingValue::F32(_, _) => result.push_str(&format!("    {}: f32,\n", name)),
-        }
-    }
-    result.push_str("}\n");
-    result
-}
-
-fn generate_header(settings: &Settings) -> String {
-    let mut result = String::new();
-    result.push_str("struct MandelboxCfg\n");
-    result.push_str("{\n");
-    for name in Settings::keys() {
-        if name == "render_scale" {
-            continue;
-        }
-        let value = settings.get(name).unwrap();
-        match value {
-            SettingValue::U32(_) => result.push_str(&format!("    int _{};\n", name)),
-            SettingValue::F32(_, _) => result.push_str(&format!("    float _{};\n", name)),
-        }
-    }
-    result.push_str("};\n\n");
-    for name in Settings::keys() {
-        if name == "render_scale" {
-            continue;
-        }
-        result.push_str(&format!("#ifndef {}\n", name));
-        result.push_str(&format!("#define {} cfg->_{}\n", name, name));
-        result.push_str(&format!("#endif\n"));
-    }
-    result
-}
-
-pub fn check_header(settings: &Settings) -> bool {
-    let header = generate_header(settings);
-    if !MANDELBOX.starts_with(&header) {
-        println!("Header check failed:");
-        println!("{}", header);
-        println!("-----");
-        println!("{}", generate_rust_struct(settings));
-        false
-    } else {
-        true
-    }
 }
 
 // the "notify" crate is broken af, so roll our own
@@ -131,10 +74,12 @@ fn get_src() -> Result<String, Error> {
     Ok(contents)
 }
 
-pub fn rebuild(queue: &ocl::Queue, settings: &Settings) -> Result<ocl::Kernel, Error> {
+pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kernel, Error> {
     let program = {
         let mut builder = ocl::Program::builder();
-        builder.source(get_src()?);
+        let src = get_src()?;
+        settings.set_src(&src);
+        builder.source(src);
         builder.devices(queue.device());
         builder.cmplr_opt("-cl-fast-relaxed-math");
         let device_name = queue.device().name()?;
@@ -165,7 +110,7 @@ pub fn rebuild(queue: &ocl::Queue, settings: &Settings) -> Result<ocl::Kernel, E
         .program(&program)
         .name("Main")
         .arg(None::<&ocl::Buffer<u8>>)
-        .arg(None::<&ocl::Buffer<MandelboxCfg>>)
+        .arg(None::<&ocl::Buffer<u8>>)
         .arg(0u32)
         .arg(0u32)
         .arg(0u32)

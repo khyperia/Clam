@@ -1,5 +1,8 @@
+use byteorder::{NativeEndian, WriteBytesExt};
 use failure::Error;
 use input::Input;
+use input::Vector;
+use regex::Regex;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
@@ -15,6 +18,8 @@ pub enum SettingValue {
 
 #[derive(Clone, Default, PartialEq)]
 pub struct Settings {
+    ordered_names: Vec<String>,
+    default_values: HashMap<String, SettingValue>,
     value_map: HashMap<String, SettingValue>,
     constants: HashSet<String>,
     rebuild: bool,
@@ -22,10 +27,11 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Self {
-        let (value_map, constants) = default_settings::make_defaults();
         Settings {
-            value_map,
-            constants,
+            ordered_names: Vec::new(),
+            default_values: HashMap::new(),
+            value_map: HashMap::new(),
+            constants: HashSet::new(),
             rebuild: false,
         }
     }
@@ -39,7 +45,7 @@ impl Settings {
     }
 
     pub fn all_constants(&mut self) {
-        for key in self.value_map.keys() {
+        for key in &self.ordered_names {
             self.constants.insert(key.clone());
         }
     }
@@ -126,24 +132,19 @@ impl Settings {
         Ok(())
     }
 
-    pub fn nth(&self, index: usize) -> &'static str {
-        default_settings::nth(index)
+    pub fn nth(&self, index: usize) -> String {
+        self.ordered_names[index].clone()
     }
 
-    pub fn default_for(key: &str) -> Option<SettingValue> {
-        default_settings::default_for(key)
-    }
-
-    pub fn keys() -> impl Iterator<Item = &'static str> {
-        default_settings::keys()
+    pub fn default_for(&self, key: &str) -> Option<SettingValue> {
+        self.default_values.get(key).cloned()
     }
 
     pub fn status(&self, input: &Input) -> String {
-        let keys = default_settings::keys();
         //let mut keys = self.value_map.keys().collect::<Vec<_>>();
         //keys.sort();
         let mut builder = String::new();
-        for (ind, key) in keys.enumerate() {
+        for (ind, key) in self.ordered_names.iter().enumerate() {
             let is_const = self.is_const(key);
             let selected = if ind == input.index { "*" } else { " " };
             let constant = if is_const { "@" } else { " " };
@@ -168,131 +169,94 @@ impl Settings {
         self.rebuild = false;
         result
     }
-}
 
-mod default_settings {
-    use super::SettingValue;
-    use super::Settings;
-    use input::Vector;
-    use std::collections::HashMap;
-    use std::collections::HashSet;
-
-    pub fn keys() -> impl Iterator<Item = &'static str> {
-        DEFAULTS.iter().map(|&(x, _, _)| x)
-    }
-
-    pub fn make_defaults() -> (HashMap<String, SettingValue>, HashSet<String>) {
-        let mut value_map = HashMap::new();
-        let mut constants = HashSet::new();
-        for &(key, value, is_const) in DEFAULTS.iter() {
-            value_map.insert(key.to_string(), value);
+    pub fn set_src(&mut self, src: &str) {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(
+               r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *$"#).unwrap();
+        }
+        self.ordered_names.clear();
+        self.value_map.clear();
+        let mut once = false;
+        for cap in RE.captures_iter(src) {
+            once = true;
+            println!("match: {}", &cap[0]);
+            let kind = &cap["kind"];
+            let name = &cap["name"];
+            let setting = match kind {
+                "float" => {
+                    let value = cap["value"].parse().unwrap();
+                    let change = cap["change"].parse().unwrap();
+                    SettingValue::F32(value, change)
+                }
+                "int" => {
+                    let value = cap["value"].parse().unwrap();
+                    SettingValue::U32(value)
+                }
+                _ => {
+                    panic!("Regex returned invalid kind");
+                }
+            };
+            self.ordered_names.push(name.to_string());
+            self.value_map.insert(name.to_string(), setting);
+            let is_const = cap.name("const").is_some();
             if is_const {
-                constants.insert(key.to_string());
+                self.constants.insert(name.to_string());
+            } else {
+                self.constants.remove(name);
             }
         }
-        (value_map, constants)
+        self.ordered_names.push("render_scale".to_string());
+        self.value_map
+            .insert("render_scale".to_string(), SettingValue::U32(1));
+        assert!(once, "Regex should get at least one setting");
+        self.default_values = self.value_map.clone();
     }
 
-    pub fn nth(index: usize) -> &'static str {
-        DEFAULTS[index].0
-    }
-
-    pub fn default_for(key: &str) -> Option<SettingValue> {
-        for &(name, value, _) in DEFAULTS.iter() {
-            if name == key {
-                return Some(value);
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        for name in &self.ordered_names {
+            match self.get(name).expect("Missing setting") {
+                &SettingValue::F32(x, _) => result.write_f32::<NativeEndian>(x).unwrap(),
+                &SettingValue::U32(x) => result.write_u32::<NativeEndian>(x).unwrap(),
             }
         }
-        None
+        result
     }
 
-    pub fn normalize(settings: &mut Settings) {
+    pub fn normalize(&mut self) {
         fn get_f32(settings: &mut Settings, key: &str) -> (f32, f32) {
             match settings.get(key) {
                 Some(&SettingValue::F32(x, scale)) => (x, scale),
                 _ => panic!("Missing key {}", key),
             }
         }
-        let (look_x, look_x_scale) = get_f32(settings, "look_x");
-        let (look_y, look_y_scale) = get_f32(settings, "look_y");
-        let (look_z, look_z_scale) = get_f32(settings, "look_z");
-        let (up_x, up_x_scale) = get_f32(settings, "up_x");
-        let (up_y, up_y_scale) = get_f32(settings, "up_y");
-        let (up_z, up_z_scale) = get_f32(settings, "up_z");
+        let (look_x, look_x_scale) = get_f32(self, "look_x");
+        let (look_y, look_y_scale) = get_f32(self, "look_y");
+        let (look_z, look_z_scale) = get_f32(self, "look_z");
+        let (up_x, up_x_scale) = get_f32(self, "up_x");
+        let (up_y, up_y_scale) = get_f32(self, "up_y");
+        let (up_z, up_z_scale) = get_f32(self, "up_z");
         let mut look = Vector::new(look_x, look_y, look_z);
         let mut up = Vector::new(up_x, up_y, up_z);
         look = look.normalized();
         up = Vector::cross(Vector::cross(look, up), look).normalized();
-        settings.insert(
+        self.insert(
             "look_x".to_string(),
             SettingValue::F32(look.x, look_x_scale),
         );
-        settings.insert(
+        self.insert(
             "look_y".to_string(),
             SettingValue::F32(look.y, look_y_scale),
         );
-        settings.insert(
+        self.insert(
             "look_z".to_string(),
             SettingValue::F32(look.z, look_z_scale),
         );
-        settings.insert("up_x".to_string(), SettingValue::F32(up.x, up_x_scale));
-        settings.insert("up_y".to_string(), SettingValue::F32(up.y, up_y_scale));
-        settings.insert("up_z".to_string(), SettingValue::F32(up.z, up_z_scale));
+        self.insert("up_x".to_string(), SettingValue::F32(up.x, up_x_scale));
+        self.insert("up_y".to_string(), SettingValue::F32(up.y, up_y_scale));
+        self.insert("up_z".to_string(), SettingValue::F32(up.z, up_z_scale));
     }
-
-    // name, value, is_const
-    const DEFAULTS: [(&str, SettingValue, bool); 42] = [
-        ("pos_x", SettingValue::F32(0.0, 1.0), false),
-        ("pos_y", SettingValue::F32(0.0, 1.0), false),
-        ("pos_z", SettingValue::F32(5.0, 1.0), false),
-        ("look_x", SettingValue::F32(0.0, 1.0), false),
-        ("look_y", SettingValue::F32(0.0, 1.0), false),
-        ("look_z", SettingValue::F32(-1.0, 1.0), false),
-        ("up_x", SettingValue::F32(0.0, 1.0), false),
-        ("up_y", SettingValue::F32(1.0, 1.0), false),
-        ("up_z", SettingValue::F32(0.0, 1.0), false),
-        ("fov", SettingValue::F32(1.0, -1.0), false),
-        ("focal_distance", SettingValue::F32(3.0, -1.0), false),
-        ("scale", SettingValue::F32(-2.0, 0.5), false),
-        ("folding_limit", SettingValue::F32(1.0, -0.5), false),
-        ("fixed_radius_2", SettingValue::F32(1.0, -0.5), false),
-        ("min_radius_2", SettingValue::F32(0.125, -0.5), false),
-        ("dof_amount", SettingValue::F32(0.001, -0.5), false),
-        ("fog_distance", SettingValue::F32(10.0, -1.0), false),
-        ("fog_brightness", SettingValue::F32(1.0, 0.5), false),
-        ("light_pos_1_x", SettingValue::F32(3.0, 0.5), false),
-        ("light_pos_1_y", SettingValue::F32(3.5, 0.5), false),
-        ("light_pos_1_z", SettingValue::F32(2.5, 0.5), false),
-        ("light_radius_1", SettingValue::F32(1.0, -0.5), false),
-        ("light_brightness_1_hue", SettingValue::F32(0.0, 0.25), false),
-        ("light_brightness_1_sat", SettingValue::F32(0.4, -1.0), false),
-        ("light_brightness_1_val", SettingValue::F32(4.0, -1.0), false),
-        ("ambient_brightness_hue", SettingValue::F32(0.65, 0.25), false),
-        ("ambient_brightness_sat", SettingValue::F32(0.2, -1.0), false),
-        ("ambient_brightness_val", SettingValue::F32(1.0, -1.0), false),
-        ("reflect_brightness", SettingValue::F32(1.0, 0.125), false),
-        (
-            "surface_color_variance",
-            SettingValue::F32(1.0, -0.25),
-            false,
-        ),
-        ("surface_color_shift", SettingValue::F32(0.0, 0.25), false),
-        (
-            "surface_color_saturation",
-            SettingValue::F32(1.0, 0.125),
-            false,
-        ),
-        ("bailout", SettingValue::F32(1024.0, -1.0), true),
-        ("de_multiplier", SettingValue::F32(0.9375, 0.125), true),
-        ("max_ray_dist", SettingValue::F32(16.0, -0.5), true),
-        ("quality_first_ray", SettingValue::F32(2.0, -0.5), true),
-        ("quality_rest_ray", SettingValue::F32(64.0, -0.5), true),
-        ("white_clamp", SettingValue::U32(0), true),
-        ("max_iters", SettingValue::U32(64), true),
-        ("max_ray_steps", SettingValue::U32(256), true),
-        ("num_ray_bounces", SettingValue::U32(3), true),
-        ("render_scale", SettingValue::U32(1), false),
-    ];
 }
 
 pub struct KeyframeList {
@@ -383,7 +347,7 @@ impl KeyframeList {
             let result = interpolate(prev, cur, next, next2, time);
             self.base.insert(key, result);
         }
-        default_settings::normalize(&mut self.base);
+        self.base.normalize();
         &self.base
     }
 }

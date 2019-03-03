@@ -8,3 +8,6 @@ failure = "*"
 ocl = { version = "*", default-features = false }
 png = "*"
 sdl2 = { version = "*", default-features = false, features = ["ttf"] }
+regex = "*"
+lazy_static = "*"
+byteorder = "*"

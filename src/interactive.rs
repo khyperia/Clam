@@ -30,7 +30,7 @@ impl InteractiveKernel {
         kernel_compilation::watch_src(screen_send.clone())?;
 
         thread::spawn(move || {
-            let kernel = Kernel::create(width, height, &settings_input.lock().unwrap().0).unwrap();
+            let kernel = Kernel::create(width, height, &mut settings_input.lock().unwrap().0).unwrap();
             match Self::run_thread(kernel, &screen_recv, &image_send, &settings_input) {
                 Ok(()) => (),
                 Err(err) => panic!("Error in kernel thread: {}", err),
@@ -81,7 +81,7 @@ impl InteractiveKernel {
                     ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
                     ScreenEvent::KernelChanged => {
                         let mut locked = settings_input.lock().unwrap();
-                        let (ref settings, _) = *locked;
+                        let (ref mut settings, _) = *locked;
                         kernel.rebuild(settings)?
                     }
                 }

@@ -1,46 +1,46 @@
 struct MandelboxCfg
 {
-    float _pos_x;
-    float _pos_y;
-    float _pos_z;
-    float _look_x;
-    float _look_y;
-    float _look_z;
-    float _up_x;
-    float _up_y;
-    float _up_z;
-    float _fov;
-    float _focal_distance;
-    float _scale;
-    float _folding_limit;
-    float _fixed_radius_2;
-    float _min_radius_2;
-    float _dof_amount;
-    float _fog_distance;
-    float _fog_brightness;
-    float _light_pos_1_x;
-    float _light_pos_1_y;
-    float _light_pos_1_z;
-    float _light_radius_1;
-    float _light_brightness_1_hue;
-    float _light_brightness_1_sat;
-    float _light_brightness_1_val;
-    float _ambient_brightness_hue;
-    float _ambient_brightness_sat;
-    float _ambient_brightness_val;
-    float _reflect_brightness;
-    float _surface_color_variance;
-    float _surface_color_shift;
-    float _surface_color_saturation;
-    float _bailout;
-    float _de_multiplier;
-    float _max_ray_dist;
-    float _quality_first_ray;
-    float _quality_rest_ray;
-    int _white_clamp;
-    int _max_iters;
-    int _max_ray_steps;
-    int _num_ray_bounces;
+    float _pos_x; // 0.0 1.0
+    float _pos_y; // 0.0 1.0
+    float _pos_z; // 5.0 1.0
+    float _look_x; // 0.0 1.0
+    float _look_y; // 0.0 1.0
+    float _look_z; // -1.0 1.0
+    float _up_x; // 0.0 1.0
+    float _up_y; // 1.0 1.0
+    float _up_z; // 0.0 1.0
+    float _fov; // 1.0 -1.0
+    float _focal_distance; // 3.0 -1.0
+    float _scale; // -2.0 0.5 const
+    float _folding_limit; // 1.0 -0.5 const
+    float _fixed_radius_2; // 1.0 -0.5 const
+    float _min_radius_2; // 0.125 -0.5 const
+    float _dof_amount; // 0.001 -0.5
+    float _fog_distance; // 10.0 -1.0
+    float _fog_brightness; // 1.0 0.5
+    float _light_pos_1_x; // 3.0 1.0
+    float _light_pos_1_y; // 3.5 1.0
+    float _light_pos_1_z; // 2.5 1.0
+    float _light_radius_1; // 1.0 -0.5
+    float _light_brightness_1_hue; // 0.0 0.25
+    float _light_brightness_1_sat; // 0.4 -1.0
+    float _light_brightness_1_val; // 4.0 -1.0
+    float _ambient_brightness_hue; // 0.65 0.25
+    float _ambient_brightness_sat; // 0.2 -1.0
+    float _ambient_brightness_val; // 1.0 -1.0
+    float _reflect_brightness; // 1.0 0.125
+    float _surface_color_variance; // 1.0 -0.25
+    float _surface_color_shift; // 0.0 0.25
+    float _surface_color_saturation; // 1.0 0.125
+    float _bailout; // 1024.0 -1.0 const
+    float _de_multiplier; // 0.9375 0.125 const
+    float _max_ray_dist; // 16.0 -0.5 const
+    float _quality_first_ray; // 2.0 -0.5 const
+    float _quality_rest_ray; // 64.0 -0.5 const
+    int _white_clamp; // 0 const
+    int _max_iters; // 64 const
+    int _max_ray_steps; // 256 const
+    int _num_ray_bounces; // 3 const
 };
 
 #ifndef pos_x

@@ -94,22 +94,22 @@ impl Input {
             }
             Key::Left => {
                 let key = settings.nth(self.index);
-                if let SettingValue::U32(value) = *settings.get(key).unwrap() {
+                if let SettingValue::U32(value) = *settings.get(&key).unwrap() {
                     if value != 0 {
-                        settings.insert(key.into(), SettingValue::U32(value - 1));
+                        settings.insert(key, SettingValue::U32(value - 1));
                     }
                 }
             }
             Key::Right => {
                 let key = settings.nth(self.index);
-                if let SettingValue::U32(value) = *settings.get(key).unwrap() {
-                    settings.insert(key.into(), SettingValue::U32(value + 1));
+                if let SettingValue::U32(value) = *settings.get(&key).unwrap() {
+                    settings.insert(key, SettingValue::U32(value + 1));
                 }
             }
             Key::T => {
                 let key = settings.nth(self.index);
-                let default = Settings::default_for(key).unwrap();
-                let new_value = match *settings.get(key).unwrap() {
+                let default = settings.default_for(&key).unwrap();
+                let new_value = match *settings.get(&key).unwrap() {
                     SettingValue::U32(value) => {
                         if value == 0 {
                             default
@@ -125,12 +125,12 @@ impl Input {
                         }
                     }
                 };
-                settings.insert(key.to_string(), new_value);
+                settings.insert(key, new_value);
             }
             Key::C => {
                 let key = settings.nth(self.index);
-                let is_const = settings.is_const(key);
-                settings.set_const(key, !is_const);
+                let is_const = settings.is_const(&key);
+                settings.set_const(&key, !is_const);
             }
             Key::B => {
                 settings.rebuild();
@@ -150,8 +150,8 @@ impl Input {
 
     fn run(&mut self, settings: &mut Settings, now: Instant) {
         self.camera_3d(settings, now);
-        self.exp_setting(settings, now, "focal_distance".into(), Key::R, Key::F);
-        self.exp_setting(settings, now, "fov".into(), Key::N, Key::M);
+        self.exp_setting(settings, now, "focal_distance".to_string(), Key::R, Key::F);
+        self.exp_setting(settings, now, "fov".to_string(), Key::N, Key::M);
         self.manual_control(settings, now);
         for value in self.pressed_keys.values_mut() {
             *value = now;
@@ -253,14 +253,14 @@ impl Input {
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
         let mut do_control = |dt| {
             let key = settings.nth(self.index);
-            if let SettingValue::F32(value, change) = *settings.get(key).unwrap() {
+            if let SettingValue::F32(value, change) = *settings.get(&key).unwrap() {
                 if change < 0.0 {
                     settings.insert(
-                        key.into(),
+                        key,
                         SettingValue::F32(value * (-change + 1.0).powf(dt), change),
                     );
                 } else {
-                    settings.insert(key.into(), SettingValue::F32(value + dt * change, change));
+                    settings.insert(key, SettingValue::F32(value + dt * change, change));
                 }
             };
         };
