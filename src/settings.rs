@@ -175,12 +175,11 @@ impl Settings {
             static ref RE: Regex = Regex::new(
                r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *$"#).unwrap();
         }
+        // TODO: Remove values no longer present
         self.ordered_names.clear();
-        self.value_map.clear();
         let mut once = false;
         for cap in RE.captures_iter(src) {
             once = true;
-            println!("match: {}", &cap[0]);
             let kind = &cap["kind"];
             let name = &cap["name"];
             let setting = match kind {
@@ -198,19 +197,38 @@ impl Settings {
                 }
             };
             self.ordered_names.push(name.to_string());
-            self.value_map.insert(name.to_string(), setting);
-            let is_const = cap.name("const").is_some();
-            if is_const {
-                self.constants.insert(name.to_string());
-            } else {
-                self.constants.remove(name);
-            }
+            self.update_value(name, setting, cap.name("const").is_some());
         }
         self.ordered_names.push("render_scale".to_string());
         self.value_map
             .insert("render_scale".to_string(), SettingValue::U32(1));
         assert!(once, "Regex should get at least one setting");
         self.default_values = self.value_map.clone();
+    }
+
+    fn update_value(&mut self, name: &str, new_value: SettingValue, is_const: bool) {
+        let insert = {
+            let old_value = self.value_map.get_mut(name);
+            match (old_value, new_value) {
+                (
+                    Some(SettingValue::F32(_, ref mut old_speed)),
+                    SettingValue::F32(_, new_speed),
+                ) => {
+                    *old_speed = new_speed;
+                    false
+                }
+                (Some(SettingValue::U32(_)), SettingValue::U32(_)) => false,
+                _ => true,
+            }
+        };
+        if insert {
+            self.value_map.insert(name.to_string(), new_value);
+            if is_const {
+                self.constants.insert(name.to_string());
+            } else {
+                self.constants.remove(name);
+            }
+        }
     }
 
     pub fn serialize(&self) -> Vec<u8> {

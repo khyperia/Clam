@@ -1,46 +1,47 @@
 struct MandelboxCfg
 {
-    float _pos_x; // 0.0 1.0
-    float _pos_y; // 0.0 1.0
-    float _pos_z; // 5.0 1.0
-    float _look_x; // 0.0 1.0
-    float _look_y; // 0.0 1.0
-    float _look_z; // -1.0 1.0
-    float _up_x; // 0.0 1.0
-    float _up_y; // 1.0 1.0
-    float _up_z; // 0.0 1.0
-    float _fov; // 1.0 -1.0
-    float _focal_distance; // 3.0 -1.0
-    float _scale; // -2.0 0.5 const
-    float _folding_limit; // 1.0 -0.5 const
-    float _fixed_radius_2; // 1.0 -0.5 const
-    float _min_radius_2; // 0.125 -0.5 const
-    float _dof_amount; // 0.001 -0.5
-    float _fog_distance; // 10.0 -1.0
-    float _fog_brightness; // 1.0 0.5
-    float _light_pos_1_x; // 3.0 1.0
-    float _light_pos_1_y; // 3.5 1.0
-    float _light_pos_1_z; // 2.5 1.0
-    float _light_radius_1; // 1.0 -0.5
-    float _light_brightness_1_hue; // 0.0 0.25
-    float _light_brightness_1_sat; // 0.4 -1.0
-    float _light_brightness_1_val; // 4.0 -1.0
-    float _ambient_brightness_hue; // 0.65 0.25
-    float _ambient_brightness_sat; // 0.2 -1.0
-    float _ambient_brightness_val; // 1.0 -1.0
-    float _reflect_brightness; // 1.0 0.125
-    float _surface_color_variance; // 1.0 -0.25
-    float _surface_color_shift; // 0.0 0.25
-    float _surface_color_saturation; // 1.0 0.125
-    float _bailout; // 1024.0 -1.0 const
-    float _de_multiplier; // 0.9375 0.125 const
-    float _max_ray_dist; // 16.0 -0.5 const
-    float _quality_first_ray; // 2.0 -0.5 const
-    float _quality_rest_ray; // 64.0 -0.5 const
-    int _white_clamp; // 0 const
-    int _max_iters; // 64 const
-    int _max_ray_steps; // 256 const
-    int _num_ray_bounces; // 3 const
+    float _pos_x;                     // 0.0 1.0
+    float _pos_y;                     // 0.0 1.0
+    float _pos_z;                     // 5.0 1.0
+    float _look_x;                    // 0.0 1.0
+    float _look_y;                    // 0.0 1.0
+    float _look_z;                    // -1.0 1.0
+    float _up_x;                      // 0.0 1.0
+    float _up_y;                      // 1.0 1.0
+    float _up_z;                      // 0.0 1.0
+    float _fov;                       // 1.0 -1.0
+    float _focal_distance;            // 3.0 -1.0
+    float _scale;                     // -2.0 0.5 const
+    float _folding_limit;             // 1.0 -0.5 const
+    float _fixed_radius_2;            // 1.0 -0.5 const
+    float _min_radius_2;              // 0.125 -0.5 const
+    float _dof_amount;                // 0.001 -0.5
+    float _fog_distance;              // 10.0 -1.0
+    float _fog_brightness;            // 1.0 0.5
+    float _light_pos_1_x;             // 3.0 1.0
+    float _light_pos_1_y;             // 3.5 1.0
+    float _light_pos_1_z;             // 2.5 1.0
+    float _light_radius_1;            // 1.0 -0.5
+    float _light_brightness_1_hue;    // 0.0 0.25
+    float _light_brightness_1_sat;    // 0.4 -1.0
+    float _light_brightness_1_val;    // 4.0 -1.0
+    float _ambient_brightness_hue;    // 0.65 0.25
+    float _ambient_brightness_sat;    // 0.2 -1.0
+    float _ambient_brightness_val;    // 1.0 -1.0
+    float _reflect_brightness;        // 1.0 0.125
+    float _surface_color_variance;    // 1.0 -0.25
+    float _surface_color_shift;       // 0.0 0.25
+    float _surface_color_saturation;  // 1.0 0.125
+    float _bailout;                   // 1024.0 -1.0 const
+    float _de_multiplier;             // 0.9375 0.125 const
+    float _max_ray_dist;              // 16.0 -0.5 const
+    float _quality_first_ray;         // 2.0 -0.5 const
+    float _quality_rest_ray;          // 64.0 -0.5 const
+    int _white_clamp;                 // 0 const
+    int _max_iters;                   // 64 const
+    int _max_ray_steps;               // 256 const
+    int _num_ray_bounces;             // 3 const
+    int _preview;                     // 0 const
 };
 
 #ifndef pos_x
@@ -166,6 +167,9 @@ struct MandelboxCfg
 #ifndef num_ray_bounces
 #define num_ray_bounces cfg->_num_ray_bounces
 #endif
+#ifndef preview
+#define preview cfg->_preview
+#endif
 
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
 // opencl runtime cannot vectorize the kernel.
@@ -205,7 +209,7 @@ static float3 LightPos1(Cfg cfg)
 static float3 LightBrightness1(Cfg cfg)
 {
     return HueToRGB(light_brightness_1_hue, light_brightness_1_sat, light_brightness_1_val) /
-        reflect_brightness;
+           reflect_brightness;
 }
 
 static float3 AmbientBrightness(Cfg cfg)
@@ -577,6 +581,18 @@ static float3 Trace(
     return rayColor;
 }
 
+static float3 PreviewTrace(Cfg cfg, struct Ray ray, const uint width, const uint height)
+{
+    const float quality = quality_first_ray * ((width + height) / (2 * fov));
+    const float max_dist = min(max_ray_dist, focal_distance * 10);
+    float3 normal;
+    // const float distance = Cast(cfg, ray, quality, max_dist, &normal);
+    // const float value = distance / max_dist;
+    // return (float3)(value);
+    Cast(cfg, ray, quality, max_dist, &normal);
+    return fabs(normal);
+}
+
 /*
 static float3 GammaTest(int x, int y, int width, int height)
 {
@@ -717,7 +733,8 @@ __kernel void Main(__global uchar* data,
 
     struct Random rand = frame > 0 ? GetRand(data, idx, size) : new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
-    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+    const float3 colorComponents =
+        preview ? PreviewTrace(cfg, ray, width, height) : Trace(cfg, ray, width, height, &rand);
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     // newColor = GammaTest(x, y, width, height);
     const uint packedColor = PackPixel(cfg, newColor);

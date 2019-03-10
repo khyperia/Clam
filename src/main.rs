@@ -52,9 +52,9 @@ fn progress_count(_: u32) -> u32 {
 
 fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
-    settings.load("settings.clam5")?;
-    settings.all_constants();
     let mut kernel = Kernel::create(width, height, &mut settings)?;
+    settings.load("settings.clam5")?;
+    settings.all_constants(); // TODO: This has no effect?
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     for ray in 0..rpp {
@@ -84,8 +84,8 @@ fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> 
 
 fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    default_settings.clear_constants();
     let mut kernel = Kernel::create(width, height, &mut default_settings)?;
+    default_settings.clear_constants(); // TODO: This has no effect?
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
     for frame in 0..frames {
