@@ -173,7 +173,7 @@ impl Settings {
     pub fn set_src(&mut self, src: &str) {
         lazy_static! {
             static ref RE: Regex = Regex::new(
-               r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *$"#).unwrap();
+               r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
         }
         // TODO: Remove values no longer present
         self.ordered_names.clear();
@@ -303,7 +303,7 @@ fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
 }
 
 fn interpolate_u32(prev: u32, cur: u32, next: u32, next2: u32, time: f32) -> u32 {
-    interpolate_f32(prev as f32, cur as f32, next as f32, next2 as f32, time) as u32
+    interpolate_f32(prev as f32, cur as f32, next as f32, next2 as f32, time).round() as u32
 }
 
 fn interpolate(
@@ -349,13 +349,37 @@ impl KeyframeList {
         Ok(KeyframeList { base, keyframes })
     }
 
-    pub fn interpolate(&mut self, time: f32) -> &Settings {
-        let time = time * (self.keyframes.len() - 1) as f32;
+    // change to isize::mod_euclidian once stablized
+    fn mod_euc(lhs: isize, rhs: isize) -> isize {
+        let r = lhs % rhs;
+        if r < 0 {
+            r + rhs.abs()
+        } else {
+            r
+        }
+    }
+
+    fn clamp(&self, index: isize, wrap: bool) -> usize {
+        let len = self.keyframes.len();
+        if wrap {
+            Self::mod_euc(index, len as isize) as usize
+        } else {
+            index.max(0).min(len as isize - 1) as usize
+        }
+    }
+
+    pub fn interpolate(&mut self, time: f32, wrap: bool) -> &Settings {
+        let timelen = if wrap {
+            self.keyframes.len()
+        } else {
+            self.keyframes.len() - 1
+        };
+        let time = time * timelen as f32;
         let index_cur = time as usize;
         let time = time - index_cur as f32;
-        let index_prev = if index_cur == 0 { 0 } else { index_cur - 1 };
-        let index_next = (index_cur + 1).min(self.keyframes.len() - 1);
-        let index_next2 = (index_cur + 2).min(self.keyframes.len() - 1);
+        let index_prev = self.clamp(index_cur as isize - 1, wrap);
+        let index_next = self.clamp(index_cur as isize + 1, wrap);
+        let index_next2 = self.clamp(index_cur as isize + 2, wrap);
         let keys = self.base.value_map.keys().cloned().collect::<Vec<String>>();
         for key in keys {
             let prev = *self.keyframes[index_prev].get(&key).unwrap();

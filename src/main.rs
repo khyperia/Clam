@@ -54,7 +54,8 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
     let mut kernel = Kernel::create(width, height, &mut settings)?;
     settings.load("settings.clam5")?;
-    settings.all_constants(); // TODO: This has no effect?
+    settings.all_constants();
+    kernel.rebuild(&mut settings)?;
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     for ray in 0..rpp {
@@ -82,14 +83,15 @@ fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> 
     Ok(())
 }
 
-fn video(width: u32, height: u32, rpp: u32, frames: u32) -> Result<(), Error> {
+fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(), Error> {
     let mut default_settings = Settings::new();
     let mut kernel = Kernel::create(width, height, &mut default_settings)?;
-    default_settings.clear_constants(); // TODO: This has no effect?
+    default_settings.clear_constants();
+    kernel.rebuild(&mut default_settings)?;
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
     for frame in 0..frames {
-        let settings = keyframes.interpolate(frame as f32 / frames as f32);
+        let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
         video_one(frame, rpp, &mut kernel, &settings)?;
         let value = (frame + 1) as f32 / frames as f32;
         println!("{}", progress.time_str(value));
@@ -122,16 +124,17 @@ fn render(args: &[String]) -> Result<(), Error> {
 }
 
 fn video_cmd(args: &[String]) -> Result<(), Error> {
-    if args.len() == 4 {
+    if args.len() == 5 {
         video(
             args[0].parse()?,
             args[1].parse()?,
             args[2].parse()?,
             args[3].parse()?,
+            args[4].parse()?,
         )
     } else {
         Err(failure::err_msg(
-            "--video needs four args: [width] [height] [rpp] [frames]",
+            "--video needs five args: [width] [height] [rpp] [frames] [wrap:true|false]",
         ))
     }
 }

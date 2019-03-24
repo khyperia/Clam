@@ -37,6 +37,7 @@ struct MandelboxCfg
     float _max_ray_dist;              // 16.0 -0.5 const
     float _quality_first_ray;         // 2.0 -0.5 const
     float _quality_rest_ray;          // 64.0 -0.5 const
+    float _rotation;                  // 0.0 0.125
     int _white_clamp;                 // 0 const
     int _max_iters;                   // 64 const
     int _max_ray_steps;               // 256 const
@@ -154,6 +155,9 @@ struct MandelboxCfg
 #endif
 #ifndef quality_rest_ray
 #define quality_rest_ray cfg->_quality_rest_ray
+#endif
+#ifndef rotation
+#define rotation cfg->_rotation
 #endif
 #ifndef white_clamp
 #define white_clamp cfg->_white_clamp
@@ -389,6 +393,13 @@ static float3 TOffsetD(float3 z, float* dz, float3 offset)
     return z + offset;
 }
 
+static float3 Rotate(Cfg cfg, float3 z)
+{
+    float3 axis = normalize(LightPos1(cfg));
+    float3 angle = rotation;
+    return cos(angle) * z + sin(angle) * cross(z, axis) + (1 - cos(angle)) * dot(axis, angle) * axis;
+}
+
 static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color)
 {
     // z = ContBoxfoldD(cfg, z);
@@ -402,6 +413,7 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
     {
         (*color)++;
     }
+    z = Rotate(cfg, z);
     z = SpherefoldD(cfg, z, dz);
     z = TScaleD(cfg, z, dz);
     z = TOffsetD(z, dz, offset);
