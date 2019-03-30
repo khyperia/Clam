@@ -301,6 +301,9 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
 
 static float DeSphere(float3 pos, float radius, float3 test)
 {
+    if (radius == 0) {
+        return FLT_MAX;
+    }
     return length(test - pos) - radius;
 }
 
@@ -432,18 +435,23 @@ static float3 Trace(
         }
 
         const float3 newPos = Ray_At(ray, min(distance, fog_dist));
+
         float3 newDir;
+        struct Material material;
 
         if (distance >= fog_dist)
         {
             // hit fog, do fog calculations
             newDir = Random_Sphere(rand);
             reflectionColor *= fog_brightness;
+            material.color = (float3)(1, 1, 1);
+            material.specular = 0;
+            material.emissive = (float3)(0, 0, 0);
         }
         else
         {
             // hit surface, do material calculations
-            const struct Material material = Material(cfg, newPos);
+            material = Material(cfg, newPos);
             rayColor += reflectionColor * material.emissive;  // ~bling~!
 
             if (Random_Next(rand) < material.specular)
@@ -457,9 +465,34 @@ static float3 Trace(
                 newDir = Random_Lambertian(rand, normal);
                 quality = quality_rest_ray;
             }
-            const float incident_angle_weakening = dot(normal, newDir);
-            reflectionColor *= incident_angle_weakening * material.color;
         }
+
+        if (light_radius_1 == 0)
+        {
+            float3 lightPos = LightPos1(cfg);
+            float3 dir = lightPos - newPos;
+            float light_dist = length(dir);
+            dir = normalize(dir);
+            float3 _normal;
+            float dist = Cast(cfg, new_Ray(newPos, dir), quality_rest_ray, light_dist, &_normal);
+            if (dist >= light_dist)
+            {
+                float prod;
+                if (distance >= fog_dist)
+                {
+                    prod = 1;
+                }
+                else
+                {
+                    prod = dot(normal, dir);
+                }
+                float3 color = prod / (light_dist * light_dist) * material.color * LightBrightness1(cfg);
+                rayColor += reflectionColor * color;  // ~bling~!
+            }
+        }
+
+        const float incident_angle_weakening = dot(normal, newDir);
+        reflectionColor *= incident_angle_weakening * material.color;
 
         ray = new_Ray(newPos, newDir);
 
