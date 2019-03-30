@@ -15,7 +15,7 @@ struct MandelboxCfg
     float _folding_limit;             // 1.0 -0.5 const
     float _fixed_radius_2;            // 1.0 -0.5 const
     float _min_radius_2;              // 0.125 -0.5 const
-    float _dof_amount;                // 0.001 -0.5
+    float _dof_amount;                // 0.001 -1.0
     float _fog_distance;              // 10.0 -1.0
     float _fog_brightness;            // 1.0 0.5
     float _light_pos_1_x;             // 3.0 1.0
@@ -32,148 +32,22 @@ struct MandelboxCfg
     float _surface_color_variance;    // 1.0 -0.25
     float _surface_color_shift;       // 0.0 0.25
     float _surface_color_saturation;  // 1.0 0.125
+    float _surface_color_specular;    // 0.5 0.125
+    float _plane_x;                   // 3.0 1.0
+    float _plane_y;                   // 3.5 1.0
+    float _plane_z;                   // 2.5 1.0
+    float _rotation;                  // 0.0 0.125
     float _bailout;                   // 1024.0 -1.0 const
     float _de_multiplier;             // 0.9375 0.125 const
     float _max_ray_dist;              // 16.0 -0.5 const
     float _quality_first_ray;         // 2.0 -0.5 const
     float _quality_rest_ray;          // 64.0 -0.5 const
-    float _rotation;                  // 0.0 0.125
     int _white_clamp;                 // 0 const
     int _max_iters;                   // 64 const
     int _max_ray_steps;               // 256 const
     int _num_ray_bounces;             // 3 const
     int _preview;                     // 0 const
 };
-
-#ifndef pos_x
-#define pos_x cfg->_pos_x
-#endif
-#ifndef pos_y
-#define pos_y cfg->_pos_y
-#endif
-#ifndef pos_z
-#define pos_z cfg->_pos_z
-#endif
-#ifndef look_x
-#define look_x cfg->_look_x
-#endif
-#ifndef look_y
-#define look_y cfg->_look_y
-#endif
-#ifndef look_z
-#define look_z cfg->_look_z
-#endif
-#ifndef up_x
-#define up_x cfg->_up_x
-#endif
-#ifndef up_y
-#define up_y cfg->_up_y
-#endif
-#ifndef up_z
-#define up_z cfg->_up_z
-#endif
-#ifndef fov
-#define fov cfg->_fov
-#endif
-#ifndef focal_distance
-#define focal_distance cfg->_focal_distance
-#endif
-#ifndef scale
-#define scale cfg->_scale
-#endif
-#ifndef folding_limit
-#define folding_limit cfg->_folding_limit
-#endif
-#ifndef fixed_radius_2
-#define fixed_radius_2 cfg->_fixed_radius_2
-#endif
-#ifndef min_radius_2
-#define min_radius_2 cfg->_min_radius_2
-#endif
-#ifndef dof_amount
-#define dof_amount cfg->_dof_amount
-#endif
-#ifndef fog_distance
-#define fog_distance cfg->_fog_distance
-#endif
-#ifndef fog_brightness
-#define fog_brightness cfg->_fog_brightness
-#endif
-#ifndef light_pos_1_x
-#define light_pos_1_x cfg->_light_pos_1_x
-#endif
-#ifndef light_pos_1_y
-#define light_pos_1_y cfg->_light_pos_1_y
-#endif
-#ifndef light_pos_1_z
-#define light_pos_1_z cfg->_light_pos_1_z
-#endif
-#ifndef light_radius_1
-#define light_radius_1 cfg->_light_radius_1
-#endif
-#ifndef light_brightness_1_hue
-#define light_brightness_1_hue cfg->_light_brightness_1_hue
-#endif
-#ifndef light_brightness_1_sat
-#define light_brightness_1_sat cfg->_light_brightness_1_sat
-#endif
-#ifndef light_brightness_1_val
-#define light_brightness_1_val cfg->_light_brightness_1_val
-#endif
-#ifndef ambient_brightness_hue
-#define ambient_brightness_hue cfg->_ambient_brightness_hue
-#endif
-#ifndef ambient_brightness_sat
-#define ambient_brightness_sat cfg->_ambient_brightness_sat
-#endif
-#ifndef ambient_brightness_val
-#define ambient_brightness_val cfg->_ambient_brightness_val
-#endif
-#ifndef reflect_brightness
-#define reflect_brightness cfg->_reflect_brightness
-#endif
-#ifndef surface_color_variance
-#define surface_color_variance cfg->_surface_color_variance
-#endif
-#ifndef surface_color_shift
-#define surface_color_shift cfg->_surface_color_shift
-#endif
-#ifndef surface_color_saturation
-#define surface_color_saturation cfg->_surface_color_saturation
-#endif
-#ifndef bailout
-#define bailout cfg->_bailout
-#endif
-#ifndef de_multiplier
-#define de_multiplier cfg->_de_multiplier
-#endif
-#ifndef max_ray_dist
-#define max_ray_dist cfg->_max_ray_dist
-#endif
-#ifndef quality_first_ray
-#define quality_first_ray cfg->_quality_first_ray
-#endif
-#ifndef quality_rest_ray
-#define quality_rest_ray cfg->_quality_rest_ray
-#endif
-#ifndef rotation
-#define rotation cfg->_rotation
-#endif
-#ifndef white_clamp
-#define white_clamp cfg->_white_clamp
-#endif
-#ifndef max_iters
-#define max_iters cfg->_max_iters
-#endif
-#ifndef max_ray_steps
-#define max_ray_steps cfg->_max_ray_steps
-#endif
-#ifndef num_ray_bounces
-#define num_ray_bounces cfg->_num_ray_bounces
-#endif
-#ifndef preview
-#define preview cfg->_preview
-#endif
 
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
 // opencl runtime cannot vectorize the kernel.
@@ -208,6 +82,11 @@ static float3 HueToRGB(float hue, float saturation, float value)
 static float3 LightPos1(Cfg cfg)
 {
     return (float3)(light_pos_1_x, light_pos_1_y, light_pos_1_z);
+}
+
+static float3 PlanePos(Cfg cfg)
+{
+    return (float3)(plane_x, plane_y, plane_z);
 }
 
 static float3 LightBrightness1(Cfg cfg)
@@ -395,7 +274,7 @@ static float3 TOffsetD(float3 z, float* dz, float3 offset)
 
 static float3 Rotate(Cfg cfg, float3 z)
 {
-    float3 axis = normalize(LightPos1(cfg));
+    float3 axis = normalize(PlanePos(cfg));
     float3 angle = rotation;
     return cos(angle) * z + sin(angle) * cross(z, axis) + (1 - cos(angle)) * dot(axis, angle) * axis;
 }
@@ -449,8 +328,8 @@ static float De(Cfg cfg, float3 offset)
     float color_data;
     const float mbox = DeMandelbox(cfg, offset, &color_data);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
-    const float cut = Plane(offset, LightPos1(cfg));
-    return max(min(light1, mbox), cut);
+    const float cut = Plane(offset, PlanePos(cfg));
+    return min(light1, max(mbox, cut));
 }
 
 struct Material
@@ -470,7 +349,6 @@ static struct Material Material(Cfg cfg, float3 offset)
     base_color += surface_color_shift;
     float3 color = (float3)(
         sinpi(base_color), sinpi(base_color + 2.0f / 3.0f), sinpi(base_color + 4.0f / 3.0f));
-    float specular = 0.0f;
     color = color * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
     color = surface_color_saturation * (color - (float3)(1, 1, 1)) + (float3)(1, 1, 1);
 
@@ -480,7 +358,7 @@ static struct Material Material(Cfg cfg, float3 offset)
     if (de < light1)
     {
         result.color = color * reflect_brightness;
-        result.specular = specular;
+        result.specular = surface_color_specular;
         result.emissive = (float3)(0, 0, 0);
     }
     else

@@ -74,11 +74,20 @@ fn get_src() -> Result<String, Error> {
     Ok(contents)
 }
 
+fn get_defines(settings: &Settings) -> String {
+    let mut result = String::new();
+    for setting in settings.keys() {
+        result.push_str(&format!("#ifndef {0}\n#define {0} cfg->_{0}\n#endif\n", setting));
+    }
+    result
+}
+
 pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kernel, Error> {
     let program = {
         let mut builder = ocl::Program::builder();
         let src = get_src()?;
         settings.set_src(&src);
+        builder.source(get_defines(&settings));
         builder.source(src);
         builder.devices(queue.device());
         builder.cmplr_opt("-cl-fast-relaxed-math");

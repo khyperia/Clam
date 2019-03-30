@@ -66,6 +66,10 @@ impl Settings {
         &self.value_map
     }
 
+    pub fn keys(&self) -> &[String] {
+        &self.ordered_names
+    }
+
     pub fn insert(&mut self, key: String, value: SettingValue) -> Option<SettingValue> {
         self.value_map.insert(key, value)
     }
@@ -282,28 +286,30 @@ pub struct KeyframeList {
     keyframes: Vec<Settings>,
 }
 
-// template<typename T, typename Tscalar>
-// T CatmullRom(T p0, T p1, T p2, T p3, Tscalar t)
-// {
-//     Tscalar t2 = t * t;
-//     Tscalar t3 = t2 * t;
-//     return (T)((((Tscalar)2 * p1) + (-p0 + p2) * t +
-//         ((Tscalar)2 * p0 - (Tscalar)5 * p1 + (Tscalar)4 * p2 - p3) * t2 +
-//         (-p0 + (Tscalar)3 * p1 - (Tscalar)3 * p2 + p3) * t3) / (Tscalar)2);
-// }
-
-fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
-    let t2 = t * t;
-    let t3 = t2 * t;
-    (((2.0 * p1)
-        + (-p0 + p2) * t
-        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
-        + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
-        / 2.0)
+fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32, linear: bool) -> f32 {
+    if linear {
+        p1 + (p2 - p1) * t
+    } else {
+        let t2 = t * t;
+        let t3 = t2 * t;
+        (((2.0 * p1)
+            + (-p0 + p2) * t
+            + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+            + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+            / 2.0)
+    }
 }
 
-fn interpolate_u32(prev: u32, cur: u32, next: u32, next2: u32, time: f32) -> u32 {
-    interpolate_f32(prev as f32, cur as f32, next as f32, next2 as f32, time).round() as u32
+fn interpolate_u32(prev: u32, cur: u32, next: u32, next2: u32, time: f32, linear: bool) -> u32 {
+    interpolate_f32(
+        prev as f32,
+        cur as f32,
+        next as f32,
+        next2 as f32,
+        time,
+        linear,
+    )
+    .round() as u32
 }
 
 fn interpolate(
@@ -312,6 +318,7 @@ fn interpolate(
     next: SettingValue,
     next2: SettingValue,
     time: f32,
+    linear: bool,
 ) -> SettingValue {
     match (prev, cur, next, next2) {
         (
@@ -319,13 +326,13 @@ fn interpolate(
             SettingValue::U32(cur),
             SettingValue::U32(next),
             SettingValue::U32(next2),
-        ) => SettingValue::U32(interpolate_u32(prev, cur, next, next2, time)),
+        ) => SettingValue::U32(interpolate_u32(prev, cur, next, next2, time, linear)),
         (
             SettingValue::F32(prev, _),
             SettingValue::F32(cur, delta),
             SettingValue::F32(next, _),
             SettingValue::F32(next2, _),
-        ) => SettingValue::F32(interpolate_f32(prev, cur, next, next2, time), delta),
+        ) => SettingValue::F32(interpolate_f32(prev, cur, next, next2, time, linear), delta),
         _ => panic!("Inconsistent keyframe types"),
     }
 }
@@ -386,7 +393,7 @@ impl KeyframeList {
             let cur = *self.keyframes[index_cur].get(&key).unwrap();
             let next = *self.keyframes[index_next].get(&key).unwrap();
             let next2 = *self.keyframes[index_next2].get(&key).unwrap();
-            let result = interpolate(prev, cur, next, next2, time);
+            let result = interpolate(prev, cur, next, next2, time, self.keyframes.len() <= 2);
             self.base.insert(key, result);
         }
         self.base.normalize();
