@@ -191,7 +191,7 @@ pub fn display(width: u32, height: u32) -> Result<(), Error> {
     let video = sdl.video().expect("SDL does not have video");
     let mut event_pump = sdl.event_pump().expect("SDL does not have event pump");
 
-    let window = video.window("Scopie", width, height).resizable().build()?;
+    let window = video.window("clam5", width, height).resizable().build()?;
     let mut canvas = window.into_canvas().present_vsync().build()?;
     let creator = canvas.texture_creator();
     let mut texture = creator.create_texture_streaming(PixelFormatEnum::ABGR8888, width, height)?;

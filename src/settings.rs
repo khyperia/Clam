@@ -266,8 +266,11 @@ impl Settings {
                     value.value = SettingValueEnum::U32(new_value.parse()?);
                 }
                 SettingValueEnum::Define(_) => {
-                    value.value = SettingValueEnum::Define(new_value.parse()?);
-                    println!("{} {:?}", key, value.value);
+                    let new_value = SettingValueEnum::Define(new_value.parse()?);
+                    if value.value != new_value {
+                        value.const_changed = true;
+                    }
+                    value.value = new_value;
                 }
             };
         }

@@ -438,7 +438,8 @@ static float3 Trace(
         float3 newDir;
         struct Material material;
 
-        if (distance >= fog_dist)
+        bool is_fog = (distance >= fog_dist);
+        if (is_fog)
         {
             // hit fog, do fog calculations
             newDir = Random_Sphere(rand);
@@ -472,25 +473,30 @@ static float3 Trace(
             float3 dir = lightPos - newPos;
             float light_dist = length(dir);
             dir = normalize(dir);
-            float3 _normal;
-            float dist = Cast(cfg, new_Ray(newPos, dir), quality_rest_ray, light_dist, &_normal);
-            if (dist >= light_dist)
+            if (is_fog || dot(dir, normal) > 0)
             {
-                float prod;
-                if (distance >= fog_dist)
+                float3 _normal;
+                float dist = Cast(cfg, new_Ray(newPos, dir), quality_rest_ray, light_dist, &_normal);
+                if (dist >= light_dist)
                 {
-                    prod = 1;
+                    float prod;
+                    if (is_fog)
+                    {
+                        prod = 1.0f;
+                    }
+                    else
+                    {
+                        prod = dot(normal, dir);
+                    }
+                    // Fixes tiny lil bright pixels
+                    float fixed_dist = fmax(distance / 2.0f, light_dist);
+                    float3 color = prod / (fixed_dist * fixed_dist) * material.color * LightBrightness1(cfg);
+                    rayColor += reflectionColor * color;  // ~bling~!
                 }
-                else
-                {
-                    prod = dot(normal, dir);
-                }
-                float3 color = prod / (light_dist * light_dist) * material.color * LightBrightness1(cfg);
-                rayColor += reflectionColor * color;  // ~bling~!
             }
         }
 
-        const float incident_angle_weakening = dot(normal, newDir);
+        const float incident_angle_weakening = (is_fog ? 1.0f : dot(normal, newDir));
         reflectionColor *= incident_angle_weakening * material.color;
 
         ray = new_Ray(newPos, newDir);
@@ -573,6 +579,10 @@ static float GammaCompression(float value)
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
+    if (isnan(pixel.x) || isnan(pixel.y) || isnan(pixel.z)) {
+        return ((uint)255 << 24) | ((uint)(uchar)255 << 0) | ((uint)(uchar)0 << 8) | ((uint)(uchar)255 << 16);
+    }
+
     if (white_clamp)
     {
         const float maxVal = max(max(pixel.x, pixel.y), pixel.z);
@@ -592,6 +602,7 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     pixel.z = GammaCompression(pixel.z);
 
     pixel = pixel * 255;
+
     return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
            ((uint)(uchar)pixel.z << 16);
 }
