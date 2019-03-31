@@ -1,90 +1,223 @@
 use byteorder::{NativeEndian, WriteBytesExt};
+use failure::err_msg;
 use failure::Error;
 use input::Input;
 use input::Vector;
 use regex::Regex;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
 use std::io::BufRead;
 use std::io::Lines;
 use std::io::Write;
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct SettingValue {
+    pub key: String,
+    pub value: SettingValueEnum,
+    default_value: SettingValueEnum,
+    is_const: bool,
+    const_changed: bool,
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum SettingValue {
+pub enum SettingValueEnum {
     U32(u32),
     F32(f32, f32),
+    Define(bool),
+}
+
+impl SettingValue {
+    pub fn change_one(&mut self, increase: bool) {
+        match self.value {
+            SettingValueEnum::F32(_, _) => (),
+            SettingValueEnum::U32(ref mut value) => {
+                if increase {
+                    *value = *value + 1;
+                } else {
+                    if *value != 0 {
+                        *value = *value - 1;
+                    }
+                }
+            }
+            SettingValueEnum::Define(ref mut value) => {
+                *value = !*value;
+                self.const_changed = true;
+            }
+        }
+    }
+
+    pub fn change(&mut self, increase: bool, mut dt: f32) {
+        dt *= if increase { 1.0 } else { -1.0 };
+        if let SettingValueEnum::F32(ref mut value, change) = self.value {
+            if change < 0.0 {
+                *value = *value * (-change + 1.0).powf(dt);
+            } else {
+                *value = *value + dt * change;
+            }
+        };
+    }
+
+    pub fn toggle(&mut self) {
+        fn def(val: &SettingValueEnum) -> Option<bool> {
+            match val {
+                &SettingValueEnum::Define(v) => Some(v),
+                _ => None,
+            }
+        }
+        let old_const = def(&self.value);
+        if self.value == self.default_value {
+            match self.value {
+                SettingValueEnum::U32(ref mut v) => *v = 0,
+                SettingValueEnum::F32(ref mut v, _) => *v = 0.0,
+                SettingValueEnum::Define(ref mut v) => *v = false,
+            }
+        } else {
+            self.value = self.default_value;
+        }
+        let new_const = def(&self.value);
+        if old_const != new_const {
+            self.const_changed = true;
+        }
+    }
+
+    pub fn toggle_const(&mut self) {
+        match self.value {
+            SettingValueEnum::Define(_) => (),
+            _ => {
+                self.is_const = !self.is_const;
+                self.const_changed = true;
+            }
+        }
+    }
+
+    pub fn unwrap_f32(&self) -> f32 {
+        match self.value {
+            SettingValueEnum::F32(value, _) => value,
+            _ => panic!("unwrap_f32 not F32"),
+        }
+    }
+
+    pub fn unwrap_f32_mut(&mut self) -> &mut f32 {
+        match self.value {
+            SettingValueEnum::F32(ref mut value, _) => value,
+            _ => panic!("unwrap_f32 not F32"),
+        }
+    }
+
+    pub fn unwrap_u32(&self) -> u32 {
+        match self.value {
+            SettingValueEnum::U32(value) => value,
+            _ => panic!("unwrap_u32 not U32"),
+        }
+    }
+
+    pub fn format_src_const(&self) -> String {
+        match self.value {
+            SettingValueEnum::F32(_, _) | SettingValueEnum::U32(_) => {
+                format!("#ifndef {0}\n#define {0} cfg->_{0}\n#endif\n", self.key)
+            }
+            SettingValueEnum::Define(_) => "".to_string(),
+        }
+    }
+
+    pub fn format_cmdline(&self) -> Option<String> {
+        match self.value {
+            SettingValueEnum::F32(value, _) => {
+                if self.is_const {
+                    Some(format!("-D {}={:.16}f", self.key, value))
+                } else {
+                    None
+                }
+            }
+            SettingValueEnum::U32(value) => {
+                if self.is_const {
+                    Some(format!("-D {}={}", self.key, value))
+                } else {
+                    None
+                }
+            }
+            SettingValueEnum::Define(value) => {
+                if value {
+                    Some(format!("-D {}", self.key))
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Default, PartialEq)]
 pub struct Settings {
-    ordered_names: Vec<String>,
-    default_values: HashMap<String, SettingValue>,
-    value_map: HashMap<String, SettingValue>,
-    constants: HashSet<String>,
+    pub values: Vec<SettingValue>,
     rebuild: bool,
 }
 
 impl Settings {
     pub fn new() -> Self {
         Settings {
-            ordered_names: Vec::new(),
-            default_values: HashMap::new(),
-            value_map: HashMap::new(),
-            constants: HashSet::new(),
+            values: Vec::new(),
             rebuild: false,
         }
     }
 
-    pub fn constants(&self) -> &HashSet<String> {
-        &self.constants
-    }
-
     pub fn clear_constants(&mut self) {
-        self.constants.clear()
+        for value in &mut self.values {
+            if value.is_const {
+                value.const_changed = true;
+            }
+            value.is_const = false;
+        }
     }
 
     pub fn all_constants(&mut self) {
-        for key in &self.ordered_names {
-            self.constants.insert(key.clone());
+        for value in &mut self.values {
+            if !value.is_const {
+                value.const_changed = true;
+            }
+            value.is_const = true;
         }
     }
 
-    pub fn is_const(&self, key: &str) -> bool {
-        self.constants.contains(key)
+    fn get(&self, key: &str) -> Option<&SettingValue> {
+        for value in &self.values {
+            if value.key == key {
+                return Some(value);
+            }
+        }
+        None
     }
 
-    pub fn set_const(&mut self, key: &str, value: bool) {
-        if value {
-            self.constants.insert(key.to_string());
-        } else {
-            self.constants.remove(key);
+    fn get_mut(&mut self, key: &str) -> Option<&mut SettingValue> {
+        for value in &mut self.values {
+            if value.key == key {
+                return Some(value);
+            }
+        }
+        None
+    }
+
+    pub fn find(&self, key: &str) -> &SettingValue {
+        match self.get(key) {
+            Some(v) => v,
+            None => panic!("Key not found: {}", key),
         }
     }
 
-    pub fn value_map(&self) -> &HashMap<String, SettingValue> {
-        &self.value_map
-    }
-
-    pub fn keys(&self) -> &[String] {
-        &self.ordered_names
-    }
-
-    pub fn insert(&mut self, key: String, value: SettingValue) -> Option<SettingValue> {
-        self.value_map.insert(key, value)
-    }
-
-    pub fn get(&self, key: &str) -> Option<&SettingValue> {
-        self.value_map.get(key)
+    pub fn find_mut(&mut self, key: &str) -> &mut SettingValue {
+        match self.get_mut(key) {
+            Some(v) => v,
+            None => panic!("Key not found: {}", key),
+        }
     }
 
     pub fn save(&self, file: &str) -> Result<(), Error> {
         let file = ::std::fs::File::create(file)?;
         let mut writer = ::std::io::BufWriter::new(&file);
-        for (key, value) in &self.value_map {
-            match *value {
-                SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
-                SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
+        for value in &self.values {
+            match value.value {
+                SettingValueEnum::F32(v, _) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
+                SettingValueEnum::U32(v) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
+                SettingValueEnum::Define(v) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
             }
         }
         Ok(())
@@ -96,10 +229,11 @@ impl Settings {
             .create(true)
             .open(file)?;
         let mut writer = ::std::io::BufWriter::new(&file);
-        for (key, value) in &self.value_map {
-            match *value {
-                SettingValue::F32(value, _) => writeln!(&mut writer, "{} = {}", key, value)?,
-                SettingValue::U32(value) => writeln!(&mut writer, "{} = {}", key, value)?,
+        for value in &self.values {
+            match value.value {
+                SettingValueEnum::F32(v, _) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
+                SettingValueEnum::U32(v) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
+                SettingValueEnum::Define(v) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
             }
         }
         writeln!(&mut writer, "---")?;
@@ -110,20 +244,31 @@ impl Settings {
         let mut count = 0;
         for line in lines {
             let line = line?;
+            if line == "---" || line == "" {
+                return Ok((count, true));
+            }
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();
             if split.len() != 2 {
-                return Ok((count, true));
+                return Err(err_msg(format!(
+                    "Invalid format in settings file: {}",
+                    line
+                )));
             }
             count += 1;
             let key = split[1].trim();
-            let value = split[0].trim();
-            match self.value_map[key] {
-                SettingValue::F32(_, change) => self
-                    .value_map
-                    .insert(key.into(), SettingValue::F32(value.parse()?, change)),
-                SettingValue::U32(_) => self
-                    .value_map
-                    .insert(key.into(), SettingValue::U32(value.parse()?)),
+            let new_value = split[0].trim();
+            let value = self.find_mut(key);
+            match value.value {
+                SettingValueEnum::F32(_, change) => {
+                    value.value = SettingValueEnum::F32(new_value.parse()?, change);
+                }
+                SettingValueEnum::U32(_) => {
+                    value.value = SettingValueEnum::U32(new_value.parse()?);
+                }
+                SettingValueEnum::Define(_) => {
+                    value.value = SettingValueEnum::Define(new_value.parse()?);
+                    println!("{} {:?}", key, value.value);
+                }
             };
         }
         Ok((count, false))
@@ -136,29 +281,32 @@ impl Settings {
         Ok(())
     }
 
-    pub fn nth(&self, index: usize) -> String {
-        self.ordered_names[index].clone()
-    }
-
-    pub fn default_for(&self, key: &str) -> Option<SettingValue> {
-        self.default_values.get(key).cloned()
-    }
-
     pub fn status(&self, input: &Input) -> String {
         //let mut keys = self.value_map.keys().collect::<Vec<_>>();
         //keys.sort();
         let mut builder = String::new();
-        for (ind, key) in self.ordered_names.iter().enumerate() {
-            let is_const = self.is_const(key);
+        for (ind, value) in self.values.iter().enumerate() {
             let selected = if ind == input.index { "*" } else { " " };
-            let constant = if is_const { "@" } else { " " };
-            match self.value_map[key] {
-                SettingValue::F32(value, _) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, value).unwrap()
-                }
-                SettingValue::U32(value) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, value).unwrap()
-                }
+            let constant = if value.is_const { "@" } else { " " };
+            match value.value {
+                SettingValueEnum::F32(v, _) => writeln!(
+                    &mut builder,
+                    "{}{}{} = {}",
+                    selected, constant, &value.key, v
+                )
+                .unwrap(),
+                SettingValueEnum::U32(v) => writeln!(
+                    &mut builder,
+                    "{}{}{} = {}",
+                    selected, constant, &value.key, v
+                )
+                .unwrap(),
+                SettingValueEnum::Define(v) => writeln!(
+                    &mut builder,
+                    "{}{}{} = {}",
+                    selected, constant, &value.key, v
+                )
+                .unwrap(),
             }
         }
         builder
@@ -169,8 +317,15 @@ impl Settings {
     }
 
     pub fn check_rebuild(&mut self) -> bool {
-        let result = self.rebuild;
-        self.rebuild = false;
+        fn check(v: &mut bool) -> bool {
+            let result = *v;
+            *v = false;
+            result
+        }
+        let mut result = check(&mut self.rebuild);
+        for value in &mut self.values {
+            result |= check(&mut value.const_changed);
+        }
         result
     }
 
@@ -180,7 +335,6 @@ impl Settings {
                r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
         }
         // TODO: Remove values no longer present
-        self.ordered_names.clear();
         let mut once = false;
         for cap in RE.captures_iter(src) {
             once = true;
@@ -190,94 +344,96 @@ impl Settings {
                 "float" => {
                     let value = cap["value"].parse().unwrap();
                     let change = cap["change"].parse().unwrap();
-                    SettingValue::F32(value, change)
+                    SettingValueEnum::F32(value, change)
                 }
                 "int" => {
                     let value = cap["value"].parse().unwrap();
-                    SettingValue::U32(value)
+                    SettingValueEnum::U32(value)
                 }
                 _ => {
                     panic!("Regex returned invalid kind");
                 }
             };
-            self.ordered_names.push(name.to_string());
             self.update_value(name, setting, cap.name("const").is_some());
         }
-        self.ordered_names.push("render_scale".to_string());
-        self.value_map
-            .insert("render_scale".to_string(), SettingValue::U32(1));
+        if self.get("render_scale").is_none() {
+            self.values.push(SettingValue {
+                key: "render_scale".to_string(),
+                value: SettingValueEnum::U32(1),
+                default_value: SettingValueEnum::U32(1),
+                is_const: false,
+                const_changed: false,
+            })
+        }
         assert!(once, "Regex should get at least one setting");
-        self.default_values = self.value_map.clone();
+        self.find_defines(src);
     }
 
-    fn update_value(&mut self, name: &str, new_value: SettingValue, is_const: bool) {
+    fn update_value(&mut self, name: &str, new_value: SettingValueEnum, is_const: bool) {
         let insert = {
-            let old_value = self.value_map.get_mut(name);
-            match (old_value, new_value) {
+            let old_value = self.get_mut(name);
+            match (old_value.map(|x| x.value), new_value) {
                 (
-                    Some(SettingValue::F32(_, ref mut old_speed)),
-                    SettingValue::F32(_, new_speed),
+                    Some(SettingValueEnum::F32(_, ref mut old_speed)),
+                    SettingValueEnum::F32(_, new_speed),
                 ) => {
                     *old_speed = new_speed;
                     false
                 }
-                (Some(SettingValue::U32(_)), SettingValue::U32(_)) => false,
+                (Some(SettingValueEnum::U32(_)), SettingValueEnum::U32(_)) => false,
                 _ => true,
             }
         };
         if insert {
-            self.value_map.insert(name.to_string(), new_value);
-            if is_const {
-                self.constants.insert(name.to_string());
-            } else {
-                self.constants.remove(name);
+            self.values.push(SettingValue {
+                key: name.to_string(),
+                value: new_value,
+                default_value: new_value,
+                is_const,
+                const_changed: false,
+            })
+        }
+    }
+
+    fn find_defines(&mut self, src: &str) {
+        lazy_static! {
+            static ref RE: Regex =
+                Regex::new(r#"(?m)^ *#ifdef +(?P<name>[a-zA-Z0-9_]+) *\r?$"#).unwrap();
+        }
+        for cap in RE.captures_iter(src) {
+            let name = &cap["name"];
+            if self.get(name).is_none() {
+                let new_value = SettingValueEnum::Define(false);
+                self.values.push(SettingValue {
+                    key: name.to_string(),
+                    value: new_value,
+                    default_value: new_value,
+                    is_const: false,
+                    const_changed: false,
+                })
             }
         }
     }
 
     pub fn serialize(&self) -> Vec<u8> {
         let mut result = Vec::new();
-        for name in &self.ordered_names {
-            match self.get(name).expect("Missing setting") {
-                &SettingValue::F32(x, _) => result.write_f32::<NativeEndian>(x).unwrap(),
-                &SettingValue::U32(x) => result.write_u32::<NativeEndian>(x).unwrap(),
+        for value in &self.values {
+            match value.value {
+                SettingValueEnum::F32(x, _) => result.write_f32::<NativeEndian>(x).unwrap(),
+                SettingValueEnum::U32(x) => result.write_u32::<NativeEndian>(x).unwrap(),
+                SettingValueEnum::Define(_) => (),
             }
         }
         result
     }
 
     pub fn normalize(&mut self) {
-        fn get_f32(settings: &mut Settings, key: &str) -> (f32, f32) {
-            match settings.get(key) {
-                Some(&SettingValue::F32(x, scale)) => (x, scale),
-                _ => panic!("Missing key {}", key),
-            }
-        }
-        let (look_x, look_x_scale) = get_f32(self, "look_x");
-        let (look_y, look_y_scale) = get_f32(self, "look_y");
-        let (look_z, look_z_scale) = get_f32(self, "look_z");
-        let (up_x, up_x_scale) = get_f32(self, "up_x");
-        let (up_y, up_y_scale) = get_f32(self, "up_y");
-        let (up_z, up_z_scale) = get_f32(self, "up_z");
-        let mut look = Vector::new(look_x, look_y, look_z);
-        let mut up = Vector::new(up_x, up_y, up_z);
+        let mut look = Vector::read(self, "look_x", "look_y", "look_z");
+        let mut up = Vector::read(self, "up_x", "up_y", "up_z");
         look = look.normalized();
         up = Vector::cross(Vector::cross(look, up), look).normalized();
-        self.insert(
-            "look_x".to_string(),
-            SettingValue::F32(look.x, look_x_scale),
-        );
-        self.insert(
-            "look_y".to_string(),
-            SettingValue::F32(look.y, look_y_scale),
-        );
-        self.insert(
-            "look_z".to_string(),
-            SettingValue::F32(look.z, look_z_scale),
-        );
-        self.insert("up_x".to_string(), SettingValue::F32(up.x, up_x_scale));
-        self.insert("up_y".to_string(), SettingValue::F32(up.y, up_y_scale));
-        self.insert("up_z".to_string(), SettingValue::F32(up.z, up_z_scale));
+        look.write(self, "look_x", "look_y", "look_z");
+        up.write(self, "up_x", "up_y", "up_z");
     }
 }
 
@@ -313,26 +469,32 @@ fn interpolate_u32(prev: u32, cur: u32, next: u32, next2: u32, time: f32, linear
 }
 
 fn interpolate(
-    prev: SettingValue,
-    cur: SettingValue,
-    next: SettingValue,
-    next2: SettingValue,
+    prev: SettingValueEnum,
+    cur: SettingValueEnum,
+    next: SettingValueEnum,
+    next2: SettingValueEnum,
     time: f32,
     linear: bool,
-) -> SettingValue {
+) -> SettingValueEnum {
     match (prev, cur, next, next2) {
         (
-            SettingValue::U32(prev),
-            SettingValue::U32(cur),
-            SettingValue::U32(next),
-            SettingValue::U32(next2),
-        ) => SettingValue::U32(interpolate_u32(prev, cur, next, next2, time, linear)),
+            SettingValueEnum::U32(prev),
+            SettingValueEnum::U32(cur),
+            SettingValueEnum::U32(next),
+            SettingValueEnum::U32(next2),
+        ) => SettingValueEnum::U32(interpolate_u32(prev, cur, next, next2, time, linear)),
         (
-            SettingValue::F32(prev, _),
-            SettingValue::F32(cur, delta),
-            SettingValue::F32(next, _),
-            SettingValue::F32(next2, _),
-        ) => SettingValue::F32(interpolate_f32(prev, cur, next, next2, time, linear), delta),
+            SettingValueEnum::F32(prev, _),
+            SettingValueEnum::F32(cur, delta),
+            SettingValueEnum::F32(next, _),
+            SettingValueEnum::F32(next2, _),
+        ) => SettingValueEnum::F32(interpolate_f32(prev, cur, next, next2, time, linear), delta),
+        (
+            SettingValueEnum::Define(_),
+            SettingValueEnum::Define(cur),
+            SettingValueEnum::Define(_),
+            SettingValueEnum::Define(_),
+        ) => SettingValueEnum::Define(cur),
         _ => panic!("Inconsistent keyframe types"),
     }
 }
@@ -375,7 +537,7 @@ impl KeyframeList {
         }
     }
 
-    pub fn interpolate(&mut self, time: f32, wrap: bool) -> &Settings {
+    pub fn interpolate(&mut self, time: f32, wrap: bool) -> &mut Settings {
         let timelen = if wrap {
             self.keyframes.len()
         } else {
@@ -387,16 +549,19 @@ impl KeyframeList {
         let index_prev = self.clamp(index_cur as isize - 1, wrap);
         let index_next = self.clamp(index_cur as isize + 1, wrap);
         let index_next2 = self.clamp(index_cur as isize + 2, wrap);
-        let keys = self.base.value_map.keys().cloned().collect::<Vec<String>>();
-        for key in keys {
-            let prev = *self.keyframes[index_prev].get(&key).unwrap();
-            let cur = *self.keyframes[index_cur].get(&key).unwrap();
-            let next = *self.keyframes[index_next].get(&key).unwrap();
-            let next2 = *self.keyframes[index_next2].get(&key).unwrap();
+        for value in &mut self.base.values {
+            let prev = self.keyframes[index_prev].find(&value.key).value;
+            let cur = self.keyframes[index_cur].find(&value.key).value;
+            let next = self.keyframes[index_next].find(&value.key).value;
+            let next2 = self.keyframes[index_next2].find(&value.key).value;
             let result = interpolate(prev, cur, next, next2, time, self.keyframes.len() <= 2);
-            self.base.insert(key, result);
+            match value.value {
+                v @ SettingValueEnum::Define(_) if v != result => self.base.rebuild = true,
+                _ => (),
+            }
+            value.value = result;
         }
         self.base.normalize();
-        &self.base
+        &mut self.base
     }
 }

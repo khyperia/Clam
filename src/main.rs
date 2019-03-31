@@ -1,4 +1,5 @@
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 extern crate byteorder;
 extern crate failure;
 extern crate ocl;
@@ -87,11 +88,13 @@ fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(
     let mut default_settings = Settings::new();
     let mut kernel = Kernel::create(width, height, &mut default_settings)?;
     default_settings.clear_constants();
-    kernel.rebuild(&mut default_settings)?;
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
     for frame in 0..frames {
         let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
+        if settings.check_rebuild() {
+            kernel.rebuild(settings)?;
+        }
         video_one(frame, rpp, &mut kernel, &settings)?;
         let value = (frame + 1) as f32 / frames as f32;
         println!("{}", progress.time_str(value));
@@ -157,7 +160,7 @@ fn main() -> Result<(), Error> {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");
         println!("clam5 --render [8k|4k|2k|1k] [rpp]");
-        println!("clam5 --video [width] [height] [rpp] [frames]");
+        println!("clam5 --video [width] [height] [rpp] [frames] [wrap:true|false]");
         println!("clam5");
     }
     Ok(())

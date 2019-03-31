@@ -67,16 +67,31 @@ fn render_text_one(
     offset_x: i32,
     offset_y: i32,
 ) -> Result<(), Error> {
+    let (_, window_height) = canvas.output_size().map_err(err_msg)?;
     let spacing = font.recommended_line_spacing();
-    for (line_index, line) in text.lines().enumerate() {
+
+    let mut current_y = 10;
+    let mut current_column_x = 10;
+    let mut next_column_x = 0;
+
+    for line in text.lines() {
         let rendered = font.render(line).solid(color)?;
         let width = rendered.width();
         let height = rendered.height();
         let tex = creator.create_texture_from_surface(rendered)?;
-        let y = 10 + offset_y + line_index as i32 * spacing;
+        if (current_y + spacing) >= (window_height as i32) {
+            current_column_x = next_column_x;
+            current_y = 10;
+        }
+        next_column_x = next_column_x.max(current_column_x + width as i32);
         canvas
-            .copy(&tex, None, Rect::new(10 + offset_x, y, width, height))
+            .copy(
+                &tex,
+                None,
+                Rect::new(current_column_x + offset_x, current_y + offset_y, width, height),
+            )
             .expect("Could not display text");
+        current_y += spacing;
     }
     Ok(())
 }

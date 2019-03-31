@@ -46,7 +46,6 @@ struct MandelboxCfg
     int _max_iters;                   // 64 const
     int _max_ray_steps;               // 256 const
     int _num_ray_bounces;             // 3 const
-    int _preview;                     // 0 const
 };
 
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
@@ -656,8 +655,11 @@ __kernel void Main(__global uchar* data,
 
     struct Random rand = frame > 0 ? GetRand(data, idx, size) : new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
-    const float3 colorComponents =
-        preview ? PreviewTrace(cfg, ray, width, height) : Trace(cfg, ray, width, height, &rand);
+#ifdef PREVIEW
+    const float3 colorComponents = PreviewTrace(cfg, ray, width, height);
+#else
+    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+#endif
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     // newColor = GammaTest(x, y, width, height);
     const uint packedColor = PackPixel(cfg, newColor);

@@ -1,6 +1,6 @@
 use failure::Error;
 use sdl2::keyboard::Scancode as Key;
-use settings::{SettingValue, Settings};
+use settings::Settings;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -81,67 +81,29 @@ impl Input {
             }
             Key::Up => {
                 if self.index == 0 {
-                    self.index = settings.value_map().len() - 1;
+                    self.index = settings.values.len() - 1;
                 } else {
                     self.index -= 1;
                 }
             }
             Key::Down => {
                 self.index += 1;
-                if self.index >= settings.value_map().len() {
+                if self.index >= settings.values.len() {
                     self.index = 0;
                 }
             }
-            Key::Left => {
-                let key = settings.nth(self.index);
-                if let SettingValue::U32(value) = *settings.get(&key).unwrap() {
-                    if value != 0 {
-                        settings.insert(key, SettingValue::U32(value - 1));
-                    }
-                }
-            }
-            Key::Right => {
-                let key = settings.nth(self.index);
-                if let SettingValue::U32(value) = *settings.get(&key).unwrap() {
-                    settings.insert(key, SettingValue::U32(value + 1));
-                }
-            }
-            Key::T => {
-                let key = settings.nth(self.index);
-                let default = settings.default_for(&key).unwrap();
-                let new_value = match *settings.get(&key).unwrap() {
-                    SettingValue::U32(value) => {
-                        if value == 0 {
-                            default
-                        } else {
-                            SettingValue::U32(0)
-                        }
-                    }
-                    SettingValue::F32(value, speed) => {
-                        if value == 0.0 {
-                            default
-                        } else {
-                            SettingValue::F32(0.0, speed)
-                        }
-                    }
-                };
-                settings.insert(key, new_value);
-            }
-            Key::C => {
-                let key = settings.nth(self.index);
-                let is_const = settings.is_const(&key);
-                settings.set_const(&key, !is_const);
-            }
-            Key::B => {
-                settings.rebuild();
-            }
+            Key::Left => settings.values[self.index].change_one(false),
+            Key::Right => settings.values[self.index].change_one(true),
+            Key::T => settings.values[self.index].toggle(),
+            Key::C => settings.values[self.index].toggle_const(),
+            Key::B => settings.rebuild(),
             Key::X => {
-                let x = *settings.get("pos_x").unwrap();
-                let y = *settings.get("pos_y").unwrap();
-                let z = *settings.get("pos_z").unwrap();
-                settings.insert("light_pos_1_x".to_string(), x);
-                settings.insert("light_pos_1_y".to_string(), y);
-                settings.insert("light_pos_1_z".to_string(), z);
+                let x = settings.find("pos_x").clone();
+                let y = settings.find("pos_y").clone();
+                let z = settings.find("pos_z").clone();
+                settings.find_mut("light_pos_1_x").value = x.value;
+                settings.find_mut("light_pos_1_y").value = y.value;
+                settings.find_mut("light_pos_1_z").value = z.value;
             }
             _ => (),
         }
@@ -150,8 +112,8 @@ impl Input {
 
     fn run(&mut self, settings: &mut Settings, now: Instant) {
         self.camera_3d(settings, now);
-        self.exp_setting(settings, now, "focal_distance".to_string(), Key::R, Key::F);
-        self.exp_setting(settings, now, "fov".to_string(), Key::N, Key::M);
+        self.exp_setting(settings, now, "focal_distance", Key::R, Key::F);
+        self.exp_setting(settings, now, "fov", Key::N, Key::M);
         self.manual_control(settings, now);
         for value in self.pressed_keys.values_mut() {
             *value = now;
@@ -168,20 +130,13 @@ impl Input {
         }
     }
 
-    fn get_f32(settings: &Settings, key: &str) -> Option<f32> {
-        match settings.get(key) {
-            Some(&SettingValue::F32(val, _)) => Some(val),
-            _ => None,
-        }
-    }
-
     fn camera_3d(&self, settings: &mut Settings, now: Instant) {
-        let move_speed = Self::get_f32(settings, "focal_distance").unwrap() * 0.5;
-        let turn_speed = Self::get_f32(settings, "fov").unwrap();
+        let move_speed = settings.find("focal_distance").unwrap_f32() * 0.5;
+        let turn_speed = settings.find("fov").unwrap_f32();
         let roll_speed = 1.0;
-        let mut pos = Vector::read(settings, "pos_x", "pos_y", "pos_z").unwrap();
-        let mut look = Vector::read(settings, "look_x", "look_y", "look_z").unwrap();
-        let mut up = Vector::read(settings, "up_x", "up_y", "up_z").unwrap();
+        let mut pos = Vector::read(settings, "pos_x", "pos_y", "pos_z");
+        let mut look = Vector::read(settings, "look_x", "look_y", "look_z");
+        let mut up = Vector::read(settings, "up_x", "up_y", "up_z");
         let old = (pos, look, up);
         let right = Vector::cross(look, up);
         if let Some(dt) = self.is_pressed(now, Key::W) {
@@ -233,42 +188,24 @@ impl Input {
         &self,
         settings: &mut Settings,
         now: Instant,
-        key: String,
+        key: &str,
         increase: Key,
         decrease: Key,
     ) {
-        let (mut value, change) = match *settings.get(&key).unwrap() {
-            SettingValue::F32(value, change) => (value, -change + 1.0),
-            _ => return,
-        };
         if let Some(dt) = self.is_pressed(now, increase) {
-            value *= change.powf(dt);
+            settings.find_mut(key).change(true, dt);
         }
         if let Some(dt) = self.is_pressed(now, decrease) {
-            value *= change.powf(-dt);
+            settings.find_mut(key).change(false, dt);
         }
-        settings.insert(key, SettingValue::F32(value, -change + 1.0));
     }
 
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
-        let mut do_control = |dt| {
-            let key = settings.nth(self.index);
-            if let SettingValue::F32(value, change) = *settings.get(&key).unwrap() {
-                if change < 0.0 {
-                    settings.insert(
-                        key,
-                        SettingValue::F32(value * (-change + 1.0).powf(dt), change),
-                    );
-                } else {
-                    settings.insert(key, SettingValue::F32(value + dt * change, change));
-                }
-            };
-        };
-        if let Some(dt) = self.is_pressed(now, Key::Left) {
-            do_control(-dt);
-        }
         if let Some(dt) = self.is_pressed(now, Key::Right) {
-            do_control(dt);
+            settings.values[self.index].change(true, dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Left) {
+            settings.values[self.index].change(false, dt);
         }
     }
 }
@@ -285,21 +222,18 @@ impl Vector {
         Vector { x, y, z }
     }
 
-    fn read(settings: &Settings, x: &str, y: &str, z: &str) -> Option<Vector> {
-        match (settings.get(x), settings.get(y), settings.get(z)) {
-            (
-                Some(&SettingValue::F32(x, _)),
-                Some(&SettingValue::F32(y, _)),
-                Some(&SettingValue::F32(z, _)),
-            ) => Some(Self::new(x, y, z)),
-            _ => None,
-        }
+    pub fn read(settings: &Settings, x: &str, y: &str, z: &str) -> Vector {
+        Self::new(
+            settings.find(x).unwrap_f32(),
+            settings.find(y).unwrap_f32(),
+            settings.find(z).unwrap_f32(),
+        )
     }
 
-    fn write(&self, settings: &mut Settings, x: &str, y: &str, z: &str) {
-        settings.insert(x.into(), SettingValue::F32(self.x, 1.0));
-        settings.insert(y.into(), SettingValue::F32(self.y, 1.0));
-        settings.insert(z.into(), SettingValue::F32(self.z, 1.0));
+    pub fn write(&self, settings: &mut Settings, x: &str, y: &str, z: &str) {
+        *settings.find_mut(x).unwrap_f32_mut() = self.x;
+        *settings.find_mut(y).unwrap_f32_mut() = self.y;
+        *settings.find_mut(z).unwrap_f32_mut() = self.z;
     }
 
     pub fn len2(&self) -> f32 {

@@ -3,7 +3,6 @@ use failure;
 use failure::Error;
 use kernel_compilation;
 use ocl;
-use settings::SettingValue;
 use settings::Settings;
 
 const DATA_WORDS: u32 = 6;
@@ -186,7 +185,12 @@ impl Kernel {
             }
             self.cpu_cfg = new_cfg;
             let to_write = &self.cpu_cfg as &[_];
-            self.cfg.as_ref().unwrap().write(to_write).queue(&self.queue).enq()?;
+            self.cfg
+                .as_ref()
+                .unwrap()
+                .write(to_write)
+                .queue(&self.queue)
+                .enq()?;
             self.frame = 0;
         }
 
@@ -195,9 +199,8 @@ impl Kernel {
             self.frame = 0;
         }
 
-        if let Some(&SettingValue::U32(render_scale)) = settings.get("render_scale") {
-            self.data.rescale(render_scale);
-        }
+        self.data
+            .rescale(settings.find("render_scale").unwrap_u32());
 
         Ok(())
     }

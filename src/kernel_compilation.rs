@@ -1,6 +1,6 @@
 use display::ScreenEvent;
 use failure::Error;
-use settings::{SettingValue, Settings};
+use settings::Settings;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
@@ -76,8 +76,8 @@ fn get_src() -> Result<String, Error> {
 
 fn get_defines(settings: &Settings) -> String {
     let mut result = String::new();
-    for setting in settings.keys() {
-        result.push_str(&format!("#ifndef {0}\n#define {0} cfg->_{0}\n#endif\n", setting));
+    for value in &settings.values {
+        result.push_str(&value.format_src_const());
     }
     result
 }
@@ -95,14 +95,11 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
         if device_name.contains("GeForce") {
             builder.cmplr_opt("-cl-nv-verbose");
         }
-        for key in settings.constants() {
-            let value = settings.get(&key).unwrap();
-            match *value {
-                SettingValue::F32(value, _) => {
-                    builder.cmplr_opt(format!("-D {}={:.16}f", key, value))
-                }
-                SettingValue::U32(value) => builder.cmplr_opt(format!("-D {}={}", key, value)),
-            };
+        for value in &settings.values {
+            if let Some(opt) = value.format_cmdline() {
+                println!("{}", opt);
+                builder.cmplr_opt(opt);
+            }
         }
         builder.build(&queue.context())?
     };
