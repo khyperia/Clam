@@ -97,7 +97,6 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
         }
         for value in &settings.values {
             if let Some(opt) = value.format_cmdline() {
-                println!("{}", opt);
                 builder.cmplr_opt(opt);
             }
         }

@@ -306,17 +306,15 @@ static float DeSphere(float3 pos, float radius, float3 test)
     return length(test - pos) - radius;
 }
 
-static float DeMandelbox(Cfg cfg, float3 offset, float* color_data)
+static float DeMandelbox(Cfg cfg, float3 offset, int* color)
 {
     float3 z = (float3)(offset.x, offset.y, offset.z);
     float dz = 1.0f;
     int n = max(max_iters, 1);
-    int color = 0;
     do
     {
-        z = MandelboxD(cfg, z, &dz, offset, &color);
+        z = MandelboxD(cfg, z, &dz, offset, color);
     } while (dot(z, z) < bailout && --n);
-    *color_data = color / 8.0f;
     return length(z) / dz;
 }
 
@@ -327,8 +325,8 @@ static float Plane(float3 pos, float3 plane)
 
 static float De(Cfg cfg, float3 offset)
 {
-    float color_data;
-    const float mbox = DeMandelbox(cfg, offset, &color_data);
+    int color;
+    const float mbox = DeMandelbox(cfg, offset, &color);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1, offset);
     const float cut = Plane(offset, PlanePos(cfg));
     return min(light1, max(mbox, cut));
@@ -344,8 +342,9 @@ struct Material
 // (r, g, b, spec)
 static struct Material Material(Cfg cfg, float3 offset)
 {
-    float base_color;
-    const float de = DeMandelbox(cfg, offset, &base_color);
+    int raw_color_data = 0;
+    const float de = DeMandelbox(cfg, offset, &raw_color_data);
+    float base_color = raw_color_data / 8.0f;
 
     base_color *= surface_color_variance;
     base_color += surface_color_shift;
@@ -420,7 +419,7 @@ static float3 Trace(
     for (int photonIndex = 0; photonIndex < num_ray_bounces; photonIndex++)
     {
         float3 normal;
-        const float fog_dist = -native_log(Random_Next(rand)) * fog_distance;
+        const float fog_dist = fog_distance == 0 ? FLT_MAX : -native_log(Random_Next(rand)) * fog_distance;
         const float max_dist = min(max_ray_dist, fog_dist);
         const float distance = min(Cast(cfg, ray, quality, max_dist, &normal), fog_dist);
 
