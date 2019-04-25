@@ -74,10 +74,18 @@ fn get_src() -> Result<String, Error> {
     Ok(contents)
 }
 
-fn get_defines(settings: &Settings) -> String {
+fn generate_src(settings: &Settings) -> String {
     let mut result = String::new();
+    result.push_str("#define NOT_EDITOR 1\n");
+    result.push_str("struct MandelboxCfg {\n");
     for value in &settings.values {
-        result.push_str(&value.format_src_const());
+        if let Some(ref tmp) = value.format_opencl_struct() {
+            result.push_str(tmp);
+        }
+    }
+    result.push_str("};\n");
+    for value in &settings.values {
+        result.push_str(&value.format_opencl());
     }
     result
 }
@@ -87,7 +95,7 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
         let mut builder = ocl::Program::builder();
         let src = get_src()?;
         settings.set_src(&src);
-        builder.source(get_defines(&settings));
+        builder.source(generate_src(&settings));
         builder.source(src);
         builder.devices(queue.device());
         builder.cmplr_opt("-cl-fast-relaxed-math");
@@ -95,11 +103,11 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
         if device_name.contains("GeForce") {
             builder.cmplr_opt("-cl-nv-verbose");
         }
-        for value in &settings.values {
-            if let Some(opt) = value.format_cmdline() {
-                builder.cmplr_opt(opt);
-            }
-        }
+        // for value in &settings.values {
+        //     if let Some(opt) = value.format_cmdline() {
+        //         builder.cmplr_opt(opt);
+        //     }
+        // }
         builder.build(&queue.context())?
     };
     if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =

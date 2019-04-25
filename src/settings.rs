@@ -110,38 +110,47 @@ impl SettingValue {
         }
     }
 
-    pub fn format_src_const(&self) -> String {
+    pub fn format_opencl_struct(&self) -> Option<String> {
         match self.value {
-            SettingValueEnum::F32(_, _) | SettingValueEnum::U32(_) => {
-                format!("#ifndef {0}\n#define {0} cfg->_{0}\n#endif\n", self.key)
+            SettingValueEnum::F32(_, _) => {
+                Some(format!("float _{};\n", self.key))
             }
-            SettingValueEnum::Define(_) => "".to_string(),
+            SettingValueEnum::U32(_) => {
+                Some(format!("int _{};\n", self.key))
+            }
+            SettingValueEnum::Define(_) => {
+                None
+            }
         }
     }
 
-    pub fn format_cmdline(&self) -> Option<String> {
+    pub fn format_opencl(&self) -> String {
+        let ty;
+        let string;
+        let is_const;
         match self.value {
             SettingValueEnum::F32(value, _) => {
-                if self.is_const {
-                    Some(format!("-D {}={:.16}f", self.key, value))
-                } else {
-                    None
-                }
+                is_const = self.is_const;
+                ty = "float";
+                string = format!("{:.16}f", value);
             }
             SettingValueEnum::U32(value) => {
-                if self.is_const {
-                    Some(format!("-D {}={}", self.key, value))
-                } else {
-                    None
-                }
+                is_const = self.is_const;
+                ty = "int";
+                string = format!("{}", value);
             }
             SettingValueEnum::Define(value) => {
                 if value {
-                    Some(format!("-D {}", self.key))
+                    return format!("#define {} 1\n", self.key)
                 } else {
-                    None
+                    return "".to_string();
                 }
             }
+        }
+        if is_const {
+            format!("{} {}(__local struct MandelboxCfg const* cfg) {{ return {}; }}\n", ty, self.key, string)
+        } else {
+            format!("{} {}(__local struct MandelboxCfg const* cfg) {{ return cfg->_{1}; }}\n", ty, self.key)
         }
     }
 }
@@ -334,8 +343,10 @@ impl Settings {
 
     pub fn set_src(&mut self, src: &str) {
         lazy_static! {
+            //static ref RE: Regex = Regex::new(
+            //   r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
             static ref RE: Regex = Regex::new(
-               r#"(?m)^ *(?P<kind>float|int) _(?P<name>[a-zA-Z0-9_]+); *// (?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
+               r#"(?m)^ *extern *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+)\([^)]*\); *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
         }
         // TODO: Remove values no longer present
         let mut once = false;
