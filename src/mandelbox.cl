@@ -47,7 +47,8 @@ extern float plane_x(Cfg cfg);                   // 3.0 1.0
 extern float plane_y(Cfg cfg);                   // 3.5 1.0
 extern float plane_z(Cfg cfg);                   // 2.5 1.0
 extern float rotation(Cfg cfg);                  // 0.0 0.125
-extern float bailout(Cfg cfg);                   // 1024.0 -1.0 const
+extern float bailout(Cfg cfg);                   // 32.0 -1.0 const
+extern float bailout_normal(Cfg cfg);            // 128.0 -1.0 const
 extern float de_multiplier(Cfg cfg);             // 0.9375 0.125 const
 extern float max_ray_dist(Cfg cfg);              // 16.0 -0.5 const
 extern float quality_first_ray(Cfg cfg);         // 2.0 -0.5 const
@@ -320,15 +321,16 @@ static float DeSphere(float3 pos, float radius, float3 test)
     return length(test - pos) - radius;
 }
 
-static float DeMandelbox(Cfg cfg, float3 offset, int* color)
+static float DeMandelbox(Cfg cfg, float3 offset, bool isNormal, int* color)
 {
     float3 z = (float3)(offset.x, offset.y, offset.z);
     float dz = 1.0f;
     int n = max(max_iters(cfg), 1);
+    int bail = isNormal ? bailout_normal(cfg) : bailout(cfg);
     do
     {
         z = MandelboxD(cfg, z, &dz, offset, color);
-    } while (dot(z, z) < bailout(cfg) && --n);
+    } while (dot(z, z) < bail * bail && --n);
     return length(z) / dz;
 }
 
@@ -337,10 +339,10 @@ static float Plane(float3 pos, float3 plane)
     return dot(pos, normalize(plane)) - length(plane);
 }
 
-static float De(Cfg cfg, float3 offset)
+static float De(Cfg cfg, float3 offset, bool isNormal)
 {
     int color;
-    const float mbox = DeMandelbox(cfg, offset, &color);
+    const float mbox = DeMandelbox(cfg, offset, isNormal, &color);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1(cfg), offset);
     const float cut = Plane(offset, PlanePos(cfg));
     return min(light1, max(mbox, cut));
@@ -349,6 +351,7 @@ static float De(Cfg cfg, float3 offset)
 struct Material
 {
     float3 color;
+    float3 normal;
     float3 emissive;
     float specular;
 };
@@ -357,7 +360,7 @@ struct Material
 static struct Material Material(Cfg cfg, float3 offset)
 {
     int raw_color_data = 0;
-    const float de = DeMandelbox(cfg, offset, &raw_color_data);
+    const float de = DeMandelbox(cfg, offset, true, &raw_color_data);
     float base_color = raw_color_data / 8.0f;
 
     base_color *= surface_color_variance(cfg);
@@ -383,17 +386,28 @@ static struct Material Material(Cfg cfg, float3 offset)
         result.emissive = LightBrightness1(cfg);
     }
 
+    const float delta = max(1e-6f, de * 0.5f);  // aprox. 8.3x float epsilon
+    const float dnpp = De(cfg, offset + (float3)(-delta, delta, delta), true);
+    const float dpnp = De(cfg, offset + (float3)(delta, -delta, delta), true);
+    const float dppn = De(cfg, offset + (float3)(delta, delta, -delta), true);
+    const float dnnn = De(cfg, offset + (float3)(-delta, -delta, -delta), true);
+    result.normal = (float3)((dppn + dpnp) - (dnpp + dnnn),
+                             (dppn + dnpp) - (dpnp + dnnn),
+                             (dpnp + dnpp) - (dppn + dnnn));
+    result.normal.x += (dot(result.normal, result.normal) == 0.0f);  // ensure nonzero
+    result.normal = normalize(result.normal);
+
     return result;
 }
 
-static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist, float3* normal)
+static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxDist)
 {
     float distance;
     float totalDistance = 0.0f;
     uint i = (uint)max(max_ray_steps(cfg), 1);
     do
     {
-        distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier(cfg);
+        distance = De(cfg, Ray_At(ray, totalDistance), false) * de_multiplier(cfg);
         totalDistance += distance;
         i--;
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
@@ -401,36 +415,13 @@ static float Cast(Cfg cfg, struct Ray ray, const float quality, const float maxD
     // correction step
     if (distance * quality <= totalDistance)
     {
-#ifdef LINEAR_CORRECTION
-        float x1 = totalDistance;
-        float y1 = De(cfg, Ray_At(ray, x1)) * de_multiplier;
-        float x2 = totalDistance - totalDistance / quality;
-        float y2 = De(cfg, Ray_At(ray, x2)) * de_multiplier;
-        float m = (y2 - y1) / (x2 - x1);
-        float b = y1 - m * x1;
-        float solve = b / ((totalDistance / quality) - m);
-        totalDistance = solve;
-#else
         totalDistance -= totalDistance / quality;
         for (int correctStep = 0; correctStep < 4; correctStep++)
         {
-            distance = De(cfg, Ray_At(ray, totalDistance)) * de_multiplier(cfg);
+            distance = De(cfg, Ray_At(ray, totalDistance), false) * de_multiplier(cfg);
             totalDistance += distance - totalDistance / quality;
         }
-#endif
     }
-
-    const float3 final = Ray_At(ray, totalDistance);
-    const float delta = max(1e-6f, distance * 0.5f);  // aprox. 8.3x float epsilon
-    const float dnpp = De(cfg, final + (float3)(-delta, delta, delta));
-    const float dpnp = De(cfg, final + (float3)(delta, -delta, delta));
-    const float dppn = De(cfg, final + (float3)(delta, delta, -delta));
-    const float dnnn = De(cfg, final + (float3)(-delta, -delta, -delta));
-    *normal = (float3)((dppn + dpnp) - (dnpp + dnnn),
-                       (dppn + dnpp) - (dpnp + dnnn),
-                       (dpnp + dnpp) - (dppn + dnnn));
-    normal->x += (dot(*normal, *normal) == 0.0f);  // ensure nonzero
-    *normal = normalize(*normal);
     return totalDistance;
 }
 
@@ -443,11 +434,10 @@ static float3 Trace(
 
     for (int photonIndex = 0; photonIndex < num_ray_bounces(cfg); photonIndex++)
     {
-        float3 normal;
         const float fog_dist =
             fog_distance(cfg) == 0 ? FLT_MAX : -native_log(Random_Next(rand)) * fog_distance(cfg);
         const float max_dist = min(max_ray_dist(cfg), fog_dist);
-        const float distance = min(Cast(cfg, ray, quality, max_dist, &normal), fog_dist);
+        const float distance = min(Cast(cfg, ray, quality, max_dist), fog_dist);
 
         if (distance >= max_ray_dist(cfg) ||
             (photonIndex + 1 == num_ray_bounces(cfg) && distance >= fog_dist))
@@ -470,6 +460,7 @@ static float3 Trace(
             newDir = Random_Sphere(rand);
             reflectionColor *= fog_brightness(cfg);
             material.color = (float3)(1, 1, 1);
+            material.normal = (float3)(0, 0, 0);
             material.specular = 0;
             material.emissive = (float3)(0, 0, 0);
         }
@@ -482,12 +473,12 @@ static float3 Trace(
             if (Random_Next(rand) < material.specular)
             {
                 // specular
-                newDir = ray.dir - 2 * dot(ray.dir, normal) * normal;
+                newDir = ray.dir - 2 * dot(ray.dir, material.normal) * material.normal;
             }
             else
             {
                 // diffuse
-                newDir = Random_Lambertian(rand, normal);
+                newDir = Random_Lambertian(rand, material.normal);
                 quality = quality_rest_ray(cfg);
             }
         }
@@ -498,22 +489,12 @@ static float3 Trace(
             float3 dir = lightPos - newPos;
             float light_dist = length(dir);
             dir = normalize(dir);
-            if (is_fog || dot(dir, normal) > 0)
+            if (is_fog || dot(dir, material.normal) > 0)
             {
-                float3 _normal;
-                float dist =
-                    Cast(cfg, new_Ray(newPos, dir), quality_rest_ray(cfg), light_dist, &_normal);
+                float dist = Cast(cfg, new_Ray(newPos, dir), quality_rest_ray(cfg), light_dist);
                 if (dist >= light_dist)
                 {
-                    float prod;
-                    if (is_fog)
-                    {
-                        prod = 1.0f;
-                    }
-                    else
-                    {
-                        prod = dot(normal, dir);
-                    }
+                    float prod = is_fog ? 1.0f : dot(material.normal, dir);
                     // Fixes tiny lil bright pixels
                     float fixed_dist = fmax(distance / 2.0f, light_dist);
                     float3 color =
@@ -523,7 +504,7 @@ static float3 Trace(
             }
         }
 
-        const float incident_angle_weakening = (is_fog ? 1.0f : dot(normal, newDir));
+        const float incident_angle_weakening = (is_fog ? 1.0f : dot(material.normal, newDir));
         reflectionColor *= incident_angle_weakening * material.color;
 
         ray = new_Ray(newPos, newDir);
@@ -540,12 +521,11 @@ static float3 PreviewTrace(Cfg cfg, struct Ray ray, const uint width, const uint
 {
     const float quality = quality_first_ray(cfg) * ((width + height) / (2 * fov(cfg)));
     const float max_dist = min(max_ray_dist(cfg), focal_distance(cfg) * 10);
-    float3 normal;
+    const float distance = Cast(cfg, ray, quality, max_dist);
 #ifdef PREVIEW_NORMAL
-    Cast(cfg, ray, quality, max_dist, &normal);
-    return fabs(normal);
+    const float3 pos = Ray_At(ray, distance);
+    return fabs(Material(cfg, pos).normal);
 #else
-    const float distance = Cast(cfg, ray, quality, max_dist, &normal);
     const float value = distance / max_dist;
     return (float3)(value);
 #endif
