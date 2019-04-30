@@ -18,14 +18,16 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
         {
             if binaries.len() != 1 {
                 for (i, binary) in binaries.iter().enumerate() {
-                    let mut file = File::create(format!("{}.{}", &path, i))?;
+                    let this_path = format!("{}.{}", &path, i);
+                    println!("Dumped binary: {}", this_path);
+                    let mut file = File::create(this_path)?;
                     file.write_all(&binary[..])?;
                 }
             } else {
                 let mut file = File::create(path.to_string())?;
                 file.write_all(&binaries[0][..])?;
+                println!("Dumped binary: {}", path);
             }
-            println!("Dumped binaries");
         }
     }
     Ok(())

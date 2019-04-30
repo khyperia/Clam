@@ -175,7 +175,7 @@ impl Kernel {
     fn update(&mut self, settings: &Settings) -> Result<(), Error> {
         let new_cfg = settings.serialize();
         if self.cfg.is_none() || new_cfg != self.cpu_cfg {
-            if self.cfg.is_none() || new_cfg.len() != self.cpu_cfg.len() {
+            if (self.cfg.is_none() || new_cfg.len() != self.cpu_cfg.len()) && !new_cfg.is_empty() {
                 self.cfg = Some(
                     ocl::Buffer::builder()
                         .context(&self.queue.context())
@@ -185,12 +185,9 @@ impl Kernel {
             }
             self.cpu_cfg = new_cfg;
             let to_write = &self.cpu_cfg as &[_];
-            self.cfg
-                .as_ref()
-                .unwrap()
-                .write(to_write)
-                .queue(&self.queue)
-                .enq()?;
+            if let Some(ref cfg) = self.cfg {
+                cfg.write(to_write).queue(&self.queue).enq()?;
+            }
             self.frame = 0;
         }
 
@@ -209,7 +206,7 @@ impl Kernel {
         if let Some(ref kernel) = self.kernel {
             let (width, height) = self.data.size();
             kernel.set_arg(0, self.data.data()?)?;
-            kernel.set_arg(1, self.cfg.as_ref().unwrap())?;
+            kernel.set_arg(1, self.cfg.as_ref())?;
             kernel.set_arg(2, width as u32)?;
             kernel.set_arg(3, height as u32)?;
             kernel.set_arg(4, self.frame as u32)?;

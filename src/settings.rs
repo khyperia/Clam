@@ -111,16 +111,20 @@ impl SettingValue {
     }
 
     pub fn format_opencl_struct(&self) -> Option<String> {
-        match self.value {
-            SettingValueEnum::F32(_, _) => {
-                Some(format!("float _{};\n", self.key))
+        if !self.is_const {
+            match self.value {
+                SettingValueEnum::F32(_, _) => {
+                    Some(format!("float _{};\n", self.key))
+                }
+                SettingValueEnum::U32(_) => {
+                    Some(format!("int _{};\n", self.key))
+                }
+                SettingValueEnum::Define(_) => {
+                    None
+                }
             }
-            SettingValueEnum::U32(_) => {
-                Some(format!("int _{};\n", self.key))
-            }
-            SettingValueEnum::Define(_) => {
-                None
-            }
+        } else {
+            None
         }
     }
 
@@ -404,7 +408,7 @@ impl Settings {
                 value: new_value,
                 default_value: new_value,
                 is_const,
-                const_changed: false,
+                const_changed: true,
             })
         }
     }
@@ -432,10 +436,12 @@ impl Settings {
     pub fn serialize(&self) -> Vec<u8> {
         let mut result = Vec::new();
         for value in &self.values {
-            match value.value {
-                SettingValueEnum::F32(x, _) => result.write_f32::<NativeEndian>(x).unwrap(),
-                SettingValueEnum::U32(x) => result.write_u32::<NativeEndian>(x).unwrap(),
-                SettingValueEnum::Define(_) => (),
+            if !value.is_const {
+                match value.value {
+                    SettingValueEnum::F32(x, _) => result.write_f32::<NativeEndian>(x).unwrap(),
+                    SettingValueEnum::U32(x) => result.write_u32::<NativeEndian>(x).unwrap(),
+                    SettingValueEnum::Define(_) => (),
+                }
             }
         }
         result

@@ -2,10 +2,10 @@ struct MandelboxCfg;
 typedef __local struct MandelboxCfg const* Cfg;
 
 #if NOT_EDITOR
-#define COPY_TO_LOCAL                         \
-    __local struct MandelboxCfg cfg_local[1]; \
-    cfg_local[0] = *cfg_global;               \
-    Cfg cfg = cfg_local;
+#define COPY_TO_LOCAL                      \
+    __local struct MandelboxCfg cfg_local; \
+    cfg_local = *cfg_global;               \
+    Cfg cfg = &cfg_local;
 #else
 #define COPY_TO_LOCAL Cfg cfg;
 #endif
