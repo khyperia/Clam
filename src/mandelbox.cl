@@ -53,6 +53,7 @@ extern float de_multiplier(Cfg cfg);             // 0.9375 0.125 const
 extern float max_ray_dist(Cfg cfg);              // 16.0 -0.5 const
 extern float quality_first_ray(Cfg cfg);         // 2.0 -0.5 const
 extern float quality_rest_ray(Cfg cfg);          // 64.0 -0.5 const
+extern float gamma(Cfg cfg);                     // 0.0 0.25 const
 extern int white_clamp(Cfg cfg);                 // 0 const
 extern int max_iters(Cfg cfg);                   // 64 const
 extern int max_ray_steps(Cfg cfg);               // 256 const
@@ -531,7 +532,6 @@ static float3 PreviewTrace(Cfg cfg, struct Ray ray, const uint width, const uint
 #endif
 }
 
-/*
 static float3 GammaTest(int x, int y, int width, int height)
 {
     const float centerValue = (float)x / width;
@@ -551,11 +551,9 @@ static float3 GammaTest(int x, int y, int width, int height)
     }
     return (float3)(result, result, result);
 }
-// */
 
 // Perfect, original sRGB
-/*
-static float GammaCompression(float value)
+static float GammaSRGB(float value)
 {
     if (value < 0.0031308f)
     {
@@ -567,10 +565,9 @@ static float GammaCompression(float value)
         return (1 + a) * powr(value, 1.0f / 2.4f) - a;
     }
 }
-// */
+
 // http://mimosa-pudica.net/fast-gamma/
-//*
-static float GammaCompression(float value)
+static float GammaFast(float value)
 {
     const float a = 0.00279491f;
     const float b = 1.15907984f;
@@ -578,14 +575,28 @@ static float GammaCompression(float value)
     const float c = 0.15746346551f;
     return (b * native_rsqrt(value + a) - c) * value;
 }
-// */
-// gamma algorithm "an attempt was made"
-/*
-static float GammaCompression(float value)
+
+static float GammaPow(float value, float power)
 {
-    return sqrt(value);
+    return native_powr(value, power);
 }
-// */
+
+static float GammaCompression(Cfg cfg, float value)
+{
+    float gam = gamma(cfg);
+    if (gam < 0)
+    {
+        return GammaSRGB(value);
+    }
+    else if (gam == 0)
+    {
+        return GammaFast(value);
+    }
+    else
+    {
+        return GammaPow(value, 1 / gam);
+    }
+}
 
 static uint PackPixel(Cfg cfg, float3 pixel)
 {
@@ -609,9 +620,9 @@ static uint PackPixel(Cfg cfg, float3 pixel)
         pixel = clamp(pixel, 0.0f, 1.0f);
     }
 
-    pixel.x = GammaCompression(pixel.x);
-    pixel.y = GammaCompression(pixel.y);
-    pixel.z = GammaCompression(pixel.z);
+    pixel.x = GammaCompression(cfg, pixel.x);
+    pixel.y = GammaCompression(cfg, pixel.y);
+    pixel.z = GammaCompression(cfg, pixel.z);
 
     pixel = pixel * 255;
 
@@ -682,11 +693,14 @@ __kernel void Main(__global uchar* data,
 #else
     const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
 #endif
+#ifdef GAMMA_TEST
+    const float3 newColor = GammaTest(x, y, width, height);
+#else
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
-    // newColor = GammaTest(x, y, width, height);
-    const uint packedColor = PackPixel(cfg, newColor);
-
     SetScratch(data, idx, size, newColor);
     SetRand(data, idx, size, rand);
+#endif
+    const uint packedColor = PackPixel(cfg, newColor);
+
     SetScreen(data, idx, size, packedColor);
 }
