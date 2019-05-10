@@ -306,7 +306,9 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
     {
         (*color)++;
     }
+#ifdef ROTATE
     z = Rotate(cfg, z);
+#endif
     z = SpherefoldD(cfg, z, dz);
     z = TScaleD(cfg, z, dz);
     z = TOffsetD(z, dz, offset);
@@ -345,8 +347,12 @@ static float De(Cfg cfg, float3 offset, bool isNormal)
     int color;
     const float mbox = DeMandelbox(cfg, offset, isNormal, &color);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1(cfg), offset);
+#ifdef PLANE
     const float cut = Plane(offset, PlanePos(cfg));
     return min(light1, max(mbox, cut));
+#else
+    return min(light1, mbox);
+#endif
 }
 
 struct Material

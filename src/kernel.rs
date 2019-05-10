@@ -174,14 +174,18 @@ impl Kernel {
 
     fn update(&mut self, settings: &Settings) -> Result<(), Error> {
         let new_cfg = settings.serialize();
-        if self.cfg.is_none() || new_cfg != self.cpu_cfg {
-            if (self.cfg.is_none() || new_cfg.len() != self.cpu_cfg.len()) && !new_cfg.is_empty() {
-                self.cfg = Some(
-                    ocl::Buffer::builder()
-                        .context(&self.queue.context())
-                        .len(new_cfg.len())
-                        .build()?,
-                );
+        if new_cfg != self.cpu_cfg {
+            if new_cfg.len() != self.cpu_cfg.len() {
+                if new_cfg.is_empty() {
+                    self.cfg = None;
+                } else {
+                    self.cfg = Some(
+                        ocl::Buffer::builder()
+                            .context(&self.queue.context())
+                            .len(new_cfg.len())
+                            .build()?,
+                    );
+                }
             }
             self.cpu_cfg = new_cfg;
             let to_write = &self.cpu_cfg as &[_];
