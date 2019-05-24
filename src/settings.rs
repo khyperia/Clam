@@ -164,9 +164,9 @@ impl SettingValue {
             }
         }
         if is_const {
-            format!("{} {}(__local struct MandelboxCfg const* cfg) {{ return {}; }}\n", ty, self.key, string)
+            format!("static {} {}(__local struct MandelboxCfg const* cfg) {{ return {}; }}\n", ty, self.key, string)
         } else {
-            format!("{} {}(__local struct MandelboxCfg const* cfg) {{ return cfg->_{1}; }}\n", ty, self.key)
+            format!("static {} {}(__local struct MandelboxCfg const* cfg) {{ return cfg->_{1}; }}\n", ty, self.key)
         }
     }
 }
