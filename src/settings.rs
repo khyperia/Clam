@@ -89,6 +89,18 @@ impl SettingValue {
         }
     }
 
+    pub fn set_const(&mut self, value: bool) {
+        match self.value {
+            SettingValueEnum::Define(_) => (),
+            _ => {
+                if self.is_const != value {
+                    self.const_changed = true;
+                }
+                self.is_const = value;
+            }
+        }
+    }
+
     pub fn unwrap_f32(&self) -> f32 {
         match self.value {
             SettingValueEnum::F32(value, _) => value,

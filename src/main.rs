@@ -2,7 +2,10 @@
 extern crate lazy_static;
 extern crate byteorder;
 extern crate failure;
+extern crate gl;
+extern crate libc;
 extern crate ocl;
+extern crate openvr;
 extern crate png;
 extern crate regex;
 extern crate sdl2;
@@ -154,6 +157,8 @@ fn main() -> Result<(), Error> {
         render(&arguments[1..])?;
     } else if arguments.len() > 2 && arguments[0] == "--video" {
         video_cmd(&arguments[1..])?;
+    } else if arguments.len() == 1 && arguments[0] == "--vr" {
+        display::vr_display()?;
     } else if arguments.is_empty() {
         interactive_cmd()?;
     } else {
@@ -161,6 +166,7 @@ fn main() -> Result<(), Error> {
         println!("clam5 --render [width] [height] [rpp]");
         println!("clam5 --render [8k|4k|2k|1k] [rpp]");
         println!("clam5 --video [width] [height] [rpp] [frames] [wrap:true|false]");
+        println!("clam5 --vr");
         println!("clam5");
     }
     Ok(())

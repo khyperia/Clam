@@ -25,7 +25,7 @@ extern float scale(Cfg cfg);                     // -2.0 0.5 const
 extern float folding_limit(Cfg cfg);             // 1.0 -0.5 const
 extern float fixed_radius_2(Cfg cfg);            // 1.0 -0.5 const
 extern float min_radius_2(Cfg cfg);              // 0.125 -0.5 const
-extern float dof_amount(Cfg cfg);                // 0.001 -1.0
+extern float dof_amount(Cfg cfg);                // 0.0 -1.0
 extern float fog_distance(Cfg cfg);              // 10.0 -1.0
 extern float fog_brightness(Cfg cfg);            // 1.0 0.5
 extern float light_pos_1_x(Cfg cfg);             // 3.0 1.0
@@ -48,14 +48,14 @@ extern float plane_y(Cfg cfg);                   // 3.5 1.0
 extern float plane_z(Cfg cfg);                   // 2.5 1.0
 extern float rotation(Cfg cfg);                  // 0.0 0.125
 extern float bailout(Cfg cfg);                   // 32.0 -1.0 const
-extern float bailout_normal(Cfg cfg);            // 128.0 -1.0 const
+extern float bailout_normal(Cfg cfg);            // 64.0 -1.0 const
 extern float de_multiplier(Cfg cfg);             // 0.9375 0.125 const
 extern float max_ray_dist(Cfg cfg);              // 16.0 -0.5 const
-extern float quality_first_ray(Cfg cfg);         // 2.0 -0.5 const
+extern float quality_first_ray(Cfg cfg);         // 1.0 -0.5 const
 extern float quality_rest_ray(Cfg cfg);          // 64.0 -0.5 const
 extern float gamma(Cfg cfg);                     // 0.0 0.25 const
 extern int white_clamp(Cfg cfg);                 // 0 const
-extern int max_iters(Cfg cfg);                   // 64 const
+extern int max_iters(Cfg cfg);                   // 20 const
 extern int max_ray_steps(Cfg cfg);               // 256 const
 extern int num_ray_bounces(Cfg cfg);             // 3 const
 
@@ -529,13 +529,13 @@ static float3 PreviewTrace(Cfg cfg, struct Ray ray, const uint width, const uint
     const float quality = quality_first_ray(cfg) * ((width + height) / (2 * fov(cfg)));
     const float max_dist = min(max_ray_dist(cfg), focal_distance(cfg) * 10);
     const float distance = Cast(cfg, ray, quality, max_dist);
-#ifdef PREVIEW_NORMAL
+// #ifdef PREVIEW_NORMAL
     const float3 pos = Ray_At(ray, distance);
     return fabs(Material(cfg, pos).normal);
-#else
-    const float value = distance / max_dist;
-    return (float3)(value);
-#endif
+// #else
+//     const float value = distance / max_dist;
+//     return (float3)(value);
+// #endif
 }
 
 static float3 GammaTest(int x, int y, int width, int height)
@@ -632,8 +632,10 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 
     pixel = pixel * 255;
 
-    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
-           ((uint)(uchar)pixel.z << 16);
+    // return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
+    //        ((uint)(uchar)pixel.z << 16);
+    return ((uint)(uchar)pixel.z << 24) | ((uint)(uchar)pixel.y << 16) |
+           ((uint)(uchar)pixel.x << 8) | ((uint)255);
 }
 
 // yay SOA
@@ -695,10 +697,12 @@ __kernel void Main(__global uchar* data,
     struct Random rand = frame > 0 ? GetRand(data, idx, size) : new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
 #ifdef PREVIEW
-    const float3 colorComponents = PreviewTrace(cfg, ray, width, height);
-#else
-    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
 #endif
+//#ifdef PREVIEW
+    const float3 colorComponents = PreviewTrace(cfg, ray, width, height);
+//#else
+//    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+//#endif
 #ifdef GAMMA_TEST
     const float3 newColor = GammaTest(x, y, width, height);
 #else

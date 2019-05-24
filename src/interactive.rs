@@ -93,6 +93,7 @@ impl InteractiveKernel {
                 input.integrate(settings);
                 if settings.check_rebuild() {
                     kernel.rebuild(settings)?;
+                    println!("Rebuilding");
                 }
                 (*settings).clone()
             };

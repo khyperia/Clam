@@ -4,10 +4,13 @@ version = "0.1.0"
 authors = ["khyperia <khyperia@live.com>"]
 
 [dependencies]
-failure = "*"
-ocl = { version = "*", default-features = false }
-png = "*"
-sdl2 = { version = "*", default-features = false, features = ["ttf"] }
-regex = "*"
-lazy_static = "*"
 byteorder = "*"
+failure = "*"
+gl = "*"
+lazy_static = "*"
+libc = "*"
+ocl = { version = "*", default-features = false }
+openvr = "*"
+png = "*"
+regex = "*"
+sdl2 = { version = "*", default-features = false, features = ["ttf"] }
