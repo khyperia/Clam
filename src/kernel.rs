@@ -1,3 +1,4 @@
+use check_gl;
 use display::Image;
 use failure;
 use failure::Error;
@@ -6,16 +7,17 @@ use ocl;
 use ocl::enums::ContextPropertyValue;
 use settings::Settings;
 
-// RGBASSSRR
-const DATA_WORDS: u32 = 9;
+// SSSRR
+const DATA_WORDS: u32 = 5;
 
 struct KernelImage {
     queue: ocl::Queue,
     width: u32,
     height: u32,
     scale: u32,
-    buffer: Option<ocl::Buffer<f32>>,
-    buffer_gl: Option<ocl::prm::cl_GLuint>,
+    scratch: Option<ocl::Buffer<f32>>,
+    texture_cl: Option<ocl::Buffer<f32>>,
+    texture_gl: Option<ocl::prm::cl_GLuint>,
 }
 
 impl KernelImage {
@@ -25,8 +27,9 @@ impl KernelImage {
             width,
             height,
             scale: 1,
-            buffer: None,
-            buffer_gl: None,
+            scratch: None,
+            texture_cl: None,
+            texture_gl: None,
         }
     }
 
@@ -34,8 +37,8 @@ impl KernelImage {
         (self.width / self.scale, self.height / self.scale)
     }
 
-    fn data(&mut self, is_ogl: bool) -> Result<&ocl::Buffer<f32>, Error> {
-        if self.buffer.is_none() {
+    fn data(&mut self, is_ogl: bool) -> Result<(&ocl::Buffer<f32>, &ocl::Buffer<f32>), Error> {
+        if self.texture_cl.is_none() {
             if is_ogl {
                 //self.test();
                 unsafe {
@@ -47,37 +50,48 @@ impl KernelImage {
                         buffer,
                         self.width as gl::types::GLsizeiptr
                             * self.height as gl::types::GLsizeiptr
-                            * DATA_WORDS as gl::types::GLsizeiptr
+                            * 4 // sizeof(float) * RGBA
                             * 4,
                         std::ptr::null(),
-                        gl::STREAM_DRAW, // TODO: fix this
+                        gl::DYNAMIC_DRAW, // TODO: fix this
                     );
-                    self.buffer_gl = Some(buffer);
+                    self.texture_gl = Some(buffer);
                     let buffer_cl = ocl::Buffer::from_gl_buffer(&self.queue, None, buffer)?;
-                    self.buffer = Some(buffer_cl);
+                    self.texture_cl = Some(buffer_cl);
                 }
             } else {
                 let new_data = ocl::Buffer::builder()
                     .context(&self.queue.context())
-                    .len(self.width * self.height * DATA_WORDS)
+                    .len(self.width * self.height)
                     .build()?;
-                self.buffer = Some(new_data);
+                self.texture_cl = Some(new_data);
             }
         }
-        Ok(self.buffer.as_ref().unwrap())
+        if self.scratch.is_none() {
+            let new_data = ocl::Buffer::builder()
+                .context(&self.queue.context())
+                .len(self.width * self.height * DATA_WORDS)
+                .build()?;
+            self.scratch = Some(new_data);
+        }
+        Ok((
+            self.texture_cl.as_ref().unwrap(),
+            self.scratch.as_ref().unwrap(),
+        ))
     }
 
     fn resize(&mut self, new_width: u32, new_height: u32) {
         if self.width != new_width || self.height != new_height {
             self.width = new_width;
             self.height = new_height;
-            self.buffer = None;
-            if let Some(id) = self.buffer_gl {
+            self.scratch = None;
+            self.texture_cl = None;
+            if let Some(id) = self.texture_gl {
                 unsafe {
                     gl::DeleteBuffers(1, &id);
                 }
             }
-            self.buffer_gl = None;
+            self.texture_gl = None;
         }
     }
 
@@ -88,13 +102,13 @@ impl KernelImage {
     fn download(&mut self) -> Result<Image, Error> {
         let (width, height) = self.size();
 
-        if let Some(gl) = self.buffer_gl {
+        if let Some(gl) = self.texture_gl {
             Ok(Image::new(None, Some(gl), width, height))
         } else {
             let mut vec = vec![0.0; width as usize * height as usize * 4];
 
             // only read if data is present
-            if let Some(ref buffer) = self.buffer {
+            if let Some(ref buffer) = self.texture_cl {
                 buffer.read(&mut vec).queue(&self.queue).enq()?;
             }
 
@@ -270,11 +284,13 @@ impl Kernel {
     fn set_args(&mut self) -> Result<(), Error> {
         if let Some(ref kernel) = self.kernel {
             let (width, height) = self.data.size();
-            kernel.set_arg(0, self.data.data(self.is_ogl)?)?;
-            kernel.set_arg(1, self.cfg.as_ref())?;
-            kernel.set_arg(2, width as u32)?;
-            kernel.set_arg(3, height as u32)?;
-            kernel.set_arg(4, self.frame as u32)?;
+            let (texture, scratch) = self.data.data(self.is_ogl)?;
+            kernel.set_arg(0, texture)?;
+            kernel.set_arg(1, scratch)?;
+            kernel.set_arg(2, self.cfg.as_ref())?;
+            kernel.set_arg(3, width as u32)?;
+            kernel.set_arg(4, height as u32)?;
+            kernel.set_arg(5, self.frame as u32)?;
         }
         Ok(())
     }
@@ -285,7 +301,9 @@ impl Kernel {
             let total_size = width * height;
 
             if self.is_ogl {
-                if let Some(ref buf) = self.data.buffer {
+                if let Some(ref buf) = self.data.texture_cl {
+                    unsafe { gl::Finish() };
+                    check_gl()?;
                     buf.cmd().gl_acquire().enq()?;
                 }
             }
@@ -294,8 +312,10 @@ impl Kernel {
             unsafe { to_launch.enq() }?;
 
             if self.is_ogl {
-                if let Some(ref buf) = self.data.buffer {
+                if let Some(ref buf) = self.data.texture_cl {
                     buf.cmd().gl_release().enq()?;
+                    self.queue.finish()?;
+                    unsafe { gl::Finish() };
                 }
             }
 
@@ -305,7 +325,11 @@ impl Kernel {
         Ok(())
     }
 
-    pub fn run(&mut self, settings: &Settings) -> Result<(), Error> {
+    pub fn run(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
+        if settings.check_rebuild() || force_rebuild {
+            self.rebuild(settings)?;
+            println!("Rebuilding");
+        }
         self.update(settings)?;
         self.set_args()?;
         self.launch()?;

@@ -44,7 +44,7 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
         .data_cpu
         .as_ref()
         .expect("save_image must have cpu image");
-    let mut output = vec![0u8; width  * height  * 3];
+    let mut output = vec![0u8; width * height * 3];
     for y in 0..height {
         for x in 0..width {
             let in_idx = (y * width + x) * 4;
@@ -69,6 +69,36 @@ fn check_gl() -> Result<(), Error> {
     }
 }
 
+fn gl_register_debug() -> Result<(), Error> {
+    unsafe {
+        gl::DebugMessageCallback(debug_callback, std::ptr::null());
+    }
+    check_gl()?;
+    Ok(())
+}
+
+extern "system" fn debug_callback(
+    source: u32,
+    type_: u32,
+    id: u32,
+    severity: u32,
+    length: i32,
+    message: *const i8,
+    _: *mut libc::c_void,
+) {
+    let msg = std::str::from_utf8(unsafe {
+        std::slice::from_raw_parts(message as *const u8, length as usize)
+    });
+    println!(
+        "GL debug callback: source:{} type:{} id:{} severity:{} {:?}",
+        source, type_, id, severity, msg
+    );
+}
+
+// TODO: cfg windows
+#[link(name = "Shell32")]
+extern "C" {}
+
 #[cfg(not(windows))]
 fn progress_count(rpp: u32) -> u32 {
     (rpp / 20).min(4).max(16)
@@ -84,11 +114,10 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut kernel = Kernel::create(width, height, false, None, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
-    kernel.rebuild(&mut settings)?;
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     for ray in 0..rpp {
-        kernel.run(&settings)?;
+        kernel.run(&mut settings, false)?;
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync_renderer()?;
             let value = ray as f32 / rpp as f32;
@@ -103,9 +132,14 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     Ok(())
 }
 
-fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> Result<(), Error> {
+fn video_one(
+    frame: u32,
+    rpp: u32,
+    kernel: &mut Kernel,
+    settings: &mut Settings,
+) -> Result<(), Error> {
     for _ in 0..rpp {
-        kernel.run(&settings)?;
+        kernel.run(settings, false)?;
     }
     let image = kernel.download()?;
     save_image(&image, &format!("render{:03}.png", frame))?;
@@ -119,11 +153,8 @@ fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
     for frame in 0..frames {
-        let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
-        if settings.check_rebuild() {
-            kernel.rebuild(settings)?;
-        }
-        video_one(frame, rpp, &mut kernel, &settings)?;
+        let mut settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
+        video_one(frame, rpp, &mut kernel, settings)?;
         let value = (frame + 1) as f32 / frames as f32;
         println!("{}", progress.time_str(value));
     }
@@ -170,14 +201,10 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
     }
 }
 
-fn interactive_cmd(is_gl: bool) -> Result<(), Error> {
+fn interactive_cmd() -> Result<(), Error> {
     let width = 1920;
     let height = 1080;
-    if is_gl {
-        display::gl_display(width, height)
-    } else {
-        display::display(width, height)
-    }
+    display::gl_display(width, height)
 }
 
 fn main() -> Result<(), Error> {
@@ -189,7 +216,7 @@ fn main() -> Result<(), Error> {
     } else if arguments.len() == 1 && arguments[0] == "--vr" {
         display::vr_display()?;
     } else if arguments.is_empty() {
-        interactive_cmd(true)?;
+        interactive_cmd()?;
     } else {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");

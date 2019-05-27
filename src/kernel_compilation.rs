@@ -1,10 +1,8 @@
-use display::ScreenEvent;
 use failure::Error;
 use settings::Settings;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -34,7 +32,7 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
 }
 
 // the "notify" crate is broken af, so roll our own
-pub fn watch_src(sender: mpsc::Sender<ScreenEvent>) -> Result<(), Error> {
+pub fn watch_src<F: Fn() + Send + 'static>(on_changed: F) {
     thread::spawn(move || {
         fn get_time() -> Option<::std::time::SystemTime> {
             let meta = match ::std::fs::metadata(MANDELBOX_PATH) {
@@ -53,14 +51,10 @@ pub fn watch_src(sender: mpsc::Sender<ScreenEvent>) -> Result<(), Error> {
             let new_time = get_time();
             if new_time != time {
                 time = new_time;
-                match sender.send(ScreenEvent::KernelChanged) {
-                    Ok(()) => (),
-                    Err(mpsc::SendError(_)) => break,
-                }
+                on_changed();
             }
         }
     });
-    Ok(())
 }
 
 fn get_src() -> Result<String, Error> {
@@ -124,7 +118,8 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
     let kernel = ocl::Kernel::builder()
         .program(&program)
         .name("Main")
-        .arg(None::<&ocl::Buffer<u8>>)
+        .arg(None::<&ocl::Buffer<f32>>)
+        .arg(None::<&ocl::Buffer<f32>>)
         .arg(None::<&ocl::Buffer<u8>>)
         .arg(0u32)
         .arg(0u32)

@@ -91,7 +91,12 @@ impl SettingValue {
 
     pub fn set_const(&mut self, value: bool) {
         match self.value {
-            SettingValueEnum::Define(_) => (),
+            SettingValueEnum::Define(ref mut v) => {
+                if *v != value {
+                    self.const_changed = true;
+                }
+                *v = value;
+            },
             _ => {
                 if self.is_const != value {
                     self.const_changed = true;

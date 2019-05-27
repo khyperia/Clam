@@ -645,8 +645,8 @@ static float3 PackPixel(Cfg cfg, float3 pixel)
     // #endif
 }
 
-#define SCRATCH_OFFSET 4
-#define RAND_OFFSET 7
+#define SCRATCH_OFFSET 0
+#define RAND_OFFSET 3
 
 // yay SOA
 static float3 GetScratch(__global float* data, uint idx, uint size)
@@ -676,14 +676,22 @@ static void SetRand(__global float* data, uint idx, uint size, struct Random val
 
 static void SetScreen(__global float* data, uint idx, uint size, float3 value)
 {
+#ifdef VR
+    __global uint* datab = (__global uint*)data;
+    value *= 255;
+    datab[idx] = ((uint)(uchar)value.z << 24) | ((uint)(uchar)value.y << 16) |
+                 ((uint)(uchar)value.x << 8) | ((uint)255);
+#else
     data[idx * 4 + 0] = value.x;
     data[idx * 4 + 1] = value.y;
     data[idx * 4 + 2] = value.z;
     data[idx * 4 + 3] = 1.0f;
+#endif
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
-__kernel void Main(__global float* data,
+__kernel void Main(__global float* texture,
+                   __global float* scratch,
                    __global struct MandelboxCfg const* cfg_global,
                    uint width,
                    uint height,
@@ -702,9 +710,9 @@ __kernel void Main(__global float* data,
     // out-of-bounds checks aren't needed, due to the ocl driver being awesome
     // and supporting exact-size launches
 
-    const float3 oldColor = frame > 0 ? GetScratch(data, idx, size) : (float3)(0, 0, 0);
+    const float3 oldColor = frame > 0 ? GetScratch(scratch, idx, size) : (float3)(0, 0, 0);
 
-    struct Random rand = frame > 0 ? GetRand(data, idx, size) : new_Random(idx, frame, size);
+    struct Random rand = frame > 0 ? GetRand(scratch, idx, size) : new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
 #ifdef PREVIEW
     const float3 colorComponents = PreviewTrace(cfg, ray, width, height);
@@ -715,10 +723,10 @@ __kernel void Main(__global float* data,
     const float3 newColor = GammaTest(x, y, width, height);
 #else
     const float3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
-    SetScratch(data, idx, size, newColor);
-    SetRand(data, idx, size, rand);
+    SetScratch(scratch, idx, size, newColor);
+    SetRand(scratch, idx, size, rand);
 #endif
     const float3 packedColor = PackPixel(cfg, newColor);
 
-    SetScreen(data, idx, size, packedColor);
+    SetScreen(texture, idx, size, packedColor);
 }

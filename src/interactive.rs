@@ -1,122 +1,20 @@
-use display::{Image, ScreenEvent};
+use display::Image;
 use failure::Error;
+use fps_counter::FpsCounter;
 use input::Input;
 use kernel::Kernel;
 use kernel_compilation;
+use sdl2::keyboard::Scancode as Key;
 use settings::Settings;
-use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
-
-pub struct InteractiveKernel {
-    image_stream: mpsc::Receiver<Image>,
-    screen_events: mpsc::Sender<ScreenEvent>,
-}
-
-pub enum DownloadResult {
-    NoMoreImages,
-    NoneAtPresent,
-    Image(Image),
-}
-
-impl InteractiveKernel {
-    pub fn create(
-        width: u32,
-        height: u32,
-        settings_input: Arc<Mutex<(Settings, Input)>>,
-    ) -> Result<Self, Error> {
-        let (screen_send, screen_recv) = mpsc::channel();
-        let (image_send, image_recv) = mpsc::sync_channel(2);
-
-        kernel_compilation::watch_src(screen_send.clone())?;
-
-        thread::spawn(move || {
-            let kernel = Kernel::create(
-                width,
-                height,
-                false,
-                None,
-                &mut settings_input.lock().unwrap().0,
-            )
-            .unwrap();
-            match Self::run_thread(kernel, &screen_recv, &image_send, &settings_input) {
-                Ok(()) => (),
-                Err(err) => panic!("Error in kernel thread: {}\n{}", err, err.backtrace()),
-            }
-        });
-
-        Ok(Self {
-            image_stream: image_recv,
-            screen_events: screen_send,
-        })
-    }
-
-    pub fn download(&self) -> DownloadResult {
-        let mut result = DownloadResult::NoneAtPresent;
-        loop {
-            let image = match self.image_stream.try_recv() {
-                Ok(image) => image,
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => return DownloadResult::NoMoreImages,
-            };
-            result = DownloadResult::Image(image);
-        }
-        result
-    }
-
-    pub fn resize(&self, width: u32, height: u32) -> bool {
-        match self.screen_events.send(ScreenEvent::Resize(width, height)) {
-            Ok(()) => true,
-            Err(mpsc::SendError(_)) => false,
-        }
-    }
-
-    fn run_thread(
-        mut kernel: Kernel,
-        screen_events: &mpsc::Receiver<ScreenEvent>,
-        send_image: &mpsc::SyncSender<Image>,
-        settings_input: &Arc<Mutex<(Settings, Input)>>,
-    ) -> Result<(), Error> {
-        loop {
-            loop {
-                let event = match screen_events.try_recv() {
-                    Ok(event) => event,
-                    Err(mpsc::TryRecvError::Empty) => break,
-                    Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-                };
-
-                match event {
-                    ScreenEvent::Resize(width, height) => kernel.resize(width, height)?,
-                    ScreenEvent::KernelChanged => {
-                        let mut locked = settings_input.lock().unwrap();
-                        let (ref mut settings, _) = *locked;
-                        kernel.rebuild(settings)?
-                    }
-                }
-            }
-
-            let settings = {
-                let mut locked = settings_input.lock().unwrap();
-                let (ref mut settings, ref mut input) = *locked;
-                input.integrate(settings);
-                if settings.check_rebuild() {
-                    kernel.rebuild(settings)?;
-                    println!("Rebuilding");
-                }
-                (*settings).clone()
-            };
-            kernel.run(&settings)?;
-            let image = kernel.download()?;
-            match send_image.send(image) {
-                Ok(()) => (),
-                Err(mpsc::SendError(_)) => return Ok(()),
-            };
-        }
-    }
-}
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub struct SyncInteractiveKernel {
-    kernel: Kernel,
-    settings_input: Arc<Mutex<(Settings, Input)>>,
+    rebuild: Arc<AtomicBool>,
+    pub kernel: Kernel,
+    pub settings: Settings,
+    pub input: Input,
 }
 
 impl SyncInteractiveKernel {
@@ -125,42 +23,54 @@ impl SyncInteractiveKernel {
         height: u32,
         is_ogl: bool,
         video: Option<&sdl2::VideoSubsystem>,
-        settings_input: Arc<Mutex<(Settings, Input)>>,
     ) -> Result<Self, Error> {
-        //kernel_compilation::watch_src(screen_send.clone())?;
+        let rebuild = Arc::new(AtomicBool::new(false));
+        let rebuild2 = rebuild.clone();
+        // TODO: stop watching once `self` dies
+        kernel_compilation::watch_src(move || rebuild2.store(true, Ordering::Relaxed));
 
-        let kernel = Kernel::create(
-            width,
-            height,
-            is_ogl,
-            video,
-            &mut settings_input.lock().unwrap().0,
-        )
-        .unwrap();
+        let mut settings = Settings::new();
+        let input = Input::new();
+        let kernel = Kernel::create(width, height, is_ogl, video, &mut settings).unwrap();
         let result = Self {
             kernel,
-            settings_input,
+            rebuild,
+            settings,
+            input,
         };
         Ok(result)
+    }
+
+    pub fn key_down(&mut self, key: Key) {
+        self.input.key_down(key, &mut self.settings);
+    }
+
+    pub fn key_up(&mut self, key: Key) {
+        self.input.key_up(key, &mut self.settings);
     }
 
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.kernel.resize(width, height)
     }
 
+    pub fn launch(&mut self) -> Result<(), Error> {
+        self.input.integrate(&mut self.settings);
+        self.kernel.run(&mut self.settings, self.rebuild.swap(false, Ordering::Relaxed))?;
+        Ok(())
+    }
+
     pub fn download(&mut self) -> Result<Image, Error> {
-        let settings = {
-            let mut locked = self.settings_input.lock().unwrap();
-            let (ref mut settings, ref mut input) = *locked;
-            input.integrate(settings);
-            if settings.check_rebuild() {
-                self.kernel.rebuild(settings)?;
-                println!("Rebuilding");
-            }
-            (*settings).clone()
-        };
-        self.kernel.run(&settings)?;
         let image = self.kernel.download()?;
         Ok(image)
+    }
+
+    pub fn print_status(&self, fps: &FpsCounter) {
+        let val = format!(
+            "\u{001b}[2J{}\n{}\n",
+            fps.value(),
+            self.settings.status(&self.input),
+        );
+        // "atomically" dump the string
+        print!("{}", val);
     }
 }
