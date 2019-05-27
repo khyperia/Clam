@@ -25,7 +25,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 pub struct Image {
-    pub data_cpu: Option<Vec<u8>>,
+    pub data_cpu: Option<Vec<f32>>,
     pub data_gl: Option<GLuint>,
     pub width: u32,
     pub height: u32,
@@ -33,7 +33,7 @@ pub struct Image {
 
 impl Image {
     pub fn new(
-        data_cpu: Option<Vec<u8>>,
+        data_cpu: Option<Vec<f32>>,
         data_gl: Option<GLuint>,
         width: u32,
         height: u32,
@@ -170,11 +170,14 @@ fn draw<'a>(
                 )?;
             }
 
-            texture.update(
-                None,
-                &image.data_cpu.expect("draw() expects GPU image"),
-                image.width as usize * 4,
-            )?;
+            let image_ = image
+                .data_cpu
+                .expect("draw() expects CPU image")
+                .into_iter()
+                .map(::f32_to_u8)
+                .collect::<Vec<_>>();
+
+            texture.update(None, &image_, image.width as usize * 4)?;
         }
     }
     // let image = match image_stream.try_recv() {
@@ -316,10 +319,10 @@ unsafe fn buffer_blit(
     }
 
     if *framebuffer != 0 {
-        let destBuf = 0;
+        let dest_buf = 0;
         gl::BlitNamedFramebuffer(
             *framebuffer,
-            destBuf,
+            dest_buf,
             0,
             0,
             width,
@@ -429,7 +432,6 @@ pub fn gl_display(init_width: u32, init_height: u32) -> Result<(), Error> {
         }?;
 
         window.gl_swap_window();
-        println!("Frame");
     }
 }
 
@@ -662,11 +664,15 @@ pub fn vr_display() -> Result<(), Error> {
                 DownloadResult::NoMoreImages => return Ok(()),
                 DownloadResult::NoneAtPresent => None,
             };
+
+            let left_image_ = left_img.map(|x| x.into_iter().map(::f32_to_u8).collect::<Vec<_>>());
+            let right_image_ = right_img.map(|x| x.into_iter().map(::f32_to_u8).collect::<Vec<_>>());
+
             render_eye(
                 &compositor,
                 openvr::Eye::Left,
                 &mut texture_left,
-                left_img.as_ref().map(|x| x as _),
+                left_image_.as_ref().map(|x| x as _),
                 width as i32,
                 height as i32,
             )?;
@@ -674,7 +680,7 @@ pub fn vr_display() -> Result<(), Error> {
                 &compositor,
                 openvr::Eye::Right,
                 &mut texture_right,
-                right_img.as_ref().map(|x| x as _),
+                right_image_.as_ref().map(|x| x as _),
                 width as i32,
                 height as i32,
             )?;

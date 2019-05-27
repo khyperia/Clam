@@ -645,63 +645,59 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 #endif
 }
 
+#define SCRATCH_OFFSET 4
+#define RAND_OFFSET 7
+
 // yay SOA
-static float3 GetScratch(__global uchar* rawData, uint idx, uint size)
+static float3 GetScratch(__global float* data, uint idx, uint size)
 {
-    const __global float* data = (__global float*)rawData;
-    return (float3)(data[idx + size], data[idx + size * 2], data[idx + size * 3]);
+    return (float3)(data[idx + size * (SCRATCH_OFFSET + 0)],
+                    data[idx + size * (SCRATCH_OFFSET + 1)],
+                    data[idx + size * (SCRATCH_OFFSET + 2)]);
 }
 
-static void SetScratch(__global uchar* rawData, uint idx, uint size, float3 value)
+static void SetScratch(__global float* data, uint idx, uint size, float3 value)
 {
-    __global float* data = (__global float*)rawData;
-    data[idx + size] = value.x;
-    data[idx + size * 2] = value.y;
-    data[idx + size * 3] = value.z;
+    data[idx + size * (SCRATCH_OFFSET + 0)] = value.x;
+    data[idx + size * (SCRATCH_OFFSET + 1)] = value.y;
+    data[idx + size * (SCRATCH_OFFSET + 2)] = value.z;
 }
 
-static struct Random GetRand(__global uchar* rawData, uint idx, uint size)
+static struct Random GetRand(__global float* data, uint idx, uint size)
 {
-    const __global struct Random* data = (__global struct Random*)rawData;
-    // this is scary: sizeof(random) is bigger than sizeof(float), so divide the
-    // size multiplier by 2
-    return data[idx + size * 2];
+    // this is scary: sizeof(random) is bigger than sizeof(float)
+    return ((__global struct Random*)(data + size * RAND_OFFSET))[idx];
 }
 
-static void SetRand(__global uchar* rawData, uint idx, uint size, struct Random value)
+static void SetRand(__global float* data, uint idx, uint size, struct Random value)
 {
-    __global struct Random* data = (__global struct Random*)rawData;
-    data[idx + size * 2] = value;
+    ((__global struct Random*)(data + size * RAND_OFFSET))[idx] = value;
 }
 
-static void SetScreen(__global uchar* rawData, uint idx, uint size, uint value)
+static void SetScreen(__global float* data, uint idx, uint size, float3 value)
 {
-    __global uint* data = (__global uint*)rawData;
-    data[idx] = value;
+    data[idx * 4 + 0] = value.x;
+    data[idx * 4 + 1] = value.y;
+    data[idx * 4 + 2] = value.z;
+    data[idx * 4 + 3] = 1.0f;
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
-__kernel void Main(__global uchar* data,
+__kernel void Main(__global float* data,
                    __global struct MandelboxCfg const* cfg_global,
                    uint width,
                    uint height,
                    uint frame)
 {
-    ((__global float*)data)[get_global_id(0)] = 0.5f;
-    return;
     COPY_TO_LOCAL
 
     const uint idx = (uint)get_global_id(0);
     const uint size = width * height;
     const uint x = idx % width;
+    const uint y = idx / width;
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is
     // bottom-left
-    const uint y = height - (idx / width + 1);
-
-    // const uint packedColor_ = PackPixel(cfg, (float3)((float)x / width, (float)y / height, 0.5f));
-
-    // SetScreen(data, idx, size, packedColor_);
-    // return;
+    // const uint y = height - (idx / width + 1);
 
     // out-of-bounds checks aren't needed, due to the ocl driver being awesome
     // and supporting exact-size launches
@@ -722,7 +718,7 @@ __kernel void Main(__global uchar* data,
     SetScratch(data, idx, size, newColor);
     SetRand(data, idx, size, rand);
 #endif
-    const uint packedColor = PackPixel(cfg, newColor);
+    // const uint packedColor = PackPixel(cfg, newColor);
 
-    SetScreen(data, idx, size, packedColor);
+    SetScreen(data, idx, size, newColor);
 }

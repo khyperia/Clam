@@ -27,6 +27,10 @@ use settings::KeyframeList;
 use settings::Settings;
 use std::env::args;
 
+fn f32_to_u8(px: f32) -> u8 {
+    (px * 255.0).max(0.0).min(255.0) as u8
+}
+
 fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     use png::HasParameters;
     let file = ::std::fs::File::create(path)?;
@@ -40,7 +44,13 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
         .expect("save_image must have cpu image")
         .iter()
         .enumerate()
-        .filter_map(|(index, &element)| if index % 4 == 3 { None } else { Some(element) })
+        .filter_map(|(index, &element)| {
+            if index % 4 == 3 {
+                None
+            } else {
+                Some(f32_to_u8(element))
+            }
+        })
         .collect::<Vec<_>>();
     writer.write_image_data(&sans_alpha)?;
     Ok(())
@@ -102,13 +112,7 @@ fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> 
 
 fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    let mut kernel = Kernel::create(
-        width,
-        height,
-        false,
-        None,
-        &mut default_settings,
-    )?;
+    let mut kernel = Kernel::create(width, height, false, None, &mut default_settings)?;
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();

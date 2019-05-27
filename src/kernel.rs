@@ -6,14 +6,15 @@ use ocl;
 use ocl::enums::ContextPropertyValue;
 use settings::Settings;
 
-const DATA_WORDS: u32 = 6;
+// RGBASSSRR
+const DATA_WORDS: u32 = 9;
 
 struct KernelImage {
     queue: ocl::Queue,
     width: u32,
     height: u32,
     scale: u32,
-    buffer: Option<ocl::Buffer<u8>>,
+    buffer: Option<ocl::Buffer<f32>>,
     buffer_gl: Option<ocl::prm::cl_GLuint>,
 }
 
@@ -33,40 +34,7 @@ impl KernelImage {
         (self.width / self.scale, self.height / self.scale)
     }
 
-    fn test(&mut self) {
-        let mut texture = 0;
-        let width = 200;
-        let height = 200;
-        let array_size = width * height * 4;
-        let row_pitch = width * 4;
-        let slc_pitch = width * height * 4;
-        unsafe {
-            let () = gl::CreateTextures(gl::TEXTURE_2D, 1, &mut texture);
-            ::check_gl().unwrap();
-            gl::TextureStorage2D(texture, 1, gl::RGBA8, 200, 200);
-            ::check_gl().unwrap();
-        }
-        let buffer_cl: ocl::Image<u8> = ocl::Image::from_gl_texture(
-            &self.queue,
-            ocl::flags::MemFlags::new().read_write(),
-            ocl::builders::ImageDescriptor::new(
-                ocl::enums::MemObjectType::Image2d,
-                width,
-                height,
-                1,
-                array_size,
-                row_pitch,
-                slc_pitch,
-                None,
-            ),
-            ocl::core::GlTextureTarget::GlTexture2d,
-            0,
-            texture,
-        )
-        .unwrap();
-    }
-
-    fn data(&mut self, is_ogl: bool) -> Result<&ocl::Buffer<u8>, Error> {
+    fn data(&mut self, is_ogl: bool) -> Result<&ocl::Buffer<f32>, Error> {
         if self.buffer.is_none() {
             if is_ogl {
                 //self.test();
@@ -91,7 +59,7 @@ impl KernelImage {
             } else {
                 let new_data = ocl::Buffer::builder()
                     .context(&self.queue.context())
-                    .len(self.width * self.height * DATA_WORDS * 4)
+                    .len(self.width * self.height * DATA_WORDS)
                     .build()?;
                 self.buffer = Some(new_data);
             }
@@ -123,7 +91,7 @@ impl KernelImage {
         if let Some(gl) = self.buffer_gl {
             Ok(Image::new(None, Some(gl), width, height))
         } else {
-            let mut vec = vec![0u8; width as usize * height as usize * 4];
+            let mut vec = vec![0.0; width as usize * height as usize * 4];
 
             // only read if data is present
             if let Some(ref buffer) = self.buffer {
@@ -249,25 +217,18 @@ impl Kernel {
         }
         if let Some((sdl_window, sdl_context)) = window {
             unsafe {
-                let wglGetCurrentContext: extern "system" fn() -> *mut libc::c_void =
-                    std::mem::transmute(
-                        sdl_window
-                            .subsystem()
-                            .gl_get_proc_address("wglGetCurrentContext"),
-                    );
-                let wglGetCurrentDC: extern "system" fn() -> *mut libc::c_void =
-                    std::mem::transmute(
-                        sdl_window
-                            .subsystem()
-                            .gl_get_proc_address("wglGetCurrentDC"),
-                    );
-                println!(" from sdl cont {:?}", sdl_context.raw());
-                println!(" winwin {:?}", sdl_window.raw());
-                let wglCurrentContext = wglGetCurrentContext();
-                let wglCurrentDC = wglGetCurrentDC();
-                println!("{:?} {:?}", wglCurrentContext, wglCurrentDC);
-                builder.property(ContextPropertyValue::GlContextKhr(wglCurrentContext));
-                builder.property(ContextPropertyValue::WglHdcKhr(wglCurrentDC));
+                let gl_cx: extern "system" fn() -> *mut libc::c_void = std::mem::transmute(
+                    sdl_window
+                        .subsystem()
+                        .gl_get_proc_address("wglGetCurrentContext"),
+                );
+                let hdc: extern "system" fn() -> *mut libc::c_void = std::mem::transmute(
+                    sdl_window
+                        .subsystem()
+                        .gl_get_proc_address("wglGetCurrentDC"),
+                );
+                builder.property(ContextPropertyValue::GlContextKhr(gl_cx()));
+                builder.property(ContextPropertyValue::WglHdcKhr(hdc()));
             }
             //builder.property(ContextPropertyValue::GlContextKhr());
         }
