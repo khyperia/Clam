@@ -38,21 +38,23 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     let mut encoder = png::Encoder::new(w, image.width, image.height);
     encoder.set(png::ColorType::RGB).set(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;
-    let sans_alpha = image
+    let width = image.width as usize;
+    let height = image.height as usize;
+    let input = image
         .data_cpu
         .as_ref()
-        .expect("save_image must have cpu image")
-        .iter()
-        .enumerate()
-        .filter_map(|(index, &element)| {
-            if index % 4 == 3 {
-                None
-            } else {
-                Some(f32_to_u8(element))
-            }
-        })
-        .collect::<Vec<_>>();
-    writer.write_image_data(&sans_alpha)?;
+        .expect("save_image must have cpu image");
+    let mut output = vec![0u8; width  * height  * 3];
+    for y in 0..height {
+        for x in 0..width {
+            let in_idx = (y * width + x) * 4;
+            let out_idx = ((height - y - 1) * width + x) * 3;
+            output[out_idx + 0] = f32_to_u8(input[in_idx + 0]);
+            output[out_idx + 1] = f32_to_u8(input[in_idx + 1]);
+            output[out_idx + 2] = f32_to_u8(input[in_idx + 2]);
+        }
+    }
+    writer.write_image_data(&output)?;
     Ok(())
 }
 

@@ -25,7 +25,7 @@ extern float scale(Cfg cfg);                     // -2.0 0.5 const
 extern float folding_limit(Cfg cfg);             // 1.0 -0.5 const
 extern float fixed_radius_2(Cfg cfg);            // 1.0 -0.5 const
 extern float min_radius_2(Cfg cfg);              // 0.125 -0.5 const
-extern float dof_amount(Cfg cfg);                // 0.0 -1.0
+extern float dof_amount(Cfg cfg);                // 0.01 -1.0
 extern float fog_distance(Cfg cfg);              // 10.0 -1.0
 extern float fog_brightness(Cfg cfg);            // 1.0 0.5
 extern float light_pos_1_x(Cfg cfg);             // 3.0 1.0
@@ -608,7 +608,7 @@ static float GammaCompression(Cfg cfg, float value)
     }
 }
 
-static uint PackPixel(Cfg cfg, float3 pixel)
+static float3 PackPixel(Cfg cfg, float3 pixel)
 {
     if (isnan(pixel.x) || isnan(pixel.y) || isnan(pixel.z))
     {
@@ -634,15 +634,15 @@ static uint PackPixel(Cfg cfg, float3 pixel)
     pixel.y = GammaCompression(cfg, pixel.y);
     pixel.z = GammaCompression(cfg, pixel.z);
 
-    pixel = pixel * 255;
+    return pixel;
 
-#ifdef VR
-    return ((uint)(uchar)pixel.z << 24) | ((uint)(uchar)pixel.y << 16) |
-           ((uint)(uchar)pixel.x << 8) | ((uint)255);
-#else
-    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
-           ((uint)(uchar)pixel.z << 16);
-#endif
+    // #ifdef VR
+    //     return ((uint)(uchar)pixel.z << 24) | ((uint)(uchar)pixel.y << 16) |
+    //            ((uint)(uchar)pixel.x << 8) | ((uint)255);
+    // #else
+    //     return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
+    //            ((uint)(uchar)pixel.z << 16);
+    // #endif
 }
 
 #define SCRATCH_OFFSET 4
@@ -718,7 +718,7 @@ __kernel void Main(__global float* data,
     SetScratch(data, idx, size, newColor);
     SetRand(data, idx, size, rand);
 #endif
-    // const uint packedColor = PackPixel(cfg, newColor);
+    const float3 packedColor = PackPixel(cfg, newColor);
 
-    SetScreen(data, idx, size, newColor);
+    SetScreen(data, idx, size, packedColor);
 }

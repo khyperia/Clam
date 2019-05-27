@@ -124,7 +124,7 @@ impl SyncInteractiveKernel {
         width: u32,
         height: u32,
         is_ogl: bool,
-        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+        video: Option<&sdl2::VideoSubsystem>,
         settings_input: Arc<Mutex<(Settings, Input)>>,
     ) -> Result<Self, Error> {
         //kernel_compilation::watch_src(screen_send.clone())?;
@@ -133,7 +133,7 @@ impl SyncInteractiveKernel {
             width,
             height,
             is_ogl,
-            window,
+            video,
             &mut settings_input.lock().unwrap().0,
         )
         .unwrap();

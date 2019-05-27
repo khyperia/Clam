@@ -119,11 +119,11 @@ impl Kernel {
         width: u32,
         height: u32,
         is_ogl: bool,
-        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+        video: Option<&sdl2::VideoSubsystem>,
         settings: &mut Settings,
     ) -> Result<Self, Error> {
         // TODO: lazy_static context
-        let context = Self::make_context(window)?;
+        let context = Self::make_context(video)?;
         let device = context.devices()[0];
         let device_name = device.name()?;
         println!("Using device: {}", device_name);
@@ -154,9 +154,7 @@ impl Kernel {
         Ok(())
     }
 
-    fn make_context(
-        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
-    ) -> Result<ocl::Context, Error> {
+    fn make_context(video: Option<&sdl2::VideoSubsystem>) -> Result<ocl::Context, Error> {
         let mut last_err = None;
         let selected = ::std::env::var("CLAM5_DEVICE")
             .ok()
@@ -172,7 +170,7 @@ impl Kernel {
             for device in ocl::Device::list(platform, None)? {
                 match selected {
                     Some(selected) if selected == i => {
-                        return Self::build_ctx(platform, Some(device), window, false);
+                        return Self::build_ctx(platform, Some(device), video, false);
                     }
                     Some(_) => (),
                     None => println!("[{}]: {}", i, device.name()?),
@@ -182,14 +180,14 @@ impl Kernel {
         }
 
         for platform in ocl::Platform::list() {
-            match Self::build_ctx(platform, None, window, true) {
+            match Self::build_ctx(platform, None, video, true) {
                 Ok(ok) => return Ok(ok),
                 Err(e) => last_err = Some(e),
             }
         }
 
         for platform in ocl::Platform::list() {
-            match Self::build_ctx(platform, None, window, false) {
+            match Self::build_ctx(platform, None, video, false) {
                 Ok(ok) => return Ok(ok),
                 Err(e) => last_err = Some(e),
             }
@@ -204,7 +202,7 @@ impl Kernel {
     fn build_ctx(
         platform: ocl::Platform,
         device: Option<ocl::Device>,
-        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+        video: Option<&sdl2::VideoSubsystem>,
         gpu: bool,
     ) -> Result<ocl::Context, Error> {
         let mut builder = ocl::Context::builder();
@@ -215,18 +213,12 @@ impl Kernel {
         if gpu && false {
             builder.devices(ocl::DeviceType::new().gpu());
         }
-        if let Some((sdl_window, sdl_context)) = window {
+        if let Some(video) = video {
             unsafe {
-                let gl_cx: extern "system" fn() -> *mut libc::c_void = std::mem::transmute(
-                    sdl_window
-                        .subsystem()
-                        .gl_get_proc_address("wglGetCurrentContext"),
-                );
-                let hdc: extern "system" fn() -> *mut libc::c_void = std::mem::transmute(
-                    sdl_window
-                        .subsystem()
-                        .gl_get_proc_address("wglGetCurrentDC"),
-                );
+                let gl_cx: extern "system" fn() -> *mut libc::c_void =
+                    std::mem::transmute(video.gl_get_proc_address("wglGetCurrentContext"));
+                let hdc: extern "system" fn() -> *mut libc::c_void =
+                    std::mem::transmute(video.gl_get_proc_address("wglGetCurrentDC"));
                 builder.property(ContextPropertyValue::GlContextKhr(gl_cx()));
                 builder.property(ContextPropertyValue::WglHdcKhr(hdc()));
             }

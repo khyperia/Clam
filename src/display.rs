@@ -382,9 +382,11 @@ pub fn gl_display(init_width: u32, init_height: u32) -> Result<(), Error> {
         init_width,
         init_height,
         is_gl,
-        Some((&window, &_gl_context)),
+        Some(&video),
         settings_input.clone(),
     )?;
+
+    let mut fps = FpsCounter::new(1.0);
 
     let mut texture = 0;
     let mut framebuffer = 0;
@@ -431,7 +433,19 @@ pub fn gl_display(init_width: u32, init_height: u32) -> Result<(), Error> {
             )
         }?;
 
+
+        {
+            let mut locked = settings_input.lock().unwrap();
+            let (ref mut settings, ref mut input) = *locked;
+            input.integrate(settings);
+            let val = format!("\u{001b}[2J{}\n{}\n", fps.value(), settings.status(input));
+            // "atomically" dump the string
+            print!("{}", val);
+        }
+
         window.gl_swap_window();
+
+        fps.tick();
     }
 }
 
@@ -666,7 +680,8 @@ pub fn vr_display() -> Result<(), Error> {
             };
 
             let left_image_ = left_img.map(|x| x.into_iter().map(::f32_to_u8).collect::<Vec<_>>());
-            let right_image_ = right_img.map(|x| x.into_iter().map(::f32_to_u8).collect::<Vec<_>>());
+            let right_image_ =
+                right_img.map(|x| x.into_iter().map(::f32_to_u8).collect::<Vec<_>>());
 
             render_eye(
                 &compositor,
