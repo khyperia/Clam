@@ -1,4 +1,5 @@
 use failure::Error;
+use ocl::OclPrm;
 use settings::Settings;
 use std::env;
 use std::fs::File;
@@ -86,7 +87,11 @@ fn generate_src(settings: &Settings) -> String {
     result
 }
 
-pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kernel, Error> {
+pub fn rebuild<T: OclPrm>(
+    queue: &ocl::Queue,
+    texture: &ocl::Image<T>,
+    settings: &mut Settings,
+) -> Result<ocl::Kernel, Error> {
     let program = {
         let mut builder = ocl::Program::builder();
         let src = get_src()?;
@@ -99,11 +104,6 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
         if device_name.contains("GeForce") {
             builder.cmplr_opt("-cl-nv-verbose");
         }
-        // for value in &settings.values {
-        //     if let Some(opt) = value.format_cmdline() {
-        //         builder.cmplr_opt(opt);
-        //     }
-        // }
         builder.build(&queue.context())?
     };
     if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
@@ -118,7 +118,7 @@ pub fn rebuild(queue: &ocl::Queue, settings: &mut Settings) -> Result<ocl::Kerne
     let kernel = ocl::Kernel::builder()
         .program(&program)
         .name("Main")
-        .arg(None::<&ocl::Buffer<f32>>)
+        .arg(texture)
         .arg(None::<&ocl::Buffer<f32>>)
         .arg(None::<&ocl::Buffer<u8>>)
         .arg(0u32)

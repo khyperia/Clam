@@ -4,25 +4,25 @@ use fps_counter::FpsCounter;
 use input::Input;
 use kernel::Kernel;
 use kernel_compilation;
+use ocl::OclPrm;
 use sdl2::keyboard::Scancode as Key;
 use settings::Settings;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-pub struct SyncInteractiveKernel {
+pub struct SyncInteractiveKernel<T: OclPrm> {
     rebuild: Arc<AtomicBool>,
-    pub kernel: Kernel,
+    pub kernel: Kernel<T>,
     pub settings: Settings,
     pub input: Input,
 }
 
-impl SyncInteractiveKernel {
+impl<T: OclPrm> SyncInteractiveKernel<T> {
     pub fn create(
         width: u32,
         height: u32,
         is_ogl: bool,
-        video: Option<&sdl2::VideoSubsystem>,
     ) -> Result<Self, Error> {
         let rebuild = Arc::new(AtomicBool::new(false));
         let rebuild2 = rebuild.clone();
@@ -31,7 +31,7 @@ impl SyncInteractiveKernel {
 
         let mut settings = Settings::new();
         let input = Input::new();
-        let kernel = Kernel::create(width, height, is_ogl, video, &mut settings).unwrap();
+        let kernel = Kernel::create(width, height, is_ogl, &mut settings).unwrap();
         let result = Self {
             kernel,
             rebuild,
@@ -55,11 +55,14 @@ impl SyncInteractiveKernel {
 
     pub fn launch(&mut self) -> Result<(), Error> {
         self.input.integrate(&mut self.settings);
-        self.kernel.run(&mut self.settings, self.rebuild.swap(false, Ordering::Relaxed))?;
+        self.kernel.run(
+            &mut self.settings,
+            self.rebuild.swap(false, Ordering::Relaxed),
+        )?;
         Ok(())
     }
 
-    pub fn download(&mut self) -> Result<Image, Error> {
+    pub fn download(&mut self) -> Result<Image<T>, Error> {
         let image = self.kernel.download()?;
         Ok(image)
     }

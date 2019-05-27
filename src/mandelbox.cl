@@ -612,8 +612,7 @@ static float3 PackPixel(Cfg cfg, float3 pixel)
 {
     if (isnan(pixel.x) || isnan(pixel.y) || isnan(pixel.z))
     {
-        return ((uint)255 << 24) | ((uint)(uchar)255 << 0) | ((uint)(uchar)0 << 8) |
-               ((uint)(uchar)255 << 16);
+        return (float3)(1.0f, 0.0f, 1.0f);
     }
 
     if (white_clamp(cfg))
@@ -635,14 +634,6 @@ static float3 PackPixel(Cfg cfg, float3 pixel)
     pixel.z = GammaCompression(cfg, pixel.z);
 
     return pixel;
-
-    // #ifdef VR
-    //     return ((uint)(uchar)pixel.z << 24) | ((uint)(uchar)pixel.y << 16) |
-    //            ((uint)(uchar)pixel.x << 8) | ((uint)255);
-    // #else
-    //     return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
-    //            ((uint)(uchar)pixel.z << 16);
-    // #endif
 }
 
 #define SCRATCH_OFFSET 0
@@ -674,23 +665,19 @@ static void SetRand(__global float* data, uint idx, uint size, struct Random val
     ((__global struct Random*)(data + size * RAND_OFFSET))[idx] = value;
 }
 
-static void SetScreen(__global float* data, uint idx, uint size, float3 value)
+static void SetScreen(write_only image2d_t data, uint x, uint y, float3 value)
 {
 #ifdef VR
-    __global uint* datab = (__global uint*)data;
     value *= 255;
-    datab[idx] = ((uint)(uchar)value.z << 24) | ((uint)(uchar)value.y << 16) |
-                 ((uint)(uchar)value.x << 8) | ((uint)255);
+    uint3 vali = (uint3)((uint)value.x, (uint)value.y, (uint)value.z);
+    write_imageui(data, (int2)(x, y), (uint4)(vali, 255));
 #else
-    data[idx * 4 + 0] = value.x;
-    data[idx * 4 + 1] = value.y;
-    data[idx * 4 + 2] = value.z;
-    data[idx * 4 + 3] = 1.0f;
+    write_imagef(data, (int2)(x, y), (float4)(value, 1.0f));
 #endif
 }
 
 // type: -1 is preview, 0 is init, 1 is continue
-__kernel void Main(__global float* texture,
+__kernel void Main(write_only image2d_t texture,
                    __global float* scratch,
                    __global struct MandelboxCfg const* cfg_global,
                    uint width,
@@ -703,6 +690,7 @@ __kernel void Main(__global float* texture,
     const uint size = width * height;
     const uint x = idx % width;
     const uint y = idx / width;
+
     // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is
     // bottom-left
     // const uint y = height - (idx / width + 1);
@@ -728,5 +716,5 @@ __kernel void Main(__global float* texture,
 #endif
     const float3 packedColor = PackPixel(cfg, newColor);
 
-    SetScreen(texture, idx, size, packedColor);
+    SetScreen(texture, x, y, packedColor);
 }

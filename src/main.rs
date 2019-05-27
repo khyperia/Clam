@@ -31,7 +31,7 @@ fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
 }
 
-fn save_image(image: &Image, path: &str) -> Result<(), Error> {
+fn save_image(image: &Image<f32>, path: &str) -> Result<(), Error> {
     use png::HasParameters;
     let file = ::std::fs::File::create(path)?;
     let w = &mut ::std::io::BufWriter::new(file);
@@ -111,7 +111,7 @@ fn progress_count(_: u32) -> u32 {
 
 fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, false, None, &mut settings)?;
+    let mut kernel = Kernel::create(width, height, false, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
     let progress = Progress::new();
@@ -135,7 +135,7 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
 fn video_one(
     frame: u32,
     rpp: u32,
-    kernel: &mut Kernel,
+    kernel: &mut Kernel<f32>,
     settings: &mut Settings,
 ) -> Result<(), Error> {
     for _ in 0..rpp {
@@ -148,7 +148,7 @@ fn video_one(
 
 fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, false, None, &mut default_settings)?;
+    let mut kernel = Kernel::create(width, height, false, &mut default_settings)?;
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
@@ -207,7 +207,7 @@ fn interactive_cmd() -> Result<(), Error> {
     display::gl_display(width, height)
 }
 
-fn main() -> Result<(), Error> {
+fn try_main() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && arguments[0] == "--render" {
         render(&arguments[1..])?;
@@ -226,4 +226,11 @@ fn main() -> Result<(), Error> {
         println!("clam5");
     }
     Ok(())
+}
+
+fn main() {
+    match try_main() {
+        Ok(()) => (),
+        Err(err) => println!("Error in main: {}\n{}", err, err.backtrace()),
+    }
 }
