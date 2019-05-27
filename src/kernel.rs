@@ -275,8 +275,6 @@ impl<T: OclPrm> Kernel<T> {
 
             if self.is_ogl {
                 if let Some(ref buf) = self.data.texture_cl {
-                    unsafe { gl::Finish() };
-                    check_gl()?;
                     buf.cmd().gl_acquire().enq()?;
                 }
             }
@@ -287,8 +285,6 @@ impl<T: OclPrm> Kernel<T> {
             if self.is_ogl {
                 if let Some(ref buf) = self.data.texture_cl {
                     buf.cmd().gl_release().enq()?;
-                    self.queue.finish()?;
-                    unsafe { gl::Finish() };
                 }
             }
 
