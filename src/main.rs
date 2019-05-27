@@ -35,13 +35,26 @@ fn save_image(image: &Image, path: &str) -> Result<(), Error> {
     encoder.set(png::ColorType::RGB).set(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;
     let sans_alpha = image
-        .data
+        .data_cpu
+        .as_ref()
+        .expect("save_image must have cpu image")
         .iter()
         .enumerate()
         .filter_map(|(index, &element)| if index % 4 == 3 { None } else { Some(element) })
         .collect::<Vec<_>>();
     writer.write_image_data(&sans_alpha)?;
     Ok(())
+}
+
+fn check_gl() -> Result<(), Error> {
+    loop {
+        let er = unsafe { gl::GetError() };
+        if er == gl::NO_ERROR {
+            return Ok(());
+        }
+        //println!("OGL error: {}", er);
+        return Err(failure::err_msg(format!("OGL error: {}", er)));
+    }
 }
 
 #[cfg(not(windows))]
@@ -56,7 +69,7 @@ fn progress_count(_: u32) -> u32 {
 
 fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, &mut settings)?;
+    let mut kernel = Kernel::create(width, height, false, None, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
     kernel.rebuild(&mut settings)?;
@@ -89,7 +102,13 @@ fn video_one(frame: u32, rpp: u32, kernel: &mut Kernel, settings: &Settings) -> 
 
 fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, &mut default_settings)?;
+    let mut kernel = Kernel::create(
+        width,
+        height,
+        false,
+        None,
+        &mut default_settings,
+    )?;
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
@@ -145,10 +164,14 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
     }
 }
 
-fn interactive_cmd() -> Result<(), Error> {
+fn interactive_cmd(is_gl: bool) -> Result<(), Error> {
     let width = 1920;
     let height = 1080;
-    display::display(width, height)
+    if is_gl {
+        display::gl_display(width, height)
+    } else {
+        display::display(width, height)
+    }
 }
 
 fn main() -> Result<(), Error> {
@@ -160,7 +183,7 @@ fn main() -> Result<(), Error> {
     } else if arguments.len() == 1 && arguments[0] == "--vr" {
         display::vr_display()?;
     } else if arguments.is_empty() {
-        interactive_cmd()?;
+        interactive_cmd(true)?;
     } else {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");

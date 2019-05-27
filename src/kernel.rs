@@ -3,6 +3,7 @@ use failure;
 use failure::Error;
 use kernel_compilation;
 use ocl;
+use ocl::enums::ContextPropertyValue;
 use settings::Settings;
 
 const DATA_WORDS: u32 = 6;
@@ -13,6 +14,7 @@ struct KernelImage {
     height: u32,
     scale: u32,
     buffer: Option<ocl::Buffer<u8>>,
+    buffer_gl: Option<ocl::prm::cl_GLuint>,
 }
 
 impl KernelImage {
@@ -23,6 +25,7 @@ impl KernelImage {
             height,
             scale: 1,
             buffer: None,
+            buffer_gl: None,
         }
     }
 
@@ -30,13 +33,68 @@ impl KernelImage {
         (self.width / self.scale, self.height / self.scale)
     }
 
-    fn data(&mut self) -> Result<&ocl::Buffer<u8>, Error> {
+    fn test(&mut self) {
+        let mut texture = 0;
+        let width = 200;
+        let height = 200;
+        let array_size = width * height * 4;
+        let row_pitch = width * 4;
+        let slc_pitch = width * height * 4;
+        unsafe {
+            let () = gl::CreateTextures(gl::TEXTURE_2D, 1, &mut texture);
+            ::check_gl().unwrap();
+            gl::TextureStorage2D(texture, 1, gl::RGBA8, 200, 200);
+            ::check_gl().unwrap();
+        }
+        let buffer_cl: ocl::Image<u8> = ocl::Image::from_gl_texture(
+            &self.queue,
+            ocl::flags::MemFlags::new().read_write(),
+            ocl::builders::ImageDescriptor::new(
+                ocl::enums::MemObjectType::Image2d,
+                width,
+                height,
+                1,
+                array_size,
+                row_pitch,
+                slc_pitch,
+                None,
+            ),
+            ocl::core::GlTextureTarget::GlTexture2d,
+            0,
+            texture,
+        )
+        .unwrap();
+    }
+
+    fn data(&mut self, is_ogl: bool) -> Result<&ocl::Buffer<u8>, Error> {
         if self.buffer.is_none() {
-            let new_data = ocl::Buffer::builder()
-                .context(&self.queue.context())
-                .len(self.width * self.height * DATA_WORDS * 4)
-                .build()?;
-            self.buffer = Some(new_data);
+            if is_ogl {
+                //self.test();
+                unsafe {
+                    ::check_gl()?;
+                    let mut buffer = 0;
+                    let () = gl::CreateBuffers(1, &mut buffer);
+                    ::check_gl()?;
+                    gl::NamedBufferData(
+                        buffer,
+                        self.width as gl::types::GLsizeiptr
+                            * self.height as gl::types::GLsizeiptr
+                            * DATA_WORDS as gl::types::GLsizeiptr
+                            * 4,
+                        std::ptr::null(),
+                        gl::STREAM_DRAW, // TODO: fix this
+                    );
+                    self.buffer_gl = Some(buffer);
+                    let buffer_cl = ocl::Buffer::from_gl_buffer(&self.queue, None, buffer)?;
+                    self.buffer = Some(buffer_cl);
+                }
+            } else {
+                let new_data = ocl::Buffer::builder()
+                    .context(&self.queue.context())
+                    .len(self.width * self.height * DATA_WORDS * 4)
+                    .build()?;
+                self.buffer = Some(new_data);
+            }
         }
         Ok(self.buffer.as_ref().unwrap())
     }
@@ -46,6 +104,12 @@ impl KernelImage {
             self.width = new_width;
             self.height = new_height;
             self.buffer = None;
+            if let Some(id) = self.buffer_gl {
+                unsafe {
+                    gl::DeleteBuffers(1, &id);
+                }
+            }
+            self.buffer_gl = None;
         }
     }
 
@@ -55,17 +119,19 @@ impl KernelImage {
 
     fn download(&mut self) -> Result<Image, Error> {
         let (width, height) = self.size();
-        let mut vec = vec![0u8; width as usize * height as usize * 4];
 
-        // only read if data is present
-        if let Some(ref buffer) = self.buffer {
-            buffer.read(&mut vec).queue(&self.queue).enq()?;
+        if let Some(gl) = self.buffer_gl {
+            Ok(Image::new(None, Some(gl), width, height))
+        } else {
+            let mut vec = vec![0u8; width as usize * height as usize * 4];
+
+            // only read if data is present
+            if let Some(ref buffer) = self.buffer {
+                buffer.read(&mut vec).queue(&self.queue).enq()?;
+            }
+
+            Ok(Image::new(Some(vec), None, width, height))
         }
-
-        //self.queue.finish()?;
-
-        let image = Image::new(vec, width, height);
-        Ok(image)
     }
 }
 
@@ -77,14 +143,19 @@ pub struct Kernel {
     cfg: Option<ocl::Buffer<u8>>,
     old_settings: Settings,
     frame: u32,
+    is_ogl: bool,
 }
 
 impl Kernel {
-    pub fn create(width: u32, height: u32, settings: &mut Settings) -> Result<Self, Error> {
-        // if !kernel_compilation::check_header(settings) {
-        //     return Err(failure::err_msg("Header didn't start with proper struct"));
-        // }
-        let context = Self::make_context()?;
+    pub fn create(
+        width: u32,
+        height: u32,
+        is_ogl: bool,
+        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+        settings: &mut Settings,
+    ) -> Result<Self, Error> {
+        // TODO: lazy_static context
+        let context = Self::make_context(window)?;
         let device = context.devices()[0];
         let device_name = device.name()?;
         println!("Using device: {}", device_name);
@@ -97,6 +168,7 @@ impl Kernel {
             cfg: None,
             old_settings: settings.clone(),
             frame: 0,
+            is_ogl,
         };
         result.rebuild(settings)?;
         Ok(result)
@@ -114,7 +186,9 @@ impl Kernel {
         Ok(())
     }
 
-    fn make_context() -> Result<ocl::Context, Error> {
+    fn make_context(
+        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+    ) -> Result<ocl::Context, Error> {
         let mut last_err = None;
         let selected = ::std::env::var("CLAM5_DEVICE")
             .ok()
@@ -130,10 +204,7 @@ impl Kernel {
             for device in ocl::Device::list(platform, None)? {
                 match selected {
                     Some(selected) if selected == i => {
-                        return Ok(ocl::Context::builder()
-                            .platform(platform)
-                            .devices(device)
-                            .build()?);
+                        return Self::build_ctx(platform, Some(device), window, false);
                     }
                     Some(_) => (),
                     None => println!("[{}]: {}", i, device.name()?),
@@ -143,18 +214,14 @@ impl Kernel {
         }
 
         for platform in ocl::Platform::list() {
-            match ocl::Context::builder()
-                .platform(platform)
-                .devices(ocl::DeviceType::new().gpu())
-                .build()
-            {
+            match Self::build_ctx(platform, None, window, true) {
                 Ok(ok) => return Ok(ok),
                 Err(e) => last_err = Some(e),
             }
         }
 
         for platform in ocl::Platform::list() {
-            match ocl::Context::builder().platform(platform).build() {
+            match Self::build_ctx(platform, None, window, false) {
                 Ok(ok) => return Ok(ok),
                 Err(e) => last_err = Some(e),
             }
@@ -164,6 +231,47 @@ impl Kernel {
             Some(e) => Err(e.into()),
             None => Err(failure::err_msg("No OpenCL devices found")),
         }
+    }
+
+    fn build_ctx(
+        platform: ocl::Platform,
+        device: Option<ocl::Device>,
+        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+        gpu: bool,
+    ) -> Result<ocl::Context, Error> {
+        let mut builder = ocl::Context::builder();
+        builder.platform(platform);
+        if let Some(device) = device {
+            builder.devices(device);
+        }
+        if gpu && false {
+            builder.devices(ocl::DeviceType::new().gpu());
+        }
+        if let Some((sdl_window, sdl_context)) = window {
+            unsafe {
+                let wglGetCurrentContext: extern "system" fn() -> *mut libc::c_void =
+                    std::mem::transmute(
+                        sdl_window
+                            .subsystem()
+                            .gl_get_proc_address("wglGetCurrentContext"),
+                    );
+                let wglGetCurrentDC: extern "system" fn() -> *mut libc::c_void =
+                    std::mem::transmute(
+                        sdl_window
+                            .subsystem()
+                            .gl_get_proc_address("wglGetCurrentDC"),
+                    );
+                println!(" from sdl cont {:?}", sdl_context.raw());
+                println!(" winwin {:?}", sdl_window.raw());
+                let wglCurrentContext = wglGetCurrentContext();
+                let wglCurrentDC = wglGetCurrentDC();
+                println!("{:?} {:?}", wglCurrentContext, wglCurrentDC);
+                builder.property(ContextPropertyValue::GlContextKhr(wglCurrentContext));
+                builder.property(ContextPropertyValue::WglHdcKhr(wglCurrentDC));
+            }
+            //builder.property(ContextPropertyValue::GlContextKhr());
+        }
+        return Ok(builder.build()?);
     }
 
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
@@ -209,7 +317,7 @@ impl Kernel {
     fn set_args(&mut self) -> Result<(), Error> {
         if let Some(ref kernel) = self.kernel {
             let (width, height) = self.data.size();
-            kernel.set_arg(0, self.data.data()?)?;
+            kernel.set_arg(0, self.data.data(self.is_ogl)?)?;
             kernel.set_arg(1, self.cfg.as_ref())?;
             kernel.set_arg(2, width as u32)?;
             kernel.set_arg(3, height as u32)?;
@@ -223,9 +331,20 @@ impl Kernel {
             let (width, height) = self.data.size();
             let total_size = width * height;
 
+            if self.is_ogl {
+                if let Some(ref buf) = self.data.buffer {
+                    buf.cmd().gl_acquire().enq()?;
+                }
+            }
             let to_launch = kernel.cmd().queue(&self.queue).global_work_size(total_size);
             // enq() is unsafe, even though the Rust code is safe (unsafe due to untrusted GPU code)
             unsafe { to_launch.enq() }?;
+
+            if self.is_ogl {
+                if let Some(ref buf) = self.data.buffer {
+                    buf.cmd().gl_release().enq()?;
+                }
+            }
 
             self.frame += 1;
         }

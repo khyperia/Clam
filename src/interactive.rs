@@ -30,10 +30,17 @@ impl InteractiveKernel {
         kernel_compilation::watch_src(screen_send.clone())?;
 
         thread::spawn(move || {
-            let kernel = Kernel::create(width, height, &mut settings_input.lock().unwrap().0).unwrap();
+            let kernel = Kernel::create(
+                width,
+                height,
+                false,
+                None,
+                &mut settings_input.lock().unwrap().0,
+            )
+            .unwrap();
             match Self::run_thread(kernel, &screen_recv, &image_send, &settings_input) {
                 Ok(()) => (),
-                Err(err) => panic!("Error in kernel thread: {}", err),
+                Err(err) => panic!("Error in kernel thread: {}\n{}", err, err.backtrace()),
             }
         });
 
@@ -104,5 +111,56 @@ impl InteractiveKernel {
                 Err(mpsc::SendError(_)) => return Ok(()),
             };
         }
+    }
+}
+
+pub struct SyncInteractiveKernel {
+    kernel: Kernel,
+    settings_input: Arc<Mutex<(Settings, Input)>>,
+}
+
+impl SyncInteractiveKernel {
+    pub fn create(
+        width: u32,
+        height: u32,
+        is_ogl: bool,
+        window: Option<(&sdl2::video::Window, &sdl2::video::GLContext)>,
+        settings_input: Arc<Mutex<(Settings, Input)>>,
+    ) -> Result<Self, Error> {
+        //kernel_compilation::watch_src(screen_send.clone())?;
+
+        let kernel = Kernel::create(
+            width,
+            height,
+            is_ogl,
+            window,
+            &mut settings_input.lock().unwrap().0,
+        )
+        .unwrap();
+        let result = Self {
+            kernel,
+            settings_input,
+        };
+        Ok(result)
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
+        self.kernel.resize(width, height)
+    }
+
+    pub fn download(&mut self) -> Result<Image, Error> {
+        let settings = {
+            let mut locked = self.settings_input.lock().unwrap();
+            let (ref mut settings, ref mut input) = *locked;
+            input.integrate(settings);
+            if settings.check_rebuild() {
+                self.kernel.rebuild(settings)?;
+                println!("Rebuilding");
+            }
+            (*settings).clone()
+        };
+        self.kernel.run(&settings)?;
+        let image = self.kernel.download()?;
+        Ok(image)
     }
 }

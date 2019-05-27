@@ -59,6 +59,10 @@ extern int max_iters(Cfg cfg);                   // 20 const
 extern int max_ray_steps(Cfg cfg);               // 256 const
 extern int num_ray_bounces(Cfg cfg);             // 3 const
 
+#ifdef VR
+#define PREVIEW 1
+#endif
+
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
 // opencl runtime cannot vectorize the kernel.
 
@@ -529,13 +533,13 @@ static float3 PreviewTrace(Cfg cfg, struct Ray ray, const uint width, const uint
     const float quality = quality_first_ray(cfg) * ((width + height) / (2 * fov(cfg)));
     const float max_dist = min(max_ray_dist(cfg), focal_distance(cfg) * 10);
     const float distance = Cast(cfg, ray, quality, max_dist);
-// #ifdef PREVIEW_NORMAL
+    // #ifdef PREVIEW_NORMAL
     const float3 pos = Ray_At(ray, distance);
     return fabs(Material(cfg, pos).normal);
-// #else
-//     const float value = distance / max_dist;
-//     return (float3)(value);
-// #endif
+    // #else
+    //     const float value = distance / max_dist;
+    //     return (float3)(value);
+    // #endif
 }
 
 static float3 GammaTest(int x, int y, int width, int height)
@@ -632,10 +636,13 @@ static uint PackPixel(Cfg cfg, float3 pixel)
 
     pixel = pixel * 255;
 
-    // return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
-    //        ((uint)(uchar)pixel.z << 16);
+#ifdef VR
     return ((uint)(uchar)pixel.z << 24) | ((uint)(uchar)pixel.y << 16) |
            ((uint)(uchar)pixel.x << 8) | ((uint)255);
+#else
+    return ((uint)255 << 24) | ((uint)(uchar)pixel.x << 0) | ((uint)(uchar)pixel.y << 8) |
+           ((uint)(uchar)pixel.z << 16);
+#endif
 }
 
 // yay SOA
@@ -680,6 +687,8 @@ __kernel void Main(__global uchar* data,
                    uint height,
                    uint frame)
 {
+    ((__global float*)data)[get_global_id(0)] = 0.5f;
+    return;
     COPY_TO_LOCAL
 
     const uint idx = (uint)get_global_id(0);
@@ -689,6 +698,11 @@ __kernel void Main(__global uchar* data,
     // bottom-left
     const uint y = height - (idx / width + 1);
 
+    // const uint packedColor_ = PackPixel(cfg, (float3)((float)x / width, (float)y / height, 0.5f));
+
+    // SetScreen(data, idx, size, packedColor_);
+    // return;
+
     // out-of-bounds checks aren't needed, due to the ocl driver being awesome
     // and supporting exact-size launches
 
@@ -697,12 +711,10 @@ __kernel void Main(__global uchar* data,
     struct Random rand = frame > 0 ? GetRand(data, idx, size) : new_Random(idx, frame, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
 #ifdef PREVIEW
-#endif
-//#ifdef PREVIEW
     const float3 colorComponents = PreviewTrace(cfg, ray, width, height);
-//#else
-//    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
-//#endif
+#else
+    const float3 colorComponents = Trace(cfg, ray, width, height, &rand);
+#endif
 #ifdef GAMMA_TEST
     const float3 newColor = GammaTest(x, y, width, height);
 #else
