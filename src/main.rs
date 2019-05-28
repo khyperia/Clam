@@ -26,6 +26,7 @@ use progress::Progress;
 use settings::KeyframeList;
 use settings::Settings;
 use std::env::args;
+use std::sync::mpsc;
 
 fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
@@ -137,12 +138,13 @@ fn video_one(
     rpp: u32,
     kernel: &mut Kernel<f32>,
     settings: &mut Settings,
+    stream: &mpsc::SyncSender<(u32, Image<f32>)>,
 ) -> Result<(), Error> {
     for _ in 0..rpp {
         kernel.run(settings, false)?;
     }
     let image = kernel.download()?;
-    save_image(&image, &format!("render{:03}.png", frame))?;
+    stream.send((frame, image))?;
     Ok(())
 }
 
@@ -152,9 +154,22 @@ fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
+
+    let (send, recv) = mpsc::sync_channel(5);
+
+    std::thread::spawn(move || loop {
+        match recv.recv() {
+            Ok((frame, img)) => match save_image(&img, &format!("render{:03}.png", frame)) {
+                Ok(()) => (),
+                Err(err) => println!("Error saving image: {}", err),
+            },
+            Err(mpsc::RecvError) => break,
+        }
+    });
+
     for frame in 0..frames {
         let mut settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
-        video_one(frame, rpp, &mut kernel, settings)?;
+        video_one(frame, rpp, &mut kernel, settings, &send)?;
         let value = (frame + 1) as f32 / frames as f32;
         println!("{}", progress.time_str(value));
     }

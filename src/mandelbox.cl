@@ -65,6 +65,7 @@ extern int num_ray_bounces(Cfg cfg);             // 3 const
 
 #ifdef VR
 #define PREVIEW 1
+#define PREVIEW_NORMAL 1
 #endif
 
 // Note: When num_ray_bounces is a dynamic variable in MandelboxCfg, the intel
@@ -251,43 +252,36 @@ static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struc
     return result;
 }
 
-/*
-static float4 Mandelbulb(float4 z, const float Power)
+static float3 Mandelbulb(float3 z, float* dz, const float Power)
 {
     const float r = length(z.xyz);
     // convert to polar coordinates
     float theta = asin(z.z / r);
     float phi = atan2(z.y, z.x);
-    float dr = pow(r, Power - 1.0f) * Power * z.w + 1.0f;
+    *dz = native_powr(r, Power - 1.0f) * Power * *dz + 1.0f;
     // scale and rotate the point
-    float zr = pow(r, Power);
+    float zr = native_powr(r, Power);
     theta = theta * Power;
     phi = phi * Power;
     // convert back to cartesian coordinates
-    float3 z3 =
-        zr * (float3)(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
-    return (float4)(z3.x, z3.y, z3.z, dr);
+    return zr * (float3)(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
 }
-*/
 
 static float3 BoxfoldD(Cfg cfg, float3 z)
 {
     return clamp(z, -folding_limit(cfg), folding_limit(cfg)) * 2.0f - z;
 }
 
-/*
-static float4 ContBoxfoldD(float4 z)
+static float3 ContBoxfoldD(float3 z)
 {
     float3 znew = z.xyz;
     float3 zsq = (float3)(znew.x * znew.x, znew.y * znew.y, znew.z * znew.z);
     zsq += (float3)(1, 1, 1);
-    float3 res = (float3)(
-        znew.x / sqrt(zsq.x), znew.y / sqrt(zsq.y), znew.z / sqrt(zsq.z));
+    float3 res = (float3)(znew.x / sqrt(zsq.x), znew.y / sqrt(zsq.y), znew.z / sqrt(zsq.z));
     res *= sqrt(8.0f);
     res = znew - res;
-    return (float4)(res.x, res.y, res.z, z.w);
+    return (float3)(res.x, res.y, res.z);
 }
-*/
 
 static float3 SpherefoldD(Cfg cfg, float3 z, float* dz)
 {
@@ -297,13 +291,13 @@ static float3 SpherefoldD(Cfg cfg, float3 z, float* dz)
     return z * factor;
 }
 
-/*
-static float4 ContSpherefoldD(Cfg cfg, float4 z)
+static float3 ContSpherefoldD(Cfg cfg, float3 z, float* dz)
 {
-    z *= min_radius_2 / dot(z.xyz, z.xyz) + fixed_radius_2;
+    const float mul = min_radius_2(cfg) / dot(z, z) + fixed_radius_2(cfg);
+    z *= mul;
+    *dz *= mul;
     return z;
 }
-*/
 
 static float3 TScaleD(Cfg cfg, float3 z, float* dz)
 {
@@ -327,9 +321,14 @@ static float3 Rotate(Cfg cfg, float3 z)
 
 static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color)
 {
-    // z = ContBoxfoldD(cfg, z);
-    // z = ContSpherefoldD(cfg, z);
+#ifdef MANDELBULB
+    z = Mandelbulb(z, dz, scale(cfg));
+#else
+#ifdef CONT_FOLD
+    z = ContBoxfoldD(z);
+#else
     z = BoxfoldD(cfg, z);
+#endif
     if (dot(z, z) < min_radius_2(cfg))
     {
         (*color)--;
@@ -341,9 +340,14 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
 #ifdef ROTATE
     z = Rotate(cfg, z);
 #endif
+#ifdef CONT_FOLD
+    z = ContSpherefoldD(cfg, z, dz);
+#else
     z = SpherefoldD(cfg, z, dz);
+#endif
     z = TScaleD(cfg, z, dz);
     z = TOffsetD(z, dz, offset);
+#endif
     return z;
 }
 
@@ -561,13 +565,13 @@ static float3 PreviewTrace(Cfg cfg, struct Ray ray, const uint width, const uint
     const float quality = quality_first_ray(cfg) * ((width + height) / (2 * fov(cfg)));
     const float max_dist = min(max_ray_dist(cfg), focal_distance(cfg) * 10);
     const float distance = Cast(cfg, ray, quality, max_dist);
-    // #ifdef PREVIEW_NORMAL
+#ifdef PREVIEW_NORMAL
     const float3 pos = Ray_At(ray, distance);
     return fabs(Material(cfg, pos).normal);
-    // #else
-    //     const float value = distance / max_dist;
-    //     return (float3)(value);
-    // #endif
+#else
+    const float value = distance / max_dist;
+    return (float3)(value);
+#endif
 }
 
 static float3 GammaTest(int x, int y, int width, int height)

@@ -100,7 +100,7 @@ impl<T: OclPrm> KernelImage<T> {
 
             // only read if data is present
             if let Some(ref buffer) = self.texture_cl {
-                buffer.read(&mut vec).queue(&self.queue).enq()?;
+                buffer.read(&mut vec).queue(&self.queue).region([width, height, 1]).enq()?;
             }
 
             Ok(Image::new(Some(vec), None, width, height))
@@ -153,7 +153,7 @@ unsafe fn cl_buf<T: OclPrm>(
     };
     let cl = ocl::Image::new(
         queue,
-        MemFlags::new().write_only(),
+        MemFlags::new().read_write(),
         ImageFormat::new(ImageChannelOrder::Rgba, data_type),
         ImageDescriptor::new(MemObjectType::Image2d, width, height, 0, 0, 0, 0, None),
         None,
@@ -209,7 +209,8 @@ impl<T: OclPrm> Kernel<T> {
                 self.kernel = Some(k);
                 self.frame = 0;
             }
-            Err(err) => println!("Kernel compilation failed: {}", err),
+            //Err(err) => println!("Kernel compilation failed: {}", err),
+            Err(err) => return Err(err), // TODO
         }
         Ok(())
     }
@@ -386,17 +387,19 @@ fn build_ctx(
     if gpu && false {
         builder.devices(ocl::DeviceType::new().gpu());
     }
-    unsafe {
-        let gl_context_khr = WGL_GET_CURRENT_CONTEXT();
-        let wgl_hdc_khr = WGL_GET_CURRENT_DC();
-        if gl_context_khr == std::ptr::null_mut() || wgl_hdc_khr == std::ptr::null_mut() {
-            panic!(
-                "WGL returned null contexts: {:?} {:?}",
-                gl_context_khr, wgl_hdc_khr
-            );
+    if false {
+        unsafe {
+            let gl_context_khr = WGL_GET_CURRENT_CONTEXT();
+            let wgl_hdc_khr = WGL_GET_CURRENT_DC();
+            if gl_context_khr == std::ptr::null_mut() || wgl_hdc_khr == std::ptr::null_mut() {
+                panic!(
+                    "WGL returned null contexts: {:?} {:?}",
+                    gl_context_khr, wgl_hdc_khr
+                );
+            }
+            builder.property(ContextPropertyValue::GlContextKhr(gl_context_khr));
+            builder.property(ContextPropertyValue::WglHdcKhr(wgl_hdc_khr));
         }
-        builder.property(ContextPropertyValue::GlContextKhr(gl_context_khr));
-        builder.property(ContextPropertyValue::WglHdcKhr(wgl_hdc_khr));
     }
     //builder.property(ContextPropertyValue::GlContextKhr());
     return Ok(builder.build()?);

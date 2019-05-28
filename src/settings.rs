@@ -591,7 +591,7 @@ impl KeyframeList {
             let cur = self.keyframes[index_cur].find(&value.key).value;
             let next = self.keyframes[index_next].find(&value.key).value;
             let next2 = self.keyframes[index_next2].find(&value.key).value;
-            let result = interpolate(prev, cur, next, next2, time, self.keyframes.len() <= 2);
+            let result = interpolate(prev, cur, next, next2, time, self.keyframes.len() <= 2 && !wrap);
             match value.value {
                 v @ SettingValueEnum::Define(_) if v != result => self.base.rebuild = true,
                 _ => (),
