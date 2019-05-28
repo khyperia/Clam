@@ -54,6 +54,10 @@ extern float max_ray_dist(Cfg cfg);              // 16.0 -0.5 const
 extern float quality_first_ray(Cfg cfg);         // 1.0 -0.5 const
 extern float quality_rest_ray(Cfg cfg);          // 64.0 -0.5 const
 extern float gamma(Cfg cfg);                     // 0.0 0.25 const
+extern float fov_left(Cfg cfg);                  // -1.0 1.0 const
+extern float fov_right(Cfg cfg);                 // 1.0 1.0 const
+extern float fov_top(Cfg cfg);                   // 1.0 1.0 const
+extern float fov_bottom(Cfg cfg);                // -1.0 1.0 const
 extern int white_clamp(Cfg cfg);                 // 0 const
 extern int max_iters(Cfg cfg);                   // 20 const
 extern int max_ray_steps(Cfg cfg);               // 256 const
@@ -181,6 +185,24 @@ static struct Ray new_Ray(float3 pos, float3 dir)
     return result;
 }
 
+#ifdef VR
+static double Remap(float value, float iMin, float iMax, float oMin, float oMax)
+{
+    float slope = (oMax - oMin) / (iMax - iMin);
+    float offset = oMin - iMin * slope;
+    return value * slope + offset;
+}
+
+static float3 RayDir(Cfg cfg, float3 forward, float3 up, float2 screenCoords)
+{
+    float x = Remap(screenCoords.x, 0, 1, fov_left(cfg), fov_right(cfg));
+    float y = Remap(screenCoords.y, 0, 1, fov_top(cfg), fov_bottom(cfg));
+    float z = 1.0f;
+    float3 dir = normalize((float3)(x, y, z));
+    float3 right = cross(forward, up);
+    return dir.x * right + dir.y * up + dir.z * forward;
+}
+#else
 // http://en.wikipedia.org/wiki/Stereographic_projection
 static float3 RayDir(float3 forward, float3 up, float2 screenCoords, float calcFov)
 {
@@ -190,6 +212,7 @@ static float3 RayDir(float3 forward, float3 up, float2 screenCoords, float calcF
     const float3 right = cross(forward, up);
     return look.x * right + look.y * up + look.z * forward;
 }
+#endif
 
 static float3 Ray_At(struct Ray this, float time)
 {
@@ -213,11 +236,16 @@ static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struc
     const float3 origin = (float3)(pos_x(cfg), pos_y(cfg), pos_z(cfg));
     const float3 look = (float3)(look_x(cfg), look_y(cfg), look_z(cfg));
     const float3 up = (float3)(up_x(cfg), up_y(cfg), up_z(cfg));
+#ifdef VR
+    const float2 screenCoords = (float2)((float)x / width, (float)y / height);
+    const float3 direction = RayDir(cfg, look, up, screenCoords);
+#else
     const float2 antialias = (float2)(Random_Next(rand), Random_Next(rand)) - (float2)(0.5f, 0.5f);
     const float2 screenCoords =
         (float2)((float)x - (float)(width / 2), (float)y - (float)(height / 2)) + antialias;
     const float calcFov = fov(cfg) * 2 / (width + height);
     const float3 direction = RayDir(look, up, screenCoords, calcFov);
+#endif
     struct Ray result = new_Ray(origin, direction);
     Ray_Dof(cfg, &result, focal_distance(cfg), rand);
     return result;

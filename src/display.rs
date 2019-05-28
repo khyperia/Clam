@@ -187,7 +187,6 @@ unsafe fn hands_eye(
         &head_to_absolute,
         &matmul_dir(&eye_to_head, &[0.0, 0.0, -1.0]),
     );
-    settings.find_mut("VR").set_const(true);
     *settings.find_mut("pos_x").unwrap_f32_mut() = pos[0] * 4.0;
     *settings.find_mut("pos_y").unwrap_f32_mut() = pos[1] * 4.0 - 4.0;
     *settings.find_mut("pos_z").unwrap_f32_mut() = pos[2] * 4.0;
@@ -272,6 +271,58 @@ pub fn vr_display() -> Result<(), Error> {
 
     let mut interactive_kernel_left = SyncInteractiveKernel::<u8>::create(width, height, is_gl)?;
     let mut interactive_kernel_right = SyncInteractiveKernel::<u8>::create(width, height, is_gl)?;
+    interactive_kernel_left
+        .settings
+        .find_mut("VR")
+        .set_const(true);
+    interactive_kernel_right
+        .settings
+        .find_mut("VR")
+        .set_const(true);
+    *interactive_kernel_left
+        .settings
+        .find_mut("dof_amount")
+        .unwrap_f32_mut() = 0.0;
+    *interactive_kernel_right
+        .settings
+        .find_mut("dof_amount")
+        .unwrap_f32_mut() = 0.0;
+
+    let proj_left = system.projection_raw(openvr::Eye::Left);
+    *interactive_kernel_left
+        .settings
+        .find_mut("fov_left")
+        .unwrap_f32_mut() = proj_left.left;
+    *interactive_kernel_left
+        .settings
+        .find_mut("fov_right")
+        .unwrap_f32_mut() = proj_left.right;
+    *interactive_kernel_left
+        .settings
+        .find_mut("fov_top")
+        .unwrap_f32_mut() = proj_left.top;
+    *interactive_kernel_left
+        .settings
+        .find_mut("fov_bottom")
+        .unwrap_f32_mut() = proj_left.bottom;
+
+    let proj_right = system.projection_raw(openvr::Eye::Right);
+    *interactive_kernel_right
+        .settings
+        .find_mut("fov_left")
+        .unwrap_f32_mut() = proj_right.left;
+    *interactive_kernel_right
+        .settings
+        .find_mut("fov_right")
+        .unwrap_f32_mut() = proj_right.right;
+    *interactive_kernel_right
+        .settings
+        .find_mut("fov_top")
+        .unwrap_f32_mut() = proj_right.top;
+    *interactive_kernel_right
+        .settings
+        .find_mut("fov_bottom")
+        .unwrap_f32_mut() = proj_right.bottom;
 
     let mut fps = FpsCounter::new(1.0);
 
