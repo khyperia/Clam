@@ -9,6 +9,7 @@ use kernel;
 use ocl::OclPrm;
 use sdl2::event::WindowEvent;
 use sdl2::init;
+#[cfg(windows)]
 use settings::Settings;
 
 pub struct Image<T: OclPrm> {
@@ -165,6 +166,7 @@ fn matmul_dir(mat: &[[f32; 4]; 3], vec: &[f32; 3]) -> [f32; 3] {
     ]
 }
 
+#[cfg(windows)]
 unsafe fn hands_eye(
     system: &openvr::System,
     eye: openvr::Eye,
@@ -198,6 +200,7 @@ unsafe fn hands_eye(
     *settings.find_mut("up_z").unwrap_f32_mut() = up[2];
 }
 
+#[cfg(windows)]
 unsafe fn hands(
     system: &openvr::System,
     compositor: &openvr::Compositor,
@@ -219,6 +222,7 @@ unsafe fn hands(
     Ok(())
 }
 
+#[cfg(windows)]
 unsafe fn render_eye(
     compositor: &openvr::Compositor,
     eye: openvr::Eye,
@@ -237,6 +241,7 @@ unsafe fn render_eye(
     Ok(())
 }
 
+#[cfg(windows)]
 pub fn vr_display() -> Result<(), Error> {
     let is_gl = true;
     let sdl = init().expect("SDL failed to init");

@@ -32,10 +32,8 @@ impl SettingValue {
             SettingValueEnum::U32(ref mut value) => {
                 if increase {
                     *value = *value + 1;
-                } else {
-                    if *value != 0 {
-                        *value = *value - 1;
-                    }
+                } else if *value != 0 {
+                    *value = *value - 1;
                 }
             }
             SettingValueEnum::Define(ref mut value) => {
@@ -58,8 +56,8 @@ impl SettingValue {
 
     pub fn toggle(&mut self) {
         fn def(val: &SettingValueEnum) -> Option<bool> {
-            match val {
-                &SettingValueEnum::Define(v) => Some(v),
+            match *val {
+                SettingValueEnum::Define(v) => Some(v),
                 _ => None,
             }
         }
@@ -96,7 +94,7 @@ impl SettingValue {
                     self.const_changed = true;
                 }
                 *v = value;
-            },
+            }
             _ => {
                 if self.is_const != value {
                     self.const_changed = true;
@@ -130,15 +128,9 @@ impl SettingValue {
     pub fn format_opencl_struct(&self) -> Option<String> {
         if !self.is_const {
             match self.value {
-                SettingValueEnum::F32(_, _) => {
-                    Some(format!("float _{};\n", self.key))
-                }
-                SettingValueEnum::U32(_) => {
-                    Some(format!("int _{};\n", self.key))
-                }
-                SettingValueEnum::Define(_) => {
-                    None
-                }
+                SettingValueEnum::F32(_, _) => Some(format!("float _{};\n", self.key)),
+                SettingValueEnum::U32(_) => Some(format!("int _{};\n", self.key)),
+                SettingValueEnum::Define(_) => None,
             }
         } else {
             None
@@ -162,16 +154,22 @@ impl SettingValue {
             }
             SettingValueEnum::Define(value) => {
                 if value {
-                    return format!("#define {} 1\n", self.key)
+                    return format!("#define {} 1\n", self.key);
                 } else {
                     return "".to_string();
                 }
             }
         }
         if is_const {
-            format!("static {} {}(__local struct MandelboxCfg const* cfg) {{ return {}; }}\n", ty, self.key, string)
+            format!(
+                "static {} {}(__local struct MandelboxCfg const* cfg) {{ return {}; }}\n",
+                ty, self.key, string
+            )
         } else {
-            format!("static {} {}(__local struct MandelboxCfg const* cfg) {{ return cfg->_{1}; }}\n", ty, self.key)
+            format!(
+                "static {} {}(__local struct MandelboxCfg const* cfg) {{ return cfg->_{1}; }}\n",
+                ty, self.key
+            )
         }
     }
 }
@@ -591,7 +589,14 @@ impl KeyframeList {
             let cur = self.keyframes[index_cur].find(&value.key).value;
             let next = self.keyframes[index_next].find(&value.key).value;
             let next2 = self.keyframes[index_next2].find(&value.key).value;
-            let result = interpolate(prev, cur, next, next2, time, self.keyframes.len() <= 2 && !wrap);
+            let result = interpolate(
+                prev,
+                cur,
+                next,
+                next2,
+                time,
+                self.keyframes.len() <= 2 && !wrap,
+            );
             match value.value {
                 v @ SettingValueEnum::Define(_) if v != result => self.base.rebuild = true,
                 _ => (),

@@ -10,7 +10,9 @@ gl = "*"
 lazy_static = "*"
 libc = "*"
 ocl = { version = "*", default-features = false }
-openvr = "*"
 png = "*"
 regex = "*"
 sdl2 = { version = "*", default-features = false, features = ["ttf"] }
+
+[target.'cfg(windows)'.dependencies]
+openvr = "*"

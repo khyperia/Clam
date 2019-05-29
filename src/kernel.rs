@@ -100,7 +100,11 @@ impl<T: OclPrm> KernelImage<T> {
 
             // only read if data is present
             if let Some(ref buffer) = self.texture_cl {
-                buffer.read(&mut vec).queue(&self.queue).region([width, height, 1]).enq()?;
+                buffer
+                    .read(&mut vec)
+                    .queue(&self.queue)
+                    .region([width, height, 1])
+                    .enq()?;
             }
 
             Ok(Image::new(Some(vec), None, width, height))
@@ -365,12 +369,29 @@ extern "system" fn dummy() -> *mut libc::c_void {
 }
 static mut WGL_GET_CURRENT_CONTEXT: extern "system" fn() -> *mut libc::c_void = dummy;
 static mut WGL_GET_CURRENT_DC: extern "system" fn() -> *mut libc::c_void = dummy;
+static mut GLX_GET_CURRENT_CONTEXT: extern "system" fn() -> *mut libc::c_void = dummy;
+static mut GLX_GET_CURRENT_DISPLAY: extern "system" fn() -> *mut libc::c_void = dummy;
 
 pub fn init_gl_funcs(video: &sdl2::VideoSubsystem) {
+    unsafe fn init(
+        video: &sdl2::VideoSubsystem,
+        func: &mut extern "system" fn() -> *mut libc::c_void,
+        name: &str,
+    ) {
+        let addr = video.gl_get_proc_address(name);
+        if !addr.is_null() {
+            println!("Have {}: {:?}", name, addr);
+            *func = std::mem::transmute(addr);
+        }
+    }
+
     unsafe {
-        WGL_GET_CURRENT_CONTEXT =
-            std::mem::transmute(video.gl_get_proc_address("wglGetCurrentContext"));
-        WGL_GET_CURRENT_DC = std::mem::transmute(video.gl_get_proc_address("wglGetCurrentDC"));
+        // Note: glXGetProcAddress returns valid pointers, even for invalid strings.
+        // https://dri.freedesktop.org/wiki/glXGetProcAddressNeverReturnsNULL/
+        init(video, &mut WGL_GET_CURRENT_CONTEXT, "wglGetCurrentContext");
+        init(video, &mut WGL_GET_CURRENT_DC, "wglGetCurrentDC");
+        init(video, &mut GLX_GET_CURRENT_CONTEXT, "glXGetCurrentContext");
+        init(video, &mut GLX_GET_CURRENT_DISPLAY, "glXGetCurrentDisplay");
     }
 }
 
@@ -384,23 +405,40 @@ fn build_ctx(
     if let Some(device) = device {
         builder.devices(device);
     }
-    if gpu && false {
+    // TODO: Check if !is_ogl is needed here
+    if gpu {
         builder.devices(ocl::DeviceType::new().gpu());
     }
-    if false {
-        unsafe {
-            let gl_context_khr = WGL_GET_CURRENT_CONTEXT();
-            let wgl_hdc_khr = WGL_GET_CURRENT_DC();
-            if gl_context_khr == std::ptr::null_mut() || wgl_hdc_khr == std::ptr::null_mut() {
-                panic!(
-                    "WGL returned null contexts: {:?} {:?}",
-                    gl_context_khr, wgl_hdc_khr
-                );
-            }
-            builder.property(ContextPropertyValue::GlContextKhr(gl_context_khr));
-            builder.property(ContextPropertyValue::WglHdcKhr(wgl_hdc_khr));
-        }
+    let wgl = cfg!(windows) && build_ctx_wgl(&mut builder);
+    let glx = !wgl && cfg!(not(windows)) && build_ctx_glx(&mut builder);
+    if !wgl && !glx {
+        println!("No OpenGL context found");
     }
-    //builder.property(ContextPropertyValue::GlContextKhr());
-    return Ok(builder.build()?);
+    Ok(builder.build()?)
+}
+
+fn build_ctx_wgl(builder: &mut ocl::builders::ContextBuilder) -> bool {
+    let gl_context_khr = unsafe { WGL_GET_CURRENT_CONTEXT }();
+    let wgl_hdc_khr = unsafe { WGL_GET_CURRENT_DC }();
+    if !gl_context_khr.is_null() && !wgl_hdc_khr.is_null() {
+        builder.property(ContextPropertyValue::GlContextKhr(gl_context_khr));
+        builder.property(ContextPropertyValue::WglHdcKhr(wgl_hdc_khr));
+        println!("WGL OpenCL");
+        true
+    } else {
+        false
+    }
+}
+
+fn build_ctx_glx(builder: &mut ocl::builders::ContextBuilder) -> bool {
+    let gl_context_khr = unsafe { GLX_GET_CURRENT_CONTEXT }();
+    let glx_display_khr = unsafe { GLX_GET_CURRENT_DISPLAY }();
+    if !gl_context_khr.is_null() && !glx_display_khr.is_null() {
+        builder.property(ContextPropertyValue::GlContextKhr(gl_context_khr));
+        builder.property(ContextPropertyValue::GlxDisplayKhr(glx_display_khr));
+        println!("GLX OpenCL");
+        true
+    } else {
+        false
+    }
 }

@@ -19,11 +19,7 @@ pub struct SyncInteractiveKernel<T: OclPrm> {
 }
 
 impl<T: OclPrm> SyncInteractiveKernel<T> {
-    pub fn create(
-        width: u32,
-        height: u32,
-        is_ogl: bool,
-    ) -> Result<Self, Error> {
+    pub fn create(width: u32, height: u32, is_ogl: bool) -> Result<Self, Error> {
         let rebuild = Arc::new(AtomicBool::new(false));
         let rebuild2 = rebuild.clone();
         // TODO: stop watching once `self` dies

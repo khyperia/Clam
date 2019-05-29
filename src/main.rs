@@ -5,6 +5,7 @@ extern crate failure;
 extern crate gl;
 extern crate libc;
 extern crate ocl;
+#[cfg(windows)]
 extern crate openvr;
 extern crate png;
 extern crate regex;
@@ -50,7 +51,7 @@ fn save_image(image: &Image<f32>, path: &str) -> Result<(), Error> {
         for x in 0..width {
             let in_idx = (y * width + x) * 4;
             let out_idx = ((height - y - 1) * width + x) * 3;
-            output[out_idx + 0] = f32_to_u8(input[in_idx + 0]);
+            output[out_idx] = f32_to_u8(input[in_idx]);
             output[out_idx + 1] = f32_to_u8(input[in_idx + 1]);
             output[out_idx + 2] = f32_to_u8(input[in_idx + 2]);
         }
@@ -60,14 +61,12 @@ fn save_image(image: &Image<f32>, path: &str) -> Result<(), Error> {
 }
 
 fn check_gl() -> Result<(), Error> {
-    loop {
-        let er = unsafe { gl::GetError() };
-        if er == gl::NO_ERROR {
-            return Ok(());
-        }
-        //println!("OGL error: {}", er);
-        return Err(failure::err_msg(format!("OGL error: {}", er)));
+    // This should technically loop.
+    let er = unsafe { gl::GetError() };
+    if er == gl::NO_ERROR {
+        return Ok(());
     }
+    Err(failure::err_msg(format!("OGL error: {}", er)))
 }
 
 fn gl_register_debug() -> Result<(), Error> {
@@ -96,7 +95,7 @@ extern "system" fn debug_callback(
     );
 }
 
-// TODO: cfg windows
+#[cfg(windows)]
 #[link(name = "Shell32")]
 extern "C" {}
 
@@ -157,13 +156,12 @@ fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(
 
     let (send, recv) = mpsc::sync_channel(5);
 
-    std::thread::spawn(move || loop {
-        match recv.recv() {
-            Ok((frame, img)) => match save_image(&img, &format!("render{:03}.png", frame)) {
+    std::thread::spawn(move || {
+        while let Ok((frame, img)) = recv.recv() {
+            match save_image(&img, &format!("render{:03}.png", frame)) {
                 Ok(()) => (),
                 Err(err) => println!("Error saving image: {}", err),
-            },
-            Err(mpsc::RecvError) => break,
+            }
         }
     });
 
@@ -228,7 +226,8 @@ fn try_main() -> Result<(), Error> {
         render(&arguments[1..])?;
     } else if arguments.len() > 2 && arguments[0] == "--video" {
         video_cmd(&arguments[1..])?;
-    } else if arguments.len() == 1 && arguments[0] == "--vr" {
+    } else if cfg!(windows) && arguments.len() == 1 && arguments[0] == "--vr" {
+        #[cfg(windows)]
         display::vr_display()?;
     } else if arguments.is_empty() {
         interactive_cmd()?;
