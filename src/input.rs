@@ -1,8 +1,11 @@
+use crate::settings::Settings;
 use failure::Error;
 use sdl2::keyboard::Scancode as Key;
-use settings::Settings;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::ops::Add;
+use std::ops::Mul;
+use std::ops::Sub;
 use std::time::Instant;
 
 #[derive(Default)]
@@ -261,7 +264,7 @@ impl Vector {
     }
 }
 
-impl ::std::ops::Add for Vector {
+impl Add for Vector {
     type Output = Vector;
 
     fn add(self, r: Vector) -> Self::Output {
@@ -269,7 +272,7 @@ impl ::std::ops::Add for Vector {
     }
 }
 
-impl ::std::ops::Sub for Vector {
+impl Sub for Vector {
     type Output = Vector;
 
     fn sub(self, r: Vector) -> Self::Output {
@@ -277,7 +280,7 @@ impl ::std::ops::Sub for Vector {
     }
 }
 
-impl ::std::ops::Mul<f32> for Vector {
+impl Mul<f32> for Vector {
     type Output = Vector;
 
     fn mul(self, r: f32) -> Self::Output {

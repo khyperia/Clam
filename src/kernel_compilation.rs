@@ -1,20 +1,29 @@
+use crate::settings::Settings;
 use failure::Error;
+use ocl::enums::ProgramBuildInfo;
+use ocl::enums::ProgramBuildInfoResult;
+use ocl::enums::ProgramInfo;
+use ocl::enums::ProgramInfoResult;
+use ocl::Buffer;
+use ocl::Image;
+use ocl::Kernel;
 use ocl::OclPrm;
-use settings::Settings;
+use ocl::Program;
+use ocl::Queue;
 use std::env;
+use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::thread;
 use std::time::Duration;
+use std::time::SystemTime;
 
 const MANDELBOX: &str = include_str!("mandelbox.cl");
 const MANDELBOX_PATH: &str = "src/mandelbox.cl";
 
-fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
+fn dump_binary(program: &Program) -> Result<(), Error> {
     if let Ok(path) = env::var("CLAM5_BINARY") {
-        if let ocl::enums::ProgramInfoResult::Binaries(binaries) =
-            program.info(ocl::enums::ProgramInfo::Binaries)?
-        {
+        if let ProgramInfoResult::Binaries(binaries) = program.info(ProgramInfo::Binaries)? {
             if binaries.len() != 1 {
                 for (i, binary) in binaries.iter().enumerate() {
                     let this_path = format!("{}.{}", &path, i);
@@ -35,8 +44,8 @@ fn dump_binary(program: &ocl::Program) -> Result<(), Error> {
 // the "notify" crate is broken af, so roll our own
 pub fn watch_src<F: Fn() + Send + 'static>(on_changed: F) {
     thread::spawn(move || {
-        fn get_time() -> Option<::std::time::SystemTime> {
-            let meta = match ::std::fs::metadata(MANDELBOX_PATH) {
+        fn get_time() -> Option<SystemTime> {
+            let meta = match fs::metadata(MANDELBOX_PATH) {
                 Ok(v) => v,
                 Err(_) => return None,
             };
@@ -88,12 +97,12 @@ fn generate_src(settings: &Settings) -> String {
 }
 
 pub fn rebuild<T: OclPrm>(
-    queue: &ocl::Queue,
-    texture: &ocl::Image<T>,
+    queue: &Queue,
+    texture: &Image<T>,
     settings: &mut Settings,
-) -> Result<ocl::Kernel, Error> {
+) -> Result<Kernel, Error> {
     let program = {
-        let mut builder = ocl::Program::builder();
+        let mut builder = Program::builder();
         let src = get_src()?;
         settings.set_src(&src);
         builder.source(generate_src(&settings));
@@ -106,8 +115,8 @@ pub fn rebuild<T: OclPrm>(
         }
         builder.build(&queue.context())?
     };
-    if let ocl::enums::ProgramBuildInfoResult::BuildLog(log) =
-        program.build_info(queue.device(), ocl::enums::ProgramBuildInfo::BuildLog)?
+    if let ProgramBuildInfoResult::BuildLog(log) =
+        program.build_info(queue.device(), ProgramBuildInfo::BuildLog)?
     {
         let log = log.trim();
         if !log.is_empty() {
@@ -115,12 +124,12 @@ pub fn rebuild<T: OclPrm>(
         }
     }
     dump_binary(&program)?;
-    let kernel = ocl::Kernel::builder()
+    let kernel = Kernel::builder()
         .program(&program)
         .name("Main")
         .arg(texture)
-        .arg(None::<&ocl::Buffer<f32>>)
-        .arg(None::<&ocl::Buffer<u8>>)
+        .arg(None::<&Buffer<f32>>)
+        .arg(None::<&Buffer<u8>>)
         .arg(0u32)
         .arg(0u32)
         .arg(0u32)

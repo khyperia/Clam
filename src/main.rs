@@ -3,9 +3,7 @@ extern crate lazy_static;
 extern crate byteorder;
 extern crate failure;
 extern crate gl;
-extern crate libc;
 extern crate ocl;
-#[cfg(windows)]
 extern crate openvr;
 extern crate png;
 extern crate regex;
@@ -20,25 +18,34 @@ mod kernel_compilation;
 mod progress;
 mod settings;
 
-use display::Image;
+use display::ImageData;
 use failure::Error;
-use kernel::Kernel;
+use kernel::FractalKernel;
+use png::BitDepth;
+use png::ColorType;
+use png::Encoder;
 use progress::Progress;
 use settings::KeyframeList;
 use settings::Settings;
 use std::env::args;
+use std::ffi::c_void;
+use std::fs::File;
+use std::io::BufWriter;
+use std::ptr::null;
+use std::slice;
+use std::str;
 use std::sync::mpsc;
 
 fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
 }
 
-fn save_image(image: &Image<f32>, path: &str) -> Result<(), Error> {
+fn save_image(image: &ImageData<f32>, path: &str) -> Result<(), Error> {
     use png::HasParameters;
-    let file = ::std::fs::File::create(path)?;
-    let w = &mut ::std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(w, image.width, image.height);
-    encoder.set(png::ColorType::RGB).set(png::BitDepth::Eight);
+    let file = File::create(path)?;
+    let w = &mut BufWriter::new(file);
+    let mut encoder = Encoder::new(w, image.width, image.height);
+    encoder.set(ColorType::RGB).set(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
     let width = image.width as usize;
     let height = image.height as usize;
@@ -71,7 +78,7 @@ fn check_gl() -> Result<(), Error> {
 
 fn gl_register_debug() -> Result<(), Error> {
     unsafe {
-        gl::DebugMessageCallback(debug_callback, std::ptr::null());
+        gl::DebugMessageCallback(debug_callback, null());
     }
     check_gl()?;
     Ok(())
@@ -84,11 +91,10 @@ extern "system" fn debug_callback(
     severity: u32,
     length: i32,
     message: *const i8,
-    _: *mut libc::c_void,
+    _: *mut c_void,
 ) {
-    let msg = std::str::from_utf8(unsafe {
-        std::slice::from_raw_parts(message as *const u8, length as usize)
-    });
+    let msg =
+        str::from_utf8(unsafe { slice::from_raw_parts(message as *const u8, length as usize) });
     println!(
         "GL debug callback: source:{} type:{} id:{} severity:{} {:?}",
         source, type_, id, severity, msg
@@ -111,7 +117,7 @@ fn progress_count(_: u32) -> u32 {
 
 fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, false, &mut settings)?;
+    let mut kernel = FractalKernel::create(width, height, false, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
     let progress = Progress::new();
@@ -135,9 +141,9 @@ fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
 fn video_one(
     frame: u32,
     rpp: u32,
-    kernel: &mut Kernel<f32>,
+    kernel: &mut FractalKernel<f32>,
     settings: &mut Settings,
-    stream: &mpsc::SyncSender<(u32, Image<f32>)>,
+    stream: &mpsc::SyncSender<(u32, ImageData<f32>)>,
 ) -> Result<(), Error> {
     for _ in 0..rpp {
         kernel.run(settings, false)?;
@@ -149,7 +155,7 @@ fn video_one(
 
 fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, false, &mut default_settings)?;
+    let mut kernel = FractalKernel::create(width, height, false, &mut default_settings)?;
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
@@ -166,7 +172,7 @@ fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(
     });
 
     for frame in 0..frames {
-        let mut settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
+        let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
         video_one(frame, rpp, &mut kernel, settings, &send)?;
         let value = (frame + 1) as f32 / frames as f32;
         println!("{}", progress.time_str(value));
@@ -227,7 +233,6 @@ fn try_main() -> Result<(), Error> {
     } else if arguments.len() > 2 && arguments[0] == "--video" {
         video_cmd(&arguments[1..])?;
     } else if cfg!(windows) && arguments.len() == 1 && arguments[0] == "--vr" {
-        #[cfg(windows)]
         display::vr_display()?;
     } else if arguments.is_empty() {
         interactive_cmd()?;

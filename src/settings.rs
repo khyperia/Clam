@@ -1,11 +1,15 @@
+use crate::input::Input;
+use crate::input::Vector;
 use byteorder::{NativeEndian, WriteBytesExt};
 use failure::err_msg;
 use failure::Error;
-use input::Input;
-use input::Vector;
 use regex::Regex;
 use std::fmt::Write as FmtWrite;
+use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::BufRead;
+use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::Lines;
 use std::io::Write;
 
@@ -31,9 +35,9 @@ impl SettingValue {
             SettingValueEnum::F32(_, _) => (),
             SettingValueEnum::U32(ref mut value) => {
                 if increase {
-                    *value = *value + 1;
+                    *value += 1;
                 } else if *value != 0 {
-                    *value = *value - 1;
+                    *value -= 1;
                 }
             }
             SettingValueEnum::Define(ref mut value) => {
@@ -47,9 +51,9 @@ impl SettingValue {
         dt *= if increase { 1.0 } else { -1.0 };
         if let SettingValueEnum::F32(ref mut value, change) = self.value {
             if change < 0.0 {
-                *value = *value * (-change + 1.0).powf(dt);
+                *value *= (-change + 1.0).powf(dt);
             } else {
-                *value = *value + dt * change;
+                *value += dt * change;
             }
         };
     }
@@ -239,8 +243,8 @@ impl Settings {
     }
 
     pub fn save(&self, file: &str) -> Result<(), Error> {
-        let file = ::std::fs::File::create(file)?;
-        let mut writer = ::std::io::BufWriter::new(&file);
+        let file = File::create(file)?;
+        let mut writer = BufWriter::new(&file);
         for value in &self.values {
             match value.value {
                 SettingValueEnum::F32(v, _) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
@@ -252,11 +256,8 @@ impl Settings {
     }
 
     pub fn save_keyframe(&self, file: &str) -> Result<(), Error> {
-        let file = ::std::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(file)?;
-        let mut writer = ::std::io::BufWriter::new(&file);
+        let file = OpenOptions::new().append(true).create(true).open(file)?;
+        let mut writer = BufWriter::new(&file);
         for value in &self.values {
             match value.value {
                 SettingValueEnum::F32(v, _) => writeln!(&mut writer, "{} = {}", &value.key, v)?,
@@ -306,8 +307,8 @@ impl Settings {
     }
 
     pub fn load(&mut self, file: &str) -> Result<(), Error> {
-        let file = ::std::fs::File::open(file)?;
-        let reader = ::std::io::BufReader::new(&file);
+        let file = File::open(file)?;
+        let reader = BufReader::new(&file);
         self.load_iter(&mut reader.lines())?;
         Ok(())
     }
@@ -536,8 +537,8 @@ fn interpolate(
 
 impl KeyframeList {
     pub fn new(file: &str, mut base: Settings) -> Result<KeyframeList, Error> {
-        let file = ::std::fs::File::open(file)?;
-        let reader = ::std::io::BufReader::new(&file);
+        let file = File::open(file)?;
+        let reader = BufReader::new(&file);
         let mut lines = reader.lines();
         let mut keyframes = Vec::new();
         loop {

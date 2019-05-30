@@ -2,17 +2,15 @@
 name = "clam5"
 version = "0.1.0"
 authors = ["khyperia <khyperia@live.com>"]
+edition = "2018"
 
 [dependencies]
 byteorder = "*"
 failure = "*"
 gl = "*"
 lazy_static = "*"
-libc = "*"
 ocl = { version = "*", default-features = false }
 png = "*"
 regex = "*"
 sdl2 = { version = "*", default-features = false, features = ["ttf"] }
-
-[target.'cfg(windows)'.dependencies]
 openvr = "*"

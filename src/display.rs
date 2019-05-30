@@ -1,25 +1,25 @@
-use check_gl;
+use crate::check_gl;
+use crate::fps_counter::FpsCounter;
+use crate::gl_register_debug;
+use crate::interactive::SyncInteractiveKernel;
+use crate::kernel;
 use failure::Error;
-use fps_counter::FpsCounter;
 use gl;
 use gl::types::*;
-use gl_register_debug;
-use interactive::SyncInteractiveKernel;
-use kernel;
 use ocl::OclPrm;
+use sdl2::event::Event;
 use sdl2::event::WindowEvent;
 use sdl2::init;
-#[cfg(windows)]
 use settings::Settings;
 
-pub struct Image<T: OclPrm> {
+pub struct ImageData<T: OclPrm> {
     pub data_cpu: Option<Vec<T>>,
     pub data_gl: Option<GLuint>,
     pub width: u32,
     pub height: u32,
 }
 
-impl<T: OclPrm> Image<T> {
+impl<T: OclPrm> ImageData<T> {
     pub fn new(data_cpu: Option<Vec<T>>, data_gl: Option<GLuint>, width: u32, height: u32) -> Self {
         Self {
             data_cpu,
@@ -39,7 +39,7 @@ unsafe fn buffer_blit(
     screen_height: i32,
 ) -> Result<(), Error> {
     if *framebuffer == 0 {
-        let () = gl::CreateFramebuffers(1, framebuffer);
+        gl::CreateFramebuffers(1, framebuffer);
         check_gl()?;
         gl::NamedFramebufferTexture(*framebuffer, gl::COLOR_ATTACHMENT0, buffer, 0);
         check_gl()?;
@@ -101,7 +101,6 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
     let mut framebuffer = 0;
     loop {
         for event in event_pump.poll_iter() {
-            use sdl2::event::Event;
             match event {
                 Event::Window {
                     win_event: WindowEvent::Resized(width, height),
@@ -166,7 +165,6 @@ fn matmul_dir(mat: &[[f32; 4]; 3], vec: &[f32; 3]) -> [f32; 3] {
     ]
 }
 
-#[cfg(windows)]
 unsafe fn hands_eye(
     system: &openvr::System,
     eye: openvr::Eye,
@@ -200,7 +198,6 @@ unsafe fn hands_eye(
     *settings.find_mut("up_z").unwrap_f32_mut() = up[2];
 }
 
-#[cfg(windows)]
 unsafe fn hands(
     system: &openvr::System,
     compositor: &openvr::Compositor,
@@ -222,7 +219,6 @@ unsafe fn hands(
     Ok(())
 }
 
-#[cfg(windows)]
 unsafe fn render_eye(
     compositor: &openvr::Compositor,
     eye: openvr::Eye,
@@ -241,7 +237,6 @@ unsafe fn render_eye(
     Ok(())
 }
 
-#[cfg(windows)]
 pub fn vr_display() -> Result<(), Error> {
     let is_gl = true;
     let sdl = init().expect("SDL failed to init");

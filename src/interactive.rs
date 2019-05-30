@@ -1,19 +1,19 @@
-use display::Image;
+use crate::display::ImageData;
+use crate::fps_counter::FpsCounter;
+use crate::input::Input;
+use crate::kernel::FractalKernel;
+use crate::kernel_compilation;
+use crate::settings::Settings;
 use failure::Error;
-use fps_counter::FpsCounter;
-use input::Input;
-use kernel::Kernel;
-use kernel_compilation;
 use ocl::OclPrm;
 use sdl2::keyboard::Scancode as Key;
-use settings::Settings;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 pub struct SyncInteractiveKernel<T: OclPrm> {
     rebuild: Arc<AtomicBool>,
-    pub kernel: Kernel<T>,
+    pub kernel: FractalKernel<T>,
     pub settings: Settings,
     pub input: Input,
 }
@@ -27,7 +27,7 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
 
         let mut settings = Settings::new();
         let input = Input::new();
-        let kernel = Kernel::create(width, height, is_ogl, &mut settings).unwrap();
+        let kernel = FractalKernel::create(width, height, is_ogl, &mut settings).unwrap();
         let result = Self {
             kernel,
             rebuild,
@@ -58,7 +58,7 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
         Ok(())
     }
 
-    pub fn download(&mut self) -> Result<Image<T>, Error> {
+    pub fn download(&mut self) -> Result<ImageData<T>, Error> {
         let image = self.kernel.download()?;
         Ok(image)
     }
