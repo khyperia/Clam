@@ -1,16 +1,23 @@
 use crate::check_gl;
 use crate::fps_counter::FpsCounter;
 use crate::gl_register_debug;
+use crate::input::Input;
 use crate::interactive::SyncInteractiveKernel;
 use crate::kernel;
+use crate::settings::Settings;
+use failure::err_msg;
 use failure::Error;
-use gl;
 use gl::types::*;
 use ocl::OclPrm;
 use sdl2::event::Event;
 use sdl2::event::WindowEvent;
 use sdl2::init;
-use settings::Settings;
+use sdl2::pixels::Color;
+use sdl2::pixels::PixelFormat;
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::ttf;
+use sdl2::video::Window;
+use std::path::Path;
 
 pub struct ImageData<T: OclPrm> {
     pub data_cpu: Option<Vec<T>>,
@@ -64,11 +71,153 @@ unsafe fn buffer_blit(
     Ok(())
 }
 
+fn find_font() -> Result<&'static Path, Error> {
+    let locations: [&'static Path; 6] = [
+        "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
+        "/usr/share/fonts/TTF/FiraSans-Regular.ttf".as_ref(),
+        "C:\\Windows\\Fonts\\arial.ttf".as_ref(),
+        "/usr/share/fonts/TTF/DejaVuSans.ttf".as_ref(),
+        "/usr/share/fonts/TTF/LiberationSans-Regular.ttf".as_ref(),
+        "/Library/Fonts/Andale Mono.ttf".as_ref(),
+    ];
+    for &location in &locations {
+        if location.exists() {
+            return Ok(location);
+        }
+    }
+    Err(err_msg("No font found"))
+}
+
+fn render_text_one(
+    font: &ttf::Font,
+    text: &str,
+    color: Color,
+    window_height: i32,
+    offset_x: i32,
+    offset_y: i32,
+) -> Result<(), Error> {
+    let spacing = font.recommended_line_spacing();
+    let mut current_y = 10;
+    let mut current_column_x = 10;
+    let mut next_column_x = 0;
+    for line in text.lines() {
+        let format = unsafe {
+            PixelFormat::from_ll(sdl2::sys::SDL_AllocFormat(PixelFormatEnum::RGBA8888 as u32))
+        };
+        let rendered = font
+            .render(line)
+            .solid(color)?
+            .convert(&format)
+            .expect("Could not convert text image format");
+        unsafe {
+            sdl2::sys::SDL_FreeFormat(format.raw());
+        }
+        let width = rendered.width() as i32;
+        let height = rendered.height() as i32;
+        if (current_y + spacing) >= (window_height as i32) {
+            current_column_x = next_column_x;
+            current_y = 10;
+        }
+        next_column_x = next_column_x.max(current_column_x + width);
+
+        unsafe {
+            let mut texture = 0;
+            gl::CreateTextures(gl::TEXTURE_2D, 1, &mut texture);
+            check_gl()?;
+            gl::TextureStorage2D(texture, 1, gl::RGBA8, width, height);
+            check_gl()?;
+            rendered.with_lock(|data| {
+                gl::TextureSubImage2D(
+                    texture,
+                    0,
+                    0,
+                    0,
+                    width,
+                    height,
+                    gl::RGBA,
+                    gl::UNSIGNED_INT_8_8_8_8,
+                    data.as_ptr() as _,
+                )
+            });
+            check_gl()?;
+
+            let mut framebuffer = 0;
+            gl::CreateFramebuffers(1, &mut framebuffer);
+            check_gl()?;
+            gl::NamedFramebufferTexture(framebuffer, gl::COLOR_ATTACHMENT0, texture, 0);
+            check_gl()?;
+
+            let dest_buf = 0;
+            gl::BlitNamedFramebuffer(
+                framebuffer,
+                dest_buf,
+                0,
+                0,
+                width,
+                height,
+                current_column_x + offset_x,
+                window_height - (current_y + offset_y + 1),
+                current_column_x + offset_x + width,
+                window_height - (current_y + offset_y + height),
+                gl::COLOR_BUFFER_BIT,
+                gl::NEAREST,
+            );
+            check_gl()?;
+
+            gl::DeleteFramebuffers(1, &framebuffer);
+            check_gl()?;
+            gl::DeleteTextures(1, &texture);
+            check_gl()?;
+        }
+
+        // rendered
+        //     .blit(
+        //         None,
+        //         window,
+        //         Rect::new(
+        //             current_column_x + offset_x,
+        //             current_y + offset_y,
+        //             width,
+        //             height,
+        //         ),
+        //     )
+        //     .expect("Could not blit SDL2 font");
+
+        current_y += spacing;
+    }
+    Ok(())
+}
+
+fn render_text(
+    window: &Window,
+    input: &Input,
+    settings: &Settings,
+    font: &ttf::Font,
+    fps: f64,
+) -> Result<(), Error> {
+    let (_, window_height) = window.drawable_size();
+    let fps_text = format!("{:.2} render fps", fps);
+    let text = format!("{}\n{}", fps_text, settings.status(input));
+    render_text_one(font, &text, Color::RGB(0, 0, 0), window_height as i32, 1, 1)?;
+    render_text_one(
+        font,
+        &text,
+        Color::RGB(255, 192, 192),
+        window_height as i32,
+        0,
+        0,
+    )?;
+    Ok(())
+}
+
 pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), Error> {
     let is_gl = true;
     let sdl = init().expect("SDL failed to init");
     let video = sdl.video().expect("SDL does not have video");
     let mut event_pump = sdl.event_pump().expect("SDL does not have event pump");
+
+    let ttf = ttf::init()?;
+    let font = ttf.load_font(find_font()?, 20).expect("Cannot open font");
 
     video.gl_attr().set_context_flags().debug().set();
 
@@ -141,7 +290,17 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
             )
         }?;
 
-        interactive_kernel.print_status(&fps);
+        if false {
+            render_text(
+                &window,
+                &interactive_kernel.input,
+                &interactive_kernel.settings,
+                &font,
+                fps.value(),
+            )?;
+        } else {
+            interactive_kernel.print_status(&fps);
+        }
 
         window.gl_swap_window();
 
@@ -328,10 +487,8 @@ pub fn vr_display() -> Result<(), Error> {
 
     loop {
         for event in event_pump.poll_iter() {
-            use sdl2::event::Event;
-            match event {
-                Event::Quit { .. } => return Ok(()),
-                _ => (),
+            if let Event::Quit { .. } = event {
+                return Ok(());
             }
         }
 

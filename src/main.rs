@@ -235,6 +235,7 @@ fn try_main() -> Result<(), Error> {
     } else if cfg!(windows) && arguments.len() == 1 && arguments[0] == "--vr" {
         display::vr_display()?;
     } else if arguments.is_empty() {
+        #[cfg(not(windows))]
         interactive_cmd()?;
     } else {
         println!("Usage:");
