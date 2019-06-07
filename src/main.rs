@@ -9,7 +9,8 @@ extern crate png;
 extern crate regex;
 extern crate sdl2;
 
-mod display;
+mod display_gl;
+mod display_vr;
 mod fps_counter;
 mod input;
 mod interactive;
@@ -18,8 +19,8 @@ mod kernel_compilation;
 mod progress;
 mod settings;
 
-use display::ImageData;
 use failure::Error;
+use interactive::ImageData;
 use kernel::FractalKernel;
 use png::BitDepth;
 use png::ColorType;
@@ -223,7 +224,7 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
 fn interactive_cmd() -> Result<(), Error> {
     let width = 1920;
     let height = 1080;
-    display::gl_display(width, height)
+    display_gl::gl_display(width, height)
 }
 
 fn try_main() -> Result<(), Error> {
@@ -233,9 +234,9 @@ fn try_main() -> Result<(), Error> {
     } else if arguments.len() > 2 && arguments[0] == "--video" {
         video_cmd(&arguments[1..])?;
     } else if cfg!(windows) && arguments.len() == 1 && arguments[0] == "--vr" {
-        display::vr_display()?;
+        #[cfg(windows)]
+        display_vr::vr_display()?;
     } else if arguments.is_empty() {
-        #[cfg(not(windows))]
         interactive_cmd()?;
     } else {
         println!("Usage:");

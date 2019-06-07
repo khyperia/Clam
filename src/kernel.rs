@@ -1,5 +1,5 @@
 use crate::check_gl;
-use crate::display::ImageData;
+use crate::interactive::ImageData;
 use crate::kernel_compilation;
 use crate::settings::Settings;
 use failure;

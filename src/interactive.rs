@@ -1,15 +1,32 @@
-use crate::display::ImageData;
-use crate::fps_counter::FpsCounter;
 use crate::input::Input;
 use crate::kernel::FractalKernel;
 use crate::kernel_compilation;
 use crate::settings::Settings;
 use failure::Error;
+use gl::types::GLuint;
 use ocl::OclPrm;
 use sdl2::keyboard::Scancode as Key;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
+pub struct ImageData<T: OclPrm> {
+    pub data_cpu: Option<Vec<T>>,
+    pub data_gl: Option<GLuint>,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl<T: OclPrm> ImageData<T> {
+    pub fn new(data_cpu: Option<Vec<T>>, data_gl: Option<GLuint>, width: u32, height: u32) -> Self {
+        Self {
+            data_cpu,
+            data_gl,
+            width,
+            height,
+        }
+    }
+}
 
 pub struct SyncInteractiveKernel<T: OclPrm> {
     rebuild: Arc<AtomicBool>,
@@ -63,13 +80,7 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
         Ok(image)
     }
 
-    pub fn print_status(&self, fps: &FpsCounter) {
-        let val = format!(
-            "\u{001b}[2J{}\n{}\n",
-            fps.value(),
-            self.settings.status(&self.input),
-        );
-        // "atomically" dump the string
-        print!("{}", val);
+    pub fn status(&self) -> String {
+        self.settings.status(&self.input)
     }
 }
