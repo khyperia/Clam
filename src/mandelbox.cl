@@ -322,7 +322,13 @@ static float3 Rotate(Cfg cfg, float3 z)
 static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color)
 {
 #ifdef MANDELBULB
-    z = Mandelbulb(z, dz, scale(cfg));
+    // z = Mandelbulb(z, dz, scale(cfg));
+    z = Mandelbulb(z, dz, 8);
+    if (*color == 0)
+    {
+        *color = 1 << 30;
+    };
+    *color = min(*color, (int)(dot(z, z) * 1000));
 #else
 #ifdef CONT_FOLD
     z = ContBoxfoldD(z);
@@ -346,8 +352,8 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
     z = SpherefoldD(cfg, z, dz);
 #endif
     z = TScaleD(cfg, z, dz);
-    z = TOffsetD(z, dz, offset);
 #endif
+    z = TOffsetD(z, dz, offset);
     return z;
 }
 
@@ -370,7 +376,13 @@ static float DeMandelbox(Cfg cfg, float3 offset, bool isNormal, int* color)
     {
         z = MandelboxD(cfg, z, &dz, offset, color);
     } while (dot(z, z) < bail * bail && --n);
+#ifdef MANDELBULB
+    float r = length(z);
+    return 0.5 * log(r) * r / dz;
+    // return length(z) / dz;
+#else
     return length(z) / dz;
+#endif
 }
 
 static float Plane(float3 pos, float3 plane)
