@@ -321,15 +321,6 @@ static float3 Rotate(Cfg cfg, float3 z)
 
 static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color)
 {
-#ifdef MANDELBULB
-    // z = Mandelbulb(z, dz, scale(cfg));
-    z = Mandelbulb(z, dz, 8);
-    if (*color == 0)
-    {
-        *color = 1 << 30;
-    };
-    *color = min(*color, (int)(dot(z, z) * 1000));
-#else
 #ifdef CONT_FOLD
     z = ContBoxfoldD(z);
 #else
@@ -352,9 +343,22 @@ static float3 MandelboxD(Cfg cfg, float3 z, float* dz, float3 offset, int* color
     z = SpherefoldD(cfg, z, dz);
 #endif
     z = TScaleD(cfg, z, dz);
-#endif
     z = TOffsetD(z, dz, offset);
     return z;
+}
+
+static float3 MandelbulbD(Cfg cfg, float3 z, float* dz, float3 offset, int* color)
+{
+    z = Mandelbulb(z, dz, fabs(scale(cfg)));
+    if (*color == 0)
+    {
+        *color = 1 << 30;
+    };
+    *color = min(*color, (int)(dot(z, z) * 1000));
+#ifdef ROTATE
+    z = Rotate(cfg, z);
+#endif
+    return z + offset;
 }
 
 static float DeSphere(float3 pos, float radius, float3 test)
@@ -376,12 +380,28 @@ static float DeMandelbox(Cfg cfg, float3 offset, bool isNormal, int* color)
     {
         z = MandelboxD(cfg, z, &dz, offset, color);
     } while (dot(z, z) < bail * bail && --n);
-#ifdef MANDELBULB
-    float r = length(z);
-    return 0.5 * log(r) * r / dz;
-    // return length(z) / dz;
-#else
     return length(z) / dz;
+}
+
+static float DeMandelbulb(Cfg cfg, float3 offset, int* color)
+{
+    float3 z = (float3)(offset.x, offset.y, offset.z);
+    float dz = 1.0f;
+    int n = max(max_iters(cfg), 1);
+    do
+    {
+        z = MandelbulbD(cfg, z, &dz, offset, color);
+    } while (dot(z, z) < 4 && --n);
+    float r = length(z);
+    return 0.5f * log(r) * r / dz;
+}
+
+static float DeFractal(Cfg cfg, float3 offset, bool isNormal, int* color)
+{
+#ifdef MANDELBULB
+    return DeMandelbulb(cfg, offset, color);
+#else
+    return DeMandelbox(cfg, offset, isNormal, color);
 #endif
 }
 
@@ -393,7 +413,7 @@ static float Plane(float3 pos, float3 plane)
 static float De(Cfg cfg, float3 offset, bool isNormal)
 {
     int color;
-    const float mbox = DeMandelbox(cfg, offset, isNormal, &color);
+    const float mbox = DeFractal(cfg, offset, isNormal, &color);
     const float light1 = DeSphere(LightPos1(cfg), light_radius_1(cfg), offset);
 #ifdef PLANE
     const float cut = Plane(offset, PlanePos(cfg));
@@ -415,7 +435,7 @@ struct Material
 static struct Material Material(Cfg cfg, float3 offset)
 {
     int raw_color_data = 0;
-    const float de = DeMandelbox(cfg, offset, true, &raw_color_data);
+    const float de = DeFractal(cfg, offset, true, &raw_color_data);
     float base_color = raw_color_data / 8.0f;
 
     base_color *= surface_color_variance(cfg);
@@ -451,6 +471,8 @@ static struct Material Material(Cfg cfg, float3 offset)
                              (dpnp + dnpp) - (dppn + dnnn));
     result.normal.x += (dot(result.normal, result.normal) == 0.0f);  // ensure nonzero
     result.normal = normalize(result.normal);
+
+    result.color = result.normal * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
 
     return result;
 }

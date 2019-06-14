@@ -4,12 +4,14 @@ extern crate byteorder;
 extern crate failure;
 extern crate gl;
 extern crate ocl;
+#[cfg(windows)]
 extern crate openvr;
 extern crate png;
 extern crate regex;
 extern crate sdl2;
 
 mod display_gl;
+#[cfg(windows)]
 mod display_vr;
 mod fps_counter;
 mod input;
@@ -17,6 +19,8 @@ mod interactive;
 mod kernel;
 mod kernel_compilation;
 mod progress;
+mod render_text;
+mod render_texture;
 mod settings;
 
 use failure::Error;
