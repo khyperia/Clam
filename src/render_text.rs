@@ -57,7 +57,7 @@ impl TextRenderer {
         for ch in text.chars() {
             if ch == '\n' {
                 y += self.spacing;
-                if y > screen_height as i32 {
+                if y + self.spacing > screen_height as i32 {
                     y = 10;
                     line_x += max_x;
                 }

@@ -146,9 +146,6 @@ in vec2 texCoord;
 void main()
 {
     vec4 color1 = texture2D(tex, texCoord);
-    // if (color1.w == 0) {
-    //     color1 = vec4(1, 0, 1, 1);
-    // }
     gl_FragColor = color1;
 }
 \0";

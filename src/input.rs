@@ -98,15 +98,18 @@ impl Input {
             Key::Left => settings.values[self.index].change_one(false),
             Key::Right => settings.values[self.index].change_one(true),
             Key::T => settings.values[self.index].toggle(),
-            Key::C => settings.values[self.index].toggle_const(),
+            Key::C => {
+                let is_const = settings.values[self.index].is_const();
+                settings.values[self.index].set_const(!is_const);
+            }
             Key::B => settings.rebuild(),
             Key::X => {
                 let x = settings.find("pos_x").clone();
                 let y = settings.find("pos_y").clone();
                 let z = settings.find("pos_z").clone();
-                settings.find_mut("light_pos_1_x").value = x.value;
-                settings.find_mut("light_pos_1_y").value = y.value;
-                settings.find_mut("light_pos_1_z").value = z.value;
+                settings.find_mut("light_pos_1_x").set_value(*x.value());
+                settings.find_mut("light_pos_1_y").set_value(*y.value());
+                settings.find_mut("light_pos_1_z").set_value(*z.value());
             }
             _ => (),
         }

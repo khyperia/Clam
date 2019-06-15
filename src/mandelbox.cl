@@ -472,8 +472,6 @@ static struct Material Material(Cfg cfg, float3 offset)
     result.normal.x += (dot(result.normal, result.normal) == 0.0f);  // ensure nonzero
     result.normal = normalize(result.normal);
 
-    result.color = result.normal * 0.5f + (float3)(0.5f, 0.5f, 0.5f);
-
     return result;
 }
 

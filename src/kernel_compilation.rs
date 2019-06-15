@@ -1,3 +1,4 @@
+use crate::setting_value::SettingValueEnum;
 use crate::settings::Settings;
 use failure::Error;
 use ocl::enums::ProgramBuildInfo;
@@ -10,6 +11,8 @@ use ocl::Kernel;
 use ocl::OclPrm;
 use ocl::Program;
 use ocl::Queue;
+use regex::Regex;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::fs::File;
@@ -104,7 +107,7 @@ pub fn rebuild<T: OclPrm>(
     let program = {
         let mut builder = Program::builder();
         let src = get_src()?;
-        settings.set_src(&src);
+        set_src(settings, &src);
         builder.source(generate_src(&settings));
         builder.source(src);
         builder.devices(queue.device());
@@ -135,4 +138,58 @@ pub fn rebuild<T: OclPrm>(
         .arg(0u32)
         .build()?;
     Ok(kernel)
+}
+
+fn set_src(settings: &mut Settings, src: &str) {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(
+           r#"(?m)^ *extern *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+)\([^)]*\); *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
+    }
+    let mut set: HashSet<String> = settings
+        .values
+        .iter()
+        .map(|x| x.key().to_string())
+        .collect();
+    let mut once = false;
+    for cap in RE.captures_iter(src) {
+        once = true;
+        let kind = &cap["kind"];
+        let name = &cap["name"];
+        set.remove(name);
+        let setting = match kind {
+            "float" => {
+                let value = cap["value"].parse().unwrap();
+                let change = cap["change"].parse().unwrap();
+                SettingValueEnum::F32(value, change)
+            }
+            "int" => {
+                let value = cap["value"].parse().unwrap();
+                SettingValueEnum::U32(value)
+            }
+            _ => {
+                panic!("Regex returned invalid kind");
+            }
+        };
+        settings.define_variable(name, setting, cap.name("const").is_some());
+    }
+    settings.define_variable("render_scale", SettingValueEnum::U32(1), false);
+    set.remove("render_scale");
+    assert!(once, "Regex should get at least one setting");
+    find_defines(settings, src, &mut set);
+    for to_delete in set {
+        settings.delete_variable(&to_delete);
+    }
+}
+
+fn find_defines(settings: &mut Settings, src: &str, variables: &mut HashSet<String>) {
+    lazy_static! {
+        static ref RE: Regex =
+            Regex::new(r#"(?m)^ *#ifdef +(?P<name>[a-zA-Z0-9_]+) *\r?$"#).unwrap();
+    }
+    for cap in RE.captures_iter(src) {
+        let name = &cap["name"];
+        let new_value = SettingValueEnum::Define(false);
+        variables.remove(name);
+        settings.define_variable(name, new_value, false);
+    }
 }

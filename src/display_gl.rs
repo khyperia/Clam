@@ -23,7 +23,7 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
 
     let window = video
         .window("clam5", screen_width, screen_height)
-        //.resizable()
+        .resizable()
         .opengl()
         .build()?;
     let _gl_context = window.gl_create_context().map_err(err_msg)?;
@@ -59,8 +59,8 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
                 } if window_id == window.id() && width > 0 && height > 0 => {
                     screen_width = width as u32;
                     screen_height = height as u32;
-                    println!("Resizing kernel");
                     interactive_kernel.resize(width as u32, height as u32)?;
+                    unsafe { gl::Viewport(0, 0, width, height) };
                 }
                 Event::KeyDown {
                     scancode: Some(scancode),

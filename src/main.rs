@@ -21,6 +21,7 @@ mod kernel_compilation;
 mod progress;
 mod render_text;
 mod render_texture;
+mod setting_value;
 mod settings;
 
 use failure::Error;
