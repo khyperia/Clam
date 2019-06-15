@@ -223,7 +223,8 @@ static float3 Ray_At(struct Ray this, float time)
 static void Ray_Dof(Cfg cfg, struct Ray* this, float focalPlane, struct Random* rand)
 {
     const float3 focalPosition = Ray_At(*this, focalPlane);
-    const float3 xShift = cross((float3)(0, 0, 1), this->dir);
+    // Normalize because the vectors aren't perpendicular
+    const float3 xShift = normalize(cross((float3)(0, 0, 1), this->dir));
     const float3 yShift = cross(this->dir, xShift);
     const float2 offset = Random_Disk(rand);
     const float dofPickup = dof_amount(cfg);
@@ -248,7 +249,9 @@ static struct Ray Camera(Cfg cfg, uint x, uint y, uint width, uint height, struc
     const float3 direction = RayDir(look, up, screenCoords, calcFov);
 #endif
     struct Ray result = new_Ray(origin, direction);
+#ifndef VR
     Ray_Dof(cfg, &result, focal_distance(cfg), rand);
+#endif
     return result;
 }
 
