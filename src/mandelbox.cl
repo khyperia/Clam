@@ -614,7 +614,8 @@ static float3 GammaTest(int x, int y, int width, int height)
     const float centerValue = (float)x / width;
     const float offset = ((float)(height - y) / height) * (0.5f - fabs(centerValue - 0.5f));
     float result;
-    if (x % 16 < 8)
+    const int column_width = 8;
+    if (x % (column_width * 2) < column_width)
     {
         result = centerValue;
     }

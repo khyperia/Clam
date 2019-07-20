@@ -184,7 +184,6 @@ impl Settings {
         if let Some(old_value) = old_value {
             // TODO: Type change check
             old_value.set_default_value(new_value);
-            old_value.set_const(is_const);
         } else {
             self.values
                 .push(SettingValue::new(name.to_string(), new_value, is_const));
