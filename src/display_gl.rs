@@ -5,6 +5,7 @@ use crate::interactive::SyncInteractiveKernel;
 use crate::kernel;
 use crate::render_text::TextRenderer;
 use crate::render_texture::TextureRenderer;
+use crate::render_texture::TextureRendererKind;
 use failure::err_msg;
 use failure::Error;
 use gl;
@@ -44,7 +45,7 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
     let mut interactive_kernel =
         SyncInteractiveKernel::<f32>::create(screen_width, screen_height, is_gl)?;
 
-    let texture_renderer = TextureRenderer::new();
+    let texture_renderer = TextureRenderer::new(TextureRendererKind::F32);
     let text_renderer = TextRenderer::new(Color::RGB(255, 192, 192));
 
     let mut fps = FpsCounter::new(1.0);

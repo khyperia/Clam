@@ -8,15 +8,24 @@ use std::ptr::null_mut;
 
 // https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/
 
+pub enum TextureRendererKind {
+    U8,
+    F32,
+}
+
 pub struct TextureRenderer {
     program: GLuint,
     pos_size_location: GLint,
 }
 
 impl TextureRenderer {
-    pub fn new() -> Self {
+    pub fn new(kind: TextureRendererKind) -> Self {
         check_gl().unwrap();
-        let program = unsafe { create_program() };
+        let frag = match kind {
+            TextureRendererKind::U8 => FRAGMENT_SHADER_U8,
+            TextureRendererKind::F32 => FRAGMENT_SHADER_F32,
+        };
+        let program = unsafe { create_program(VERTEX_SHADER, frag) };
         let pos_size_location =
             unsafe { gl::GetUniformLocation(program, b"pos_size\0".as_ptr() as *const i8) };
         check_gl().unwrap();
@@ -26,6 +35,7 @@ impl TextureRenderer {
         unsafe {
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::Enable(gl::BLEND);
+            gl::Enable(gl::TEXTURE_2D);
         }
         check_gl().unwrap();
         Self {
@@ -52,6 +62,8 @@ impl TextureRenderer {
             check_gl()?;
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
             check_gl()?;
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+            check_gl()?;
         }
         Ok(())
     }
@@ -63,9 +75,9 @@ impl Drop for TextureRenderer {
     }
 }
 
-unsafe fn create_program() -> GLuint {
-    let vertex = create_shader(VERTEX_SHADER, gl::VERTEX_SHADER);
-    let fragment = create_shader(FRAGMENT_SHADER, gl::FRAGMENT_SHADER);
+unsafe fn create_program(vertex: &'static [u8], fragment: &'static [u8]) -> GLuint {
+    let vertex = create_shader(vertex, gl::VERTEX_SHADER);
+    let fragment = create_shader(fragment, gl::FRAGMENT_SHADER);
 
     let program = gl::CreateProgram();
     gl::AttachShader(program, vertex);
@@ -139,13 +151,24 @@ void main()
 }
 \0";
 
-const FRAGMENT_SHADER: &[u8] = b"
+const FRAGMENT_SHADER_F32: &[u8] = b"
 uniform sampler2D tex;
 in vec2 texCoord;
 
 void main()
 {
-    vec4 color1 = texture2D(tex, texCoord);
+    vec4 color1 = texture(tex, texCoord);
     gl_FragColor = color1;
+}
+\0";
+
+const FRAGMENT_SHADER_U8: &[u8] = b"
+uniform usampler2D tex;
+in vec2 texCoord;
+
+void main()
+{
+    vec4 color1 = texture(tex, texCoord);
+    gl_FragColor = color1 / 255.0;
 }
 \0";

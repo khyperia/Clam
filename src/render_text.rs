@@ -12,15 +12,15 @@ use std::path::Path;
 
 const OFFSET: u8 = 32;
 
-struct AtlasEntry {
-    texture: GLuint,
+pub struct AtlasEntry {
+    pub texture: GLuint,
     width: u32,
     height: u32,
 }
 
 pub struct TextRenderer {
     spacing: i32,
-    atlas: Vec<AtlasEntry>,
+    pub atlas: Vec<AtlasEntry>,
 }
 
 impl TextRenderer {

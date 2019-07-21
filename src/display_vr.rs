@@ -5,11 +5,11 @@ use crate::interactive::SyncInteractiveKernel;
 use crate::kernel;
 use crate::render_text::TextRenderer;
 use crate::render_texture::TextureRenderer;
+use crate::render_texture::TextureRendererKind;
 use crate::settings::Settings;
 use cgmath::prelude::*;
-use cgmath::Vector3;
-use cgmath::Matrix3;
 use cgmath::Matrix4;
+use cgmath::Vector3;
 use failure::err_msg;
 use failure::Error;
 use gl::types::*;
@@ -18,6 +18,7 @@ use sdl2::event::WindowEvent;
 use sdl2::init;
 use sdl2::pixels::Color;
 
+/*
 fn mat_print(mat: &[[f32; 4]; 3]) {
     println!(
         "[{}, {}, {}, {}]",
@@ -32,25 +33,12 @@ fn mat_print(mat: &[[f32; 4]; 3]) {
         mat[2][0], mat[2][1], mat[2][2], mat[2][3]
     );
 }
+*/
 
 fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f32> {
     Matrix4::new(
-        mat[0][0],
-        mat[1][0],
-        mat[2][0],
-        0.0,
-        mat[0][1],
-        mat[1][1],
-        mat[2][1],
-        0.0,
-        mat[0][2],
-        mat[1][2],
-        mat[2][2],
-        0.0,
-        mat[0][3],
-        mat[1][3],
-        mat[2][3],
-        1.0,
+        mat[0][0], mat[1][0], mat[2][0], 0.0, mat[0][1], mat[1][1], mat[2][1], 0.0, mat[0][2],
+        mat[1][2], mat[2][2], 0.0, mat[0][3], mat[1][3], mat[2][3], 1.0,
     )
 }
 
@@ -70,9 +58,12 @@ unsafe fn hands_eye(
 
     let world = world.inverse_transform().unwrap();
 
-    let mut pos = world * head_to_absolute * eye_to_head * Vector3::zero().extend(1.0);
-    let mut up = (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 1.0, 0.0).extend(0.0)).normalize();
-    let mut forwards = (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 0.0, -1.0).extend(0.0)).normalize();
+    let pos = world * head_to_absolute * eye_to_head * Vector3::zero().extend(1.0);
+    let up = (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 1.0, 0.0).extend(0.0))
+        .normalize();
+    let forwards =
+        (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 0.0, -1.0).extend(0.0))
+            .normalize();
 
     *settings.find_mut("pos_x").unwrap_f32_mut() = pos[0] * 8.0;
     *settings.find_mut("pos_y").unwrap_f32_mut() = pos[1] * 8.0;
@@ -94,7 +85,7 @@ struct HandsState {
 impl HandsState {
     fn new() -> Self {
         Self {
-            left: Vector3::new (-1.0, 0.0, 0.0),
+            left: Vector3::new(-1.0, 0.0, 0.0),
             right: Vector3::new(1.0, 0.0, 0.0),
             world: Matrix4::identity(),
         }
@@ -130,19 +121,18 @@ unsafe fn hands(
                 // let left_delta = sub(&left_pos, &hands_state.left);
                 // let right_delta = sub(&right_pos, &hands_state.right);
                 // let rotation = mat_scale(1.0); // TODO
-                let new_dist = left_pos.distance( right_pos);
+                let new_dist = left_pos.distance(right_pos);
                 let old_dist = hands_state.left.distance(hands_state.right);
                 let scale = new_dist / old_dist;
 
-
-                let old_center = (hands_state.left+ hands_state.right)* 0.5;
-                let new_center = (left_pos+ right_pos)* 0.5;
-                let translation = new_center- old_center;
+                let old_center = (hands_state.left + hands_state.right) * 0.5;
+                let new_center = (left_pos + right_pos) * 0.5;
+                let translation = new_center - old_center;
 
                 fn scale_around(scale: f32, center: Vector3<f32>) -> Matrix4<f32> {
-                    Matrix4::from_translation(center) *
-                    Matrix4::from_scale(scale) *
-                    Matrix4::from_translation(-center)
+                    Matrix4::from_translation(center)
+                        * Matrix4::from_scale(scale)
+                        * Matrix4::from_translation(-center)
                 }
 
                 //let go_rot = ();
@@ -205,8 +195,13 @@ pub fn vr_display() -> Result<(), Error> {
 
     video.gl_attr().set_context_flags().debug().set();
 
-    let mut screen_width = 1000;
-    let mut screen_height = 1000;
+    let ovr = unsafe { openvr::init(openvr::ApplicationType::Scene)? };
+    let system = ovr.system()?;
+    let compositor = ovr.compositor()?;
+    let (width, height) = system.recommended_render_target_size();
+
+    let mut screen_width = width;
+    let mut screen_height = height / 2;
     let window = video
         .window("clam5", screen_width, screen_height)
         .resizable()
@@ -227,10 +222,6 @@ pub fn vr_display() -> Result<(), Error> {
 
     kernel::init_gl_funcs(&video);
 
-    let ovr = unsafe { openvr::init(openvr::ApplicationType::Scene)? };
-    let system = ovr.system()?;
-    let compositor = ovr.compositor()?;
-    let (width, height) = system.recommended_render_target_size();
     check_gl()?;
 
     let mut hands_state = HandsState::new();
@@ -294,7 +285,8 @@ pub fn vr_display() -> Result<(), Error> {
     interactive_kernel_right.settings.rebuild();
 
     let mut fps = FpsCounter::new(1.0);
-    let texture_renderer = TextureRenderer::new();
+    let texture_renderer_u8 = TextureRenderer::new(TextureRendererKind::U8);
+    let texture_renderer_f32 = TextureRenderer::new(TextureRendererKind::F32);
     let text_renderer = TextRenderer::new(Color::RGB(255, 192, 192));
     unsafe { gl::Viewport(0, 0, screen_width as i32, screen_height as i32) };
     unsafe { gl::ClearColor(0.0, 0.0, 0.0, 1.0) };
@@ -347,11 +339,14 @@ pub fn vr_display() -> Result<(), Error> {
             render_eye(&compositor, openvr::Eye::Right, right_img)?;
         }
 
-        unsafe { gl::Clear(gl::COLOR_BUFFER_BIT) };
+        unsafe { gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT) };
+
+        texture_renderer_u8.render(left_img, 0.0, 0.0, 0.5, 1.0)?;
+        texture_renderer_u8.render(right_img, 0.5, 0.0, 0.5, 1.0)?;
 
         fps.tick();
         let display = format!("{} fps\n{}", fps.value(), interactive_kernel_left.status());
-        text_renderer.render(&texture_renderer, &display, screen_width, screen_height)?;
+        text_renderer.render(&texture_renderer_f32, &display, screen_width, screen_height)?;
 
         window.gl_swap_window();
 
