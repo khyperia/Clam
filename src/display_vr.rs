@@ -3,27 +3,55 @@ use crate::fps_counter::FpsCounter;
 use crate::gl_register_debug;
 use crate::interactive::SyncInteractiveKernel;
 use crate::kernel;
+use crate::render_text::TextRenderer;
+use crate::render_texture::TextureRenderer;
 use crate::settings::Settings;
+use cgmath::prelude::*;
+use cgmath::Vector3;
+use cgmath::Matrix3;
+use cgmath::Matrix4;
 use failure::err_msg;
 use failure::Error;
 use gl::types::*;
 use sdl2::event::Event;
+use sdl2::event::WindowEvent;
 use sdl2::init;
+use sdl2::pixels::Color;
 
-fn matmul(mat: &[[f32; 4]; 3], vec: &[f32; 3]) -> [f32; 3] {
-    [
-        mat[0][0] * vec[0] + mat[0][1] * vec[1] + mat[0][2] * vec[2] + mat[0][3],
-        mat[1][0] * vec[0] + mat[1][1] * vec[1] + mat[1][2] * vec[2] + mat[1][3],
-        mat[2][0] * vec[0] + mat[2][1] * vec[1] + mat[2][2] * vec[2] + mat[2][3],
-    ]
+fn mat_print(mat: &[[f32; 4]; 3]) {
+    println!(
+        "[{}, {}, {}, {}]",
+        mat[0][0], mat[0][1], mat[0][2], mat[0][3]
+    );
+    println!(
+        "[{}, {}, {}, {}]",
+        mat[1][0], mat[1][1], mat[1][2], mat[1][3]
+    );
+    println!(
+        "[{}, {}, {}, {}]",
+        mat[2][0], mat[2][1], mat[2][2], mat[2][3]
+    );
 }
 
-fn matmul_dir(mat: &[[f32; 4]; 3], vec: &[f32; 3]) -> [f32; 3] {
-    [
-        mat[0][0] * vec[0] + mat[0][1] * vec[1] + mat[0][2] * vec[2],
-        mat[1][0] * vec[0] + mat[1][1] * vec[1] + mat[1][2] * vec[2],
-        mat[2][0] * vec[0] + mat[2][1] * vec[1] + mat[2][2] * vec[2],
-    ]
+fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f32> {
+    Matrix4::new(
+        mat[0][0],
+        mat[1][0],
+        mat[2][0],
+        0.0,
+        mat[0][1],
+        mat[1][1],
+        mat[2][1],
+        0.0,
+        mat[0][2],
+        mat[1][2],
+        mat[2][2],
+        0.0,
+        mat[0][3],
+        mat[1][3],
+        mat[2][3],
+        1.0,
+    )
 }
 
 unsafe fn hands_eye(
@@ -31,26 +59,24 @@ unsafe fn hands_eye(
     eye: openvr::Eye,
     head: &openvr::TrackedDevicePose,
     settings: &mut Settings,
+    world: &Matrix4<f32>,
 ) {
-    let eye_to_head = system.eye_to_head_transform(eye);
-    let head_to_absolute = head.device_to_absolute_tracking();
+    let eye_to_head = to_cgmath(system.eye_to_head_transform(eye));
+    let head_to_absolute = to_cgmath(*head.device_to_absolute_tracking());
 
-    let pos = matmul(&head_to_absolute, &matmul(&eye_to_head, &[0.0, 0.0, 0.0]));
-    // let right = matmul_dir(
-    //     &head_to_absolute,
-    //     &matmul_dir(&eye_to_head, &[1.0, 0.0, 0.0]),
-    // );
-    let up = matmul_dir(
-        &head_to_absolute,
-        &matmul_dir(&eye_to_head, &[0.0, 1.0, 0.0]),
-    );
-    let forwards = matmul_dir(
-        &head_to_absolute,
-        &matmul_dir(&eye_to_head, &[0.0, 0.0, -1.0]),
-    );
-    *settings.find_mut("pos_x").unwrap_f32_mut() = pos[0] * 4.0;
-    *settings.find_mut("pos_y").unwrap_f32_mut() = pos[1] * 4.0 - 4.0;
-    *settings.find_mut("pos_z").unwrap_f32_mut() = pos[2] * 4.0;
+    if world[0][0].is_nan() {
+        panic!("NaN");
+    }
+
+    let world = world.inverse_transform().unwrap();
+
+    let mut pos = world * head_to_absolute * eye_to_head * Vector3::zero().extend(1.0);
+    let mut up = (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 1.0, 0.0).extend(0.0)).normalize();
+    let mut forwards = (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 0.0, -1.0).extend(0.0)).normalize();
+
+    *settings.find_mut("pos_x").unwrap_f32_mut() = pos[0] * 8.0;
+    *settings.find_mut("pos_y").unwrap_f32_mut() = pos[1] * 8.0;
+    *settings.find_mut("pos_z").unwrap_f32_mut() = pos[2] * 8.0;
     *settings.find_mut("look_x").unwrap_f32_mut() = forwards[0];
     *settings.find_mut("look_y").unwrap_f32_mut() = forwards[1];
     *settings.find_mut("look_z").unwrap_f32_mut() = forwards[2];
@@ -59,24 +85,99 @@ unsafe fn hands_eye(
     *settings.find_mut("up_z").unwrap_f32_mut() = up[2];
 }
 
+struct HandsState {
+    world: Matrix4<f32>,
+    left: Vector3<f32>,
+    right: Vector3<f32>,
+}
+
+impl HandsState {
+    fn new() -> Self {
+        Self {
+            left: Vector3::new (-1.0, 0.0, 0.0),
+            right: Vector3::new(1.0, 0.0, 0.0),
+            world: Matrix4::identity(),
+        }
+    }
+}
+
 unsafe fn hands(
     system: &openvr::System,
     compositor: &openvr::Compositor,
     settings_left: &mut Settings,
     settings_right: &mut Settings,
+    hands_state: &mut HandsState,
 ) -> Result<(), Error> {
-    let _ =
+    let left =
         system.tracked_device_index_for_controller_role(openvr::TrackedControllerRole::LeftHand);
-    let _ =
+    let right =
         system.tracked_device_index_for_controller_role(openvr::TrackedControllerRole::RightHand);
     let wait_poses: openvr::compositor::WaitPoses = compositor.wait_get_poses()?;
+
+    if let (Some(left), Some(right)) = (left, right) {
+        let left_state = system.controller_state(left);
+        let right_state = system.controller_state(right);
+
+        let left = &wait_poses.render[left as usize];
+        let right = &wait_poses.render[right as usize];
+        let left_mat = to_cgmath(*left.device_to_absolute_tracking());
+        let right_mat = to_cgmath(*right.device_to_absolute_tracking());
+        let left_pos = (left_mat * Vector3::zero().extend(1.0)).truncate();
+        let right_pos = (right_mat * Vector3::zero().extend(1.0)).truncate();
+
+        if let (Some(left_state), Some(right_state)) = (left_state, right_state) {
+            if left_state.axis[1].x == 1.0 || right_state.axis[1].x == 1.0 {
+                // let left_delta = sub(&left_pos, &hands_state.left);
+                // let right_delta = sub(&right_pos, &hands_state.right);
+                // let rotation = mat_scale(1.0); // TODO
+                let new_dist = left_pos.distance( right_pos);
+                let old_dist = hands_state.left.distance(hands_state.right);
+                let scale = new_dist / old_dist;
+
+
+                let old_center = (hands_state.left+ hands_state.right)* 0.5;
+                let new_center = (left_pos+ right_pos)* 0.5;
+                let translation = new_center- old_center;
+
+                fn scale_around(scale: f32, center: Vector3<f32>) -> Matrix4<f32> {
+                    Matrix4::from_translation(center) *
+                    Matrix4::from_scale(scale) *
+                    Matrix4::from_translation(-center)
+                }
+
+                //let go_rot = ();
+                let go_scale = scale_around(scale, new_center);
+                let go_trans = Matrix4::from_translation(translation);
+                let transform = go_scale * go_trans;
+
+                println!("{:?}", transform);
+
+                hands_state.world = transform * hands_state.world;
+            }
+        }
+
+        hands_state.left = left_pos;
+        hands_state.right = right_pos;
+    }
 
     // render = upcoming frame
     // game = 2 frames from now
     let head: &openvr::TrackedDevicePose = &wait_poses.render[0];
 
-    hands_eye(system, openvr::Eye::Left, head, settings_left);
-    hands_eye(system, openvr::Eye::Right, head, settings_right);
+    hands_eye(
+        system,
+        openvr::Eye::Left,
+        head,
+        settings_left,
+        &hands_state.world,
+    );
+    hands_eye(
+        system,
+        openvr::Eye::Right,
+        head,
+        settings_right,
+        &hands_state.world,
+    );
     Ok(())
 }
 
@@ -104,7 +205,13 @@ pub fn vr_display() -> Result<(), Error> {
 
     video.gl_attr().set_context_flags().debug().set();
 
-    let window = video.window("clam5", 500, 500).opengl().build()?;
+    let mut screen_width = 1000;
+    let mut screen_height = 1000;
+    let window = video
+        .window("clam5", screen_width, screen_height)
+        .resizable()
+        .opengl()
+        .build()?;
     let _gl_context = window.gl_create_context().map_err(err_msg)?;
 
     gl::load_with(|s| video.gl_get_proc_address(s) as *const _);
@@ -126,16 +233,18 @@ pub fn vr_display() -> Result<(), Error> {
     let (width, height) = system.recommended_render_target_size();
     check_gl()?;
 
+    let mut hands_state = HandsState::new();
+
     let mut interactive_kernel_left = SyncInteractiveKernel::<u8>::create(width, height, is_gl)?;
     let mut interactive_kernel_right = SyncInteractiveKernel::<u8>::create(width, height, is_gl)?;
-    interactive_kernel_left
+    *interactive_kernel_left
         .settings
         .find_mut("VR")
-        .set_const(true);
-    interactive_kernel_right
+        .unwrap_define_mut() = true;
+    *interactive_kernel_right
         .settings
         .find_mut("VR")
-        .set_const(true);
+        .unwrap_define_mut() = true;
     *interactive_kernel_left
         .settings
         .find_mut("dof_amount")
@@ -181,12 +290,34 @@ pub fn vr_display() -> Result<(), Error> {
         .find_mut("fov_bottom")
         .unwrap_f32_mut() = proj_right.bottom;
 
+    interactive_kernel_left.settings.rebuild();
+    interactive_kernel_right.settings.rebuild();
+
     let mut fps = FpsCounter::new(1.0);
+    let texture_renderer = TextureRenderer::new();
+    let text_renderer = TextRenderer::new(Color::RGB(255, 192, 192));
+    unsafe { gl::Viewport(0, 0, screen_width as i32, screen_height as i32) };
+    unsafe { gl::ClearColor(0.0, 0.0, 0.0, 1.0) };
+    check_gl()?;
 
     loop {
         for event in event_pump.poll_iter() {
-            if let Event::Quit { .. } = event {
-                return Ok(());
+            match event {
+                Event::Quit { .. }
+                | Event::Window {
+                    win_event: WindowEvent::Close,
+                    ..
+                } => return Ok(()),
+                Event::Window {
+                    win_event: WindowEvent::Resized(width, height),
+                    window_id,
+                    ..
+                } if window_id == window.id() && width > 0 && height > 0 => {
+                    screen_width = width as u32;
+                    screen_height = height as u32;
+                    unsafe { gl::Viewport(0, 0, width, height) };
+                }
+                _ => (),
             }
         }
 
@@ -196,6 +327,7 @@ pub fn vr_display() -> Result<(), Error> {
                 &compositor,
                 &mut interactive_kernel_left.settings,
                 &mut interactive_kernel_right.settings,
+                &mut hands_state,
             )?;
         }
 
@@ -215,9 +347,14 @@ pub fn vr_display() -> Result<(), Error> {
             render_eye(&compositor, openvr::Eye::Right, right_img)?;
         }
 
-        window.gl_swap_window();
+        unsafe { gl::Clear(gl::COLOR_BUFFER_BIT) };
 
         fps.tick();
-        println!("{:.2}fps", fps.value());
+        let display = format!("{} fps\n{}", fps.value(), interactive_kernel_left.status());
+        text_renderer.render(&texture_renderer, &display, screen_width, screen_height)?;
+
+        window.gl_swap_window();
+
+        check_gl()?;
     }
 }

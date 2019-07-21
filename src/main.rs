@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate byteorder;
+extern crate cgmath;
 extern crate failure;
 extern crate gl;
 extern crate ocl;

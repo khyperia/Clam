@@ -140,6 +140,13 @@ impl SettingValue {
         }
     }
 
+    pub fn unwrap_define_mut(&mut self) -> &mut bool {
+        match self.value {
+            SettingValueEnum::Define(ref mut value) => value,
+            _ => panic!("unwrap_f32 not F32"),
+        }
+    }
+
     pub fn format_opencl_struct(&self) -> Option<String> {
         if !self.is_const {
             match self.value {

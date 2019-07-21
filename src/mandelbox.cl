@@ -51,7 +51,7 @@ extern float bailout(Cfg cfg);                   // 32.0 -1.0 const
 extern float bailout_normal(Cfg cfg);            // 64.0 -1.0 const
 extern float de_multiplier(Cfg cfg);             // 0.9375 0.125 const
 extern float max_ray_dist(Cfg cfg);              // 16.0 -0.5 const
-extern float quality_first_ray(Cfg cfg);         // 1.0 -0.5 const
+extern float quality_first_ray(Cfg cfg);         // 2.0 -0.5 const
 extern float quality_rest_ray(Cfg cfg);          // 64.0 -0.5 const
 extern float gamma(Cfg cfg);                     // 0.0 0.25 const
 extern float fov_left(Cfg cfg);                  // -1.0 1.0 const
@@ -144,6 +144,15 @@ static struct Random new_Random(uint idx, uint frame, uint global_size)
         Random_Next(&result);
     }
     return result;
+}
+
+static void Random_Init(struct Random* this, uint idx, uint frame, uint global_size)
+{
+    this->seed += (ulong)idx + (ulong)global_size * (ulong)frame;
+    for (int i = 0; i < 8; i++)
+    {
+        Random_Next(this);
+    }
 }
 
 static float2 Random_Disk(struct Random* this)
@@ -724,8 +733,9 @@ static void SetScratch(__global float* data, uint idx, uint size, float3 value)
 
 static struct Random GetRand(__global float* data, uint idx, uint size)
 {
-    // this is scary: sizeof(random) is bigger than sizeof(float)
-    return ((__global struct Random*)(data + size * RAND_OFFSET))[idx];
+    struct Random rand = ((__global struct Random*)(data + size * RAND_OFFSET))[idx];
+    Random_Init(&rand, idx, 0, size);
+    return rand;
 }
 
 static void SetRand(__global float* data, uint idx, uint size, struct Random value)
@@ -768,7 +778,7 @@ __kernel void Main(write_only image2d_t texture,
 
     const float3 oldColor = frame > 0 ? GetScratch(scratch, idx, size) : (float3)(0, 0, 0);
 
-    struct Random rand = frame > 0 ? GetRand(scratch, idx, size) : new_Random(idx, frame, size);
+    struct Random rand = GetRand(scratch, idx, size);
     const struct Ray ray = Camera(cfg, x, y, width, height, &rand);
 #ifdef PREVIEW
     const float3 colorComponents = PreviewTrace(cfg, ray, width, height);

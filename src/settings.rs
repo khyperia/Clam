@@ -1,8 +1,9 @@
 use crate::input::Input;
-use crate::input::Vector;
 use crate::setting_value::SettingValue;
 use crate::setting_value::SettingValueEnum;
 use byteorder::{NativeEndian, WriteBytesExt};
+use cgmath::prelude::*;
+use cgmath::Vector3;
 use failure::err_msg;
 use failure::Error;
 use std::fmt::Write as FmtWrite;
@@ -209,12 +210,26 @@ impl Settings {
     }
 
     pub fn normalize(&mut self) {
-        let mut look = Vector::read(self, "look_x", "look_y", "look_z");
-        let mut up = Vector::read(self, "up_x", "up_y", "up_z");
-        look = look.normalized();
-        up = Vector::cross(Vector::cross(look, up), look).normalized();
-        look.write(self, "look_x", "look_y", "look_z");
-        up.write(self, "up_x", "up_y", "up_z");
+        let mut look = self.read_vector("look_x", "look_y", "look_z");
+        let mut up = self.read_vector("up_x", "up_y", "up_z");
+        look = look.normalize();
+        up = Vector3::cross(Vector3::cross(look, up), look).normalize();
+        self.write_vector(look, "look_x", "look_y", "look_z");
+        self.write_vector(up, "up_x", "up_y", "up_z");
+    }
+
+    pub fn read_vector(&self, x: &str, y: &str, z: &str) -> Vector3<f32> {
+        Vector3::new(
+            self.find(x).unwrap_f32(),
+            self.find(y).unwrap_f32(),
+            self.find(z).unwrap_f32(),
+        )
+    }
+
+    pub fn write_vector(&mut self, vec: Vector3<f32>, x: &str, y: &str, z: &str) {
+        *self.find_mut(x).unwrap_f32_mut() = vec.x;
+        *self.find_mut(y).unwrap_f32_mut() = vec.y;
+        *self.find_mut(z).unwrap_f32_mut() = vec.z;
     }
 }
 

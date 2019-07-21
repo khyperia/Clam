@@ -1,11 +1,12 @@
 use crate::settings::Settings;
+use cgmath::prelude::*;
+use cgmath::Quaternion;
+use cgmath::Rad;
+use cgmath::Vector3;
 use failure::Error;
 use sdl2::keyboard::Scancode as Key;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::ops::Add;
-use std::ops::Mul;
-use std::ops::Sub;
 use std::time::Instant;
 
 #[derive(Default)]
@@ -140,11 +141,11 @@ impl Input {
         let move_speed = settings.find("focal_distance").unwrap_f32() * 0.5;
         let turn_speed = settings.find("fov").unwrap_f32();
         let roll_speed = 1.0;
-        let mut pos = Vector::read(settings, "pos_x", "pos_y", "pos_z");
-        let mut look = Vector::read(settings, "look_x", "look_y", "look_z");
-        let mut up = Vector::read(settings, "up_x", "up_y", "up_z");
+        let mut pos = settings.read_vector("pos_x", "pos_y", "pos_z");
+        let mut look = settings.read_vector("look_x", "look_y", "look_z");
+        let mut up = settings.read_vector("up_x", "up_y", "up_z");
         let old = (pos, look, up);
-        let right = Vector::cross(look, up);
+        let right = Vector3::cross(look, up);
         if let Some(dt) = self.is_pressed(now, Key::W) {
             pos = pos + look * (move_speed * dt);
         }
@@ -164,29 +165,29 @@ impl Input {
             pos = pos - up * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::I) {
-            look = look.rotate(up, turn_speed * dt);
+            look = Quaternion::from_axis_angle(right, Rad(turn_speed * dt)) * look;
         }
         if let Some(dt) = self.is_pressed(now, Key::K) {
-            look = look.rotate(up, -turn_speed * dt);
+            look = Quaternion::from_axis_angle(right, Rad(-turn_speed * dt)) * look;
         }
         if let Some(dt) = self.is_pressed(now, Key::L) {
-            look = look.rotate(right, turn_speed * dt);
+            look = Quaternion::from_axis_angle(up, Rad(-turn_speed * dt)) * look;
         }
         if let Some(dt) = self.is_pressed(now, Key::J) {
-            look = look.rotate(right, -turn_speed * dt);
+            look = Quaternion::from_axis_angle(up, Rad(turn_speed * dt)) * look;
         }
         if let Some(dt) = self.is_pressed(now, Key::O) {
-            up = up.rotate(right, roll_speed * dt);
+            up = Quaternion::from_axis_angle(look, Rad(roll_speed * dt)) * up;
         }
         if let Some(dt) = self.is_pressed(now, Key::U) {
-            up = up.rotate(right, -roll_speed * dt);
+            up = Quaternion::from_axis_angle(look, Rad(-roll_speed * dt)) * up;
         }
         if old != (pos, look, up) {
-            look = look.normalized();
-            up = Vector::cross(Vector::cross(look, up), look).normalized();
-            pos.write(settings, "pos_x", "pos_y", "pos_z");
-            look.write(settings, "look_x", "look_y", "look_z");
-            up.write(settings, "up_x", "up_y", "up_z");
+            look = look.normalize();
+            up = Vector3::cross(Vector3::cross(look, up), look).normalize();
+            settings.write_vector(pos, "pos_x", "pos_y", "pos_z");
+            settings.write_vector(look, "look_x", "look_y", "look_z");
+            settings.write_vector(up, "up_x", "up_y", "up_z");
         }
     }
 
@@ -213,80 +214,5 @@ impl Input {
         if let Some(dt) = self.is_pressed(now, Key::Left) {
             settings.values[self.index].change(false, dt);
         }
-    }
-}
-
-#[derive(PartialEq, Clone, Copy)]
-pub struct Vector {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-impl Vector {
-    pub fn new(x: f32, y: f32, z: f32) -> Vector {
-        Vector { x, y, z }
-    }
-
-    pub fn read(settings: &Settings, x: &str, y: &str, z: &str) -> Vector {
-        Self::new(
-            settings.find(x).unwrap_f32(),
-            settings.find(y).unwrap_f32(),
-            settings.find(z).unwrap_f32(),
-        )
-    }
-
-    pub fn write(&self, settings: &mut Settings, x: &str, y: &str, z: &str) {
-        *settings.find_mut(x).unwrap_f32_mut() = self.x;
-        *settings.find_mut(y).unwrap_f32_mut() = self.y;
-        *settings.find_mut(z).unwrap_f32_mut() = self.z;
-    }
-
-    pub fn len2(&self) -> f32 {
-        self.x * self.x + self.y * self.y + self.z * self.z
-    }
-
-    pub fn len(&self) -> f32 {
-        self.len2().sqrt()
-    }
-
-    pub fn normalized(&self) -> Vector {
-        *self * (1.0 / self.len())
-    }
-
-    pub fn cross(l: Vector, r: Vector) -> Vector {
-        Self::new(
-            l.y * r.z - l.z * r.y,
-            l.z * r.x - l.x * r.z,
-            l.x * r.y - l.y * r.x,
-        )
-    }
-
-    pub fn rotate(&self, direction: Vector, amount: f32) -> Vector {
-        (*self + direction * amount).normalized()
-    }
-}
-
-impl Add for Vector {
-    type Output = Vector;
-
-    fn add(self, r: Vector) -> Self::Output {
-        Self::new(self.x + r.x, self.y + r.y, self.z + r.z)
-    }
-}
-
-impl Sub for Vector {
-    type Output = Vector;
-
-    fn sub(self, r: Vector) -> Self::Output {
-        Self::new(self.x - r.x, self.y - r.y, self.z - r.z)
-    }
-}
-
-impl Mul<f32> for Vector {
-    type Output = Vector;
-
-    fn mul(self, r: f32) -> Self::Output {
-        Self::new(self.x * r, self.y * r, self.z * r)
     }
 }

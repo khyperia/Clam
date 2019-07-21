@@ -6,11 +6,12 @@ edition = "2018"
 
 [dependencies]
 byteorder = "*"
+cgmath = "*"
 failure = "*"
 gl = "*"
 lazy_static = "*"
 ocl = { version = "*", default-features = false }
+openvr = "*"
 png = "*"
 regex = "*"
 sdl2 = { version = "*", default-features = false, features = ["ttf"] }
-openvr = "*"

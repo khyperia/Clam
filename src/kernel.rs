@@ -4,6 +4,7 @@ use crate::kernel_compilation;
 use crate::settings::Settings;
 use failure;
 use failure::Error;
+use gl::types::*;
 use ocl::builders::ContextBuilder;
 use ocl::builders::ImageDescriptor;
 use ocl::builders::ImageFormat;
@@ -56,14 +57,15 @@ impl<T: OclPrm> KernelImage<T> {
     }
 
     fn data(&mut self, is_ogl: bool) -> Result<(&Image<T>, &Buffer<f32>), Error> {
+        let (width, height) = self.size();
         if self.texture_cl.is_none() {
             unsafe {
                 if is_ogl {
-                    let (cl, gl) = cl_gl_buf(&self.queue, self.width as _, self.height as _)?;
+                    let (cl, gl) = cl_gl_buf(&self.queue, width as _, height as _)?;
                     self.texture_cl = Some(cl);
                     self.texture_gl = Some(gl);
                 } else {
-                    let cl = cl_buf(&self.queue, self.width as _, self.height as _)?;
+                    let cl = cl_buf(&self.queue, width as _, height as _)?;
                     self.texture_cl = Some(cl);
                 }
             }
@@ -71,7 +73,7 @@ impl<T: OclPrm> KernelImage<T> {
         if self.scratch.is_none() {
             let new_data = Buffer::builder()
                 .context(&self.queue.context())
-                .len(self.width * self.height * DATA_WORDS)
+                .len(width * height * DATA_WORDS)
                 .build()?;
             self.scratch = Some(new_data);
         }
@@ -81,10 +83,12 @@ impl<T: OclPrm> KernelImage<T> {
         ))
     }
 
-    fn resize(&mut self, new_width: u32, new_height: u32) {
-        if self.width != new_width || self.height != new_height {
-            self.width = new_width;
-            self.height = new_height;
+    fn resize(&mut self, new_width: u32, new_height: u32, new_scale: u32) {
+        let old_size = self.size();
+        self.width = new_width;
+        self.height = new_height;
+        self.scale = new_scale.max(1);
+        if old_size != self.size() {
             self.scratch = None;
             self.texture_cl = None;
             if let Some(id) = self.texture_gl {
@@ -94,10 +98,6 @@ impl<T: OclPrm> KernelImage<T> {
             }
             self.texture_gl = None;
         }
-    }
-
-    fn rescale(&mut self, new_scale: u32) {
-        self.scale = new_scale.max(1);
     }
 
     fn download(&mut self) -> Result<ImageData<T>, Error> {
@@ -137,6 +137,10 @@ unsafe fn cl_gl_buf<T: OclPrm>(
     } else {
         panic!("std::mem::size_of::<T>() did not equal 1 or 4");
     }
+    check_gl()?;
+    gl::TextureParameteri(texture, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+    check_gl()?;
+    gl::TextureParameteri(texture, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
     check_gl()?;
 
     let image = Image::from_gl_texture(
@@ -225,7 +229,7 @@ impl<T: OclPrm> FractalKernel<T> {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        self.data.resize(width, height);
+        self.data.resize(width, height, self.data.scale);
         self.frame = 0;
         Ok(())
     }
@@ -258,8 +262,11 @@ impl<T: OclPrm> FractalKernel<T> {
             self.frame = 0;
         }
 
-        self.data
-            .rescale(settings.find("render_scale").unwrap_u32());
+        self.data.resize(
+            self.data.width,
+            self.data.height,
+            settings.find("render_scale").unwrap_u32(),
+        );
 
         Ok(())
     }
