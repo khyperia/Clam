@@ -47,8 +47,8 @@ extern float plane_x(Cfg cfg);                   // 3.0 1.0
 extern float plane_y(Cfg cfg);                   // 3.5 1.0
 extern float plane_z(Cfg cfg);                   // 2.5 1.0
 extern float rotation(Cfg cfg);                  // 0.0 0.125
-extern float bailout(Cfg cfg);                   // 32.0 -1.0 const
-extern float bailout_normal(Cfg cfg);            // 64.0 -1.0 const
+extern float bailout(Cfg cfg);                   // 64.0 -1.0 const
+extern float bailout_normal(Cfg cfg);            // 1024.0 -1.0 const
 extern float de_multiplier(Cfg cfg);             // 0.9375 0.125 const
 extern float max_ray_dist(Cfg cfg);              // 16.0 -0.5 const
 extern float quality_first_ray(Cfg cfg);         // 2.0 -0.5 const
@@ -474,6 +474,19 @@ static struct Material Material(Cfg cfg, float3 offset)
     }
 
     const float delta = max(1e-6f, de * 0.5f);  // aprox. 8.3x float epsilon
+#ifdef CUBE_NORMAL
+    const float dppp = De(cfg, offset + (float3)(+delta, +delta, +delta), true);
+    const float dppn = De(cfg, offset + (float3)(+delta, +delta, -delta), true);
+    const float dpnp = De(cfg, offset + (float3)(+delta, -delta, +delta), true);
+    const float dpnn = De(cfg, offset + (float3)(+delta, -delta, -delta), true);
+    const float dnpp = De(cfg, offset + (float3)(-delta, +delta, +delta), true);
+    const float dnpn = De(cfg, offset + (float3)(-delta, +delta, -delta), true);
+    const float dnnp = De(cfg, offset + (float3)(-delta, -delta, +delta), true);
+    const float dnnn = De(cfg, offset + (float3)(-delta, -delta, -delta), true);
+    result.normal = (float3)((dppp + dppn + dpnp + dpnn) - (dnpp + dnpn + dnnp + dnnn),
+                             (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn),
+                             (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
+#else
     const float dnpp = De(cfg, offset + (float3)(-delta, delta, delta), true);
     const float dpnp = De(cfg, offset + (float3)(delta, -delta, delta), true);
     const float dppn = De(cfg, offset + (float3)(delta, delta, -delta), true);
@@ -481,6 +494,7 @@ static struct Material Material(Cfg cfg, float3 offset)
     result.normal = (float3)((dppn + dpnp) - (dnpp + dnnn),
                              (dppn + dnpp) - (dpnp + dnnn),
                              (dpnp + dnpp) - (dppn + dnnn));
+#endif
     result.normal.x += (dot(result.normal, result.normal) == 0.0f);  // ensure nonzero
     result.normal = normalize(result.normal);
 
