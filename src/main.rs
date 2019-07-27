@@ -48,11 +48,11 @@ fn f32_to_u8(px: f32) -> u8 {
 }
 
 fn save_image(image: &ImageData<f32>, path: &str) -> Result<(), Error> {
-    use png::HasParameters;
     let file = File::create(path)?;
     let w = &mut BufWriter::new(file);
     let mut encoder = Encoder::new(w, image.width, image.height);
-    encoder.set(ColorType::RGB).set(BitDepth::Eight);
+    encoder.set_color(ColorType::RGB);
+    encoder.set_depth(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
     let width = image.width as usize;
     let height = image.height as usize;

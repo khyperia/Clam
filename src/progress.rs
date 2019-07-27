@@ -11,24 +11,37 @@ impl Progress {
         }
     }
 
-    pub fn time(&self, value: f32) -> f32 {
+    fn elapsed(&self) -> f32 {
         let now = Instant::now();
-        // value / time = 1 / (result + time)
-        // time / value - time = result
         let duration = now - self.start;
-        let time = duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0;
+        duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
+    }
+
+    pub fn time(&self, value: f32) -> f32 {
+        let time = self.elapsed();
         time / value - time
     }
 
-    pub fn time_str(&self, value: f32) -> String {
-        let mut seconds = self.time(value);
+    fn to_min_sec(mut seconds: f32) -> String {
         let minutes = (seconds / 60.0) as u32;
         seconds -= (minutes * 60) as f32;
+        if minutes == 0 {
+            format!("{:05.2}", seconds)
+        } else {
+            format!("{:02}:{:02}", minutes, seconds as u32)
+        }
+    }
+
+    pub fn time_str(&self, value: f32) -> String {
+        let left = self.time(value);
+        let elapsed = self.elapsed();
+        let total = left + elapsed;
         format!(
-            "{:05.2}%, {:02}:{:05.2} left",
+            "{:05.2}%, {} left, {} elapsed, {} total",
             100.0 * value,
-            minutes,
-            seconds
+            Self::to_min_sec(left),
+            Self::to_min_sec(elapsed),
+            Self::to_min_sec(total),
         )
     }
 }

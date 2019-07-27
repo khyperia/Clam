@@ -163,11 +163,12 @@ static float2 Random_Disk(struct Random* this)
 
 static float3 Random_Sphere(struct Random* this)
 {
-    const float theta = Random_Next(this);
-    const float phi = acospi(2 * Random_Next(this) - 1);
-    const float x = sinpi(phi) * cospi(theta);
-    const float y = sinpi(phi) * sinpi(theta);
-    const float z = cospi(phi);
+    const float theta = 2 * Random_Next(this);
+    const float cosphi = 2 * Random_Next(this) - 1;
+    const float sinphi = sqrt(1 - cosphi * cosphi);
+    const float x = sinphi * cospi(theta);
+    const float y = sinphi * sinpi(theta);
+    const float z = cosphi;
     return (float3)(x, y, z);
 }
 
@@ -571,10 +572,23 @@ static float3 Trace(
             material = Material(cfg, newPos);
             rayColor += reflectionColor * material.emissive;  // ~bling~!
 
-            if (Random_Next(rand) < material.specular)
+            /*
+                // Assuming for example:
+                //   diffuse = albedo / PI;
+                //   specular = my_favorite_glossy_brdf(in_dir, out_dir, roughness);
+                //   fresnel = f0 + (1.0 - f0) * pow(1.0 - dot(E, H), 5.0);
+                //   total_surface_reflection = fresnel
+                color = lightIntensity * dot(L, N) * Lerp(diffuse, specular,
+               total_surface_reflection);
+            */
+            float cosTheta = -dot(ray.dir, material.normal);
+            float fresnel =
+                material.specular + (1.0f - material.specular) * pown(1.0 - cosTheta, 5);
+            if (Random_Next(rand) < fresnel)
             {
                 // specular
-                newDir = ray.dir - 2 * dot(ray.dir, material.normal) * material.normal;
+                newDir = ray.dir + 2 * cosTheta * material.normal;
+                // material.color = (float3)(1.0, 1.0, 1.0);
             }
             else
             {
