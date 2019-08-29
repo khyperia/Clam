@@ -119,8 +119,15 @@ impl Input {
 
     fn run(&mut self, settings: &mut Settings, now: Instant) {
         self.camera_3d(settings, now);
-        self.exp_setting(settings, now, "focal_distance", Key::R, Key::F);
-        self.exp_setting(settings, now, "fov", Key::N, Key::M);
+        self.exp_setting(
+            settings,
+            now,
+            "focal_distance",
+            settings.find("fov").unwrap_f32(),
+            Key::R,
+            Key::F,
+        );
+        self.exp_setting(settings, now, "fov", 1.0, Key::N, Key::M);
         self.manual_control(settings, now);
         for value in self.pressed_keys.values_mut() {
             *value = now;
@@ -147,22 +154,22 @@ impl Input {
         let old = (pos, look, up);
         let right = Vector3::cross(look, up);
         if let Some(dt) = self.is_pressed(now, Key::W) {
-            pos = pos + look * (move_speed * dt);
+            pos += look * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::S) {
-            pos = pos - look * (move_speed * dt);
+            pos -= look * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::D) {
-            pos = pos + right * (move_speed * dt);
+            pos += right * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::A) {
-            pos = pos - right * (move_speed * dt);
+            pos -= right * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::Space) {
-            pos = pos + up * (move_speed * dt);
+            pos += up * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::Z) {
-            pos = pos - up * (move_speed * dt);
+            pos -= up * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::I) {
             look = Quaternion::from_axis_angle(right, Rad(turn_speed * dt)) * look;
@@ -196,14 +203,15 @@ impl Input {
         settings: &mut Settings,
         now: Instant,
         key: &str,
+        mul: f32,
         increase: Key,
         decrease: Key,
     ) {
         if let Some(dt) = self.is_pressed(now, increase) {
-            settings.find_mut(key).change(true, dt);
+            settings.find_mut(key).change(true, dt * mul);
         }
         if let Some(dt) = self.is_pressed(now, decrease) {
-            settings.find_mut(key).change(false, dt);
+            settings.find_mut(key).change(false, dt * mul);
         }
     }
 

@@ -761,14 +761,20 @@ static void SetScratch(__global float* data, uint idx, uint size, float3 value)
 
 static struct Random GetRand(__global float* data, uint idx, uint size)
 {
-    struct Random rand = ((__global struct Random*)(data + size * RAND_OFFSET))[idx];
+    uintptr_t ptr = (uintptr_t)(data + size * RAND_OFFSET);
+    const uintptr_t roundTo = 8;
+    ptr = (ptr + (roundTo - 1)) & ~(roundTo - 1);
+    struct Random rand = ((__global struct Random*)ptr)[idx];
     Random_Init(&rand, idx, 0, size);
     return rand;
 }
 
 static void SetRand(__global float* data, uint idx, uint size, struct Random value)
 {
-    ((__global struct Random*)(data + size * RAND_OFFSET))[idx] = value;
+    uintptr_t ptr = (uintptr_t)(data + size * RAND_OFFSET);
+    const uintptr_t roundTo = 8;
+    ptr = (ptr + (roundTo - 1)) & ~(roundTo - 1);
+    ((__global struct Random*)ptr)[idx] = value;
 }
 
 static void SetScreen(write_only image2d_t data, uint x, uint y, float3 value)

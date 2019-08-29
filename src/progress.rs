@@ -22,7 +22,7 @@ impl Progress {
         time / value - time
     }
 
-    fn to_min_sec(mut seconds: f32) -> String {
+    fn get_min_sec(mut seconds: f32) -> String {
         let minutes = (seconds / 60.0) as u32;
         seconds -= (minutes * 60) as f32;
         if minutes == 0 {
@@ -39,9 +39,9 @@ impl Progress {
         format!(
             "{:05.2}%, {} left, {} elapsed, {} total",
             100.0 * value,
-            Self::to_min_sec(left),
-            Self::to_min_sec(elapsed),
-            Self::to_min_sec(total),
+            Self::get_min_sec(left),
+            Self::get_min_sec(elapsed),
+            Self::get_min_sec(total),
         )
     }
 }

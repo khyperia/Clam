@@ -66,15 +66,11 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
                 Event::KeyDown {
                     scancode: Some(scancode),
                     ..
-                } => {
-                    interactive_kernel.key_down(scancode);
-                }
+                } => interactive_kernel.key_down(scancode),
                 Event::KeyUp {
                     scancode: Some(scancode),
                     ..
-                } => {
-                    interactive_kernel.key_up(scancode);
-                }
+                } => interactive_kernel.key_up(scancode),
                 Event::Quit { .. }
                 | Event::Window {
                     win_event: WindowEvent::Close,

@@ -71,9 +71,12 @@ impl<T: OclPrm> KernelImage<T> {
             }
         }
         if self.scratch.is_none() {
+            let size_unrounded = width * height * DATA_WORDS;
+            let round_to = 8;
+            let size = (size_unrounded + (round_to - 1)) & !(round_to - 1);
             let new_data = Buffer::builder()
                 .context(&self.queue.context())
-                .len(width * height * DATA_WORDS)
+                .len(size)
                 .build()?;
             self.scratch = Some(new_data);
         }
@@ -83,7 +86,7 @@ impl<T: OclPrm> KernelImage<T> {
         ))
     }
 
-    fn resize(&mut self, new_width: u32, new_height: u32, new_scale: u32) {
+    fn resize(&mut self, new_width: u32, new_height: u32, new_scale: u32) -> Result<(), Error> {
         let old_size = self.size();
         self.width = new_width;
         self.height = new_height;
@@ -98,6 +101,7 @@ impl<T: OclPrm> KernelImage<T> {
             }
             self.texture_gl = None;
         }
+        Ok(())
     }
 
     fn download(&mut self) -> Result<ImageData<T>, Error> {
@@ -229,7 +233,7 @@ impl<T: OclPrm> FractalKernel<T> {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        self.data.resize(width, height, self.data.scale);
+        self.data.resize(width, height, self.data.scale)?;
         self.frame = 0;
         Ok(())
     }
@@ -266,7 +270,7 @@ impl<T: OclPrm> FractalKernel<T> {
             self.data.width,
             self.data.height,
             settings.find("render_scale").unwrap_u32(),
-        );
+        )?;
 
         Ok(())
     }
