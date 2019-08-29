@@ -58,7 +58,6 @@ extern float fov_left(Cfg cfg);                  // -1.0 1.0 const
 extern float fov_right(Cfg cfg);                 // 1.0 1.0 const
 extern float fov_top(Cfg cfg);                   // 1.0 1.0 const
 extern float fov_bottom(Cfg cfg);                // -1.0 1.0 const
-extern int white_clamp(Cfg cfg);                 // 0 const
 extern int max_iters(Cfg cfg);                   // 20 const
 extern int max_ray_steps(Cfg cfg);               // 256 const
 extern int num_ray_bounces(Cfg cfg);             // 3 const
@@ -720,19 +719,16 @@ static float3 PackPixel(Cfg cfg, float3 pixel)
         return (float3)(1.0f, 0.0f, 1.0f);
     }
 
-    if (white_clamp(cfg))
+#ifdef CLAMP_PRESERVE_COLOR
+    const float maxVal = max(max(pixel.x, pixel.y), pixel.z);
+    if (maxVal > 1)
     {
-        const float maxVal = max(max(pixel.x, pixel.y), pixel.z);
-        if (maxVal > 1)
-        {
-            pixel *= 1.0f / maxVal;
-        }
-        pixel = max(pixel, (float3)(0.0f, 0.0f, 0.0f));
+        pixel *= 1.0f / maxVal;
     }
-    else
-    {
-        pixel = clamp(pixel, 0.0f, 1.0f);
-    }
+    pixel = max(pixel, (float3)(0.0f, 0.0f, 0.0f));
+#else
+    pixel = clamp(pixel, 0.0f, 1.0f);
+#endif
 
     pixel.x = GammaCompression(cfg, pixel.x);
     pixel.y = GammaCompression(cfg, pixel.y);
