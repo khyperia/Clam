@@ -91,7 +91,7 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
             1.0,
         )?;
 
-        let display = format!("{} fps\n{}", fps.value(), interactive_kernel.status());
+        let display = format!("{:.2} fps\n{}", fps.value(), interactive_kernel.status());
         text_renderer.render(&texture_renderer, &display, screen_width, screen_height)?;
 
         window.gl_swap_window();

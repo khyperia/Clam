@@ -200,11 +200,12 @@ impl<T: OclPrm> FractalKernel<T> {
         lazy_static! {
             static ref CONTEXT: Context = make_context().expect("Could not create OpenCL context");
         }
+        kernel_compilation::refresh_settings(settings)?;
         let device = CONTEXT.devices()[0];
         let device_name = device.name()?;
         println!("Using device: {}", device_name);
         let queue = Queue::new(&CONTEXT, device, None)?;
-        let mut result = Self {
+        let result = Self {
             queue: queue.clone(),
             kernel: None,
             data: KernelImage::new(queue, width, height),
@@ -214,20 +215,22 @@ impl<T: OclPrm> FractalKernel<T> {
             frame: 0,
             is_ogl,
         };
-        result.rebuild(settings)?;
         Ok(result)
     }
 
-    pub fn rebuild(&mut self, settings: &mut Settings) -> Result<(), Error> {
-        let (texture, _) = self.data.data(self.is_ogl)?;
-        let new_kernel = kernel_compilation::rebuild(&self.queue, texture, settings);
-        match new_kernel {
-            Ok(k) => {
-                self.kernel = Some(k);
-                self.frame = 0;
+    pub fn rebuild(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
+        if settings.check_rebuild() || self.kernel.is_none() || force_rebuild {
+            println!("Rebuilding");
+            let (texture, _) = self.data.data(self.is_ogl)?;
+            let new_kernel = kernel_compilation::rebuild(&self.queue, texture, settings);
+            match new_kernel {
+                Ok(k) => {
+                    self.kernel = Some(k);
+                    self.frame = 0;
+                }
+                //Err(err) => println!("Kernel compilation failed: {}", err),
+                Err(err) => return Err(err), // TODO
             }
-            //Err(err) => println!("Kernel compilation failed: {}", err),
-            Err(err) => return Err(err), // TODO
         }
         Ok(())
     }
@@ -316,10 +319,7 @@ impl<T: OclPrm> FractalKernel<T> {
     }
 
     pub fn run(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
-        if settings.check_rebuild() || force_rebuild {
-            self.rebuild(settings)?;
-            println!("Rebuilding");
-        }
+        self.rebuild(settings, force_rebuild)?;
         self.update(settings)?;
         self.set_args()?;
         self.launch()?;

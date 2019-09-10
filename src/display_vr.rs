@@ -117,7 +117,7 @@ unsafe fn hands(
         let right_pos = (right_mat * Vector3::zero().extend(1.0)).truncate();
 
         if let (Some(left_state), Some(right_state)) = (left_state, right_state) {
-            if left_state.axis[1].x == 1.0 || right_state.axis[1].x == 1.0 {
+            if left_state.axis[1].x >= 1.0 || right_state.axis[1].x >= 1.0 {
                 // let left_delta = sub(&left_pos, &hands_state.left);
                 // let right_delta = sub(&right_pos, &hands_state.right);
                 // let rotation = mat_scale(1.0); // TODO
@@ -345,7 +345,11 @@ pub fn vr_display() -> Result<(), Error> {
         texture_renderer_u8.render(right_img, 0.5, 0.0, 0.5, 1.0)?;
 
         fps.tick();
-        let display = format!("{} fps\n{}", fps.value(), interactive_kernel_left.status());
+        let display = format!(
+            "{:.2} fps\n{}",
+            fps.value(),
+            interactive_kernel_left.status()
+        );
         text_renderer.render(&texture_renderer_f32, &display, screen_width, screen_height)?;
 
         window.gl_swap_window();

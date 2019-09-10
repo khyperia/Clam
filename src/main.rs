@@ -122,11 +122,12 @@ fn progress_count(_: u32) -> u32 {
     1
 }
 
-fn headless(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
+fn image(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
     let mut settings = Settings::new();
     let mut kernel = FractalKernel::create(width, height, false, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
+    kernel.rebuild(&mut settings, false)?;
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     for ray in 0..rpp {
@@ -192,18 +193,18 @@ fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
         let rpp = args[1].parse()?;
         match &*args[0] {
-            "32k" => headless(30720, 17280, rpp),
-            "16k" => headless(15360, 8640, rpp),
-            "8k" => headless(7680, 4320, rpp),
-            "4k" => headless(3840, 2160, rpp),
-            "2k" => headless(1920, 1080, rpp),
-            "1k" => headless(960, 540, rpp),
-            "0.5k" => headless(480, 270, rpp),
-            "0.25k" => headless(240, 135, rpp),
-            pix => headless(pix.parse()?, pix.parse()?, rpp),
+            "32k" => image(30720, 17280, rpp),
+            "16k" => image(15360, 8640, rpp),
+            "8k" => image(7680, 4320, rpp),
+            "4k" => image(3840, 2160, rpp),
+            "2k" => image(1920, 1080, rpp),
+            "1k" => image(960, 540, rpp),
+            "0.5k" => image(480, 270, rpp),
+            "0.25k" => image(240, 135, rpp),
+            pix => image(pix.parse()?, pix.parse()?, rpp),
         }
     } else if args.len() == 3 {
-        headless(args[0].parse()?, args[1].parse()?, args[2].parse()?)
+        image(args[0].parse()?, args[1].parse()?, args[2].parse()?)
     } else {
         Err(failure::err_msg(
             "--render needs two or three args: [width] [height] [rpp], or, [16k|8k|4k|2k|1k] [rpp]",

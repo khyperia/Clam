@@ -99,6 +99,12 @@ fn generate_src(settings: &Settings) -> String {
     result
 }
 
+pub fn refresh_settings(settings: &mut Settings) -> Result<(), Error> {
+    let src = get_src()?;
+    set_src(settings, &src);
+    Ok(())
+}
+
 pub fn rebuild<T: OclPrm>(
     queue: &Queue,
     texture: &Image<T>,
@@ -108,7 +114,7 @@ pub fn rebuild<T: OclPrm>(
         let mut builder = Program::builder();
         let src = get_src()?;
         set_src(settings, &src);
-        builder.source(generate_src(&settings));
+        builder.source(generate_src(settings));
         builder.source(src);
         builder.devices(queue.device());
         builder.cmplr_opt("-cl-fast-relaxed-math");
