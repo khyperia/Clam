@@ -150,13 +150,16 @@ impl Settings {
             let key = value.key();
             match value.value() {
                 SettingValueEnum::F32(v, _) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v).unwrap()
+                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
+                        .expect("Failed to write line to file")
                 }
                 SettingValueEnum::U32(v) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v).unwrap()
+                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
+                        .expect("Failed to write line to file")
                 }
                 SettingValueEnum::Define(v) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v).unwrap()
+                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
+                        .expect("Failed to write line to file")
                 }
             }
         }
@@ -200,8 +203,12 @@ impl Settings {
         for value in &self.values {
             if !value.is_const() {
                 match *value.value() {
-                    SettingValueEnum::F32(x, _) => result.write_f32::<NativeEndian>(x).unwrap(),
-                    SettingValueEnum::U32(x) => result.write_u32::<NativeEndian>(x).unwrap(),
+                    SettingValueEnum::F32(x, _) => result
+                        .write_f32::<NativeEndian>(x)
+                        .expect("Failed to write value to struct"),
+                    SettingValueEnum::U32(x) => result
+                        .write_u32::<NativeEndian>(x)
+                        .expect("Failed to write value to struct"),
                     SettingValueEnum::Define(_) => (),
                 }
             }

@@ -1,89 +1,47 @@
 use crate::check_gl;
+use crate::display;
+use crate::display::Display;
 use crate::fps_counter::FpsCounter;
-use crate::gl_register_debug;
 use crate::interactive::SyncInteractiveKernel;
-use crate::kernel;
 use crate::render_text::TextRenderer;
 use crate::render_texture::TextureRenderer;
 use crate::render_texture::TextureRendererKind;
-use failure::err_msg;
+use crate::Key;
 use failure::Error;
-use gl;
-use sdl2::event::Event;
-use sdl2::event::WindowEvent;
-use sdl2::init;
-use sdl2::pixels::Color;
 
-pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), Error> {
-    let is_gl = true;
-    let sdl = init().map_err(err_msg)?;
-    let video = sdl.video().map_err(err_msg)?;
-    let mut event_pump = sdl.event_pump().map_err(err_msg)?;
+struct GlDisplay {
+    interactive_kernel: SyncInteractiveKernel<f32>,
+    texture_renderer: TextureRenderer,
+    text_renderer: TextRenderer,
+    fps: FpsCounter,
+    width: u32,
+    height: u32,
+}
 
-    video.gl_attr().set_context_flags().debug().set();
+impl Display for GlDisplay {
+    fn setup(width: u32, height: u32) -> Result<Self, Error> {
+        let interactive_kernel = SyncInteractiveKernel::<f32>::create(width, height, true)?;
 
-    let window = video
-        .window("clam5", screen_width, screen_height)
-        .resizable()
-        .opengl()
-        .build()?;
-    let _gl_context = window.gl_create_context().map_err(err_msg)?;
+        let texture_renderer = TextureRenderer::new(TextureRendererKind::F32)?;
+        let text_renderer = TextRenderer::new((1.0, 0.75, 0.75))?;
 
-    gl::load_with(|s| video.gl_get_proc_address(s) as *const _);
+        let fps = FpsCounter::new(1.0);
 
-    if !gl::GetError::is_loaded() {
-        return Err(failure::err_msg("glGetError not loaded"));
+        Ok(Self {
+            interactive_kernel,
+            texture_renderer,
+            text_renderer,
+            fps,
+            width,
+            height,
+        })
     }
 
-    unsafe { gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS) };
-    check_gl()?;
+    fn render(&mut self) -> Result<(), Error> {
+        self.interactive_kernel.launch()?;
+        let img = self.interactive_kernel.download()?;
 
-    gl_register_debug()?;
-
-    kernel::init_gl_funcs(&video);
-
-    let mut interactive_kernel =
-        SyncInteractiveKernel::<f32>::create(screen_width, screen_height, is_gl)?;
-
-    let texture_renderer = TextureRenderer::new(TextureRendererKind::F32);
-    let text_renderer = TextRenderer::new(Color::RGB(255, 192, 192));
-
-    let mut fps = FpsCounter::new(1.0);
-
-    loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Window {
-                    win_event: WindowEvent::Resized(width, height),
-                    window_id,
-                    ..
-                } if window_id == window.id() && width > 0 && height > 0 => {
-                    screen_width = width as u32;
-                    screen_height = height as u32;
-                    interactive_kernel.resize(width as u32, height as u32)?;
-                    unsafe { gl::Viewport(0, 0, width, height) };
-                }
-                Event::KeyDown {
-                    scancode: Some(scancode),
-                    ..
-                } => interactive_kernel.key_down(scancode),
-                Event::KeyUp {
-                    scancode: Some(scancode),
-                    ..
-                } => interactive_kernel.key_up(scancode),
-                Event::Quit { .. }
-                | Event::Window {
-                    win_event: WindowEvent::Close,
-                    ..
-                } => return Ok(()),
-                _ => (),
-            }
-        }
-
-        interactive_kernel.launch()?;
-        let img = interactive_kernel.download()?;
-
-        texture_renderer.render(
+        self.texture_renderer.render(
             img.data_gl.expect("gl_display needs OGL texture"),
             0.0,
             0.0,
@@ -91,13 +49,37 @@ pub fn gl_display(mut screen_width: u32, mut screen_height: u32) -> Result<(), E
             1.0,
         )?;
 
-        let display = format!("{:.2} fps\n{}", fps.value(), interactive_kernel.status());
-        text_renderer.render(&texture_renderer, &display, screen_width, screen_height)?;
-
-        window.gl_swap_window();
-
+        let display = format!(
+            "{:.2} fps\n{}",
+            self.fps.value(),
+            self.interactive_kernel.status()
+        );
+        self.text_renderer
+            .render(&self.texture_renderer, &display, self.width, self.height)?;
+        //gl.draw_frame([1.0, 0.5, 0.7, 1.0]);
+        self.fps.tick();
         check_gl()?;
-
-        fps.tick();
+        Ok(())
     }
+
+    fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
+        self.width = width as u32;
+        self.height = height as u32;
+        self.interactive_kernel.resize(width, height)?;
+        Ok(())
+    }
+
+    fn key_up(&mut self, key: Key) -> Result<(), Error> {
+        self.interactive_kernel.key_up(key);
+        Ok(())
+    }
+
+    fn key_down(&mut self, key: Key) -> Result<(), Error> {
+        self.interactive_kernel.key_down(key);
+        Ok(())
+    }
+}
+
+pub fn gl_display(width: f64, height: f64) -> Result<(), Error> {
+    display::run_display::<GlDisplay>(width, height)
 }

@@ -1,10 +1,10 @@
 use crate::settings::Settings;
+use crate::Key;
 use cgmath::prelude::*;
 use cgmath::Quaternion;
 use cgmath::Rad;
 use cgmath::Vector3;
 use failure::Error;
-use sdl2::keyboard::Scancode as Key;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Instant;

@@ -2,10 +2,10 @@ use crate::input::Input;
 use crate::kernel::FractalKernel;
 use crate::kernel_compilation;
 use crate::settings::Settings;
+use crate::Key;
 use failure::Error;
 use gl::types::GLuint;
 use ocl::OclPrm;
-use sdl2::keyboard::Scancode as Key;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -44,7 +44,7 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
 
         let mut settings = Settings::new();
         let input = Input::new();
-        let kernel = FractalKernel::create(width, height, is_ogl, &mut settings).unwrap();
+        let kernel = FractalKernel::create(width, height, is_ogl, &mut settings)?;
         let result = Self {
             kernel,
             rebuild,

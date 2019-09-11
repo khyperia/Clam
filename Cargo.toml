@@ -9,9 +9,10 @@ byteorder = "*"
 cgmath = "*"
 failure = "*"
 gl = "*"
+glutin = "0.22.0-alpha3"
 lazy_static = "*"
 ocl = { version = "*", default-features = false }
 openvr = "*"
 png = "*"
 regex = "*"
-sdl2 = { version = "*", default-features = false, features = ["ttf"] }
+rusttype = "*"

@@ -1,22 +1,18 @@
 use crate::check_gl;
+use crate::display;
+use crate::display::Display;
 use crate::fps_counter::FpsCounter;
-use crate::gl_register_debug;
 use crate::interactive::SyncInteractiveKernel;
-use crate::kernel;
 use crate::render_text::TextRenderer;
 use crate::render_texture::TextureRenderer;
 use crate::render_texture::TextureRendererKind;
 use crate::settings::Settings;
+use crate::Key;
 use cgmath::prelude::*;
 use cgmath::Matrix4;
 use cgmath::Vector3;
-use failure::err_msg;
 use failure::Error;
 use gl::types::*;
-use sdl2::event::Event;
-use sdl2::event::WindowEvent;
-use sdl2::init;
-use sdl2::pixels::Color;
 
 /*
 fn mat_print(mat: &[[f32; 4]; 3]) {
@@ -56,7 +52,9 @@ unsafe fn hands_eye(
         panic!("NaN");
     }
 
-    let world = world.inverse_transform().unwrap();
+    let world = world
+        .inverse_transform()
+        .expect("Failed to invert world matrix");
 
     let pos = world * head_to_absolute * eye_to_head * Vector3::zero().extend(1.0);
     let up = (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 1.0, 0.0).extend(0.0))
@@ -187,173 +185,175 @@ unsafe fn render_eye(
     Ok(())
 }
 
-pub fn vr_display() -> Result<(), Error> {
-    let is_gl = true;
-    let sdl = init().map_err(err_msg)?;
-    let video = sdl.video().map_err(err_msg)?;
-    let mut event_pump = sdl.event_pump().map_err(err_msg)?;
+struct VrDisplay {
+    system: openvr::System,
+    compositor: openvr::Compositor,
+    interactive_kernel_left: SyncInteractiveKernel<u8>,
+    interactive_kernel_right: SyncInteractiveKernel<u8>,
+    hands_state: HandsState,
+    texture_renderer_u8: TextureRenderer,
+    texture_renderer_f32: TextureRenderer,
+    text_renderer: TextRenderer,
+    fps: FpsCounter,
+    vr_width: u32,
+    vr_height: u32,
+}
 
-    video.gl_attr().set_context_flags().debug().set();
+impl Display for VrDisplay {
+    fn setup(_: u32, _: u32) -> Result<Self, Error> {
+        let ovr = unsafe { openvr::init(openvr::ApplicationType::Scene) }?;
+        let system = ovr.system()?;
+        let compositor = ovr.compositor()?;
+        let (vr_width, vr_height) = system.recommended_render_target_size();
 
-    let ovr = unsafe { openvr::init(openvr::ApplicationType::Scene)? };
-    let system = ovr.system()?;
-    let compositor = ovr.compositor()?;
-    let (width, height) = system.recommended_render_target_size();
+        let hands_state = HandsState::new();
 
-    let mut screen_width = width;
-    let mut screen_height = height / 2;
-    let window = video
-        .window("clam5", screen_width, screen_height)
-        .resizable()
-        .opengl()
-        .build()?;
-    let _gl_context = window.gl_create_context().map_err(err_msg)?;
+        let mut interactive_kernel_left =
+            SyncInteractiveKernel::<u8>::create(vr_width, vr_height, true)?;
+        let mut interactive_kernel_right =
+            SyncInteractiveKernel::<u8>::create(vr_width, vr_height, true)?;
+        *interactive_kernel_left
+            .settings
+            .find_mut("VR")
+            .unwrap_define_mut() = true;
+        *interactive_kernel_right
+            .settings
+            .find_mut("VR")
+            .unwrap_define_mut() = true;
+        *interactive_kernel_left
+            .settings
+            .find_mut("dof_amount")
+            .unwrap_f32_mut() = 0.0;
+        *interactive_kernel_right
+            .settings
+            .find_mut("dof_amount")
+            .unwrap_f32_mut() = 0.0;
 
-    gl::load_with(|s| video.gl_get_proc_address(s) as *const _);
+        let proj_left = system.projection_raw(openvr::Eye::Left);
+        *interactive_kernel_left
+            .settings
+            .find_mut("fov_left")
+            .unwrap_f32_mut() = proj_left.left;
+        *interactive_kernel_left
+            .settings
+            .find_mut("fov_right")
+            .unwrap_f32_mut() = proj_left.right;
+        *interactive_kernel_left
+            .settings
+            .find_mut("fov_top")
+            .unwrap_f32_mut() = proj_left.top;
+        *interactive_kernel_left
+            .settings
+            .find_mut("fov_bottom")
+            .unwrap_f32_mut() = proj_left.bottom;
 
-    if !gl::GetError::is_loaded() {
-        return Err(failure::err_msg("glGetError not loaded"));
+        let proj_right = system.projection_raw(openvr::Eye::Right);
+        *interactive_kernel_right
+            .settings
+            .find_mut("fov_left")
+            .unwrap_f32_mut() = proj_right.left;
+        *interactive_kernel_right
+            .settings
+            .find_mut("fov_right")
+            .unwrap_f32_mut() = proj_right.right;
+        *interactive_kernel_right
+            .settings
+            .find_mut("fov_top")
+            .unwrap_f32_mut() = proj_right.top;
+        *interactive_kernel_right
+            .settings
+            .find_mut("fov_bottom")
+            .unwrap_f32_mut() = proj_right.bottom;
+
+        interactive_kernel_left.settings.rebuild();
+        interactive_kernel_right.settings.rebuild();
+
+        let fps = FpsCounter::new(1.0);
+        let texture_renderer_u8 = TextureRenderer::new(TextureRendererKind::U8)?;
+        let texture_renderer_f32 = TextureRenderer::new(TextureRendererKind::F32)?;
+        let text_renderer = TextRenderer::new((1.0, 0.75, 0.75))?;
+        //unsafe { gl::Viewport(0, 0, width as i32, height as i32) };
+        unsafe { gl::ClearColor(0.0, 0.0, 0.0, 1.0) };
+        check_gl()?;
+        Ok(Self {
+            system,
+            compositor,
+            interactive_kernel_left,
+            interactive_kernel_right,
+            hands_state,
+            texture_renderer_u8,
+            texture_renderer_f32,
+            text_renderer,
+            fps,
+            vr_width,
+            vr_height,
+        })
     }
 
-    unsafe { gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS) };
-    check_gl()?;
-
-    gl_register_debug()?;
-
-    kernel::init_gl_funcs(&video);
-
-    check_gl()?;
-
-    let mut hands_state = HandsState::new();
-
-    let mut interactive_kernel_left = SyncInteractiveKernel::<u8>::create(width, height, is_gl)?;
-    let mut interactive_kernel_right = SyncInteractiveKernel::<u8>::create(width, height, is_gl)?;
-    *interactive_kernel_left
-        .settings
-        .find_mut("VR")
-        .unwrap_define_mut() = true;
-    *interactive_kernel_right
-        .settings
-        .find_mut("VR")
-        .unwrap_define_mut() = true;
-    *interactive_kernel_left
-        .settings
-        .find_mut("dof_amount")
-        .unwrap_f32_mut() = 0.0;
-    *interactive_kernel_right
-        .settings
-        .find_mut("dof_amount")
-        .unwrap_f32_mut() = 0.0;
-
-    let proj_left = system.projection_raw(openvr::Eye::Left);
-    *interactive_kernel_left
-        .settings
-        .find_mut("fov_left")
-        .unwrap_f32_mut() = proj_left.left;
-    *interactive_kernel_left
-        .settings
-        .find_mut("fov_right")
-        .unwrap_f32_mut() = proj_left.right;
-    *interactive_kernel_left
-        .settings
-        .find_mut("fov_top")
-        .unwrap_f32_mut() = proj_left.top;
-    *interactive_kernel_left
-        .settings
-        .find_mut("fov_bottom")
-        .unwrap_f32_mut() = proj_left.bottom;
-
-    let proj_right = system.projection_raw(openvr::Eye::Right);
-    *interactive_kernel_right
-        .settings
-        .find_mut("fov_left")
-        .unwrap_f32_mut() = proj_right.left;
-    *interactive_kernel_right
-        .settings
-        .find_mut("fov_right")
-        .unwrap_f32_mut() = proj_right.right;
-    *interactive_kernel_right
-        .settings
-        .find_mut("fov_top")
-        .unwrap_f32_mut() = proj_right.top;
-    *interactive_kernel_right
-        .settings
-        .find_mut("fov_bottom")
-        .unwrap_f32_mut() = proj_right.bottom;
-
-    interactive_kernel_left.settings.rebuild();
-    interactive_kernel_right.settings.rebuild();
-
-    let mut fps = FpsCounter::new(1.0);
-    let texture_renderer_u8 = TextureRenderer::new(TextureRendererKind::U8);
-    let texture_renderer_f32 = TextureRenderer::new(TextureRendererKind::F32);
-    let text_renderer = TextRenderer::new(Color::RGB(255, 192, 192));
-    unsafe { gl::Viewport(0, 0, screen_width as i32, screen_height as i32) };
-    unsafe { gl::ClearColor(0.0, 0.0, 0.0, 1.0) };
-    check_gl()?;
-
-    loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::Window {
-                    win_event: WindowEvent::Close,
-                    ..
-                } => return Ok(()),
-                Event::Window {
-                    win_event: WindowEvent::Resized(width, height),
-                    window_id,
-                    ..
-                } if window_id == window.id() && width > 0 && height > 0 => {
-                    screen_width = width as u32;
-                    screen_height = height as u32;
-                    unsafe { gl::Viewport(0, 0, width, height) };
-                }
-                _ => (),
-            }
-        }
-
+    fn render(&mut self) -> Result<(), Error> {
         unsafe {
             hands(
-                &system,
-                &compositor,
-                &mut interactive_kernel_left.settings,
-                &mut interactive_kernel_right.settings,
-                &mut hands_state,
+                &self.system,
+                &self.compositor,
+                &mut self.interactive_kernel_left.settings,
+                &mut self.interactive_kernel_right.settings,
+                &mut self.hands_state,
             )?;
         }
 
-        interactive_kernel_left.launch()?;
-        interactive_kernel_right.launch()?;
-        let left_img = interactive_kernel_left
+        self.interactive_kernel_left.launch()?;
+        self.interactive_kernel_right.launch()?;
+        let left_img = self
+            .interactive_kernel_left
             .download()?
             .data_gl
             .expect("vr_display needs OGL textures");
-        let right_img = interactive_kernel_right
+        let right_img = self
+            .interactive_kernel_right
             .download()?
             .data_gl
             .expect("vr_display needs OGL textures");
 
         unsafe {
-            render_eye(&compositor, openvr::Eye::Left, left_img)?;
-            render_eye(&compositor, openvr::Eye::Right, right_img)?;
+            render_eye(&self.compositor, openvr::Eye::Left, left_img)?;
+            render_eye(&self.compositor, openvr::Eye::Right, right_img)?;
         }
 
         unsafe { gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT) };
 
-        texture_renderer_u8.render(left_img, 0.0, 0.0, 0.5, 1.0)?;
-        texture_renderer_u8.render(right_img, 0.5, 0.0, 0.5, 1.0)?;
+        self.texture_renderer_u8
+            .render(left_img, 0.0, 0.0, 0.5, 1.0)?;
+        self.texture_renderer_u8
+            .render(right_img, 0.5, 0.0, 0.5, 1.0)?;
 
-        fps.tick();
+        self.fps.tick();
         let display = format!(
             "{:.2} fps\n{}",
-            fps.value(),
-            interactive_kernel_left.status()
+            self.fps.value(),
+            self.interactive_kernel_left.status()
         );
-        text_renderer.render(&texture_renderer_f32, &display, screen_width, screen_height)?;
-
-        window.gl_swap_window();
+        self.text_renderer.render(
+            &self.texture_renderer_f32,
+            &display,
+            self.vr_width,
+            self.vr_height,
+        )?;
 
         check_gl()?;
+        Ok(())
     }
+
+    fn resize(&mut self, _: u32, _: u32) -> Result<(), Error> {
+        Ok(())
+    }
+    fn key_up(&mut self, _: Key) -> Result<(), Error> {
+        Ok(())
+    }
+    fn key_down(&mut self, _: Key) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+pub fn vr_display() -> Result<(), Error> {
+    display::run_display::<VrDisplay>(100.0, 100.0)
 }

@@ -1,16 +1,4 @@
-#[macro_use]
-extern crate lazy_static;
-extern crate byteorder;
-extern crate cgmath;
-extern crate failure;
-extern crate gl;
-extern crate ocl;
-#[cfg(windows)]
-extern crate openvr;
-extern crate png;
-extern crate regex;
-extern crate sdl2;
-
+mod display;
 mod display_gl;
 #[cfg(windows)]
 mod display_vr;
@@ -26,6 +14,7 @@ mod setting_value;
 mod settings;
 
 use failure::Error;
+use glutin::event::VirtualKeyCode as Key;
 use interactive::ImageData;
 use kernel::FractalKernel;
 use png::BitDepth;
@@ -229,8 +218,8 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
 }
 
 fn interactive_cmd() -> Result<(), Error> {
-    let width = 1920;
-    let height = 1080;
+    let width = 1920.0;
+    let height = 1080.0;
     display_gl::gl_display(width, height)
 }
 

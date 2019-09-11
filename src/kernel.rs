@@ -5,6 +5,7 @@ use crate::settings::Settings;
 use failure;
 use failure::Error;
 use gl::types::*;
+use lazy_static::lazy_static;
 use ocl::builders::ContextBuilder;
 use ocl::builders::ImageDescriptor;
 use ocl::builders::ImageFormat;
@@ -81,8 +82,8 @@ impl<T: OclPrm> KernelImage<T> {
             self.scratch = Some(new_data);
         }
         Ok((
-            self.texture_cl.as_ref().unwrap(),
-            self.scratch.as_ref().unwrap(),
+            self.texture_cl.as_ref().expect("Didn't assign texture_cl?"),
+            self.scratch.as_ref().expect("Didn't assign texture_cl?"),
         ))
     }
 
@@ -388,13 +389,13 @@ static mut WGL_GET_CURRENT_DC: extern "system" fn() -> *mut c_void = dummy;
 static mut GLX_GET_CURRENT_CONTEXT: extern "system" fn() -> *mut c_void = dummy;
 static mut GLX_GET_CURRENT_DISPLAY: extern "system" fn() -> *mut c_void = dummy;
 
-pub fn init_gl_funcs(video: &sdl2::VideoSubsystem) {
+pub fn init_gl_funcs(get_proc_address: impl Fn(&str) -> *const c_void) {
     unsafe fn init(
-        video: &sdl2::VideoSubsystem,
+        get_proc_address: &impl Fn(&str) -> *const c_void,
         func: &mut extern "system" fn() -> *mut c_void,
         name: &str,
     ) {
-        let addr = video.gl_get_proc_address(name);
+        let addr = get_proc_address(name);
         if !addr.is_null() {
             println!("Have {}: {:?}", name, addr);
             *func = std::mem::transmute(addr);
@@ -404,10 +405,26 @@ pub fn init_gl_funcs(video: &sdl2::VideoSubsystem) {
     unsafe {
         // Note: glXGetProcAddress returns valid pointers, even for invalid strings.
         // https://dri.freedesktop.org/wiki/glXGetProcAddressNeverReturnsNULL/
-        init(video, &mut WGL_GET_CURRENT_CONTEXT, "wglGetCurrentContext");
-        init(video, &mut WGL_GET_CURRENT_DC, "wglGetCurrentDC");
-        init(video, &mut GLX_GET_CURRENT_CONTEXT, "glXGetCurrentContext");
-        init(video, &mut GLX_GET_CURRENT_DISPLAY, "glXGetCurrentDisplay");
+        init(
+            &get_proc_address,
+            &mut WGL_GET_CURRENT_CONTEXT,
+            "wglGetCurrentContext",
+        );
+        init(
+            &get_proc_address,
+            &mut WGL_GET_CURRENT_DC,
+            "wglGetCurrentDC",
+        );
+        init(
+            &get_proc_address,
+            &mut GLX_GET_CURRENT_CONTEXT,
+            "glXGetCurrentContext",
+        );
+        init(
+            &get_proc_address,
+            &mut GLX_GET_CURRENT_DISPLAY,
+            "glXGetCurrentDisplay",
+        );
     }
 }
 

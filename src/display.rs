@@ -1,0 +1,103 @@
+use crate::kernel;
+use crate::Key;
+use crate::{check_gl, gl_register_debug};
+use failure::Error;
+use glutin;
+use glutin::event::{ElementState, Event, WindowEvent};
+use glutin::event_loop::{ControlFlow, EventLoop};
+use glutin::window::WindowBuilder;
+use glutin::ContextBuilder;
+
+pub trait Display: Sized {
+    fn setup(width: u32, height: u32) -> Result<Self, Error>;
+    fn render(&mut self) -> Result<(), Error>;
+    fn resize(&mut self, width: u32, height: u32) -> Result<(), Error>;
+    fn key_up(&mut self, key: Key) -> Result<(), Error>;
+    fn key_down(&mut self, key: Key) -> Result<(), Error>;
+}
+
+pub fn run_display<Disp: Display + 'static>(
+    request_width: f64,
+    request_height: f64,
+) -> Result<(), Error> {
+    let el = EventLoop::new();
+    //let vm = el.primary_monitor().video_modes().min().expect("No video modes found");
+    let wb = WindowBuilder::new()
+        .with_title("clam5")
+        //.with_fullscreen(Some(Fullscreen::Exclusive(vm)));
+        .with_inner_size(glutin::dpi::LogicalSize::new(request_width, request_height));
+    let windowed_context = ContextBuilder::new()
+        .with_vsync(true)
+        .build_windowed(wb, &el)?;
+
+    let windowed_context = unsafe { windowed_context.make_current().map_err(|(_, e)| e)? };
+
+    let initial_size = windowed_context
+        .window()
+        .inner_size()
+        .to_physical(windowed_context.window().hidpi_factor());
+
+    gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
+
+    if !gl::GetError::is_loaded() {
+        return Err(failure::err_msg("glGetError not loaded"));
+    }
+
+    unsafe { gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS) };
+    check_gl()?;
+
+    gl_register_debug()?;
+
+    kernel::init_gl_funcs(|symbol| windowed_context.get_proc_address(symbol) as *const _);
+
+    let mut display = Disp::setup(initial_size.width as u32, initial_size.height as u32)?;
+
+    el.run(move |event, _, control_flow| {
+        println!("Event: {:?}", event);
+        match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(logical_size)
+                    if logical_size.width > 0.0 && logical_size.height > 0.0 =>
+                {
+                    let dpi_factor = windowed_context.window().hidpi_factor();
+                    let physical = logical_size.to_physical(dpi_factor);
+                    handle(display.resize(physical.width as u32, physical.height as u32));
+                    unsafe { gl::Viewport(0, 0, physical.width as i32, physical.height as i32) };
+                    windowed_context.resize(logical_size.to_physical(dpi_factor));
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    if let Some(code) = input.virtual_keycode {
+                        if code == Key::Escape {
+                            println!("Quitting");
+                            *control_flow = ControlFlow::Exit;
+                        } else {
+                            match input.state {
+                                ElementState::Pressed => handle(display.key_down(code)),
+                                ElementState::Released => handle(display.key_up(code)),
+                            }
+                        }
+                    }
+                }
+                WindowEvent::RedrawRequested => {
+                    handle(display.render());
+                    handle(windowed_context.swap_buffers().map_err(|e| e.into()));
+                }
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                _ => (),
+            },
+            Event::EventsCleared => {
+                if *control_flow != ControlFlow::Exit {
+                    windowed_context.window().request_redraw()
+                }
+            }
+            _ => (),
+        }
+    })
+}
+
+fn handle<T>(res: Result<T, Error>) -> T {
+    match res {
+        Ok(ok) => ok,
+        Err(err) => panic!("{:?}", err),
+    }
+}

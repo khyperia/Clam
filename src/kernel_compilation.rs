@@ -1,6 +1,7 @@
 use crate::setting_value::SettingValueEnum;
 use crate::settings::Settings;
 use failure::Error;
+use lazy_static::lazy_static;
 use ocl::enums::ProgramBuildInfo;
 use ocl::enums::ProgramBuildInfoResult;
 use ocl::enums::ProgramInfo;
@@ -149,7 +150,7 @@ pub fn rebuild<T: OclPrm>(
 fn set_src(settings: &mut Settings, src: &str) {
     lazy_static! {
         static ref RE: Regex = Regex::new(
-           r#"(?m)^ *extern *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+)\([^)]*\); *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).unwrap();
+           r#"(?m)^ *extern *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+)\([^)]*\); *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
     }
     let mut set: HashSet<String> = settings
         .values
@@ -164,12 +165,12 @@ fn set_src(settings: &mut Settings, src: &str) {
         set.remove(name);
         let setting = match kind {
             "float" => {
-                let value = cap["value"].parse().unwrap();
-                let change = cap["change"].parse().unwrap();
+                let value = cap["value"].parse().expect("Failed to extract regex");
+                let change = cap["change"].parse().expect("Failed to extract regex");
                 SettingValueEnum::F32(value, change)
             }
             "int" => {
-                let value = cap["value"].parse().unwrap();
+                let value = cap["value"].parse().expect("Failed to extract regex");
                 SettingValueEnum::U32(value)
             }
             _ => {
@@ -189,8 +190,8 @@ fn set_src(settings: &mut Settings, src: &str) {
 
 fn find_defines(settings: &mut Settings, src: &str, variables: &mut HashSet<String>) {
     lazy_static! {
-        static ref RE: Regex =
-            Regex::new(r#"(?m)^ *#ifdef +(?P<name>[a-zA-Z0-9_]+) *\r?$"#).unwrap();
+        static ref RE: Regex = Regex::new(r#"(?m)^ *#ifdef +(?P<name>[a-zA-Z0-9_]+) *\r?$"#)
+            .expect("Failed to create regex");
     }
     for cap in RE.captures_iter(src) {
         let name = &cap["name"];

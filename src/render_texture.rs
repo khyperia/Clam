@@ -19,16 +19,16 @@ pub struct TextureRenderer {
 }
 
 impl TextureRenderer {
-    pub fn new(kind: TextureRendererKind) -> Self {
-        check_gl().unwrap();
+    pub fn new(kind: TextureRendererKind) -> Result<Self, Error> {
+        check_gl()?;
         let frag = match kind {
             TextureRendererKind::U8 => FRAGMENT_SHADER_U8,
             TextureRendererKind::F32 => FRAGMENT_SHADER_F32,
         };
-        let program = unsafe { create_program(VERTEX_SHADER, frag) };
+        let program = unsafe { create_program(VERTEX_SHADER, frag)? };
         let pos_size_location =
             unsafe { gl::GetUniformLocation(program, b"pos_size\0".as_ptr() as *const i8) };
-        check_gl().unwrap();
+        check_gl()?;
         if pos_size_location == -1 {
             panic!("pos_size_location not found");
         }
@@ -37,11 +37,11 @@ impl TextureRenderer {
             gl::Enable(gl::BLEND);
             gl::Enable(gl::TEXTURE_2D);
         }
-        check_gl().unwrap();
-        Self {
+        check_gl()?;
+        Ok(Self {
             program,
             pos_size_location,
-        }
+        })
     }
 
     pub fn render(
@@ -75,9 +75,9 @@ impl Drop for TextureRenderer {
     }
 }
 
-unsafe fn create_program(vertex: &'static [u8], fragment: &'static [u8]) -> GLuint {
-    let vertex = create_shader(vertex, gl::VERTEX_SHADER);
-    let fragment = create_shader(fragment, gl::FRAGMENT_SHADER);
+unsafe fn create_program(vertex: &'static [u8], fragment: &'static [u8]) -> Result<GLuint, Error> {
+    let vertex = create_shader(vertex, gl::VERTEX_SHADER)?;
+    let fragment = create_shader(fragment, gl::FRAGMENT_SHADER)?;
 
     let program = gl::CreateProgram();
     gl::AttachShader(program, vertex);
@@ -95,29 +95,29 @@ unsafe fn create_program(vertex: &'static [u8], fragment: &'static [u8]) -> GLui
             .expect("Invalid OpenGL error message");
         panic!("Failed to compile OpenGL program:\n{}", log);
     }
-    check_gl().unwrap();
+    check_gl()?;
 
     // ???
     gl::DeleteShader(vertex);
     gl::DeleteShader(fragment);
 
-    check_gl().unwrap();
+    check_gl()?;
 
-    program
+    Ok(program)
 }
 
-unsafe fn create_shader(source: &'static [u8], shader_type: GLenum) -> GLuint {
+unsafe fn create_shader(source: &'static [u8], shader_type: GLenum) -> Result<GLuint, Error> {
     let shader = gl::CreateShader(shader_type);
-    check_gl().unwrap();
+    check_gl()?;
     gl::ShaderSource(
         shader,
         1,
         &(source.as_ptr()) as *const *const u8 as *const *const i8,
         null(),
     );
-    check_gl().unwrap();
+    check_gl()?;
     gl::CompileShader(shader);
-    check_gl().unwrap();
+    check_gl()?;
     let mut success = 0;
     gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
     if success == 0 {
@@ -129,8 +129,8 @@ unsafe fn create_shader(source: &'static [u8], shader_type: GLenum) -> GLuint {
             .expect("Invalid OpenGL error message");
         panic!("Failed to compile OpenGL shader:\n{}", log);
     }
-    check_gl().unwrap();
-    shader
+    check_gl()?;
+    Ok(shader)
 }
 
 const VERTEX_SHADER: &[u8] = b"
