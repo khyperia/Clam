@@ -1,6 +1,6 @@
 mod display;
 mod display_gl;
-#[cfg(windows)]
+#[cfg(feature = "vr")]
 mod display_vr;
 mod fps_counter;
 mod input;
@@ -97,9 +97,9 @@ extern "system" fn debug_callback(
     );
 }
 
-#[cfg(windows)]
-#[link(name = "Shell32")]
-extern "C" {}
+// #[cfg(all(windows, feature = "vr"))]
+// #[link(name = "Shell32")]
+// extern "C" {}
 
 #[cfg(not(windows))]
 fn progress_count(rpp: u32) -> u32 {
@@ -229,8 +229,8 @@ fn try_main() -> Result<(), Error> {
         render(&arguments[1..])?;
     } else if arguments.len() > 2 && arguments[0] == "--video" {
         video_cmd(&arguments[1..])?;
-    } else if cfg!(windows) && arguments.len() == 1 && arguments[0] == "--vr" {
-        #[cfg(windows)]
+    } else if cfg!(feature = "vr") && arguments.len() == 1 && arguments[0] == "--vr" {
+        #[cfg(feature = "vr")]
         display_vr::vr_display()?;
     } else if arguments.is_empty() {
         interactive_cmd()?;
@@ -239,6 +239,7 @@ fn try_main() -> Result<(), Error> {
         println!("clam5 --render [width] [height] [rpp]");
         println!("clam5 --render [8k|4k|2k|1k] [rpp]");
         println!("clam5 --video [width] [height] [rpp] [frames] [wrap:true|false]");
+        #[cfg(feature = "vr")]
         println!("clam5 --vr");
         println!("clam5");
     }

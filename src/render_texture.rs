@@ -9,6 +9,7 @@ use std::ptr::null_mut;
 // https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/
 
 pub enum TextureRendererKind {
+    #[cfg(feature = "vr")]
     U8,
     F32,
 }
@@ -22,6 +23,7 @@ impl TextureRenderer {
     pub fn new(kind: TextureRendererKind) -> Result<Self, Error> {
         check_gl()?;
         let frag = match kind {
+            #[cfg(feature = "vr")]
             TextureRendererKind::U8 => FRAGMENT_SHADER_U8,
             TextureRendererKind::F32 => FRAGMENT_SHADER_F32,
         };
@@ -162,6 +164,7 @@ void main()
 }
 \0";
 
+#[cfg(feature = "vr")]
 const FRAGMENT_SHADER_U8: &[u8] = b"
 uniform usampler2D tex;
 in vec2 texCoord;

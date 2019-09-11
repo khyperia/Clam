@@ -140,6 +140,7 @@ impl SettingValue {
         }
     }
 
+    #[cfg(feature = "vr")]
     pub fn unwrap_define_mut(&mut self) -> &mut bool {
         match self.value {
             SettingValueEnum::Define(ref mut value) => value,

@@ -12,7 +12,10 @@ gl = "*"
 glutin = "0.22.0-alpha3"
 lazy_static = "*"
 ocl = { version = "*", default-features = false }
-openvr = "*"
+openvr = { version = "*", optional = true }
 png = "*"
 regex = "*"
 rusttype = "*"
+
+[features]
+vr = ["openvr"]
