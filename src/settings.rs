@@ -1,11 +1,12 @@
+use crate::gl_help::{set_arg_f32, set_arg_u32};
 use crate::input::Input;
 use crate::setting_value::SettingValue;
 use crate::setting_value::SettingValueEnum;
-use byteorder::{NativeEndian, WriteBytesExt};
 use cgmath::prelude::*;
 use cgmath::Vector3;
 use failure::err_msg;
 use failure::Error;
+use gl::types::*;
 use std::fmt::Write as FmtWrite;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -198,22 +199,15 @@ impl Settings {
         self.values.retain(|e| e.key() != name);
     }
 
-    pub fn serialize(&self) -> Vec<u8> {
-        let mut result = Vec::new();
+    pub fn set_uniforms(&self, compute_shader: GLuint) -> Result<(), Error> {
         for value in &self.values {
-            if !value.is_const() {
-                match *value.value() {
-                    SettingValueEnum::F32(x, _) => result
-                        .write_f32::<NativeEndian>(x)
-                        .expect("Failed to write value to struct"),
-                    SettingValueEnum::U32(x) => result
-                        .write_u32::<NativeEndian>(x)
-                        .expect("Failed to write value to struct"),
-                    SettingValueEnum::Define(_) => (),
-                }
+            match *value.value() {
+                SettingValueEnum::F32(x, _) => set_arg_f32(compute_shader, value.key(), x)?,
+                SettingValueEnum::U32(x) => set_arg_u32(compute_shader, value.key(), x)?,
+                SettingValueEnum::Define(_) => (),
             }
         }
-        result
+        Ok(())
     }
 
     pub fn normalize(&mut self) {

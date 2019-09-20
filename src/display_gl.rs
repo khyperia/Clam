@@ -10,17 +10,17 @@ use crate::Key;
 use failure::Error;
 
 struct GlDisplay {
-    interactive_kernel: SyncInteractiveKernel<f32>,
+    interactive_kernel: SyncInteractiveKernel<[f32; 4]>,
     texture_renderer: TextureRenderer,
     text_renderer: TextRenderer,
     fps: FpsCounter,
-    width: u32,
-    height: u32,
+    width: usize,
+    height: usize,
 }
 
 impl Display for GlDisplay {
-    fn setup(width: u32, height: u32) -> Result<Self, Error> {
-        let interactive_kernel = SyncInteractiveKernel::<f32>::create(width, height, true)?;
+    fn setup(width: usize, height: usize) -> Result<Self, Error> {
+        let interactive_kernel = SyncInteractiveKernel::<[f32; 4]>::create(width, height)?;
 
         let texture_renderer = TextureRenderer::new(TextureRendererKind::F32)?;
         let text_renderer = TextRenderer::new((1.0, 0.75, 0.75))?;
@@ -39,15 +39,9 @@ impl Display for GlDisplay {
 
     fn render(&mut self) -> Result<(), Error> {
         self.interactive_kernel.launch()?;
-        let img = self.interactive_kernel.download()?;
+        let img = self.interactive_kernel.texture()?;
 
-        self.texture_renderer.render(
-            img.data_gl.expect("gl_display needs OGL texture"),
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-        )?;
+        self.texture_renderer.render(img.id, 0.0, 0.0, 1.0, 1.0)?;
 
         let display = format!(
             "{:.2} fps\n{}",
@@ -62,9 +56,9 @@ impl Display for GlDisplay {
         Ok(())
     }
 
-    fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        self.width = width as u32;
-        self.height = height as u32;
+    fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
+        self.width = width;
+        self.height = height;
         self.interactive_kernel.resize(width, height)?;
         Ok(())
     }

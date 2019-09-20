@@ -3,6 +3,7 @@ mod display_gl;
 #[cfg(feature = "vr")]
 mod display_vr;
 mod fps_counter;
+mod gl_help;
 mod input;
 mod interactive;
 mod kernel;
@@ -14,8 +15,9 @@ mod setting_value;
 mod settings;
 
 use failure::Error;
+use gl::types::*;
+use gl_help::CpuTexture;
 use glutin::event::VirtualKeyCode as Key;
-use interactive::ImageData;
 use kernel::FractalKernel;
 use png::BitDepth;
 use png::ColorType;
@@ -36,27 +38,23 @@ fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
 }
 
-fn save_image(image: &ImageData<f32>, path: &str) -> Result<(), Error> {
+fn save_image(image: &CpuTexture<[f32; 4]>, path: &str) -> Result<(), Error> {
     let file = File::create(path)?;
     let w = &mut BufWriter::new(file);
-    let mut encoder = Encoder::new(w, image.width, image.height);
+    let mut encoder = Encoder::new(w, image.width as u32, image.height as u32);
     encoder.set_color(ColorType::RGB);
     encoder.set_depth(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
-    let width = image.width as usize;
-    let height = image.height as usize;
-    let input = image
-        .data_cpu
-        .as_ref()
-        .expect("save_image must have cpu image");
+    let width = image.width;
+    let height = image.height;
     let mut output = vec![0u8; width * height * 3];
     for y in 0..height {
         for x in 0..width {
-            let in_idx = (y * width + x) * 4;
+            let in_idx = y * width + x;
             let out_idx = ((height - y - 1) * width + x) * 3;
-            output[out_idx] = f32_to_u8(input[in_idx]);
-            output[out_idx + 1] = f32_to_u8(input[in_idx + 1]);
-            output[out_idx + 2] = f32_to_u8(input[in_idx + 2]);
+            output[out_idx] = f32_to_u8(image.data[in_idx][0]);
+            output[out_idx + 1] = f32_to_u8(image.data[in_idx][1]);
+            output[out_idx + 2] = f32_to_u8(image.data[in_idx][2]);
         }
     }
     writer.write_image_data(&output)?;
@@ -81,12 +79,12 @@ fn gl_register_debug() -> Result<(), Error> {
 }
 
 extern "system" fn debug_callback(
-    source: u32,
-    type_: u32,
-    id: u32,
-    severity: u32,
-    length: i32,
-    message: *const i8,
+    source: GLenum,
+    type_: GLenum,
+    id: GLuint,
+    severity: GLenum,
+    length: GLsizei,
+    message: *const GLchar,
     _: *mut c_void,
 ) {
     let msg =
@@ -102,18 +100,18 @@ extern "system" fn debug_callback(
 // extern "C" {}
 
 #[cfg(not(windows))]
-fn progress_count(rpp: u32) -> u32 {
+fn progress_count(rpp: usize) -> usize {
     (rpp / 20).min(4).max(16)
 }
 
 #[cfg(windows)]
-fn progress_count(_: u32) -> u32 {
+fn progress_count(_: usize) -> usize {
     1
 }
 
-fn image(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
+fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     let mut settings = Settings::new();
-    let mut kernel = FractalKernel::create(width, height, false, &mut settings)?;
+    let mut kernel = FractalKernel::create(width, height, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
     kernel.rebuild(&mut settings, false)?;
@@ -136,11 +134,11 @@ fn image(width: u32, height: u32, rpp: u32) -> Result<(), Error> {
 }
 
 fn video_one(
-    frame: u32,
-    rpp: u32,
-    kernel: &mut FractalKernel<f32>,
+    frame: usize,
+    rpp: usize,
+    kernel: &mut FractalKernel<[f32; 4]>,
     settings: &mut Settings,
-    stream: &mpsc::SyncSender<(u32, ImageData<f32>)>,
+    stream: &mpsc::SyncSender<(usize, CpuTexture<[f32; 4]>)>,
 ) -> Result<(), Error> {
     for _ in 0..rpp {
         kernel.run(settings, false)?;
@@ -150,9 +148,9 @@ fn video_one(
     Ok(())
 }
 
-fn video(width: u32, height: u32, rpp: u32, frames: u32, wrap: bool) -> Result<(), Error> {
+fn video(width: usize, height: usize, rpp: usize, frames: usize, wrap: bool) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    let mut kernel = FractalKernel::create(width, height, false, &mut default_settings)?;
+    let mut kernel = FractalKernel::create(width, height, &mut default_settings)?;
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();

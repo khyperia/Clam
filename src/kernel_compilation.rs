@@ -1,20 +1,12 @@
+use crate::gl_help::create_compute_program;
 use crate::setting_value::SettingValueEnum;
 use crate::settings::Settings;
 use failure::Error;
+use gl::types::*;
 use lazy_static::lazy_static;
-use ocl::enums::ProgramBuildInfo;
-use ocl::enums::ProgramBuildInfoResult;
-use ocl::enums::ProgramInfo;
-use ocl::enums::ProgramInfoResult;
-use ocl::Buffer;
-use ocl::Image;
-use ocl::Kernel;
-use ocl::OclPrm;
-use ocl::Program;
-use ocl::Queue;
 use regex::Regex;
 use std::collections::HashSet;
-use std::env;
+use std::ffi::CString;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -22,9 +14,10 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 
-const MANDELBOX: &str = include_str!("mandelbox.cl");
-const MANDELBOX_PATH: &str = "src/mandelbox.cl";
+const MANDELBOX: &str = include_str!("mandelbox.gl");
+const MANDELBOX_PATH: &str = "src/mandelbox.gl";
 
+/*
 fn dump_binary(program: &Program) -> Result<(), Error> {
     if let Ok(path) = env::var("CLAM5_BINARY") {
         if let ProgramInfoResult::Binaries(binaries) = program.info(ProgramInfo::Binaries)? {
@@ -44,6 +37,7 @@ fn dump_binary(program: &Program) -> Result<(), Error> {
     }
     Ok(())
 }
+*/
 
 // the "notify" crate is broken af, so roll our own
 pub fn watch_src<F: Fn() + Send + 'static>(on_changed: F) {
@@ -84,19 +78,19 @@ fn get_src() -> Result<String, Error> {
     Ok(contents)
 }
 
-fn generate_src(settings: &Settings) -> String {
-    let mut result = String::new();
-    result.push_str("#define NOT_EDITOR 1\n");
-    result.push_str("struct MandelboxCfg {\n");
-    for value in &settings.values {
-        if let Some(ref tmp) = value.format_opencl_struct() {
-            result.push_str(tmp);
-        }
-    }
-    result.push_str("};\n");
-    for value in &settings.values {
-        result.push_str(&value.format_opencl());
-    }
+fn generate_src(_settings: &Settings) -> String {
+    let result = String::new();
+    // result.push_str("#define NOT_EDITOR 1\n");
+    // result.push_str("struct MandelboxCfg {\n");
+    // for value in &settings.values {
+    //     if let Some(ref tmp) = value.format_opencl_struct() {
+    //         result.push_str(tmp);
+    //     }
+    // }
+    // result.push_str("};\n");
+    // for value in &settings.values {
+    //     result.push_str(&value.format_opencl());
+    // }
     result
 }
 
@@ -106,11 +100,14 @@ pub fn refresh_settings(settings: &mut Settings) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn rebuild<T: OclPrm>(
-    queue: &Queue,
-    texture: &Image<T>,
-    settings: &mut Settings,
-) -> Result<Kernel, Error> {
+pub fn rebuild(settings: &mut Settings) -> Result<GLuint, Error> {
+    let src = get_src()?;
+    set_src(settings, &src);
+    let mut full = generate_src(settings);
+    full.push_str(&src);
+    let cstr = CString::new(full)?;
+    unsafe { create_compute_program(cstr.as_bytes_with_nul()) }
+    /*
     let program = {
         let mut builder = Program::builder();
         let src = get_src()?;
@@ -145,12 +142,13 @@ pub fn rebuild<T: OclPrm>(
         .arg(0u32)
         .build()?;
     Ok(kernel)
+    */
 }
 
 fn set_src(settings: &mut Settings, src: &str) {
     lazy_static! {
         static ref RE: Regex = Regex::new(
-           r#"(?m)^ *extern *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+)\([^)]*\); *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
+           r#"(?m)^ *uniform *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+) *; *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
     }
     let mut set: HashSet<String> = settings
         .values

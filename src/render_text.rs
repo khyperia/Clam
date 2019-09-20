@@ -64,8 +64,8 @@ impl TextRenderer {
         &self,
         renderer: &TextureRenderer,
         text: &str,
-        screen_width: u32,
-        screen_height: u32,
+        screen_width: usize,
+        screen_height: usize,
     ) -> Result<(), Error> {
         let mut line_x = 10;
         let mut x = line_x;

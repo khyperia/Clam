@@ -1,42 +1,22 @@
+use crate::gl_help::{Texture, TextureType};
 use crate::input::Input;
 use crate::kernel::FractalKernel;
 use crate::kernel_compilation;
 use crate::settings::Settings;
 use crate::Key;
 use failure::Error;
-use gl::types::GLuint;
-use ocl::OclPrm;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-pub struct ImageData<T: OclPrm> {
-    pub data_cpu: Option<Vec<T>>,
-    pub data_gl: Option<GLuint>,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl<T: OclPrm> ImageData<T> {
-    pub fn new(data_cpu: Option<Vec<T>>, data_gl: Option<GLuint>, width: u32, height: u32) -> Self {
-        Self {
-            data_cpu,
-            data_gl,
-            width,
-            height,
-        }
-    }
-}
-
-pub struct SyncInteractiveKernel<T: OclPrm> {
+pub struct SyncInteractiveKernel<T: TextureType> {
     rebuild: Arc<AtomicBool>,
     pub kernel: FractalKernel<T>,
     pub settings: Settings,
     pub input: Input,
 }
 
-impl<T: OclPrm> SyncInteractiveKernel<T> {
-    pub fn create(width: u32, height: u32, is_ogl: bool) -> Result<Self, Error> {
+impl<T: TextureType> SyncInteractiveKernel<T> {
+    pub fn create(width: usize, height: usize) -> Result<Self, Error> {
         let rebuild = Arc::new(AtomicBool::new(false));
         let rebuild2 = rebuild.clone();
         // TODO: stop watching once `self` dies
@@ -44,7 +24,7 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
 
         let mut settings = Settings::new();
         let input = Input::new();
-        let kernel = FractalKernel::create(width, height, is_ogl, &mut settings)?;
+        let kernel = FractalKernel::create(width, height, &mut settings)?;
         let result = Self {
             kernel,
             rebuild,
@@ -62,7 +42,7 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
         self.input.key_up(key, &mut self.settings);
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), Error> {
+    pub fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
         self.kernel.resize(width, height)
     }
 
@@ -75,10 +55,15 @@ impl<T: OclPrm> SyncInteractiveKernel<T> {
         Ok(())
     }
 
-    pub fn download(&mut self) -> Result<ImageData<T>, Error> {
-        let image = self.kernel.download()?;
+    pub fn texture(&mut self) -> Result<&Texture<T>, Error> {
+        let image = self.kernel.texture()?;
         Ok(image)
     }
+
+    // pub fn download(&mut self) -> Result<CpuTexture<T>, Error> {
+    //     let image = self.kernel.download()?;
+    //     Ok(image)
+    // }
 
     pub fn status(&self) -> String {
         self.settings.status(&self.input)

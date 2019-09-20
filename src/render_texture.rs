@@ -1,10 +1,8 @@
 use crate::check_gl;
+use crate::gl_help;
 use failure::Error;
 use gl;
 use gl::types::*;
-use std::ffi::CStr;
-use std::ptr::null;
-use std::ptr::null_mut;
 
 // https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/
 
@@ -27,9 +25,9 @@ impl TextureRenderer {
             TextureRendererKind::U8 => FRAGMENT_SHADER_U8,
             TextureRendererKind::F32 => FRAGMENT_SHADER_F32,
         };
-        let program = unsafe { create_program(VERTEX_SHADER, frag)? };
+        let program = unsafe { gl_help::create_vert_frag_program(VERTEX_SHADER, frag)? };
         let pos_size_location =
-            unsafe { gl::GetUniformLocation(program, b"pos_size\0".as_ptr() as *const i8) };
+            unsafe { gl::GetUniformLocation(program, b"pos_size\0".as_ptr() as *const GLchar) };
         check_gl()?;
         if pos_size_location == -1 {
             panic!("pos_size_location not found");
@@ -75,64 +73,6 @@ impl Drop for TextureRenderer {
     fn drop(&mut self) {
         unsafe { gl::DeleteProgram(self.program) }
     }
-}
-
-unsafe fn create_program(vertex: &'static [u8], fragment: &'static [u8]) -> Result<GLuint, Error> {
-    let vertex = create_shader(vertex, gl::VERTEX_SHADER)?;
-    let fragment = create_shader(fragment, gl::FRAGMENT_SHADER)?;
-
-    let program = gl::CreateProgram();
-    gl::AttachShader(program, vertex);
-    gl::AttachShader(program, fragment);
-    gl::LinkProgram(program);
-
-    let mut success = 0;
-    gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
-    if success == 0 {
-        let mut info_log: [GLchar; 512] = [0; 512];
-        let ptr = info_log.as_mut_ptr();
-        gl::GetProgramInfoLog(program, 512, null_mut(), ptr);
-        let log = CStr::from_ptr(ptr)
-            .to_str()
-            .expect("Invalid OpenGL error message");
-        panic!("Failed to compile OpenGL program:\n{}", log);
-    }
-    check_gl()?;
-
-    // ???
-    gl::DeleteShader(vertex);
-    gl::DeleteShader(fragment);
-
-    check_gl()?;
-
-    Ok(program)
-}
-
-unsafe fn create_shader(source: &'static [u8], shader_type: GLenum) -> Result<GLuint, Error> {
-    let shader = gl::CreateShader(shader_type);
-    check_gl()?;
-    gl::ShaderSource(
-        shader,
-        1,
-        &(source.as_ptr()) as *const *const u8 as *const *const i8,
-        null(),
-    );
-    check_gl()?;
-    gl::CompileShader(shader);
-    check_gl()?;
-    let mut success = 0;
-    gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
-    if success == 0 {
-        let mut info_log: [GLchar; 512] = [0; 512];
-        let ptr = info_log.as_mut_ptr();
-        gl::GetShaderInfoLog(shader, 512, null_mut(), ptr);
-        let log = CStr::from_ptr(ptr)
-            .to_str()
-            .expect("Invalid OpenGL error message");
-        panic!("Failed to compile OpenGL shader:\n{}", log);
-    }
-    check_gl()?;
-    Ok(shader)
 }
 
 const VERTEX_SHADER: &[u8] = b"
