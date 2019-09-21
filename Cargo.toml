@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 cgmath = "*"
+chrono = "*"
 failure = "*"
 gl = "*"
 glutin = "0.22.0-alpha3"

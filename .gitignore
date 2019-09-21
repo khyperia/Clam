@@ -1,6 +1,6 @@
 .vs/
 /target/
-render.png
+*.png
 settings.clam5
 keyframes.clam5
 *.obj

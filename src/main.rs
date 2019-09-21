@@ -14,6 +14,7 @@ mod render_texture;
 mod setting_value;
 mod settings;
 
+use chrono::prelude::*;
 use failure::Error;
 use gl::types::*;
 use gl_help::CpuTexture;
@@ -118,7 +119,9 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     kernel.sync_renderer()?;
     let image = kernel.download()?;
     println!("render done, saving");
-    save_image(&image, "render.png")?;
+    let local: DateTime<Local> = Local::now(); // e.g. `2014-11-28T21:45:59.324310806+09:00`
+    let filename = local.format("%Y-%m-%d_%H-%M-%S.png").to_string();
+    save_image(&image, &filename)?;
     println!("done");
     Ok(())
 }
