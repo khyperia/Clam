@@ -1,13 +1,8 @@
-use crate::check_gl;
-use crate::render_texture::TextureRenderer;
-use failure::err_msg;
-use failure::Error;
-use gl;
-use gl::types::*;
+use crate::{check_gl, render_texture::TextureRenderer};
+use failure::{err_msg, Error};
+use gl::{self, types::*};
 use rusttype::{point, FontCollection, PositionedGlyph, Scale};
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
+use std::{fs::File, io::prelude::*, path::Path};
 
 const OFFSET: u8 = 33;
 const MAX: u8 = 127;

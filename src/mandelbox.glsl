@@ -1,10 +1,13 @@
+#version 430
 layout(rgba32f, binding = 0) uniform image2D img_output;
 layout(rgba32f, binding = 1) uniform image2D scratch;
-layout(rg32ui, binding = 2) uniform uimage2D randbuf;
+layout(r32ui, binding = 2) uniform uimage2D randbuf;
+// precision highp float;
 
 #define PI  3.1415926538
 #define TAU 6.28318530718
 #define FLT_MAX 1E+37
+#define UINT_MAX 0xFFFFFFFFU
 
 uniform float pos_x;                     // 0.0 1.0
 uniform float pos_y;                     // 0.0 1.0
@@ -37,6 +40,7 @@ uniform float ambient_brightness_val;    // 1.0 -1.0
 uniform float reflect_brightness;        // 1.0 0.125
 uniform float surface_color_variance;    // 1.0 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
+uniform float surface_color_spread;      // 1.0 0.125
 uniform float surface_color_saturation;  // 1.0 0.125
 uniform float surface_color_specular;    // 0.5 0.125
 uniform float plane_x;                   // 3.0 1.0
@@ -114,22 +118,20 @@ vec3 AmbientBrightness()
 
 struct Random
 {
-    uvec2 seed;
+    uint seed;
 };
+
+uint xorshift32(inout uint x)
+{
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+	return x;
+}
 
 float Random_Next(inout struct Random this_)
 {
-    // const float v = float(this_.seed.x) / FLT_MAX;
-    // const float nextf = fract(sin(v * 12.9898) * 43758.5453123);
-    // const uint next = uint(nextf * FLT_MAX);
-    // this_.seed = uvec2(this_.seed.y, next);
-    // return nextf;
-    this_.seed += uvec2(this_.seed.y * 47812390 + 832910, this_.seed.x * 391208 + 473902);
-    return float(this_.seed.x) / 4294967296.0;
-    // uint c = this->seed >> 32;
-    // uint x = this->seed & 0xFFFFFFFF;
-    // this->seed = x * ((ulong)4294883355U) + c;
-    // return (x ^ c) / 4294967296.0f;
+    return float(xorshift32(this_.seed.x)) / UINT_MAX;
 }
 
 /*
@@ -145,9 +147,9 @@ struct Random new_Random(uint idx, uint frame, uint global_size)
 }
 */
 
-void Random_Init(inout struct Random this_, uint x, uint y)
+void Random_Init(inout struct Random this_)
 {
-    this_.seed += y * 10000 + x;
+    this_.seed += gl_GlobalInvocationID.x + 10;
     for (int i = 0; i < 8; i++)
     {
         Random_Next(this_);
@@ -196,7 +198,7 @@ struct Ray new_Ray(vec3 pos, vec3 dir)
 }
 
 #ifdef VR
-double Remap(float value, float iMin, float iMax, float oMin, float oMax)
+float Remap(float value, float iMin, float iMax, float oMin, float oMax)
 {
     float slope = (oMax - oMin) / (iMax - iMin);
     float offset = oMin - iMin * slope;
@@ -453,7 +455,9 @@ struct Material GetMaterial(vec3 offset)
     base_color *= surface_color_variance;
     base_color += surface_color_shift;
     vec3 color = vec3(
-        sin(TAU * base_color), sin(TAU * (base_color + 1.0f / 3.0f)), sin(TAU * (base_color + 2.0f / 3.0f)));
+        sin(TAU * base_color),
+        sin(TAU * (base_color + surface_color_spread * 1.0f / 3.0f)),
+        sin(TAU * (base_color + surface_color_spread * 2.0f / 3.0f)));
     color = color * 0.5f + vec3(0.5f, 0.5f, 0.5f);
     color = surface_color_saturation * (color - vec3(1, 1, 1)) + vec3(1, 1, 1);
 
@@ -531,7 +535,7 @@ vec3 Trace(
 {
     vec3 rayColor = vec3(0, 0, 0);
     vec3 reflectionColor = vec3(1, 1, 1);
-    float quality = quality_first_ray * ((width + height) / (2 * fov));
+    float quality = quality_first_ray * (float(width + height) / float(2 * fov));
 
     for (int photonIndex = 0; photonIndex < num_ray_bounces; photonIndex++)
     {
@@ -586,7 +590,7 @@ vec3 Trace(
             if (Random_Next(rand) < fresnel)
             {
                 // specular
-                newDir = ray.dir + 2 * cosTheta * material.normal;
+                newDir = ray.dir + 2.0 * cosTheta * material.normal;
                 // material.color = vec3(1.0, 1.0, 1.0);
             }
             else
@@ -633,7 +637,7 @@ vec3 Trace(
 
 vec3 PreviewTrace(struct Ray ray, const uint width, const uint height)
 {
-    const float quality = quality_first_ray * ((width + height) / (2 * fov));
+    const float quality = quality_first_ray * (float(width + height) / float(2 * fov));
     const float max_dist = min(max_ray_dist, focal_distance * 10);
     const float distance = Cast(ray, quality, max_dist);
 #ifdef PREVIEW_NORMAL
@@ -645,7 +649,7 @@ vec3 PreviewTrace(struct Ray ray, const uint width, const uint height)
 #endif
 }
 
-vec3 GammaTest(int x, int y, int width, int height)
+vec3 GammaTest(uint x, uint y, uint width, uint height)
 {
     const float centerValue = float(x) / float(width);
     const float offset = float((height - y)) / float(height) * (0.5f - abs(centerValue - 0.5f));
@@ -708,7 +712,7 @@ float GammaCompression(float value)
     }
     else
     {
-        return GammaPow(value, 1 / gam);
+        return GammaPow(value, 1.0 / gam);
     }
 }
 
@@ -749,16 +753,16 @@ void SetScratch(uint x, uint y, vec3 value)
 
 struct Random GetRand(uint x, uint y)
 {
-    uvec2 value = imageLoad(randbuf, ivec2(x, y)).xy;
+    uint value = imageLoad(randbuf, ivec2(x, y)).x;
     struct Random rand;
     rand.seed = value;
-    Random_Init(rand, x, y);
+    Random_Init(rand);
     return rand;
 }
 
 void SetRand(uint x, uint y, struct Random value)
 {
-    imageStore(randbuf, ivec2(x, y), uvec4(value.seed, 0, 0));
+    imageStore(randbuf, ivec2(x, y), uvec4(value.seed, 0, 0, 0));
 }
 
 void SetScreen(uint x, uint y, vec3 value)
@@ -776,10 +780,6 @@ void main()
     if (idx >= size) { return; }
     const uint x = idx % width;
     const uint y = idx / width;
-
-    // flip image - in screen space, 0,0 is top-left, in 3d space, 0,0 is
-    // bottom-left
-    // const uint y = height - (idx / width + 1);
 
     const vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
 
@@ -799,8 +799,5 @@ void main()
 #endif
     vec3 packedColor = PackPixel(newColor);
 
-    //packedColor.x = float(frame) / 100.0;
-    //packedColor.y = quality_first_ray;
     SetScreen(x, y, packedColor);
-    //SetScreen(x, y, colorComponents);
 }

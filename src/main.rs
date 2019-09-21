@@ -19,20 +19,10 @@ use gl::types::*;
 use gl_help::CpuTexture;
 use glutin::event::VirtualKeyCode as Key;
 use kernel::FractalKernel;
-use png::BitDepth;
-use png::ColorType;
-use png::Encoder;
+use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
-use settings::KeyframeList;
-use settings::Settings;
-use std::env::args;
-use std::ffi::c_void;
-use std::fs::File;
-use std::io::BufWriter;
-use std::ptr::null;
-use std::slice;
-use std::str;
-use std::sync::mpsc;
+use settings::{KeyframeList, Settings};
+use std::{env::args, ffi::c_void, fs::File, io::BufWriter, ptr::null, slice, str, sync::mpsc};
 
 fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8

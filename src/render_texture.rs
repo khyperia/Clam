@@ -1,8 +1,6 @@
-use crate::check_gl;
-use crate::gl_help;
+use crate::{check_gl, gl_help};
 use failure::Error;
-use gl;
-use gl::types::*;
+use gl::{self, types::*};
 
 // https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/
 
@@ -25,7 +23,7 @@ impl TextureRenderer {
             TextureRendererKind::U8 => FRAGMENT_SHADER_U8,
             TextureRendererKind::F32 => FRAGMENT_SHADER_F32,
         };
-        let program = unsafe { gl_help::create_vert_frag_program(VERTEX_SHADER, frag)? };
+        let program = unsafe { gl_help::create_vert_frag_program(&[VERTEX_SHADER], &[frag])? };
         let pos_size_location =
             unsafe { gl::GetUniformLocation(program, b"pos_size\0".as_ptr() as *const GLchar) };
         check_gl()?;
@@ -53,16 +51,12 @@ impl TextureRenderer {
         height: f32,
     ) -> Result<(), Error> {
         unsafe {
-            check_gl()?;
             gl::UseProgram(self.program);
-            check_gl()?;
             gl::Uniform4f(self.pos_size_location, x, y, width, height);
-            check_gl()?;
             gl::BindTexture(gl::TEXTURE_2D, texture);
-            check_gl()?;
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
-            check_gl()?;
             gl::BindTexture(gl::TEXTURE_2D, 0);
+            gl::UseProgram(0);
             check_gl()?;
         }
         Ok(())
@@ -75,7 +69,7 @@ impl Drop for TextureRenderer {
     }
 }
 
-const VERTEX_SHADER: &[u8] = b"
+const VERTEX_SHADER: &str = "
 #version 130
 
 uniform vec4 pos_size;
@@ -91,9 +85,9 @@ void main()
     y = pos_size.y + pos_size.w * y;
     gl_Position = vec4(x*2-1, y*2-1, 0, 1);
 }
-\0";
+";
 
-const FRAGMENT_SHADER_F32: &[u8] = b"
+const FRAGMENT_SHADER_F32: &str = "
 uniform sampler2D tex;
 in vec2 texCoord;
 
@@ -102,10 +96,10 @@ void main()
     vec4 color1 = texture(tex, texCoord);
     gl_FragColor = color1;
 }
-\0";
+";
 
 #[cfg(feature = "vr")]
-const FRAGMENT_SHADER_U8: &[u8] = b"
+const FRAGMENT_SHADER_U8: &str = "
 uniform usampler2D tex;
 in vec2 texCoord;
 
@@ -114,4 +108,4 @@ void main()
     vec4 color1 = texture(tex, texCoord);
     gl_FragColor = color1 / 255.0;
 }
-\0";
+";

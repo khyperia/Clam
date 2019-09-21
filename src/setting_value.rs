@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct SettingValue {
     key: String,
@@ -145,6 +147,28 @@ impl SettingValue {
         match self.value {
             SettingValueEnum::Define(ref mut value) => value,
             _ => panic!("unwrap_f32 not F32"),
+        }
+    }
+
+    pub fn format_glsl(&self, src: &mut String, output: &mut String) {
+        match self.value {
+            SettingValueEnum::F32(x, _) => {
+                if self.is_const() {
+                    writeln!(output, "#define {} {:.16}", self.key(), x).unwrap();
+                    *src = src.replace(&format!("uniform float {};", self.key()), "");
+                }
+            }
+            SettingValueEnum::U32(x) => {
+                if self.is_const() {
+                    writeln!(output, "#define {} {}", self.key(), x).unwrap();
+                    *src = src.replace(&format!("uniform uint {};", self.key()), "");
+                }
+            }
+            SettingValueEnum::Define(val) => {
+                if val {
+                    writeln!(output, "#define {} 1", self.key()).unwrap();
+                }
+            }
         }
     }
 }

@@ -1,12 +1,13 @@
-use crate::Key;
-use crate::{check_gl, gl_register_debug};
+use crate::{check_gl, gl_register_debug, Key};
 use failure::Error;
-use glutin;
-use glutin::dpi::PhysicalSize;
-use glutin::event::{ElementState, Event, WindowEvent};
-use glutin::event_loop::{ControlFlow, EventLoop};
-use glutin::window::WindowBuilder;
-use glutin::ContextBuilder;
+use glutin::{
+    self,
+    dpi::PhysicalSize,
+    event::{ElementState, Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+    ContextBuilder,
+};
 
 pub trait Display: Sized {
     fn setup(width: usize, height: usize) -> Result<Self, Error>;
@@ -37,7 +38,7 @@ pub fn run_display<Disp: Display + 'static>(
         //.with_fullscreen(Some(Fullscreen::Exclusive(vm)));
         .with_inner_size(glutin::dpi::LogicalSize::new(request_width, request_height));
     let windowed_context = ContextBuilder::new()
-        .with_vsync(true)
+        //.with_vsync(true)
         .build_windowed(wb, &el)?;
 
     let windowed_context = unsafe { windowed_context.make_current().map_err(|(_, e)| e)? };
@@ -53,10 +54,11 @@ pub fn run_display<Disp: Display + 'static>(
         return Err(failure::err_msg("glGetError not loaded"));
     }
 
-    unsafe { gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS) };
-    check_gl()?;
-
-    gl_register_debug()?;
+    if cfg!(debug_assertions) {
+        unsafe { gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS) };
+        check_gl()?;
+        gl_register_debug()?;
+    }
 
     //kernel::init_gl_funcs(|symbol| windowed_context.get_proc_address(symbol) as *const _);
 

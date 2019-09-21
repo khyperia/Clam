@@ -1,12 +1,16 @@
-use crate::gl_help::{Texture, TextureType};
-use crate::input::Input;
-use crate::kernel::FractalKernel;
-use crate::kernel_compilation;
-use crate::settings::Settings;
-use crate::Key;
+use crate::{
+    gl_help::{Texture, TextureType},
+    input::Input,
+    kernel::FractalKernel,
+    kernel_compilation,
+    settings::Settings,
+    Key,
+};
 use failure::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 pub struct SyncInteractiveKernel<T: TextureType> {
     rebuild: Arc<AtomicBool>,

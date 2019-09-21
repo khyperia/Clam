@@ -1,9 +1,10 @@
-use crate::check_gl;
-use crate::gl_help::{set_arg_u32, CpuTexture, Texture, TextureType};
-use crate::kernel_compilation;
-use crate::settings::Settings;
-use failure;
-use failure::Error;
+use crate::{
+    check_gl,
+    gl_help::{set_arg_u32, CpuTexture, Texture, TextureType},
+    kernel_compilation,
+    settings::Settings,
+};
+use failure::{self, Error};
 use gl::types::*;
 
 struct KernelImage<T: TextureType> {
@@ -12,7 +13,7 @@ struct KernelImage<T: TextureType> {
     scale: usize,
     output: Option<Texture<T>>,
     scratch: Option<Texture<[f32; 4]>>,
-    randbuf: Option<Texture<[u32; 2]>>,
+    randbuf: Option<Texture<u32>>,
 }
 
 impl<T: TextureType> KernelImage<T> {
@@ -31,7 +32,7 @@ impl<T: TextureType> KernelImage<T> {
         (self.width / self.scale, self.height / self.scale)
     }
 
-    fn data(&mut self) -> Result<(&Texture<T>, &Texture<[f32; 4]>, &Texture<[u32; 2]>), Error> {
+    fn data(&mut self) -> Result<(&Texture<T>, &Texture<[f32; 4]>, &Texture<u32>), Error> {
         let (width, height) = self.size();
         if self.output.is_none() {
             self.output = Some(Texture::new(width, height)?);
@@ -78,8 +79,6 @@ impl<T: TextureType> KernelImage<T> {
 pub struct FractalKernel<T: TextureType> {
     kernel: Option<GLuint>,
     data: KernelImage<T>,
-    //cpu_cfg: Vec<u8>,
-    //cfg: Option<Buffer<u8>>,
     old_settings: Settings,
     frame: u32,
     local_size: usize,
@@ -93,6 +92,7 @@ impl<T: TextureType> FractalKernel<T> {
             gl::GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, 0, &mut local_size);
             check_gl()?;
         }
+        local_size = local_size.min(64);
         let result = Self {
             kernel: None,
             data: KernelImage::new(width, height),
@@ -148,12 +148,12 @@ impl<T: TextureType> FractalKernel<T> {
         Ok(())
     }
 
-    fn launch(&mut self, settings: &Settings) -> Result<(), Error> {
+    fn launch(&mut self) -> Result<(), Error> {
         if let Some(kernel) = self.kernel {
             let (width, height) = self.data.size();
             let (texture, scratch, randbuf) = self.data.data()?;
             let total_size = width * height;
-            let local_size = settings.find("local_size").unwrap_u32() as usize;
+            let local_size = self.local_size;
             let launch_size = (total_size + local_size - 1) / local_size;
             unsafe {
                 gl::UseProgram(kernel);
@@ -175,7 +175,7 @@ impl<T: TextureType> FractalKernel<T> {
     pub fn run(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
         self.rebuild(settings, force_rebuild)?;
         self.update(settings)?;
-        self.launch(settings)?;
+        self.launch()?;
         Ok(())
     }
 

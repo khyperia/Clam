@@ -5,7 +5,6 @@ authors = ["khyperia <khyperia@live.com>"]
 edition = "2018"
 
 [dependencies]
-byteorder = "*"
 cgmath = "*"
 failure = "*"
 gl = "*"

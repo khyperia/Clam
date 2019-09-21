@@ -1,12 +1,12 @@
-use crate::check_gl;
-use crate::display;
-use crate::display::Display;
-use crate::fps_counter::FpsCounter;
-use crate::interactive::SyncInteractiveKernel;
-use crate::render_text::TextRenderer;
-use crate::render_texture::TextureRenderer;
-use crate::render_texture::TextureRendererKind;
-use crate::Key;
+use crate::{
+    check_gl,
+    display::{run_display, Display},
+    fps_counter::FpsCounter,
+    interactive::SyncInteractiveKernel,
+    render_text::TextRenderer,
+    render_texture::{TextureRenderer, TextureRendererKind},
+    Key,
+};
 use failure::Error;
 
 struct GlDisplay {
@@ -50,7 +50,6 @@ impl Display for GlDisplay {
         );
         self.text_renderer
             .render(&self.texture_renderer, &display, self.width, self.height)?;
-        //gl.draw_frame([1.0, 0.5, 0.7, 1.0]);
         self.fps.tick();
         check_gl()?;
         Ok(())
@@ -75,5 +74,5 @@ impl Display for GlDisplay {
 }
 
 pub fn gl_display(width: f64, height: f64) -> Result<(), Error> {
-    display::run_display::<GlDisplay>(width, height)
+    run_display::<GlDisplay>(width, height)
 }

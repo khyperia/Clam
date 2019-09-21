@@ -1,20 +1,16 @@
-use crate::gl_help::{set_arg_f32, set_arg_u32};
-use crate::input::Input;
-use crate::setting_value::SettingValue;
-use crate::setting_value::SettingValueEnum;
-use cgmath::prelude::*;
-use cgmath::Vector3;
-use failure::err_msg;
-use failure::Error;
+use crate::{
+    gl_help::{set_arg_f32, set_arg_u32},
+    input::Input,
+    setting_value::{SettingValue, SettingValueEnum},
+};
+use cgmath::{prelude::*, Vector3};
+use failure::{err_msg, Error};
 use gl::types::*;
-use std::fmt::Write as FmtWrite;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::BufWriter;
-use std::io::Lines;
-use std::io::Write;
+use std::{
+    fmt::Write as FmtWrite,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, BufWriter, Lines, Write},
+};
 
 #[derive(Clone, Default, PartialEq)]
 pub struct Settings {

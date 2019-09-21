@@ -1,35 +1,16 @@
-use crate::check_gl;
-use crate::display;
-use crate::display::Display;
-use crate::fps_counter::FpsCounter;
-use crate::interactive::SyncInteractiveKernel;
-use crate::render_text::TextRenderer;
-use crate::render_texture::TextureRenderer;
-use crate::render_texture::TextureRendererKind;
-use crate::settings::Settings;
-use crate::Key;
-use cgmath::prelude::*;
-use cgmath::Matrix4;
-use cgmath::Vector3;
+use crate::{
+    check_gl,
+    display::{run_display, Display},
+    fps_counter::FpsCounter,
+    interactive::SyncInteractiveKernel,
+    render_text::TextRenderer,
+    render_texture::{TextureRenderer, TextureRendererKind},
+    settings::Settings,
+    Key,
+};
+use cgmath::{prelude::*, Matrix4, Vector3};
 use failure::Error;
 use gl::types::*;
-
-/*
-fn mat_print(mat: &[[f32; 4]; 3]) {
-    println!(
-        "[{}, {}, {}, {}]",
-        mat[0][0], mat[0][1], mat[0][2], mat[0][3]
-    );
-    println!(
-        "[{}, {}, {}, {}]",
-        mat[1][0], mat[1][1], mat[1][2], mat[1][3]
-    );
-    println!(
-        "[{}, {}, {}, {}]",
-        mat[2][0], mat[2][1], mat[2][2], mat[2][3]
-    );
-}
-*/
 
 fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f32> {
     Matrix4::new(
@@ -175,7 +156,6 @@ unsafe fn render_eye(
     texture: GLuint,
 ) -> Result<(), Error> {
     check_gl()?;
-
     let ovr_tex = openvr::compositor::Texture {
         handle: openvr::compositor::texture::Handle::OpenGLTexture(texture as usize),
         color_space: openvr::compositor::texture::ColorSpace::Gamma,
@@ -188,8 +168,8 @@ unsafe fn render_eye(
 struct VrDisplay {
     system: openvr::System,
     compositor: openvr::Compositor,
-    interactive_kernel_left: SyncInteractiveKernel<u8>,
-    interactive_kernel_right: SyncInteractiveKernel<u8>,
+    interactive_kernel_left: SyncInteractiveKernel<[u8; 4]>,
+    interactive_kernel_right: SyncInteractiveKernel<[u8; 4]>,
     hands_state: HandsState,
     texture_renderer_u8: TextureRenderer,
     texture_renderer_f32: TextureRenderer,
@@ -200,7 +180,7 @@ struct VrDisplay {
 }
 
 impl Display for VrDisplay {
-    fn setup(_: u32, _: u32) -> Result<Self, Error> {
+    fn setup(_: usize, _: usize) -> Result<Self, Error> {
         let ovr = unsafe { openvr::init(openvr::ApplicationType::Scene) }?;
         let system = ovr.system()?;
         let compositor = ovr.compositor()?;
@@ -209,9 +189,9 @@ impl Display for VrDisplay {
         let hands_state = HandsState::new();
 
         let mut interactive_kernel_left =
-            SyncInteractiveKernel::<u8>::create(vr_width, vr_height, true)?;
+            SyncInteractiveKernel::<[u8; 4]>::create(vr_width as usize, vr_height as usize)?;
         let mut interactive_kernel_right =
-            SyncInteractiveKernel::<u8>::create(vr_width, vr_height, true)?;
+            SyncInteractiveKernel::<[u8; 4]>::create(vr_width as usize, vr_height as usize)?;
         *interactive_kernel_left
             .settings
             .find_mut("VR")
@@ -303,28 +283,20 @@ impl Display for VrDisplay {
 
         self.interactive_kernel_left.launch()?;
         self.interactive_kernel_right.launch()?;
-        let left_img = self
-            .interactive_kernel_left
-            .download()?
-            .data_gl
-            .expect("vr_display needs OGL textures");
-        let right_img = self
-            .interactive_kernel_right
-            .download()?
-            .data_gl
-            .expect("vr_display needs OGL textures");
+        let left_img = self.interactive_kernel_left.texture()?;
+        let right_img = self.interactive_kernel_right.texture()?;
 
         unsafe {
-            render_eye(&self.compositor, openvr::Eye::Left, left_img)?;
-            render_eye(&self.compositor, openvr::Eye::Right, right_img)?;
+            render_eye(&self.compositor, openvr::Eye::Left, left_img.id)?;
+            render_eye(&self.compositor, openvr::Eye::Right, right_img.id)?;
         }
 
         unsafe { gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT) };
 
         self.texture_renderer_u8
-            .render(left_img, 0.0, 0.0, 0.5, 1.0)?;
+            .render(left_img.id, 0.0, 0.0, 0.5, 1.0)?;
         self.texture_renderer_u8
-            .render(right_img, 0.5, 0.0, 0.5, 1.0)?;
+            .render(right_img.id, 0.5, 0.0, 0.5, 1.0)?;
 
         self.fps.tick();
         let display = format!(
@@ -335,15 +307,15 @@ impl Display for VrDisplay {
         self.text_renderer.render(
             &self.texture_renderer_f32,
             &display,
-            self.vr_width,
-            self.vr_height,
+            self.vr_width as usize,
+            self.vr_height as usize,
         )?;
 
         check_gl()?;
         Ok(())
     }
 
-    fn resize(&mut self, _: u32, _: u32) -> Result<(), Error> {
+    fn resize(&mut self, _: usize, _: usize) -> Result<(), Error> {
         Ok(())
     }
     fn key_up(&mut self, _: Key) -> Result<(), Error> {
@@ -355,5 +327,5 @@ impl Display for VrDisplay {
 }
 
 pub fn vr_display() -> Result<(), Error> {
-    display::run_display::<VrDisplay>(100.0, 100.0)
+    run_display::<VrDisplay>(100.0, 100.0)
 }

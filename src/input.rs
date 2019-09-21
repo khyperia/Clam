@@ -1,13 +1,10 @@
-use crate::settings::Settings;
-use crate::Key;
-use cgmath::prelude::*;
-use cgmath::Quaternion;
-use cgmath::Rad;
-use cgmath::Vector3;
+use crate::{settings::Settings, Key};
+use cgmath::{prelude::*, Quaternion, Rad, Vector3};
 use failure::Error;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::time::Instant;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    time::Instant,
+};
 
 #[derive(Default)]
 pub struct Input {

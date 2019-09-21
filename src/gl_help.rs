@@ -1,11 +1,11 @@
 use crate::check_gl;
 use failure::Error;
 use gl::types::*;
-use std::ffi::CStr;
-use std::ffi::CString;
-use std::marker::PhantomData;
-use std::ptr::null;
-use std::ptr::null_mut;
+use std::{
+    ffi::{CStr, CString},
+    marker::PhantomData,
+    ptr::null_mut,
+};
 
 pub trait TextureType: Clone + Default {
     fn internalformat() -> GLuint;
@@ -45,7 +45,19 @@ impl TextureType for [u32; 2] {
         gl::RG32UI
     }
     fn format() -> GLuint {
-        gl::RG
+        gl::RG_INTEGER
+    }
+    fn type_() -> GLuint {
+        gl::UNSIGNED_INT
+    }
+}
+
+impl TextureType for u32 {
+    fn internalformat() -> GLuint {
+        gl::R32UI
+    }
+    fn format() -> GLuint {
+        gl::RED_INTEGER
     }
     fn type_() -> GLuint {
         gl::UNSIGNED_INT
@@ -77,14 +89,6 @@ impl<T: TextureType> Texture<T> {
             size: (width, height),
             _t: PhantomData,
         })
-    }
-
-    pub fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
-        let format = T::internalformat();
-        unsafe {
-            gl::TextureStorage2D(self.id, 1, format, width as _, height as _);
-        }
-        check_gl()
     }
 
     pub fn download(&mut self) -> Result<CpuTexture<T>, Error> {
@@ -176,12 +180,15 @@ pub fn set_arg_u32(kernel: GLuint, key: &str, value: u32) -> Result<(), Error> {
     Ok(())
 }
 
-pub unsafe fn create_compute_program(source: &[u8]) -> Result<GLuint, Error> {
-    let shader = create_shader(source, gl::COMPUTE_SHADER)?;
+pub unsafe fn create_compute_program(sources: &[&str]) -> Result<GLuint, Error> {
+    let shader = create_shader(sources, gl::COMPUTE_SHADER)?;
     create_program(&[shader])
 }
 
-pub unsafe fn create_vert_frag_program(vertex: &[u8], fragment: &[u8]) -> Result<GLuint, Error> {
+pub unsafe fn create_vert_frag_program(
+    vertex: &[&str],
+    fragment: &[&str],
+) -> Result<GLuint, Error> {
     let vertex = create_shader(vertex, gl::VERTEX_SHADER)?;
     let fragment = create_shader(fragment, gl::FRAGMENT_SHADER)?;
     create_program(&[vertex, fragment])
@@ -216,14 +223,22 @@ pub unsafe fn create_program(shaders: &[GLuint]) -> Result<GLuint, Error> {
     Ok(program)
 }
 
-pub unsafe fn create_shader(source: &[u8], shader_type: GLenum) -> Result<GLuint, Error> {
+pub unsafe fn create_shader(sources: &[&str], shader_type: GLenum) -> Result<GLuint, Error> {
     let shader = gl::CreateShader(shader_type);
     check_gl()?;
+    let vec_sources = sources
+        .iter()
+        .map(|source| source.as_ptr() as *const GLchar)
+        .collect::<Vec<_>>();
+    let lengths = sources
+        .iter()
+        .map(|source| source.len() as GLint)
+        .collect::<Vec<_>>();
     gl::ShaderSource(
         shader,
-        1,
-        &(source.as_ptr()) as *const *const u8 as *const *const GLchar,
-        null(),
+        vec_sources.len() as GLsizei,
+        vec_sources.as_ptr() as *const *const GLchar,
+        lengths.as_ptr(),
     );
     check_gl()?;
     gl::CompileShader(shader);
