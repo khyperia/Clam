@@ -2,6 +2,7 @@ use crate::Key;
 use crate::{check_gl, gl_register_debug};
 use failure::Error;
 use glutin;
+use glutin::dpi::PhysicalSize;
 use glutin::event::{ElementState, Event, WindowEvent};
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
@@ -13,6 +14,16 @@ pub trait Display: Sized {
     fn resize(&mut self, width: usize, height: usize) -> Result<(), Error>;
     fn key_up(&mut self, key: Key) -> Result<(), Error>;
     fn key_down(&mut self, key: Key) -> Result<(), Error>;
+}
+
+pub fn run_headless<T>(func: impl Fn() -> T) -> Result<T, Error> {
+    unsafe {
+        let el = EventLoop::new();
+        let ctx = ContextBuilder::new().build_headless(&el, PhysicalSize::new(10.0, 10.0))?;
+        let ctx_cur = ctx.make_current().map_err(|(_, e)| e)?;
+        gl::load_with(|symbol| ctx_cur.get_proc_address(symbol) as *const _);
+        Ok(func())
+    }
 }
 
 pub fn run_display<Disp: Display + 'static>(

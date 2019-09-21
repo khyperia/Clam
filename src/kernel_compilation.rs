@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashSet;
 use std::ffi::CString;
+use std::fmt::Write;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -14,8 +15,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 
-const MANDELBOX: &str = include_str!("mandelbox.gl");
-const MANDELBOX_PATH: &str = "src/mandelbox.gl";
+const MANDELBOX: &str = include_str!("mandelbox.glsl");
+const MANDELBOX_PATH: &str = "src/mandelbox.glsl";
 
 /*
 fn dump_binary(program: &Program) -> Result<(), Error> {
@@ -78,8 +79,11 @@ fn get_src() -> Result<String, Error> {
     Ok(contents)
 }
 
-fn generate_src(_settings: &Settings) -> String {
-    let result = String::new();
+fn generate_src(_settings: &Settings, local_size: usize) -> String {
+    let mut result = String::new();
+    println!("Building using local size: {}", local_size);
+    writeln!(&mut result, "#version 430").unwrap();
+    writeln!(&mut result, "layout(local_size_x = {}) in;", local_size).unwrap();
     // result.push_str("#define NOT_EDITOR 1\n");
     // result.push_str("struct MandelboxCfg {\n");
     // for value in &settings.values {
@@ -100,10 +104,10 @@ pub fn refresh_settings(settings: &mut Settings) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn rebuild(settings: &mut Settings) -> Result<GLuint, Error> {
+pub fn rebuild(settings: &mut Settings, local_size: usize) -> Result<GLuint, Error> {
     let src = get_src()?;
     set_src(settings, &src);
-    let mut full = generate_src(settings);
+    let mut full = generate_src(settings, local_size);
     full.push_str(&src);
     let cstr = CString::new(full)?;
     unsafe { create_compute_program(cstr.as_bytes_with_nul()) }
@@ -148,7 +152,7 @@ pub fn rebuild(settings: &mut Settings) -> Result<GLuint, Error> {
 fn set_src(settings: &mut Settings, src: &str) {
     lazy_static! {
         static ref RE: Regex = Regex::new(
-           r#"(?m)^ *uniform *(?P<kind>float|int) (?P<name>[a-zA-Z0-9_]+) *; *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
+           r#"(?m)^ *uniform *(?P<kind>float|uint) (?P<name>[a-zA-Z0-9_]+) *; *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
     }
     let mut set: HashSet<String> = settings
         .values
@@ -167,7 +171,7 @@ fn set_src(settings: &mut Settings, src: &str) {
                 let change = cap["change"].parse().expect("Failed to extract regex");
                 SettingValueEnum::F32(value, change)
             }
-            "int" => {
+            "uint" => {
                 let value = cap["value"].parse().expect("Failed to extract regex");
                 SettingValueEnum::U32(value)
             }
@@ -179,6 +183,8 @@ fn set_src(settings: &mut Settings, src: &str) {
     }
     settings.define_variable("render_scale", SettingValueEnum::U32(1), false);
     set.remove("render_scale");
+    settings.define_variable("local_size", SettingValueEnum::U32(32), false);
+    set.remove("local_size");
     assert!(once, "Regex should get at least one setting");
     find_defines(settings, src, &mut set);
     for to_delete in set {

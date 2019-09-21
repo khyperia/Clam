@@ -10,8 +10,9 @@ struct KernelImage<T: TextureType> {
     width: usize,
     height: usize,
     scale: usize,
-    scratch: Option<Texture<[f32; 4]>>,
     output: Option<Texture<T>>,
+    scratch: Option<Texture<[f32; 4]>>,
+    randbuf: Option<Texture<[u32; 2]>>,
 }
 
 impl<T: TextureType> KernelImage<T> {
@@ -20,8 +21,9 @@ impl<T: TextureType> KernelImage<T> {
             width,
             height,
             scale: 1,
-            scratch: None,
             output: None,
+            scratch: None,
+            randbuf: None,
         }
     }
 
@@ -29,7 +31,7 @@ impl<T: TextureType> KernelImage<T> {
         (self.width / self.scale, self.height / self.scale)
     }
 
-    fn data(&mut self) -> Result<(&Texture<T>, &Texture<[f32; 4]>), Error> {
+    fn data(&mut self) -> Result<(&Texture<T>, &Texture<[f32; 4]>, &Texture<[u32; 2]>), Error> {
         let (width, height) = self.size();
         if self.output.is_none() {
             self.output = Some(Texture::new(width, height)?);
@@ -37,9 +39,13 @@ impl<T: TextureType> KernelImage<T> {
         if self.scratch.is_none() {
             self.scratch = Some(Texture::new(width, height)?);
         }
+        if self.randbuf.is_none() {
+            self.randbuf = Some(Texture::new(width, height)?);
+        }
         Ok((
             self.output.as_ref().expect("Didn't assign output?"),
             self.scratch.as_ref().expect("Didn't assign scratch?"),
+            self.randbuf.as_ref().expect("Didn't assign randbuf?"),
         ))
     }
 
@@ -54,8 +60,9 @@ impl<T: TextureType> KernelImage<T> {
         self.height = new_height;
         self.scale = new_scale.max(1);
         if old_size != self.size() {
-            self.scratch = None;
             self.output = None;
+            self.scratch = None;
+            self.randbuf = None;
         }
         Ok(())
     }
@@ -75,16 +82,23 @@ pub struct FractalKernel<T: TextureType> {
     //cfg: Option<Buffer<u8>>,
     old_settings: Settings,
     frame: u32,
+    local_size: usize,
 }
 
 impl<T: TextureType> FractalKernel<T> {
     pub fn create(width: usize, height: usize, settings: &mut Settings) -> Result<Self, Error> {
         kernel_compilation::refresh_settings(settings)?;
+        let mut local_size = 0;
+        unsafe {
+            gl::GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, 0, &mut local_size);
+            check_gl()?;
+        }
         let result = Self {
             kernel: None,
             data: KernelImage::new(width, height),
             old_settings: settings.clone(),
             frame: 0,
+            local_size: local_size as usize,
         };
         Ok(result)
     }
@@ -92,7 +106,7 @@ impl<T: TextureType> FractalKernel<T> {
     pub fn rebuild(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
         if settings.check_rebuild() || self.kernel.is_none() || force_rebuild {
             println!("Rebuilding");
-            let new_kernel = kernel_compilation::rebuild(settings);
+            let new_kernel = kernel_compilation::rebuild(settings, self.local_size);
             match new_kernel {
                 Ok(k) => {
                     self.kernel = Some(k);
@@ -112,46 +126,43 @@ impl<T: TextureType> FractalKernel<T> {
     }
 
     fn update(&mut self, settings: &Settings) -> Result<(), Error> {
-        if let Some(kernel) = self.kernel {
-            settings.set_uniforms(kernel)?;
-        }
-
-        if *settings != self.old_settings {
-            self.old_settings = settings.clone();
-            self.frame = 0;
-        }
-
         self.data.resize(
             self.data.width,
             self.data.height,
             settings.find("render_scale").unwrap_u32() as usize,
         )?;
 
-        Ok(())
-    }
+        if *settings != self.old_settings {
+            self.old_settings = settings.clone();
+            self.frame = 0;
+        }
 
-    fn set_args(&mut self) -> Result<(), Error> {
-        let (width, height) = self.data.size();
         if let Some(kernel) = self.kernel {
+            let (width, height) = self.data.size();
+            settings.set_uniforms(kernel)?;
             set_arg_u32(kernel, "width", width as u32)?;
             set_arg_u32(kernel, "height", height as u32)?;
             set_arg_u32(kernel, "frame", self.frame)?;
         }
+
         Ok(())
     }
 
-    fn launch(&mut self) -> Result<(), Error> {
+    fn launch(&mut self, settings: &Settings) -> Result<(), Error> {
         if let Some(kernel) = self.kernel {
             let (width, height) = self.data.size();
-            let (texture, scratch) = self.data.data()?;
+            let (texture, scratch, randbuf) = self.data.data()?;
             let total_size = width * height;
+            let local_size = settings.find("local_size").unwrap_u32() as usize;
+            let launch_size = (total_size + local_size - 1) / local_size;
             unsafe {
                 gl::UseProgram(kernel);
                 check_gl()?;
                 texture.bind(0)?;
                 scratch.bind(1)?;
+                randbuf.bind(2)?;
                 check_gl()?;
-                gl::DispatchCompute(total_size as u32, 1, 1);
+                gl::DispatchCompute(launch_size as u32, 1, 1);
                 check_gl()?;
                 gl::UseProgram(0);
                 check_gl()?;
@@ -164,8 +175,7 @@ impl<T: TextureType> FractalKernel<T> {
     pub fn run(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
         self.rebuild(settings, force_rebuild)?;
         self.update(settings)?;
-        self.set_args()?;
-        self.launch()?;
+        self.launch(settings)?;
         Ok(())
     }
 

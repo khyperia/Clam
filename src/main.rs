@@ -215,23 +215,17 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
     }
 }
 
-fn interactive_cmd() -> Result<(), Error> {
-    let width = 1920.0;
-    let height = 1080.0;
-    display_gl::gl_display(width, height)
-}
-
 fn try_main() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && arguments[0] == "--render" {
-        render(&arguments[1..])?;
+        display::run_headless(|| render(&arguments[1..]))??
     } else if arguments.len() > 2 && arguments[0] == "--video" {
-        video_cmd(&arguments[1..])?;
+        display::run_headless(|| video_cmd(&arguments[1..]))??
     } else if cfg!(feature = "vr") && arguments.len() == 1 && arguments[0] == "--vr" {
         #[cfg(feature = "vr")]
-        display_vr::vr_display()?;
+        display_vr::vr_display()?
     } else if arguments.is_empty() {
-        interactive_cmd()?;
+        display_gl::gl_display(1920.0, 1080.0)?
     } else {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");

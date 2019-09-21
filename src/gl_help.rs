@@ -40,6 +40,18 @@ impl TextureType for [u8; 4] {
     }
 }
 
+impl TextureType for [u32; 2] {
+    fn internalformat() -> GLuint {
+        gl::RG32UI
+    }
+    fn format() -> GLuint {
+        gl::RG
+    }
+    fn type_() -> GLuint {
+        gl::UNSIGNED_INT
+    }
+}
+
 pub struct Texture<T: TextureType> {
     pub id: GLuint,
     pub size: (usize, usize),
