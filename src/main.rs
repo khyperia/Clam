@@ -15,7 +15,7 @@ mod setting_value;
 mod settings;
 
 use chrono::prelude::*;
-use failure::Error;
+use failure::{err_msg, Error};
 use gl::types::*;
 use gl_help::CpuTexture;
 use glutin::event::VirtualKeyCode as Key;
@@ -23,7 +23,17 @@ use kernel::FractalKernel;
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
 use settings::{KeyframeList, Settings};
-use std::{env::args, ffi::c_void, fs::File, io::BufWriter, ptr::null, slice, str, sync::mpsc};
+use std::{
+    env::args,
+    ffi::c_void,
+    fs::File,
+    io::{BufWriter, Write},
+    mem::drop,
+    process::{Command, Stdio},
+    ptr::null,
+    slice, str,
+    sync::mpsc,
+};
 
 fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
@@ -32,6 +42,10 @@ fn f32_to_u8(px: f32) -> u8 {
 fn save_image(image: &CpuTexture<[f32; 4]>, path: &str) -> Result<(), Error> {
     let file = File::create(path)?;
     let w = &mut BufWriter::new(file);
+    write_image(image, w)
+}
+
+fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error> {
     let mut encoder = Encoder::new(w, image.width as u32, image.height as u32);
     encoder.set_color(ColorType::RGB);
     encoder.set_depth(BitDepth::Eight);
@@ -86,10 +100,6 @@ extern "system" fn debug_callback(
     );
 }
 
-// #[cfg(all(windows, feature = "vr"))]
-// #[link(name = "Shell32")]
-// extern "C" {}
-
 #[cfg(not(windows))]
 fn progress_count(rpp: usize) -> usize {
     (rpp / 20).min(4).max(16)
@@ -119,7 +129,7 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     kernel.sync_renderer()?;
     let image = kernel.download()?;
     println!("render done, saving");
-    let local: DateTime<Local> = Local::now(); // e.g. `2014-11-28T21:45:59.324310806+09:00`
+    let local: DateTime<Local> = Local::now();
     let filename = local.format("%Y-%m-%d_%H-%M-%S.png").to_string();
     save_image(&image, &filename)?;
     println!("done");
@@ -127,18 +137,59 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
 }
 
 fn video_one(
-    frame: usize,
     rpp: usize,
     kernel: &mut FractalKernel<[f32; 4]>,
     settings: &mut Settings,
-    stream: &mpsc::SyncSender<(usize, CpuTexture<[f32; 4]>)>,
+    stream: &mpsc::SyncSender<CpuTexture<[f32; 4]>>,
 ) -> Result<(), Error> {
     for _ in 0..rpp {
         kernel.run(settings, false)?;
     }
     let image = kernel.download()?;
-    stream.send((frame, image))?;
+    stream.send(image)?;
     Ok(())
+}
+
+fn video_write(stream: mpsc::Receiver<CpuTexture<[f32; 4]>>) -> Result<(), Error> {
+    let exe = if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    };
+    println!("Starting {}", exe);
+    let mut ffmpeg = Command::new(exe)
+        .args(&[
+            "-f",
+            "image2pipe",
+            "-framerate",
+            "60",
+            "-i",
+            "-",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "video.mp4",
+            "-y",
+        ])
+        .stdin(Stdio::piped())
+        .spawn()?;
+    while let Ok(img) = stream.recv() {
+        let ffmpeg_stdin = ffmpeg
+            .stdin
+            .as_mut()
+            .expect("ffmpeg process failed to redirect stdin");
+        write_image(&img, ffmpeg_stdin)?;
+    }
+    // make sure to drop stdin to close process before waiting
+    ffmpeg.stdin = None;
+    println!("closed ffmpeg stdin, waiting...");
+    let res = ffmpeg.wait()?;
+    if res.success() {
+        Ok(())
+    } else {
+        Err(err_msg(format!("ffmpeg exited with error code: {}", res)))
+    }
 }
 
 fn video(width: usize, height: usize, rpp: usize, frames: usize, wrap: bool) -> Result<(), Error> {
@@ -150,21 +201,16 @@ fn video(width: usize, height: usize, rpp: usize, frames: usize, wrap: bool) -> 
 
     let (send, recv) = mpsc::sync_channel(5);
 
-    std::thread::spawn(move || {
-        while let Ok((frame, img)) = recv.recv() {
-            match save_image(&img, &format!("render{:03}.png", frame)) {
-                Ok(()) => (),
-                Err(err) => println!("Error saving image: {}", err),
-            }
-        }
-    });
+    let thread_handle = std::thread::spawn(move || video_write(recv));
 
     for frame in 0..frames {
         let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
-        video_one(frame, rpp, &mut kernel, settings, &send)?;
-        let value = (frame + 1) as f32 / frames as f32;
+        video_one(rpp, &mut kernel, settings, &send)?;
+        let value = (frame + 1) as f64 / frames as f64;
         println!("{}", progress.time_str(value));
     }
+    drop(send);
+    thread_handle.join().expect("Couldn't join thread")?;
     println!("done");
     Ok(())
 }

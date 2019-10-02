@@ -37,12 +37,11 @@ uniform float light_brightness_1_val;    // 4.0 -1.0
 uniform float ambient_brightness_hue;    // 0.65 0.25
 uniform float ambient_brightness_sat;    // 0.2 -1.0
 uniform float ambient_brightness_val;    // 1.0 -1.0
-uniform float reflect_brightness;        // 1.0 0.125
-uniform float surface_color_variance;    // 1.0 -0.25
+uniform float surface_color_variance;    // 0.0625 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
-uniform float surface_color_spread;      // 1.0 0.125
 uniform float surface_color_saturation;  // 1.0 0.125
-uniform float surface_color_specular;    // 0.5 0.125
+uniform float surface_color_value;        // 1.0 0.125
+uniform float surface_color_specular;    // 0.0 0.125
 uniform float plane_x;                   // 3.0 1.0
 uniform float plane_y;                   // 3.5 1.0
 uniform float plane_z;                   // 2.5 1.0
@@ -67,6 +66,7 @@ uniform uint frame;
 
 vec3 HueToRGB(float hue, float saturation, float value)
 {
+    hue = mod(hue, 1.0f);
     hue *= 3;
     float frac = mod(hue, 1.0f);
     vec3 color;
@@ -105,7 +105,7 @@ vec3 LightBrightness1()
     return HueToRGB(light_brightness_1_hue,
                     light_brightness_1_sat,
                     light_brightness_1_val) /
-           reflect_brightness;
+           surface_color_value;
 }
 
 vec3 AmbientBrightness()
@@ -113,7 +113,7 @@ vec3 AmbientBrightness()
     return HueToRGB(ambient_brightness_hue,
                     ambient_brightness_sat,
                     ambient_brightness_val) /
-           reflect_brightness;
+           surface_color_value;
 }
 
 struct Random
@@ -450,23 +450,15 @@ struct Material GetMaterial(vec3 offset)
 {
     int raw_color_data = 0;
     const float de = DeFractal(offset, true, raw_color_data);
-    float base_color = raw_color_data / 16.0f;
-
-    base_color *= surface_color_variance;
-    base_color += surface_color_shift;
-    vec3 color = vec3(
-        sin(TAU * base_color),
-        sin(TAU * (base_color + surface_color_spread * 1.0f / 3.0f)),
-        sin(TAU * (base_color + surface_color_spread * 2.0f / 3.0f)));
-    color = color * 0.5f + vec3(0.5f, 0.5f, 0.5f);
-    color = surface_color_saturation * (color - vec3(1, 1, 1)) + vec3(1, 1, 1);
 
     const float light1 = DeSphere(LightPos1(), light_radius_1, offset);
 
     struct Material result;
     if (de < light1)
     {
-        result.color = color * reflect_brightness;
+        const float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
+        const vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
+        result.color = color;
         result.specular = surface_color_specular;
         result.emissive = vec3(0, 0, 0);
     }

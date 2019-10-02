@@ -1,6 +1,7 @@
 .vs/
 /target/
 *.png
+*.mp4
 settings.clam5
 keyframes.clam5
 *.obj

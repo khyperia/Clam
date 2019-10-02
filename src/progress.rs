@@ -11,20 +11,20 @@ impl Progress {
         }
     }
 
-    fn elapsed(&self) -> f32 {
+    fn elapsed(&self) -> f64 {
         let now = Instant::now();
         let duration = now - self.start;
-        duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
+        duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0
     }
 
-    pub fn time(&self, value: f32) -> f32 {
+    pub fn time(&self, value: f64) -> f64 {
         let time = self.elapsed();
         time / value - time
     }
 
-    fn get_min_sec(mut seconds: f32) -> String {
+    fn get_min_sec(mut seconds: f64) -> String {
         let minutes = (seconds / 60.0) as u32;
-        seconds -= (minutes * 60) as f32;
+        seconds -= (minutes * 60) as f64;
         if minutes == 0 {
             format!("{:05.2}", seconds)
         } else {
@@ -32,7 +32,7 @@ impl Progress {
         }
     }
 
-    pub fn time_str(&self, value: f32) -> String {
+    pub fn time_str(&self, value: f64) -> String {
         let left = self.time(value);
         let elapsed = self.elapsed();
         let total = left + elapsed;

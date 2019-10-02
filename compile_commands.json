@@ -1,7 +1,0 @@
-[
-{
-    "directory": "/mnt/c/Users/khype/Documents/src/clam",
-    "file": "src/mandelbox.cl",
-    "command": "clang -xcl src/mandelbox.cl -cl-std=CL1.2 -Xclang -finclude-default-header"
-}
-]
