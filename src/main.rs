@@ -122,7 +122,7 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
         kernel.run(&mut settings, false)?;
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync_renderer()?;
-            let value = ray as f32 / rpp as f32;
+            let value = ray as f64 / rpp as f64;
             println!("{}", progress.time_str(value));
         }
     }
@@ -150,30 +150,20 @@ fn video_one(
     Ok(())
 }
 
-fn video_write(stream: mpsc::Receiver<CpuTexture<[f32; 4]>>) -> Result<(), Error> {
+fn video_write(stream: mpsc::Receiver<CpuTexture<[f32; 4]>>, twitter: bool) -> Result<(), Error> {
     let exe = if cfg!(windows) {
         "ffmpeg.exe"
     } else {
         "ffmpeg"
     };
-    println!("Starting {}", exe);
-    let mut ffmpeg = Command::new(exe)
-        .args(&[
-            "-f",
-            "image2pipe",
-            "-framerate",
-            "60",
-            "-i",
-            "-",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "video.mp4",
-            "-y",
-        ])
-        .stdin(Stdio::piped())
-        .spawn()?;
+    let mut ffmpeg = Command::new(exe);
+    ffmpeg.stdin(Stdio::piped());
+    ffmpeg.args(&["-f", "image2pipe", "-framerate", "60", "-i", "-"]);
+    if twitter {
+        ffmpeg.args(&["-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "2048K"]);
+    }
+    ffmpeg.args(&["video.mp4", "-y"]);
+    let mut ffmpeg = ffmpeg.spawn()?;
     while let Ok(img) = stream.recv() {
         let ffmpeg_stdin = ffmpeg
             .stdin
@@ -183,7 +173,6 @@ fn video_write(stream: mpsc::Receiver<CpuTexture<[f32; 4]>>) -> Result<(), Error
     }
     // make sure to drop stdin to close process before waiting
     ffmpeg.stdin = None;
-    println!("closed ffmpeg stdin, waiting...");
     let res = ffmpeg.wait()?;
     if res.success() {
         Ok(())
@@ -192,7 +181,14 @@ fn video_write(stream: mpsc::Receiver<CpuTexture<[f32; 4]>>) -> Result<(), Error
     }
 }
 
-fn video(width: usize, height: usize, rpp: usize, frames: usize, wrap: bool) -> Result<(), Error> {
+fn video(
+    width: usize,
+    height: usize,
+    rpp: usize,
+    frames: usize,
+    wrap: bool,
+    twitter: bool,
+) -> Result<(), Error> {
     let mut default_settings = Settings::new();
     let mut kernel = FractalKernel::create(width, height, &mut default_settings)?;
     default_settings.clear_constants();
@@ -201,7 +197,7 @@ fn video(width: usize, height: usize, rpp: usize, frames: usize, wrap: bool) -> 
 
     let (send, recv) = mpsc::sync_channel(5);
 
-    let thread_handle = std::thread::spawn(move || video_write(recv));
+    let thread_handle = std::thread::spawn(move || video_write(recv, twitter));
 
     for frame in 0..frames {
         let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
@@ -246,10 +242,27 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
             args[2].parse()?,
             args[3].parse()?,
             args[4].parse()?,
+            false,
         )
+    } else if args.len() == 4 {
+        let rpp = args[1].parse()?;
+        let frames = args[2].parse()?;
+        let wrap = args[3].parse()?;
+        match &*args[0] {
+            "32k" => video(30720, 17280, rpp, frames, wrap, false),
+            "16k" => video(15360, 8640, rpp, frames, wrap, false),
+            "8k" => video(7680, 4320, rpp, frames, wrap, false),
+            "4k" => video(3840, 2160, rpp, frames, wrap, false),
+            "2k" => video(1920, 1080, rpp, frames, wrap, false),
+            "1k" => video(960, 540, rpp, frames, wrap, false),
+            "0.5k" => video(480, 270, rpp, frames, wrap, false),
+            "0.25k" => video(240, 135, rpp, frames, wrap, false),
+            "twitter" => video(1280, 720, rpp, frames, wrap, true),
+            _ => Err(failure::err_msg("Invalid video resolution alias")),
+        }
     } else {
         Err(failure::err_msg(
-            "--video needs five args: [width] [height] [rpp] [frames] [wrap:true|false]",
+            "--video needs four or five args: [[width] [height]|[0.25k..32k|twitter]] [rpp] [frames] [wrap:true|false]",
         ))
     }
 }
@@ -268,8 +281,10 @@ fn try_main() -> Result<(), Error> {
     } else {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");
-        println!("clam5 --render [8k|4k|2k|1k] [rpp]");
+        println!("clam5 --render [0.25k..32k] [rpp]");
         println!("clam5 --video [width] [height] [rpp] [frames] [wrap:true|false]");
+        println!("clam5 --video [0.25k..32k] [rpp] [frames] [wrap:true|false]");
+        println!("clam5 --video twitter [rpp] [frames] [wrap:true|false]");
         #[cfg(feature = "vr")]
         println!("clam5 --vr");
         println!("clam5");
