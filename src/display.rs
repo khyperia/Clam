@@ -27,7 +27,7 @@ pub fn run_headless<T>(func: impl Fn() -> T) -> Result<T, Error> {
     }
 }
 
-pub fn run_display<Disp: Display + 'static>(
+pub fn run<Disp: Display + 'static>(
     request_width: f64,
     request_height: f64,
 ) -> Result<(), Error> {

@@ -52,7 +52,7 @@ impl<T: TextureType> KernelImage<T> {
     }
 }
 
-pub struct FractalKernel<T: TextureType> {
+pub struct Kernel<T: TextureType> {
     kernel: Option<GLuint>,
     data: KernelImage<T>,
     old_settings: Settings,
@@ -60,7 +60,7 @@ pub struct FractalKernel<T: TextureType> {
     local_size: usize,
 }
 
-impl<T: TextureType> FractalKernel<T> {
+impl<T: TextureType> Kernel<T> {
     pub fn create(width: usize, height: usize, settings: &mut Settings) -> Result<Self, Error> {
         kernel_compilation::refresh_settings(settings)?;
         let mut local_size = 0;

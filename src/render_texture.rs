@@ -4,6 +4,7 @@ use gl::{self, types::*};
 
 // https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/
 
+#[derive(Clone, Copy)]
 pub enum TextureRendererKind {
     #[cfg(feature = "vr")]
     U8,

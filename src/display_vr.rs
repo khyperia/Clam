@@ -1,6 +1,6 @@
 use crate::{
     check_gl,
-    display::{run_display, Display},
+    display::{self, Display},
     fps_counter::FpsCounter,
     interactive::SyncInteractiveKernel,
     render_text::TextRenderer,
@@ -283,8 +283,8 @@ impl Display for VrDisplay {
 
         self.interactive_kernel_left.launch()?;
         self.interactive_kernel_right.launch()?;
-        let left_img = self.interactive_kernel_left.texture()?;
-        let right_img = self.interactive_kernel_right.texture()?;
+        let left_img = self.interactive_kernel_left.texture();
+        let right_img = self.interactive_kernel_right.texture();
 
         unsafe {
             render_eye(&self.compositor, openvr::Eye::Left, left_img.id)?;
@@ -326,6 +326,6 @@ impl Display for VrDisplay {
     }
 }
 
-pub fn vr_display() -> Result<(), Error> {
-    run_display::<VrDisplay>(100.0, 100.0)
+pub fn run() -> Result<(), Error> {
+    display::run::<VrDisplay>(100.0, 100.0)
 }

@@ -1,7 +1,7 @@
 use crate::{
     gl_help::{Texture, TextureType},
     input::Input,
-    kernel::FractalKernel,
+    kernel::Kernel,
     kernel_compilation,
     settings::Settings,
     Key,
@@ -14,7 +14,7 @@ use std::sync::{
 
 pub struct SyncInteractiveKernel<T: TextureType> {
     rebuild: Arc<AtomicBool>,
-    pub kernel: FractalKernel<T>,
+    pub kernel: Kernel<T>,
     pub settings: Settings,
     pub input: Input,
 }
@@ -28,7 +28,7 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
 
         let mut settings = Settings::new();
         let input = Input::new();
-        let kernel = FractalKernel::create(width, height, &mut settings)?;
+        let kernel = Kernel::create(width, height, &mut settings)?;
         let result = Self {
             kernel,
             rebuild,

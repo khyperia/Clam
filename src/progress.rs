@@ -5,8 +5,8 @@ pub struct Progress {
 }
 
 impl Progress {
-    pub fn new() -> Progress {
-        Progress {
+    pub fn new() -> Self {
+        Self {
             start: Instant::now(),
         }
     }

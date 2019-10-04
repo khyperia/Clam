@@ -46,7 +46,7 @@ impl TextRenderer {
         let string = (OFFSET..MAX).map(|c| c as char).collect::<String>();
         let atlas = font
             .layout(&string, scale, offset)
-            .map(|glyph| render_char(glyph, rgb))
+            .map(|glyph| render_char(&glyph, rgb))
             .collect::<Result<Vec<_>, Error>>()?;
 
         Ok(Self {
@@ -93,7 +93,7 @@ impl TextRenderer {
     }
 }
 
-fn render_char(glyph: PositionedGlyph, rgb: (f32, f32, f32)) -> Result<AtlasEntry, Error> {
+fn render_char(glyph: &PositionedGlyph, rgb: (f32, f32, f32)) -> Result<AtlasEntry, Error> {
     let bb = glyph
         .pixel_bounding_box()
         .expect("Could not get bounding box of glyph");
@@ -101,7 +101,7 @@ fn render_char(glyph: PositionedGlyph, rgb: (f32, f32, f32)) -> Result<AtlasEntr
     let width = bb.width();
     let height = bb.height();
 
-    let mut pixels = vec![0f32; width as usize * height as usize * (4 * 4)];
+    let mut pixels = vec![0.0; width as usize * height as usize * (4 * 4)];
 
     glyph.draw(|x, y, v| {
         let index = (y as usize * width as usize + x as usize) * 4;

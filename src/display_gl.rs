@@ -1,6 +1,6 @@
 use crate::{
     check_gl,
-    display::{run_display, Display},
+    display::{self, Display},
     fps_counter::FpsCounter,
     interactive::SyncInteractiveKernel,
     render_text::TextRenderer,
@@ -73,6 +73,6 @@ impl Display for GlDisplay {
     }
 }
 
-pub fn gl_display(width: f64, height: f64) -> Result<(), Error> {
-    run_display::<GlDisplay>(width, height)
+pub fn run(width: f64, height: f64) -> Result<(), Error> {
+    display::run::<GlDisplay>(width, height)
 }

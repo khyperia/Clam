@@ -20,7 +20,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Self {
-        Settings {
+        Self {
             values: Vec::new(),
             rebuild: false,
         }
@@ -293,7 +293,7 @@ fn interpolate(
 }
 
 impl KeyframeList {
-    pub fn new(file: &str, mut base: Settings) -> Result<KeyframeList, Error> {
+    pub fn new(file: &str, mut base: Settings) -> Result<Self, Error> {
         let file = File::open(file)?;
         let reader = BufReader::new(&file);
         let mut lines = reader.lines();
@@ -308,7 +308,7 @@ impl KeyframeList {
             }
             keyframes.push(base.clone());
         }
-        Ok(KeyframeList { base, keyframes })
+        Ok(Self { base, keyframes })
     }
 
     // change to isize::mod_euclidian once stablized

@@ -19,7 +19,7 @@ use failure::{err_msg, Error};
 use gl::types::*;
 use gl_help::CpuTexture;
 use glutin::event::VirtualKeyCode as Key;
-use kernel::FractalKernel;
+use kernel::Kernel;
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
 use settings::{KeyframeList, Settings};
@@ -52,7 +52,7 @@ fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error>
     let mut writer = encoder.write_header()?;
     let width = image.width;
     let height = image.height;
-    let mut output = vec![0u8; width * height * 3];
+    let mut output = vec![0; width * height * 3];
     for y in 0..height {
         for x in 0..width {
             let in_idx = y * width + x;
@@ -112,7 +112,7 @@ fn progress_count(_: usize) -> usize {
 
 fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     let mut settings = Settings::new();
-    let mut kernel = FractalKernel::create(width, height, &mut settings)?;
+    let mut kernel = Kernel::create(width, height, &mut settings)?;
     settings.load("settings.clam5")?;
     settings.all_constants();
     kernel.rebuild(&mut settings, false)?;
@@ -138,7 +138,7 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
 
 fn video_one(
     rpp: usize,
-    kernel: &mut FractalKernel<[f32; 4]>,
+    kernel: &mut Kernel<[f32; 4]>,
     settings: &mut Settings,
     stream: &mpsc::SyncSender<CpuTexture<[f32; 4]>>,
 ) -> Result<(), Error> {
@@ -150,7 +150,7 @@ fn video_one(
     Ok(())
 }
 
-fn video_write(stream: mpsc::Receiver<CpuTexture<[f32; 4]>>, twitter: bool) -> Result<(), Error> {
+fn video_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, twitter: bool) -> Result<(), Error> {
     let exe = if cfg!(windows) {
         "ffmpeg.exe"
     } else {
@@ -190,14 +190,14 @@ fn video(
     twitter: bool,
 ) -> Result<(), Error> {
     let mut default_settings = Settings::new();
-    let mut kernel = FractalKernel::create(width, height, &mut default_settings)?;
+    let mut kernel = Kernel::create(width, height, &mut default_settings)?;
     default_settings.clear_constants();
     let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
     let progress = Progress::new();
 
     let (send, recv) = mpsc::sync_channel(5);
 
-    let thread_handle = std::thread::spawn(move || video_write(recv, twitter));
+    let thread_handle = std::thread::spawn(move || video_write(&recv, twitter));
 
     for frame in 0..frames {
         let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
@@ -275,9 +275,9 @@ fn try_main() -> Result<(), Error> {
         display::run_headless(|| video_cmd(&arguments[1..]))??
     } else if cfg!(feature = "vr") && arguments.len() == 1 && arguments[0] == "--vr" {
         #[cfg(feature = "vr")]
-        display_vr::vr_display()?
+        display_vr::run()?
     } else if arguments.is_empty() {
-        display_gl::gl_display(1920.0, 1080.0)?
+        display_gl::run(1920.0, 1080.0)?
     } else {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");
