@@ -36,11 +36,11 @@ uniform float light_brightness_1_sat;    // 0.4 -1.0
 uniform float light_brightness_1_val;    // 4.0 -1.0
 uniform float ambient_brightness_hue;    // 0.65 0.25
 uniform float ambient_brightness_sat;    // 0.2 -1.0
-uniform float ambient_brightness_val;    // 1.0 -1.0
+uniform float ambient_brightness_val;    // 0.5 -1.0
 uniform float surface_color_variance;    // 0.0625 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
 uniform float surface_color_saturation;  // 1.0 0.125
-uniform float surface_color_value;        // 1.0 0.125
+uniform float surface_color_value;       // 1.0 0.125
 uniform float surface_color_specular;    // 0.0 0.125
 uniform float plane_x;                   // 3.0 1.0
 uniform float plane_y;                   // 3.5 1.0
@@ -57,9 +57,9 @@ uniform float fov_left;                  // -1.0 1.0 const
 uniform float fov_right;                 // 1.0 1.0 const
 uniform float fov_top;                   // 1.0 1.0 const
 uniform float fov_bottom;                // -1.0 1.0 const
-uniform uint max_iters;                   // 20 const
-uniform uint max_ray_steps;               // 256 const
-uniform uint num_ray_bounces;             // 3 const
+uniform uint max_iters;                  // 20 const
+uniform uint max_ray_steps;              // 256 const
+uniform uint num_ray_bounces;            // 4 const
 uniform uint width;
 uniform uint height;
 uniform uint frame;
@@ -129,7 +129,7 @@ uint xorshift32(inout uint x)
 	return x;
 }
 
-float Random_Next(inout struct Random this_)
+float Random_Next(inout Random this_)
 {
     return float(xorshift32(this_.seed.x)) / UINT_MAX;
 }
@@ -147,7 +147,7 @@ struct Random new_Random(uint idx, uint frame, uint global_size)
 }
 */
 
-void Random_Init(inout struct Random this_)
+void Random_Init(inout Random this_)
 {
     this_.seed += gl_GlobalInvocationID.x + 10;
     for (int i = 0; i < 8; i++)
@@ -156,13 +156,13 @@ void Random_Init(inout struct Random this_)
     }
 }
 
-vec2 Random_Disk(inout struct Random this_)
+vec2 Random_Disk(inout Random this_)
 {
     const vec2 polar = vec2(Random_Next(this_), sqrt(Random_Next(this_)));
     return vec2(cos(TAU * polar.x) * polar.y, sin(TAU * polar.x) * polar.y);
 }
 
-vec3 Random_Sphere(inout struct Random this_)
+vec3 Random_Sphere(inout Random this_)
 {
     const float theta = Random_Next(this_);
     const float cosphi = 2 * Random_Next(this_) - 1;
@@ -173,12 +173,12 @@ vec3 Random_Sphere(inout struct Random this_)
     return vec3(x, y, z);
 }
 
-vec3 Random_Ball(inout struct Random this_)
+vec3 Random_Ball(inout Random this_)
 {
     return pow(Random_Next(this_), 1.0/3.0) * Random_Sphere(this_);
 }
 
-vec3 Random_Lambertian(inout struct Random this_, vec3 normal)
+vec3 Random_Lambertian(inout Random this_, vec3 normal)
 {
     return normalize(Random_Ball(this_) + normal);
 }
@@ -188,14 +188,6 @@ struct Ray
     vec3 pos;
     vec3 dir;
 };
-
-struct Ray new_Ray(vec3 pos, vec3 dir)
-{
-    struct Ray result;
-    result.pos = pos;
-    result.dir = dir;
-    return result;
-}
 
 #ifdef VR
 float Remap(float value, float iMin, float iMax, float oMin, float oMax)
@@ -226,12 +218,12 @@ vec3 RayDir(vec3 forward, vec3 up, vec2 screenCoords, float calcFov)
 }
 #endif
 
-vec3 Ray_At(struct Ray this_, float time)
+vec3 Ray_At(Ray this_, float time)
 {
     return this_.pos + this_.dir * time;
 }
 
-void Ray_Dof(inout struct Ray this_, float focalPlane, inout struct Random rand)
+void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
 {
     const vec3 focalPosition = Ray_At(this_, focalPlane);
     // Normalize because the vectors aren't perpendicular
@@ -244,7 +236,7 @@ void Ray_Dof(inout struct Ray this_, float focalPlane, inout struct Random rand)
     this_.pos = focalPosition - this_.dir * focalPlane;
 }
 
-struct Ray Camera(uint x, uint y, uint width, uint height, inout struct Random rand)
+Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
 {
     const vec3 origin = vec3(pos_x, pos_y, pos_z);
     const vec3 look = vec3(look_x, look_y, look_z);
@@ -259,7 +251,7 @@ struct Ray Camera(uint x, uint y, uint width, uint height, inout struct Random r
     const float calcFov = fov * 2.0 / float(width + height);
     const vec3 direction = RayDir(look, up, screenCoords, calcFov);
 #endif
-    struct Ray result = new_Ray(origin, direction);
+    Ray result = Ray(origin, direction);
 #ifndef VR
     Ray_Dof(result, focal_distance, rand);
 #endif
@@ -446,14 +438,14 @@ struct Material
 };
 
 // (r, g, b, spec)
-struct Material GetMaterial(vec3 offset)
+Material GetMaterial(vec3 offset)
 {
     int raw_color_data = 0;
     const float de = DeFractal(offset, true, raw_color_data);
 
     const float light1 = DeSphere(LightPos1(), light_radius_1, offset);
 
-    struct Material result;
+    Material result;
     if (de < light1)
     {
         const float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
@@ -497,7 +489,7 @@ struct Material GetMaterial(vec3 offset)
     return result;
 }
 
-float Cast(struct Ray ray, const float quality, const float maxDist)
+float Cast(Ray ray, const float quality, const float maxDist)
 {
     float distance;
     float totalDistance = 0.0f;
@@ -523,7 +515,7 @@ float Cast(struct Ray ray, const float quality, const float maxDist)
 }
 
 vec3 Trace(
-    struct Ray ray, const uint width, const uint height, inout struct Random rand)
+    Ray ray, const uint width, const uint height, inout Random rand)
 {
     vec3 rayColor = vec3(0, 0, 0);
     vec3 reflectionColor = vec3(1, 1, 1);
@@ -548,7 +540,7 @@ vec3 Trace(
         const vec3 newPos = Ray_At(ray, min(distance, fog_dist));
 
         vec3 newDir;
-        struct Material material;
+        Material material;
 
         bool is_fog = (distance >= fog_dist);
         if (is_fog)
@@ -601,7 +593,7 @@ vec3 Trace(
             dir = normalize(dir);
             if (is_fog || dot(dir, material.normal) > 0)
             {
-                float dist = Cast(new_Ray(newPos, dir), quality_rest_ray, light_dist);
+                float dist = Cast(Ray(newPos, dir), quality_rest_ray, light_dist);
                 if (dist >= light_dist)
                 {
                     float prod = is_fog ? 1.0f : dot(material.normal, dir);
@@ -617,7 +609,7 @@ vec3 Trace(
         const float incident_angle_weakening = (is_fog ? 1.0f : dot(material.normal, newDir));
         reflectionColor *= incident_angle_weakening * material.color;
 
-        ray = new_Ray(newPos, newDir);
+        ray = Ray(newPos, newDir);
 
         if (dot(reflectionColor, reflectionColor) == 0)
         {
@@ -627,7 +619,7 @@ vec3 Trace(
     return rayColor;
 }
 
-vec3 PreviewTrace(struct Ray ray, const uint width, const uint height)
+vec3 PreviewTrace(Ray ray, const uint width, const uint height)
 {
     const float quality = quality_first_ray * (float(width + height) / float(2 * fov));
     const float max_dist = min(max_ray_dist, focal_distance * 10);
@@ -743,16 +735,15 @@ void SetScratch(uint x, uint y, vec3 value)
     imageStore(scratch, ivec2(x, y), vec4(value, 1.0));
 }
 
-struct Random GetRand(uint x, uint y)
+Random GetRand(uint x, uint y)
 {
     uint value = imageLoad(randbuf, ivec2(x, y)).x;
-    struct Random rand;
-    rand.seed = value;
+    Random rand = Random(value);
     Random_Init(rand);
     return rand;
 }
 
-void SetRand(uint x, uint y, struct Random value)
+void SetRand(uint x, uint y, Random value)
 {
     imageStore(randbuf, ivec2(x, y), uvec4(value.seed, 0, 0, 0));
 }
@@ -775,8 +766,8 @@ void main()
 
     const vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
 
-    struct Random rand = GetRand(x, y);
-    const struct Ray ray = Camera(x, y, width, height, rand);
+    Random rand = GetRand(x, y);
+    const Ray ray = Camera(x, y, width, height, rand);
 #ifdef PREVIEW
     const vec3 colorComponents = PreviewTrace(ray, width, height);
 #else

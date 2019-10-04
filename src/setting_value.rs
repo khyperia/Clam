@@ -42,6 +42,8 @@ impl SettingValue {
             } else {
                 self.needs_rebuild = true;
             }
+        } else if self.is_const && self.value != value {
+            self.needs_rebuild = true;
         }
         self.value = value
     }

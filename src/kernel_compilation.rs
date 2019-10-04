@@ -13,8 +13,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-const MANDELBOX: &str = include_str!("mandelbox.glsl");
-const MANDELBOX_PATH: &str = "src/mandelbox.glsl";
+const MANDELBOX: &str = include_str!("mandelbox.comp.glsl");
+const MANDELBOX_PATH: &str = "src/mandelbox.comp.glsl";
 
 // the "notify" crate is broken af, so roll our own
 pub fn watch_src<F: Fn() + Send + 'static>(on_changed: F) {

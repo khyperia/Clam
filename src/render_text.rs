@@ -75,7 +75,7 @@ impl TextRenderer {
                 }
                 x = line_x;
             } else if ch == ' ' {
-                x += self.atlas[('*' as u8 - OFFSET) as usize].stride;
+                x += self.atlas[(b'*' - OFFSET) as usize].stride;
             } else {
                 let tex = &self.atlas[(ch as u8 - OFFSET) as usize];
                 renderer.render(
@@ -94,7 +94,6 @@ impl TextRenderer {
 }
 
 fn render_char(glyph: PositionedGlyph, rgb: (f32, f32, f32)) -> Result<AtlasEntry, Error> {
-    //glyph.set_position(Point { x: 0.0, y: 0.0 });
     let bb = glyph
         .pixel_bounding_box()
         .expect("Could not get bounding box of glyph");

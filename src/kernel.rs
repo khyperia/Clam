@@ -11,43 +11,25 @@ struct KernelImage<T: TextureType> {
     width: usize,
     height: usize,
     scale: usize,
-    output: Option<Texture<T>>,
-    scratch: Option<Texture<[f32; 4]>>,
-    randbuf: Option<Texture<u32>>,
+    output: Texture<T>,
+    scratch: Texture<[f32; 4]>,
+    randbuf: Texture<u32>,
 }
 
 impl<T: TextureType> KernelImage<T> {
-    fn new(width: usize, height: usize) -> Self {
-        Self {
+    fn new(width: usize, height: usize) -> Result<Self, Error> {
+        Ok(Self {
             width,
             height,
             scale: 1,
-            output: None,
-            scratch: None,
-            randbuf: None,
-        }
+            output: Texture::new(width, height)?,
+            scratch: Texture::new(width, height)?,
+            randbuf: Texture::new(width, height)?,
+        })
     }
 
     fn size(&self) -> (usize, usize) {
         (self.width / self.scale, self.height / self.scale)
-    }
-
-    fn data(&mut self) -> Result<(&Texture<T>, &Texture<[f32; 4]>, &Texture<u32>), Error> {
-        let (width, height) = self.size();
-        if self.output.is_none() {
-            self.output = Some(Texture::new(width, height)?);
-        }
-        if self.scratch.is_none() {
-            self.scratch = Some(Texture::new(width, height)?);
-        }
-        if self.randbuf.is_none() {
-            self.randbuf = Some(Texture::new(width, height)?);
-        }
-        Ok((
-            self.output.as_ref().expect("Didn't assign output?"),
-            self.scratch.as_ref().expect("Didn't assign scratch?"),
-            self.randbuf.as_ref().expect("Didn't assign randbuf?"),
-        ))
     }
 
     fn resize(
@@ -60,19 +42,13 @@ impl<T: TextureType> KernelImage<T> {
         self.width = new_width;
         self.height = new_height;
         self.scale = new_scale.max(1);
-        if old_size != self.size() {
-            self.output = None;
-            self.scratch = None;
-            self.randbuf = None;
+        let new_size = self.size();
+        if old_size != new_size {
+            self.output = Texture::new(new_size.0, new_size.1)?;
+            self.scratch = Texture::new(new_size.0, new_size.1)?;
+            self.randbuf = Texture::new(new_size.0, new_size.1)?;
         }
         Ok(())
-    }
-
-    fn download(&mut self) -> Result<CpuTexture<T>, Error> {
-        self.output
-            .as_mut()
-            .ok_or_else(|| failure::err_msg("Cannot download image that hasn't been created yet"))
-            .and_then(|img| img.download())
     }
 }
 
@@ -95,7 +71,7 @@ impl<T: TextureType> FractalKernel<T> {
         local_size = local_size.min(64);
         let result = Self {
             kernel: None,
-            data: KernelImage::new(width, height),
+            data: KernelImage::new(width, height)?,
             old_settings: settings.clone(),
             frame: 0,
             local_size: local_size as usize,
@@ -151,16 +127,15 @@ impl<T: TextureType> FractalKernel<T> {
     fn launch(&mut self) -> Result<(), Error> {
         if let Some(kernel) = self.kernel {
             let (width, height) = self.data.size();
-            let (texture, scratch, randbuf) = self.data.data()?;
             let total_size = width * height;
             let local_size = self.local_size;
             let launch_size = (total_size + local_size - 1) / local_size;
             unsafe {
                 gl::UseProgram(kernel);
                 check_gl()?;
-                texture.bind(0)?;
-                scratch.bind(1)?;
-                randbuf.bind(2)?;
+                self.data.output.bind(0)?;
+                self.data.scratch.bind(1)?;
+                self.data.randbuf.bind(2)?;
                 check_gl()?;
                 gl::DispatchCompute(launch_size as u32, 1, 1);
                 check_gl()?;
@@ -179,12 +154,12 @@ impl<T: TextureType> FractalKernel<T> {
         Ok(())
     }
 
-    pub fn texture(&mut self) -> Result<&Texture<T>, Error> {
-        Ok(self.data.data()?.0)
+    pub fn texture(&mut self) -> &Texture<T> {
+        &self.data.output
     }
 
     pub fn download(&mut self) -> Result<CpuTexture<T>, Error> {
-        self.data.download()
+        self.data.output.download()
     }
 
     pub fn sync_renderer(&mut self) -> Result<(), Error> {

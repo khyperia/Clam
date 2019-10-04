@@ -39,7 +39,7 @@ impl Display for GlDisplay {
 
     fn render(&mut self) -> Result<(), Error> {
         self.interactive_kernel.launch()?;
-        let img = self.interactive_kernel.texture()?;
+        let img = self.interactive_kernel.texture();
 
         self.texture_renderer.render(img.id, 0.0, 0.0, 1.0, 1.0)?;
 

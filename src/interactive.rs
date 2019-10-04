@@ -59,9 +59,8 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
         Ok(())
     }
 
-    pub fn texture(&mut self) -> Result<&Texture<T>, Error> {
-        let image = self.kernel.texture()?;
-        Ok(image)
+    pub fn texture(&mut self) -> &Texture<T> {
+        self.kernel.texture()
     }
 
     // pub fn download(&mut self) -> Result<CpuTexture<T>, Error> {
