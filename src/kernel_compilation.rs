@@ -1,10 +1,13 @@
-use crate::{gl_help::create_compute_program, setting_value::SettingValueEnum, settings::Settings};
-use failure::Error;
+use crate::{
+    check_gl, gl_help::create_compute_program, setting_value::SettingValueEnum, settings::Settings,
+};
+use failure::{err_msg, Error};
 use gl::types::*;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
     collections::HashSet,
+    ffi::CStr,
     fmt::Write,
     fs,
     fs::File,
@@ -55,15 +58,35 @@ fn get_src() -> Result<String, Error> {
     Ok(contents)
 }
 
-fn generate_src(original_source: &mut String, settings: &Settings, local_size: usize) -> String {
-    let mut result = String::new();
-    writeln!(&mut result, "#version 430").unwrap();
-    writeln!(&mut result, "layout(local_size_x = {}) in;", local_size).unwrap();
-    *original_source = original_source.replace("#version 430", "");
+fn shader_version() -> Result<String, Error> {
+    let ver = unsafe { CStr::from_ptr(gl::GetString(gl::SHADING_LANGUAGE_VERSION) as _) };
+    check_gl()?;
+    let ver = ver
+        .to_str()?
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| err_msg("GL_SHADING_LANGUAGE_VERSION is empty"))?
+        .replace(".", "");
+    Ok(ver)
+}
+
+fn generate_src(original_source: &mut String, settings: &Settings, local_size: usize) {
+    let mut header = String::new();
+    let version = match shader_version() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Couldn't get shader version: {}", e);
+            "430".to_string()
+        }
+    };
+    writeln!(&mut header, "#version {}", version).unwrap();
+    writeln!(&mut header, "layout(local_size_x = {}) in;", local_size).unwrap();
     for value in &settings.values {
-        value.format_glsl(original_source, &mut result);
+        if let Some(header_item) = value.format_glsl(original_source) {
+            writeln!(&mut header, "{}", header_item).unwrap();
+        }
     }
-    result
+    *original_source = original_source.replace("#version 430", &header);
 }
 
 pub fn refresh_settings(settings: &mut Settings) -> Result<(), Error> {
@@ -75,8 +98,8 @@ pub fn refresh_settings(settings: &mut Settings) -> Result<(), Error> {
 pub fn rebuild(settings: &mut Settings, local_size: usize) -> Result<GLuint, Error> {
     let mut src = get_src()?;
     set_src(settings, &src);
-    let generated = generate_src(&mut src, settings, local_size);
-    unsafe { create_compute_program(&[&generated, &src]) }
+    generate_src(&mut src, settings, local_size);
+    unsafe { create_compute_program(&[&src]) }
 }
 
 fn set_src(settings: &mut Settings, src: &str) {

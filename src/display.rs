@@ -8,6 +8,7 @@ use glutin::{
     window::WindowBuilder,
     ContextBuilder,
 };
+use std::ffi::CStr;
 
 pub trait Display: Sized {
     fn setup(width: usize, height: usize) -> Result<Self, Error>;
@@ -17,20 +18,30 @@ pub trait Display: Sized {
     fn key_down(&mut self, key: Key) -> Result<(), Error>;
 }
 
+fn print_name() -> Result<(), Error> {
+    unsafe {
+        let renderer = CStr::from_ptr(gl::GetString(gl::RENDERER) as _);
+        check_gl()?;
+        println!("Using engine: {:?}", renderer);
+        let shader_version = CStr::from_ptr(gl::GetString(gl::SHADING_LANGUAGE_VERSION) as _);
+        check_gl()?;
+        println!("Shader version: {:?}", shader_version);
+    }
+    Ok(())
+}
+
 pub fn run_headless<T>(func: impl Fn() -> T) -> Result<T, Error> {
     unsafe {
         let el = EventLoop::new();
         let ctx = ContextBuilder::new().build_headless(&el, PhysicalSize::new(10.0, 10.0))?;
         let ctx_cur = ctx.make_current().map_err(|(_, e)| e)?;
         gl::load_with(|symbol| ctx_cur.get_proc_address(symbol) as *const _);
+        print_name()?;
         Ok(func())
     }
 }
 
-pub fn run<Disp: Display + 'static>(
-    request_width: f64,
-    request_height: f64,
-) -> Result<(), Error> {
+pub fn run<Disp: Display + 'static>(request_width: f64, request_height: f64) -> Result<(), Error> {
     let el = EventLoop::new();
     //let vm = el.primary_monitor().video_modes().min().expect("No video modes found");
     let wb = WindowBuilder::new()
@@ -60,7 +71,7 @@ pub fn run<Disp: Display + 'static>(
         gl_register_debug()?;
     }
 
-    //kernel::init_gl_funcs(|symbol| windowed_context.get_proc_address(symbol) as *const _);
+    print_name()?;
 
     let mut display = Some(Disp::setup(
         initial_size.width as usize,

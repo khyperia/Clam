@@ -131,7 +131,7 @@ uint xorshift32(inout uint x)
 
 float Random_Next(inout Random this_)
 {
-    return float(xorshift32(this_.seed.x)) / UINT_MAX;
+    return float(xorshift32(this_.seed)) / UINT_MAX;
 }
 
 /*
@@ -158,18 +158,18 @@ void Random_Init(inout Random this_)
 
 vec2 Random_Disk(inout Random this_)
 {
-    const vec2 polar = vec2(Random_Next(this_), sqrt(Random_Next(this_)));
+    vec2 polar = vec2(Random_Next(this_), sqrt(Random_Next(this_)));
     return vec2(cos(TAU * polar.x) * polar.y, sin(TAU * polar.x) * polar.y);
 }
 
 vec3 Random_Sphere(inout Random this_)
 {
-    const float theta = Random_Next(this_);
-    const float cosphi = 2 * Random_Next(this_) - 1;
-    const float sinphi = sqrt(1 - cosphi * cosphi);
-    const float x = sinphi * cos(TAU * theta);
-    const float y = sinphi * sin(TAU * theta);
-    const float z = cosphi;
+    float theta = Random_Next(this_);
+    float cosphi = 2 * Random_Next(this_) - 1;
+    float sinphi = sqrt(1 - cosphi * cosphi);
+    float x = sinphi * cos(TAU * theta);
+    float y = sinphi * sin(TAU * theta);
+    float z = cosphi;
     return vec3(x, y, z);
 }
 
@@ -211,9 +211,9 @@ vec3 RayDir(vec3 forward, vec3 up, vec2 screenCoords)
 vec3 RayDir(vec3 forward, vec3 up, vec2 screenCoords, float calcFov)
 {
     screenCoords *= -calcFov;
-    const float len2 = dot(screenCoords, screenCoords);
-    const vec3 look = vec3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
-    const vec3 right = cross(forward, up);
+    float len2 = dot(screenCoords, screenCoords);
+    vec3 look = vec3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+    vec3 right = cross(forward, up);
     return look.x * right + look.y * up + look.z * forward;
 }
 #endif
@@ -225,12 +225,12 @@ vec3 Ray_At(Ray this_, float time)
 
 void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
 {
-    const vec3 focalPosition = Ray_At(this_, focalPlane);
+    vec3 focalPosition = Ray_At(this_, focalPlane);
     // Normalize because the vectors aren't perpendicular
-    const vec3 xShift = normalize(cross(vec3(0, 0, 1), this_.dir));
-    const vec3 yShift = cross(this_.dir, xShift);
-    const vec2 offset = Random_Disk(rand);
-    const float dofPickup = dof_amount;
+    vec3 xShift = normalize(cross(vec3(0, 0, 1), this_.dir));
+    vec3 yShift = cross(this_.dir, xShift);
+    vec2 offset = Random_Disk(rand);
+    float dofPickup = dof_amount;
     this_.dir =
         normalize(this_.dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
     this_.pos = focalPosition - this_.dir * focalPlane;
@@ -238,18 +238,18 @@ void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
 
 Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
 {
-    const vec3 origin = vec3(pos_x, pos_y, pos_z);
-    const vec3 look = vec3(look_x, look_y, look_z);
-    const vec3 up = vec3(up_x, up_y, up_z);
+    vec3 origin = vec3(pos_x, pos_y, pos_z);
+    vec3 look = vec3(look_x, look_y, look_z);
+    vec3 up = vec3(up_x, up_y, up_z);
 #ifdef VR
-    const vec2 screenCoords = vec2(float(x) / float(width), float(y) / float(height));
-    const vec3 direction = RayDir(look, up, screenCoords);
+    vec2 screenCoords = vec2(float(x) / float(width), float(y) / float(height));
+    vec3 direction = RayDir(look, up, screenCoords);
 #else
-    const vec2 antialias = vec2(Random_Next(rand), Random_Next(rand)) - vec2(0.5f, 0.5f);
-    const vec2 screenCoords =
+    vec2 antialias = vec2(Random_Next(rand), Random_Next(rand)) - vec2(0.5f, 0.5f);
+    vec2 screenCoords =
         vec2(float(x) - float(width) / 2.0, float(y) - float(height) / 2.0) + antialias;
-    const float calcFov = fov * 2.0 / float(width + height);
-    const vec3 direction = RayDir(look, up, screenCoords, calcFov);
+    float calcFov = fov * 2.0 / float(width + height);
+    vec3 direction = RayDir(look, up, screenCoords, calcFov);
 #endif
     Ray result = Ray(origin, direction);
 #ifndef VR
@@ -258,9 +258,9 @@ Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
     return result;
 }
 
-vec3 Mandelbulb(vec3 z, inout float dz, const float Power)
+vec3 Mandelbulb(vec3 z, inout float dz, float Power)
 {
-    const float r = length(z.xyz);
+    float r = length(z.xyz);
     // convert to polar coordinates
     float theta = asin(z.z / r);
     float phi = atan(z.y, z.x);
@@ -291,7 +291,7 @@ vec3 ContBoxfoldD(vec3 z)
 
 vec3 SpherefoldD(vec3 z, inout float dz)
 {
-    const float factor =
+    float factor =
         fixed_radius_2 / clamp(dot(z, z), min_radius_2, fixed_radius_2);
     dz *= factor;
     return z * factor;
@@ -299,7 +299,7 @@ vec3 SpherefoldD(vec3 z, inout float dz)
 
 vec3 ContSpherefoldD(vec3 z, inout float dz)
 {
-    const float mul = min_radius_2 / dot(z, z) + fixed_radius_2;
+    float mul = min_radius_2 / dot(z, z) + fixed_radius_2;
     z *= mul;
     dz *= mul;
     return z;
@@ -419,10 +419,10 @@ float Plane(vec3 pos, vec3 plane)
 float De(vec3 offset, bool isNormal)
 {
     int color;
-    const float mbox = DeFractal(offset, isNormal, color);
-    const float light1 = DeSphere(LightPos1(), light_radius_1, offset);
+    float mbox = DeFractal(offset, isNormal, color);
+    float light1 = DeSphere(LightPos1(), light_radius_1, offset);
 #ifdef PLANE
-    const float cut = Plane(offset, PlanePos());
+    float cut = Plane(offset, PlanePos());
     return min(light1, max(mbox, cut));
 #else
     return min(light1, mbox);
@@ -441,15 +441,15 @@ struct Material
 Material GetMaterial(vec3 offset)
 {
     int raw_color_data = 0;
-    const float de = DeFractal(offset, true, raw_color_data);
+    float de = DeFractal(offset, true, raw_color_data);
 
-    const float light1 = DeSphere(LightPos1(), light_radius_1, offset);
+    float light1 = DeSphere(LightPos1(), light_radius_1, offset);
 
     Material result;
     if (de < light1)
     {
-        const float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
-        const vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
+        float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
+        vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
         result.color = color;
         result.specular = surface_color_specular;
         result.emissive = vec3(0, 0, 0);
@@ -461,24 +461,24 @@ Material GetMaterial(vec3 offset)
         result.emissive = LightBrightness1();
     }
 
-    const float delta = max(1e-6f, de * 0.5f);  // aprox. 8.3x float epsilon
+    float delta = max(1e-6f, de * 0.5f);  // aprox. 8.3x float epsilon
 #ifdef CUBE_NORMAL
-    const float dppp = De(offset + vec3(+delta, +delta, +delta), true);
-    const float dppn = De(offset + vec3(+delta, +delta, -delta), true);
-    const float dpnp = De(offset + vec3(+delta, -delta, +delta), true);
-    const float dpnn = De(offset + vec3(+delta, -delta, -delta), true);
-    const float dnpp = De(offset + vec3(-delta, +delta, +delta), true);
-    const float dnpn = De(offset + vec3(-delta, +delta, -delta), true);
-    const float dnnp = De(offset + vec3(-delta, -delta, +delta), true);
-    const float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
+    float dppp = De(offset + vec3(+delta, +delta, +delta), true);
+    float dppn = De(offset + vec3(+delta, +delta, -delta), true);
+    float dpnp = De(offset + vec3(+delta, -delta, +delta), true);
+    float dpnn = De(offset + vec3(+delta, -delta, -delta), true);
+    float dnpp = De(offset + vec3(-delta, +delta, +delta), true);
+    float dnpn = De(offset + vec3(-delta, +delta, -delta), true);
+    float dnnp = De(offset + vec3(-delta, -delta, +delta), true);
+    float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
     result.normal = vec3((dppp + dppn + dpnp + dpnn) - (dnpp + dnpn + dnnp + dnnn),
                              (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn),
                              (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
 #else
-    const float dnpp = De(offset + vec3(-delta, delta, delta), true);
-    const float dpnp = De(offset + vec3(delta, -delta, delta), true);
-    const float dppn = De(offset + vec3(delta, delta, -delta), true);
-    const float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
+    float dnpp = De(offset + vec3(-delta, delta, delta), true);
+    float dpnp = De(offset + vec3(delta, -delta, delta), true);
+    float dppn = De(offset + vec3(delta, delta, -delta), true);
+    float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
     result.normal = vec3((dppn + dpnp) - (dnpp + dnnn),
                              (dppn + dnpp) - (dpnp + dnnn),
                              (dpnp + dnpp) - (dppn + dnnn));
@@ -489,7 +489,7 @@ Material GetMaterial(vec3 offset)
     return result;
 }
 
-float Cast(Ray ray, const float quality, const float maxDist)
+float Cast(Ray ray, float quality, float maxDist)
 {
     float distance;
     float totalDistance = 0.0f;
@@ -514,8 +514,7 @@ float Cast(Ray ray, const float quality, const float maxDist)
     return totalDistance;
 }
 
-vec3 Trace(
-    Ray ray, const uint width, const uint height, inout Random rand)
+vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
 {
     vec3 rayColor = vec3(0, 0, 0);
     vec3 reflectionColor = vec3(1, 1, 1);
@@ -523,21 +522,21 @@ vec3 Trace(
 
     for (int photonIndex = 0; photonIndex < num_ray_bounces; photonIndex++)
     {
-        const float fog_dist =
+        float fog_dist =
             fog_distance == 0 ? FLT_MAX : -log(Random_Next(rand)) * fog_distance;
-        const float max_dist = min(max_ray_dist, fog_dist);
-        const float distance = min(Cast(ray, quality, max_dist), fog_dist);
+        float max_dist = min(max_ray_dist, fog_dist);
+        float distance = min(Cast(ray, quality, max_dist), fog_dist);
 
         if (distance >= max_ray_dist ||
             (photonIndex + 1 == num_ray_bounces && distance >= fog_dist))
         {
             // went out-of-bounds, or last fog ray didn't hit anything
-            const vec3 color = AmbientBrightness();
+            vec3 color = AmbientBrightness();
             rayColor += color * reflectionColor;
             break;
         }
 
-        const vec3 newPos = Ray_At(ray, min(distance, fog_dist));
+        vec3 newPos = Ray_At(ray, min(distance, fog_dist));
 
         vec3 newDir;
         Material material;
@@ -606,7 +605,7 @@ vec3 Trace(
             }
         }
 
-        const float incident_angle_weakening = (is_fog ? 1.0f : dot(material.normal, newDir));
+        float incident_angle_weakening = (is_fog ? 1.0f : dot(material.normal, newDir));
         reflectionColor *= incident_angle_weakening * material.color;
 
         ray = Ray(newPos, newDir);
@@ -619,26 +618,26 @@ vec3 Trace(
     return rayColor;
 }
 
-vec3 PreviewTrace(Ray ray, const uint width, const uint height)
+vec3 PreviewTrace(Ray ray, uint width, uint height)
 {
-    const float quality = quality_first_ray * (float(width + height) / float(2 * fov));
-    const float max_dist = min(max_ray_dist, focal_distance * 10);
-    const float distance = Cast(ray, quality, max_dist);
+    float quality = quality_first_ray * (float(width + height) / float(2 * fov));
+    float max_dist = min(max_ray_dist, focal_distance * 10);
+    float distance = Cast(ray, quality, max_dist);
 #ifdef PREVIEW_NORMAL
-    const vec3 pos = Ray_At(ray, distance);
+    vec3 pos = Ray_At(ray, distance);
     return abs(GetMaterial(pos).normal);
 #else
-    const float value = distance / max_dist;
+    float value = distance / max_dist;
     return vec3(value);
 #endif
 }
 
 vec3 GammaTest(uint x, uint y, uint width, uint height)
 {
-    const float centerValue = float(x) / float(width);
-    const float offset = float((height - y)) / float(height) * (0.5f - abs(centerValue - 0.5f));
+    float centerValue = float(x) / float(width);
+    float offset = float((height - y)) / float(height) * (0.5f - abs(centerValue - 0.5f));
     float result;
-    const int column_width = 8;
+    int column_width = 8;
     if (x % (column_width * 2) < column_width)
     {
         result = centerValue;
@@ -671,10 +670,10 @@ float GammaSRGB(float value)
 // http://mimosa-pudica.net/fast-gamma/
 float GammaFast(float value)
 {
-    const float a = 0.00279491f;
-    const float b = 1.15907984f;
+    float a = 0.00279491f;
+    float b = 1.15907984f;
     // float c = b * rsqrt(1.0f + a) - 1.0f;
-    const float c = 0.15746346551f;
+    float c = 0.15746346551f;
     return (b / sqrt(value + a) - c) * value;
 }
 
@@ -708,7 +707,7 @@ vec3 PackPixel(vec3 pixel)
     }
 
 #ifdef CLAMP_PRESERVE_COLOR
-    const float maxVal = max(max(pixel.x, pixel.y), pixel.z);
+    float maxVal = max(max(pixel.x, pixel.y), pixel.z);
     if (maxVal > 1)
     {
         pixel *= 1.0f / maxVal;
@@ -758,25 +757,25 @@ void SetScreen(uint x, uint y, vec3 value)
 
 void main()
 {
-    const uint idx = gl_GlobalInvocationID.x;
-    const uint size = width * height;
+    uint idx = gl_GlobalInvocationID.x;
+    uint size = width * height;
     if (idx >= size) { return; }
-    const uint x = idx % width;
-    const uint y = idx / width;
+    uint x = idx % width;
+    uint y = idx / width;
 
-    const vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
+    vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
 
     Random rand = GetRand(x, y);
-    const Ray ray = Camera(x, y, width, height, rand);
+    Ray ray = Camera(x, y, width, height, rand);
 #ifdef PREVIEW
-    const vec3 colorComponents = PreviewTrace(ray, width, height);
+    vec3 colorComponents = PreviewTrace(ray, width, height);
 #else
-    const vec3 colorComponents = Trace(ray, width, height, rand);
+    vec3 colorComponents = Trace(ray, width, height, rand);
 #endif
 #ifdef GAMMA_TEST
-    const vec3 newColor = GammaTest(x, y, width, height);
+    vec3 newColor = GammaTest(x, y, width, height);
 #else
-    const vec3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
+    vec3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     SetScratch(x, y, newColor);
     SetRand(x, y, rand);
 #endif

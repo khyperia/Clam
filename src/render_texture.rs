@@ -89,6 +89,8 @@ void main()
 ";
 
 const FRAGMENT_SHADER_F32: &str = "
+#version 130
+
 uniform sampler2D tex;
 in vec2 texCoord;
 
@@ -101,6 +103,8 @@ void main()
 
 #[cfg(feature = "vr")]
 const FRAGMENT_SHADER_U8: &str = "
+#version 130
+
 uniform usampler2D tex;
 in vec2 texCoord;
 
