@@ -5,16 +5,16 @@ authors = ["khyperia <khyperia@live.com>"]
 edition = "2018"
 
 [dependencies]
-cgmath = "*"
-chrono = "*"
-failure = "*"
-gl = "*"
-glutin = "0.22.0-alpha3"
-lazy_static = "*"
-openvr = { version = "*", optional = true }
-png = "*"
-regex = "*"
-rusttype = "*"
+cgmath = { version = "*", default-features = false }
+chrono = { version = "*", default-features = false, features = ["clock"] }
+failure = { version = "*", default-features = false }
+gl = { version = "*", default-features = false }
+khygl = { path = "../khygl" }
+lazy_static = { version = "*", default-features = false }
+openvr = { version = "*", default-features = false, optional = true }
+png = { version = "*", default-features = false, features = ["png-encoding"] }
+regex = { version = "*", default-features = false, features = ["std"] }
+rusttype = { version = "*", default-features = false }
 
 [features]
 vr = ["openvr"]

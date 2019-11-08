@@ -1,12 +1,6 @@
-use crate::{
-    gl_help::{Texture, TextureType},
-    input::Input,
-    kernel::Kernel,
-    kernel_compilation,
-    settings::Settings,
-    Key,
-};
+use crate::{input::Input, kernel::Kernel, kernel_compilation, settings::Settings, Key};
 use failure::Error;
+use khygl::texture::{Texture, TextureType};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,

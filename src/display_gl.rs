@@ -1,17 +1,14 @@
-use crate::{
-    check_gl,
-    display::{self, Display},
-    fps_counter::FpsCounter,
-    interactive::SyncInteractiveKernel,
-    render_text::TextRenderer,
-    render_texture::{TextureRenderer, TextureRendererKind},
-    Key,
-};
+use crate::{check_gl, fps_counter::FpsCounter, interactive::SyncInteractiveKernel, Key};
 use failure::Error;
+use khygl::{
+    display::Display,
+    render_text::TextRenderer,
+    render_texture::{TextureRendererF32},
+};
 
 struct GlDisplay {
     interactive_kernel: SyncInteractiveKernel<[f32; 4]>,
-    texture_renderer: TextureRenderer,
+    texture_renderer: TextureRendererF32,
     text_renderer: TextRenderer,
     fps: FpsCounter,
     width: usize,
@@ -19,11 +16,11 @@ struct GlDisplay {
 }
 
 impl Display for GlDisplay {
-    fn setup(width: usize, height: usize) -> Result<Self, Error> {
-        let interactive_kernel = SyncInteractiveKernel::<[f32; 4]>::create(width, height)?;
+    fn setup(size: (usize, usize), _: f64) -> Result<Self, Error> {
+        let interactive_kernel = SyncInteractiveKernel::<[f32; 4]>::create(size.0, size.1)?;
 
-        let texture_renderer = TextureRenderer::new(TextureRendererKind::F32)?;
-        let text_renderer = TextRenderer::new((1.0, 0.75, 0.75))?;
+        let texture_renderer = TextureRendererF32::new()?;
+        let text_renderer = TextRenderer::new(20.0)?;
 
         let fps = FpsCounter::new(1.0);
 
@@ -32,8 +29,8 @@ impl Display for GlDisplay {
             texture_renderer,
             text_renderer,
             fps,
-            width,
-            height,
+            width: size.0,
+            height: size.1,
         })
     }
 
@@ -41,24 +38,35 @@ impl Display for GlDisplay {
         self.interactive_kernel.launch()?;
         let img = self.interactive_kernel.texture();
 
-        self.texture_renderer.render(img.id, 0.0, 0.0, 1.0, 1.0)?;
+        self.texture_renderer.render(
+            &img,
+            None,
+            None,
+            None,
+            (self.width as f32, self.height as f32),
+        )?;
 
         let display = format!(
             "{:.2} fps\n{}",
             self.fps.value(),
             self.interactive_kernel.status()
         );
-        self.text_renderer
-            .render(&self.texture_renderer, &display, self.width, self.height)?;
+        self.text_renderer.render(
+            &self.texture_renderer,
+            &display,
+            [1.0, 0.75, 0.75, 1.0],
+            (10, 10),
+            (self.width, self.height),
+        )?;
         self.fps.tick();
         check_gl()?;
         Ok(())
     }
 
-    fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
-        self.width = width;
-        self.height = height;
-        self.interactive_kernel.resize(width, height)?;
+    fn resize(&mut self, size: (usize, usize)) -> Result<(), Error> {
+        self.width = size.0;
+        self.height = size.1;
+        self.interactive_kernel.resize(size.0, size.1)?;
         Ok(())
     }
 
@@ -71,8 +79,12 @@ impl Display for GlDisplay {
         self.interactive_kernel.key_down(key);
         Ok(())
     }
+
+    fn received_character(&mut self, _: char) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 pub fn run(width: f64, height: f64) -> Result<(), Error> {
-    display::run::<GlDisplay>(width, height)
+    khygl::display::run::<GlDisplay>((width, height))
 }

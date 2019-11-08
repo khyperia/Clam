@@ -1,37 +1,30 @@
-mod display;
 mod display_gl;
 #[cfg(feature = "vr")]
 mod display_vr;
 mod fps_counter;
-mod gl_help;
 mod input;
 mod interactive;
 mod kernel;
 mod kernel_compilation;
 mod progress;
-mod render_text;
-mod render_texture;
 mod setting_value;
 mod settings;
 
 use chrono::prelude::*;
 use failure::{err_msg, Error};
-use gl::types::*;
-use gl_help::CpuTexture;
-use glutin::event::VirtualKeyCode as Key;
+use khygl::texture::CpuTexture;
 use kernel::Kernel;
+use khygl::{check_gl, display::Key};
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
 use settings::{KeyframeList, Settings};
 use std::{
     env::args,
-    ffi::c_void,
     fs::File,
     io::{BufWriter, Write},
     mem::drop,
     process::{Command, Stdio},
-    ptr::null,
-    slice, str,
+    str,
     sync::mpsc,
 };
 
@@ -46,12 +39,11 @@ fn save_image(image: &CpuTexture<[f32; 4]>, path: &str) -> Result<(), Error> {
 }
 
 fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error> {
-    let mut encoder = Encoder::new(w, image.width as u32, image.height as u32);
+    let mut encoder = Encoder::new(w, image.size.0 as u32, image.size.1 as u32);
     encoder.set_color(ColorType::RGB);
     encoder.set_depth(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
-    let width = image.width;
-    let height = image.height;
+    let (width, height) = image.size;
     let mut output = vec![0; width * height * 3];
     for y in 0..height {
         for x in 0..width {
@@ -66,49 +58,13 @@ fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error>
     Ok(())
 }
 
-fn check_gl() -> Result<(), Error> {
-    // This should technically loop.
-    let er = unsafe { gl::GetError() };
-    if er == gl::NO_ERROR {
-        return Ok(());
-    }
-    Err(failure::err_msg(format!("OGL error: {}", er)))
-}
-
-fn gl_register_debug() -> Result<(), Error> {
-    unsafe {
-        gl::DebugMessageCallback(debug_callback, null());
-    }
-    check_gl()?;
-    Ok(())
-}
-
-extern "system" fn debug_callback(
-    source: GLenum,
-    type_: GLenum,
-    id: GLuint,
-    severity: GLenum,
-    length: GLsizei,
-    message: *const GLchar,
-    _: *mut c_void,
-) {
-    let msg =
-        str::from_utf8(unsafe { slice::from_raw_parts(message as *const u8, length as usize) });
-    println!(
-        "GL debug callback: source:{} type:{} id:{} severity:{} {:?}",
-        source, type_, id, severity, msg
-    );
-}
-
-#[cfg(not(windows))]
+// #[cfg(not(windows))]
 fn progress_count(rpp: usize) -> usize {
     (rpp / 20).min(4).max(16)
 }
 
-#[cfg(windows)]
-fn progress_count(_: usize) -> usize {
-    1
-}
+// #[cfg(windows)]
+// fn progress_count(_: usize) -> usize { 1 }
 
 fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     let mut settings = Settings::new();
@@ -269,11 +225,11 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
 
 fn try_main() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
-    if arguments.len() > 2 && arguments[0] == "--render" {
-        display::run_headless(|| render(&arguments[1..]))??
-    } else if arguments.len() > 2 && arguments[0] == "--video" {
-        display::run_headless(|| video_cmd(&arguments[1..]))??
-    } else if cfg!(feature = "vr") && arguments.len() == 1 && arguments[0] == "--vr" {
+    if arguments.len() > 2 && &arguments[0] == "--render" {
+        khygl::display::run_headless(|| render(&arguments[1..]))??
+    } else if arguments.len() > 2 && &arguments[0] == "--video" {
+        khygl::display::run_headless(|| video_cmd(&arguments[1..]))??
+    } else if cfg!(feature = "vr") && arguments.len() == 1 && &arguments[0] == "--vr" {
         #[cfg(feature = "vr")]
         display_vr::run()?
     } else if arguments.is_empty() {
@@ -295,6 +251,6 @@ fn try_main() -> Result<(), Error> {
 fn main() {
     match try_main() {
         Ok(()) => (),
-        Err(err) => println!("Error in main: {}\n{}", err, err.backtrace()),
+        Err(err) => println!("Error in main: {:?}", err),
     }
 }

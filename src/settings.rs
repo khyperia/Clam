@@ -1,11 +1,11 @@
 use crate::{
-    gl_help::{set_arg_f32, set_arg_u32},
     input::Input,
     setting_value::{SettingValue, SettingValueEnum},
 };
 use cgmath::{prelude::*, Vector3};
 use failure::{err_msg, Error};
 use gl::types::*;
+use khygl::{set_arg_f32, set_arg_u32};
 use std::{
     fmt::Write as FmtWrite,
     fs::{File, OpenOptions},
@@ -101,7 +101,7 @@ impl Settings {
         let mut count = 0;
         for line in lines {
             let line = line?;
-            if line == "---" || line == "" {
+            if &line == "---" || &line == "" {
                 return Ok((count, true));
             }
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();
@@ -311,20 +311,10 @@ impl KeyframeList {
         Ok(Self { base, keyframes })
     }
 
-    // change to isize::mod_euclidian once stablized
-    fn mod_euc(lhs: isize, rhs: isize) -> isize {
-        let r = lhs % rhs;
-        if r < 0 {
-            r + rhs.abs()
-        } else {
-            r
-        }
-    }
-
     fn clamp(&self, index: isize, wrap: bool) -> usize {
         let len = self.keyframes.len();
         if wrap {
-            Self::mod_euc(index, len as isize) as usize
+            index.rem_euclid(len as isize) as usize
         } else {
             index.max(0).min(len as isize - 1) as usize
         }

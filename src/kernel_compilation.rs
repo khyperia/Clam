@@ -1,8 +1,7 @@
-use crate::{
-    check_gl, gl_help::create_compute_program, setting_value::SettingValueEnum, settings::Settings,
-};
+use crate::{check_gl, setting_value::SettingValueEnum, settings::Settings};
 use failure::{err_msg, Error};
 use gl::types::*;
+use khygl::create_compute_program;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
@@ -99,13 +98,13 @@ pub fn rebuild(settings: &mut Settings, local_size: usize) -> Result<GLuint, Err
     let mut src = get_src()?;
     set_src(settings, &src);
     generate_src(&mut src, settings, local_size);
-    unsafe { create_compute_program(&[&src]) }
+    create_compute_program(&[&src])
 }
 
 fn set_src(settings: &mut Settings, src: &str) {
     lazy_static! {
         static ref RE: Regex = Regex::new(
-           r#"(?m)^ *uniform *(?P<kind>float|uint) (?P<name>[a-zA-Z0-9_]+) *; *// *(?P<value>[-+]?\d+(?:\.\d+)?) *(?P<change>[-+]?\d+(?:\.\d+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
+           r#"(?m)^ *uniform *(?P<kind>float|uint) (?P<name>[a-zA-Z0-9_]+) *; *// *(?P<value>[-+]?[0-9]+(?:\.[0-9]+)?) *(?P<change>[-+]?[0-9]+(?:\.[0-9]+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
     }
     let mut set: HashSet<String> = settings
         .values

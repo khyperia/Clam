@@ -1,11 +1,10 @@
-use crate::{
-    check_gl,
-    gl_help::{set_arg_u32, CpuTexture, Texture, TextureType},
-    kernel_compilation,
-    settings::Settings,
-};
+use crate::{check_gl, kernel_compilation, settings::Settings};
 use failure::{self, Error};
 use gl::types::*;
+use khygl::{
+    set_arg_u32,
+    texture::{CpuTexture, Texture, TextureType},
+};
 
 struct KernelImage<T: TextureType> {
     width: usize,
@@ -22,9 +21,9 @@ impl<T: TextureType> KernelImage<T> {
             width,
             height,
             scale: 1,
-            output: Texture::new(width, height)?,
-            scratch: Texture::new(width, height)?,
-            randbuf: Texture::new(width, height)?,
+            output: Texture::new((width, height))?,
+            scratch: Texture::new((width, height))?,
+            randbuf: Texture::new((width, height))?,
         })
     }
 
@@ -44,9 +43,9 @@ impl<T: TextureType> KernelImage<T> {
         self.scale = new_scale.max(1);
         let new_size = self.size();
         if old_size != new_size {
-            self.output = Texture::new(new_size.0, new_size.1)?;
-            self.scratch = Texture::new(new_size.0, new_size.1)?;
-            self.randbuf = Texture::new(new_size.0, new_size.1)?;
+            self.output = Texture::new(new_size)?;
+            self.scratch = Texture::new(new_size)?;
+            self.randbuf = Texture::new(new_size)?;
         }
         Ok(())
     }
