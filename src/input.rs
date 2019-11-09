@@ -1,4 +1,7 @@
-use crate::{settings::Settings, Key};
+use crate::{
+    settings::{KeyframeList, Settings},
+    Key,
+};
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
 use failure::Error;
 use std::{
@@ -9,6 +12,9 @@ use std::{
 #[derive(Default)]
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
+    video: Option<KeyframeList>,
+    cur_video: usize,
+    video_len: usize,
     pub index: usize,
 }
 
@@ -21,12 +27,14 @@ impl Input {
         println!("Keybindings:");
         // free:
         // QE
-        // G
+        //
         //
         println!("WASD, [space]Z, IJKL, OU: move camera");
         println!("RF: focal distance/move speed");
         println!("NM: field of view");
-        println!("Y: Write settings to disk. P: Read settings. V: Write keyframe.");
+        println!(
+            "Y: Write settings to disk. P: Read settings. V: Write keyframe. G: Play keyframes."
+        );
         println!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
         println!("C: Toggle constant. B: Recompile kernel with new constants.");
         println!("X: Copy position to lightsource position");
@@ -80,6 +88,15 @@ impl Input {
                 settings.save_keyframe("keyframes.clam5")?;
                 println!("Keyframe saved");
             }
+            Key::G => match KeyframeList::new("keyframes.clam5", settings.clone()) {
+                Ok(ok) => {
+                    self.cur_video = 0;
+                    self.video_len = ok.len() * 100;
+                    self.video = Some(ok);
+                    println!("Playing video")
+                }
+                Err(err) => println!("Failed to open keyframes.clam5: {}", err),
+            },
             Key::Up => {
                 if self.index == 0 {
                     self.index = settings.values.len() - 1;
@@ -102,12 +119,8 @@ impl Input {
             }
             Key::B => settings.rebuild(),
             Key::X => {
-                let x = settings.find("pos_x").clone();
-                let y = settings.find("pos_y").clone();
-                let z = settings.find("pos_z").clone();
-                settings.find_mut("light_pos_1_x").set_value(*x.value());
-                settings.find_mut("light_pos_1_y").set_value(*y.value());
-                settings.find_mut("light_pos_1_z").set_value(*z.value());
+                let pos = settings.find("pos").value().clone();
+                settings.find_mut("light_pos_1").set_value(pos);
             }
             _ => (),
         }
@@ -129,12 +142,20 @@ impl Input {
         for value in self.pressed_keys.values_mut() {
             *value = now;
         }
+        if let Some(ref mut video) = self.video {
+            let interpolated = video.interpolate(self.cur_video as f64 / self.video_len as f64, false);
+            *settings = interpolated.clone();
+            self.cur_video += 1;
+            if self.cur_video > self.video_len {
+                self.video = None;
+            }
+        }
     }
 
-    fn is_pressed(&self, now: Instant, key: Key) -> Option<f32> {
+    fn is_pressed(&self, now: Instant, key: Key) -> Option<f64> {
         if let Some(&old) = self.pressed_keys.get(&key) {
             let dt = now.duration_since(old);
-            let flt = dt.as_secs() as f32 + dt.subsec_nanos() as f32 * 1e-9;
+            let flt = dt.as_secs() as f64 + dt.subsec_nanos() as f64 * 1e-9;
             Some(flt)
         } else {
             None
@@ -145,9 +166,9 @@ impl Input {
         let move_speed = settings.find("focal_distance").unwrap_f32() * 0.5;
         let turn_speed = settings.find("fov").unwrap_f32();
         let roll_speed = 1.0;
-        let mut pos = settings.read_vector("pos_x", "pos_y", "pos_z");
-        let mut look = settings.read_vector("look_x", "look_y", "look_z");
-        let mut up = settings.read_vector("up_x", "up_y", "up_z");
+        let mut pos = settings.find("pos").unwrap_vec3();
+        let mut look = settings.find("look").unwrap_vec3();
+        let mut up = settings.find("up").unwrap_vec3();
         let old = (pos, look, up);
         let right = Vector3::cross(look, up);
         if let Some(dt) = self.is_pressed(now, Key::W) {
@@ -189,9 +210,9 @@ impl Input {
         if old != (pos, look, up) {
             look = look.normalize();
             up = Vector3::cross(Vector3::cross(look, up), look).normalize();
-            settings.write_vector(pos, "pos_x", "pos_y", "pos_z");
-            settings.write_vector(look, "look_x", "look_y", "look_z");
-            settings.write_vector(up, "up_x", "up_y", "up_z");
+            *settings.find_mut("pos").unwrap_vec3_mut() = pos;
+            *settings.find_mut("look").unwrap_vec3_mut() = look;
+            *settings.find_mut("up").unwrap_vec3_mut() = up;
         }
     }
 
@@ -200,7 +221,7 @@ impl Input {
         settings: &mut Settings,
         now: Instant,
         key: &str,
-        mul: f32,
+        mul: f64,
         increase: Key,
         decrease: Key,
     ) {

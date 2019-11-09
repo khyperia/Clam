@@ -10,11 +10,11 @@ mod progress;
 mod setting_value;
 mod settings;
 
+use cgmath::Vector3;
 use chrono::prelude::*;
 use failure::{err_msg, Error};
-use khygl::texture::CpuTexture;
 use kernel::Kernel;
-use khygl::{check_gl, display::Key};
+use khygl::{check_gl, display::Key, texture::CpuTexture};
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
 use settings::{KeyframeList, Settings};
@@ -27,6 +27,18 @@ use std::{
     str,
     sync::mpsc,
 };
+
+fn parse_vector3(v: &str) -> Option<Vector3<f64>> {
+    let mut split = v.split_ascii_whitespace();
+    let x = split.next()?.parse().ok()?;
+    let y = split.next()?.parse().ok()?;
+    let z = split.next()?.parse().ok()?;
+    if split.next().is_some() {
+        None
+    } else {
+        Some(Vector3::new(x, y, z))
+    }
+}
 
 fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
@@ -48,7 +60,7 @@ fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error>
     for y in 0..height {
         for x in 0..width {
             let in_idx = y * width + x;
-            let out_idx = ((height - y - 1) * width + x) * 3;
+            let out_idx = (y * width + x) * 3;
             output[out_idx] = f32_to_u8(image.data[in_idx][0]);
             output[out_idx + 1] = f32_to_u8(image.data[in_idx][1]);
             output[out_idx + 2] = f32_to_u8(image.data[in_idx][2]);
@@ -156,7 +168,7 @@ fn video(
     let thread_handle = std::thread::spawn(move || video_write(&recv, twitter));
 
     for frame in 0..frames {
-        let settings = keyframes.interpolate(frame as f32 / frames as f32, wrap);
+        let settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
         video_one(rpp, &mut kernel, settings, &send)?;
         let value = (frame + 1) as f64 / frames as f64;
         println!("{}", progress.time_str(value));

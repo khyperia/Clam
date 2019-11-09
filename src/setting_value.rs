@@ -1,3 +1,5 @@
+use cgmath::Vector3;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct SettingValue {
     key: String,
@@ -9,8 +11,9 @@ pub struct SettingValue {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SettingValueEnum {
-    U32(u32),
-    F32(f32, f32),
+    Int(u64),
+    Float(f64, f64),
+    Vec3(Vector3<f64>, f64),
     Define(bool),
 }
 
@@ -52,8 +55,9 @@ impl SettingValue {
 
     pub fn change_one(&mut self, increase: bool) {
         match self.value {
-            SettingValueEnum::F32(_, _) => (),
-            SettingValueEnum::U32(ref mut value) => {
+            SettingValueEnum::Float(_, _) => (),
+            SettingValueEnum::Vec3(_, _) => (),
+            SettingValueEnum::Int(ref mut value) => {
                 if increase {
                     *value += 1;
                 } else if *value != 0 {
@@ -67,15 +71,21 @@ impl SettingValue {
         }
     }
 
-    pub fn change(&mut self, increase: bool, mut dt: f32) {
+    pub fn change(&mut self, increase: bool, mut dt: f64) {
         dt *= if increase { 1.0 } else { -1.0 };
-        if let SettingValueEnum::F32(ref mut value, change) = self.value {
-            if change < 0.0 {
-                *value *= (-change + 1.0).powf(dt);
-            } else {
-                *value += dt * change;
+        match self.value {
+            SettingValueEnum::Float(ref mut value, change) => {
+                if change < 0.0 {
+                    *value *= (-change + 1.0).powf(dt);
+                } else {
+                    *value += dt * change;
+                }
             }
-        };
+            SettingValueEnum::Vec3(ref mut value, change) => {
+                // TODO
+            }
+            SettingValueEnum::Define(_) | SettingValueEnum::Int(_) => (),
+        }
     }
 
     pub fn toggle(&mut self) {
@@ -88,8 +98,9 @@ impl SettingValue {
         let old_define = def(&self.value);
         if self.value == self.default_value {
             match self.value {
-                SettingValueEnum::U32(ref mut v) => *v = 0,
-                SettingValueEnum::F32(ref mut v, _) => *v = 0.0,
+                SettingValueEnum::Int(ref mut v) => *v = 0,
+                SettingValueEnum::Float(ref mut v, _) => *v = 0.0,
+                SettingValueEnum::Vec3(ref mut v, _) => *v = Vector3::new(0.0, 0.0, 0.0),
                 SettingValueEnum::Define(ref mut v) => *v = false,
             }
         } else {
@@ -121,24 +132,38 @@ impl SettingValue {
         result
     }
 
-    pub fn unwrap_f32(&self) -> f32 {
+    pub fn unwrap_u32(&self) -> u64 {
         match self.value {
-            SettingValueEnum::F32(value, _) => value,
-            _ => panic!("unwrap_f32 not F32"),
-        }
-    }
-
-    pub fn unwrap_f32_mut(&mut self) -> &mut f32 {
-        match self.value {
-            SettingValueEnum::F32(ref mut value, _) => value,
-            _ => panic!("unwrap_f32 not F32"),
-        }
-    }
-
-    pub fn unwrap_u32(&self) -> u32 {
-        match self.value {
-            SettingValueEnum::U32(value) => value,
+            SettingValueEnum::Int(value) => value,
             _ => panic!("unwrap_u32 not U32"),
+        }
+    }
+
+    pub fn unwrap_f32(&self) -> f64 {
+        match self.value {
+            SettingValueEnum::Float(value, _) => value,
+            _ => panic!("unwrap_f32 not F32"),
+        }
+    }
+
+    pub fn unwrap_f32_mut(&mut self) -> &mut f64 {
+        match self.value {
+            SettingValueEnum::Float(ref mut value, _) => value,
+            _ => panic!("unwrap_f32 not F32"),
+        }
+    }
+
+    pub fn unwrap_vec3(&self) -> Vector3<f64> {
+        match self.value {
+            SettingValueEnum::Vec3(value, _) => value,
+            _ => panic!("unwrap_vec3 not vec3"),
+        }
+    }
+
+    pub fn unwrap_vec3_mut(&mut self) -> &mut Vector3<f64> {
+        match self.value {
+            SettingValueEnum::Vec3(ref mut value, _) => value,
+            _ => panic!("unwrap_vec3 not vec3"),
         }
     }
 
@@ -152,17 +177,24 @@ impl SettingValue {
 
     pub fn format_glsl(&self, src: &mut String) -> Option<String> {
         match self.value {
-            SettingValueEnum::F32(x, _) => {
+            SettingValueEnum::Int(x) => {
+                if self.is_const() {
+                    let replacement = format!("#define {} {}", self.key(), x);
+                    *src = src.replace(&format!("uniform uint {};", self.key()), &replacement);
+                }
+                None
+            }
+            SettingValueEnum::Float(x, _) => {
                 if self.is_const() {
                     let replacement = format!("#define {} {:.16}", self.key(), x);
                     *src = src.replace(&format!("uniform float {};", self.key()), &replacement);
                 }
                 None
             }
-            SettingValueEnum::U32(x) => {
+            SettingValueEnum::Vec3(x, _) => {
                 if self.is_const() {
-                    let replacement = format!("#define {} {}", self.key(), x);
-                    *src = src.replace(&format!("uniform uint {};", self.key()), &replacement);
+                    let replacement = format!("#define {} vec3({:.16}, {:.16}, {:.16})", self.key(), x.x, x.y, x.z);
+                    *src = src.replace(&format!("uniform vec3 {};", self.key()), &replacement);
                 }
                 None
             }

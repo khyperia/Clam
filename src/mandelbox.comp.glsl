@@ -9,15 +9,9 @@ layout(r32ui, binding = 2) uniform uimage2D randbuf;
 #define FLT_MAX 1E+37
 #define UINT_MAX 0xFFFFFFFFU
 
-uniform float pos_x;                     // 0.0 1.0
-uniform float pos_y;                     // 0.0 1.0
-uniform float pos_z;                     // 5.0 1.0
-uniform float look_x;                    // 0.0 1.0
-uniform float look_y;                    // 0.0 1.0
-uniform float look_z;                    // -1.0 1.0
-uniform float up_x;                      // 0.0 1.0
-uniform float up_y;                      // 1.0 1.0
-uniform float up_z;                      // 0.0 1.0
+uniform vec3 pos;                        // 0.0 0.0 5.0 1.0
+uniform vec3 look;                       // 0.0 0.0 -1.0 1.0
+uniform vec3 up;                         // 0.0 1.0 0.0 1.0
 uniform float fov;                       // 1.0 -1.0
 uniform float focal_distance;            // 3.0 -1.0
 uniform float scale;                     // -2.0 0.5 const
@@ -27,9 +21,7 @@ uniform float min_radius_2;              // 0.125 -0.5 const
 uniform float dof_amount;                // 0.01 -1.0
 uniform float fog_distance;              // 10.0 -1.0
 uniform float fog_brightness;            // 1.0 0.5
-uniform float light_pos_1_x;             // 3.0 1.0
-uniform float light_pos_1_y;             // 3.5 1.0
-uniform float light_pos_1_z;             // 2.5 1.0
+uniform vec3 light_pos_1;               // 3.0 3.5 2.5 1.0
 uniform float light_radius_1;            // 1.0 -0.5
 uniform float light_brightness_1_hue;    // 0.0 0.25
 uniform float light_brightness_1_sat;    // 0.4 -1.0
@@ -41,10 +33,8 @@ uniform float surface_color_variance;    // 0.0625 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
 uniform float surface_color_saturation;  // 1.0 0.125
 uniform float surface_color_value;       // 1.0 0.125
-uniform float surface_color_specular;    // 0.0 0.125
-uniform float plane_x;                   // 3.0 1.0
-uniform float plane_y;                   // 3.5 1.0
-uniform float plane_z;                   // 2.5 1.0
+uniform float surface_color_ior;         // 1.0 0.125
+uniform vec3 plane;                      // 3.0 3.5 2.5 1.0
 uniform float rotation;                  // 0.0 0.125
 uniform float bailout;                   // 64.0 -1.0 const
 uniform float bailout_normal;            // 1024.0 -1.0 const
@@ -88,16 +78,6 @@ vec3 HueToRGB(float hue, float saturation, float value)
     saturation = value * (1 - saturation);
     color = color * (value - saturation) + vec3(saturation, saturation, saturation);
     return color;
-}
-
-vec3 LightPos1()
-{
-    return vec3(light_pos_1_x, light_pos_1_y, light_pos_1_z);
-}
-
-vec3 PlanePos()
-{
-    return vec3(plane_x, plane_y, plane_z);
 }
 
 vec3 LightBrightness1()
@@ -185,7 +165,7 @@ vec3 Random_Lambertian(inout Random this_, vec3 normal)
 
 struct Ray
 {
-    vec3 pos;
+    vec3 org;
     vec3 dir;
 };
 
@@ -197,30 +177,30 @@ float Remap(float value, float iMin, float iMax, float oMin, float oMax)
     return value * slope + offset;
 }
 
-vec3 RayDir(vec3 forward, vec3 up, vec2 screenCoords)
+vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords)
 {
     float x = Remap(screenCoords.x, 0, 1, fov_left, fov_right);
     float y = Remap(screenCoords.y, 0, 1, fov_top, fov_bottom);
     float z = 1.0f;
     vec3 dir = normalize(vec3(x, y, z));
-    vec3 right = cross(forward, up);
-    return dir.x * right + dir.y * up + dir.z * forward;
+    vec3 right = cross(forward, upvec);
+    return dir.x * right + dir.y * upvec + dir.z * forward;
 }
 #else
 // http://en.wikipedia.org/wiki/Stereographic_projection
-vec3 RayDir(vec3 forward, vec3 up, vec2 screenCoords, float calcFov)
+vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords, float calcFov)
 {
     screenCoords *= -calcFov;
     float len2 = dot(screenCoords, screenCoords);
-    vec3 look = vec3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
-    vec3 right = cross(forward, up);
-    return look.x * right + look.y * up + look.z * forward;
+    vec3 lookvec = vec3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+    vec3 right = cross(forward, upvec);
+    return lookvec.x * right + lookvec.y * upvec + lookvec.z * forward;
 }
 #endif
 
 vec3 Ray_At(Ray this_, float time)
 {
-    return this_.pos + this_.dir * time;
+    return this_.org + this_.dir * time;
 }
 
 void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
@@ -233,14 +213,11 @@ void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
     float dofPickup = dof_amount;
     this_.dir =
         normalize(this_.dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
-    this_.pos = focalPosition - this_.dir * focalPlane;
+    this_.org = focalPosition - this_.dir * focalPlane;
 }
 
 Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
 {
-    vec3 origin = vec3(pos_x, pos_y, pos_z);
-    vec3 look = vec3(look_x, look_y, look_z);
-    vec3 up = vec3(up_x, up_y, up_z);
 #ifdef VR
     vec2 screenCoords = vec2(float(x) / float(width), float(y) / float(height));
     vec3 direction = RayDir(look, up, screenCoords);
@@ -251,7 +228,7 @@ Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
     float calcFov = fov * 2.0 / float(width + height);
     vec3 direction = RayDir(look, up, screenCoords, calcFov);
 #endif
-    Ray result = Ray(origin, direction);
+    Ray result = Ray(pos, direction);
 #ifndef VR
     Ray_Dof(result, focal_distance, rand);
 #endif
@@ -319,7 +296,7 @@ vec3 TOffsetD(vec3 z, inout float dz, vec3 offset)
 
 vec3 Rotate(vec3 z)
 {
-    vec3 axis = normalize(PlanePos());
+    vec3 axis = normalize(plane);
     float angle = rotation;
     return cos(angle) * z + sin(angle) * cross(z, axis) +
            (1 - cos(angle)) * dot(axis, vec3(angle)) * axis;
@@ -367,13 +344,13 @@ vec3 MandelbulbD(vec3 z, inout float dz, vec3 offset, inout int color)
     return z + offset;
 }
 
-float DeSphere(vec3 pos, float radius, vec3 test)
+float DeSphere(vec3 org, float radius, vec3 test)
 {
-    if (radius == 0)
+    if (radius <= 0)
     {
         return FLT_MAX;
     }
-    return length(test - pos) - radius;
+    return length(test - org) - radius;
 }
 
 float DeMandelbox(vec3 offset, bool isNormal, inout int color)
@@ -411,18 +388,18 @@ float DeFractal(vec3 offset, bool isNormal, inout int color)
 #endif
 }
 
-float Plane(vec3 pos, vec3 plane)
+float Plane(vec3 org, vec3 planedef)
 {
-    return dot(pos, normalize(plane)) - length(plane);
+    return dot(org, normalize(planedef)) - length(planedef);
 }
 
 float De(vec3 offset, bool isNormal)
 {
     int color;
     float mbox = DeFractal(offset, isNormal, color);
-    float light1 = DeSphere(LightPos1(), light_radius_1, offset);
+    float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 #ifdef PLANE
-    float cut = Plane(offset, PlanePos());
+    float cut = Plane(offset, plane);
     return min(light1, max(mbox, cut));
 #else
     return min(light1, mbox);
@@ -434,16 +411,15 @@ struct Material
     vec3 color;
     vec3 normal;
     vec3 emissive;
-    float specular;
+    float ior;
 };
 
-// (r, g, b, spec)
 Material GetMaterial(vec3 offset)
 {
     int raw_color_data = 0;
     float de = DeFractal(offset, true, raw_color_data);
 
-    float light1 = DeSphere(LightPos1(), light_radius_1, offset);
+    float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 
     Material result;
     if (de < light1)
@@ -451,13 +427,13 @@ Material GetMaterial(vec3 offset)
         float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
         vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
         result.color = color;
-        result.specular = surface_color_specular;
+        result.ior = surface_color_ior;
         result.emissive = vec3(0, 0, 0);
     }
     else
     {
         result.color = vec3(1, 1, 1);
-        result.specular = 0.0f;
+        result.ior = 0.0f;
         result.emissive = LightBrightness1();
     }
 
@@ -549,7 +525,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             reflectionColor *= fog_brightness;
             material.color = vec3(1, 1, 1);
             material.normal = vec3(0, 0, 0);
-            material.specular = 0;
+            material.ior = 0;
             material.emissive = vec3(0, 0, 0);
         }
         else
@@ -568,8 +544,12 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
                total_surface_reflection);
             */
             float cosTheta = -dot(ray.dir, material.normal);
+            // https://en.wikipedia.org/wiki/Schlick%27s_approximation
+            float iorAir = 1.0;
+            float r0 = (iorAir - material.ior) / (iorAir + material.ior);
+            r0 *= r0;
             float fresnel =
-                material.specular + (1.0f - material.specular) * pow(1.0 - cosTheta, 5);
+                r0 + (1.0f - r0) * pow(1.0 - cosTheta, 5);
             if (Random_Next(rand) < fresnel)
             {
                 // specular
@@ -586,7 +566,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
 
         if (light_radius_1 == 0)
         {
-            vec3 lightPos = LightPos1();
+            vec3 lightPos = light_pos_1;
             vec3 dir = lightPos - newPos;
             float light_dist = length(dir);
             dir = normalize(dir);
@@ -624,8 +604,8 @@ vec3 PreviewTrace(Ray ray, uint width, uint height)
     float max_dist = min(max_ray_dist, focal_distance * 10);
     float distance = Cast(ray, quality, max_dist);
 #ifdef PREVIEW_NORMAL
-    vec3 pos = Ray_At(ray, distance);
-    return abs(GetMaterial(pos).normal);
+    vec3 org = Ray_At(ray, distance);
+    return abs(GetMaterial(org).normal);
 #else
     float value = distance / max_dist;
     return vec3(value);
@@ -749,6 +729,7 @@ void SetRand(uint x, uint y, Random value)
 
 void SetScreen(uint x, uint y, vec3 value)
 {
+    y = height - (y + 1);
 #ifdef VR
     value *= 255;
 #endif

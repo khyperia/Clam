@@ -1,4 +1,4 @@
-use crate::{check_gl, setting_value::SettingValueEnum, settings::Settings};
+use crate::{check_gl, parse_vector3, setting_value::SettingValueEnum, settings::Settings};
 use failure::{err_msg, Error};
 use gl::types::*;
 use khygl::create_compute_program;
@@ -101,10 +101,17 @@ pub fn rebuild(settings: &mut Settings, local_size: usize) -> Result<GLuint, Err
     create_compute_program(&[&src])
 }
 
+const PARSE: &'static str = concat!(
+    "(?m)^ *(",
+    r"uniform *(?P<kinduint>uint) (?P<nameuint>[a-zA-Z0-9_]+) *; *// *(?P<valueuint>([-+]?[0-9]+))|",
+    r"uniform *(?P<kindfloat>float) (?P<namefloat>[a-zA-Z0-9_]+) *; *// *(?P<valuefloat>[-+]?[0-9]+(?:\.[0-9]+)?) +(?P<changefloat>[-+]?[0-9]+(?:\.[0-9]+)?)?|",
+    r"uniform *(?P<kindvec3>vec3) (?P<namevec3>[a-zA-Z0-9_]+) *; *// *(?P<valuevec3>([-+]?[0-9]+(?:\.[0-9]+)? +){3}) *(?P<changevec3>[-+]?[0-9]+(?:\.[0-9]+)?)?",
+    ") *(?P<const>const)? *\r?$"
+);
+
 fn set_src(settings: &mut Settings, src: &str) {
     lazy_static! {
-        static ref RE: Regex = Regex::new(
-           r#"(?m)^ *uniform *(?P<kind>float|uint) (?P<name>[a-zA-Z0-9_]+) *; *// *(?P<value>[-+]?[0-9]+(?:\.[0-9]+)?) *(?P<change>[-+]?[0-9]+(?:\.[0-9]+)?)? *(?P<const>const)? *\r?$"#).expect("Failed to create regex");
+        static ref RE: Regex = Regex::new(PARSE).expect("Failed to create regex");
     }
     let mut set: HashSet<String> = settings
         .values
@@ -114,26 +121,24 @@ fn set_src(settings: &mut Settings, src: &str) {
     let mut once = false;
     for cap in RE.captures_iter(src) {
         once = true;
-        let kind = &cap["kind"];
-        let name = &cap["name"];
-        set.remove(name);
-        let setting = match kind {
-            "float" => {
-                let value = cap["value"].parse().expect("Failed to extract regex");
-                let change = cap["change"].parse().expect("Failed to extract regex");
-                SettingValueEnum::F32(value, change)
-            }
-            "uint" => {
-                let value = cap["value"].parse().expect("Failed to extract regex");
-                SettingValueEnum::U32(value)
-            }
-            _ => {
-                panic!("Regex returned invalid kind");
-            }
+        let (name, setting) = if cap.name("kinduint").is_some() {
+            let value = cap["valueuint"].parse().expect("Failed to extract regex");
+            (&cap["nameuint"], SettingValueEnum::Int(value))
+        } else if cap.name("kindfloat").is_some() {
+            let value = cap["valuefloat"].parse().expect("Failed to extract regex");
+            let change = cap["changefloat"].parse().expect("Failed to extract regex");
+            (&cap["namefloat"], SettingValueEnum::Float(value, change))
+        } else if cap.name("kindvec3").is_some() {
+            let value = parse_vector3(&cap["valuevec3"]).expect("Failed to extract regex");
+            let change = cap["changevec3"].parse().expect("Failed to extract regex");
+            (&cap["namevec3"], SettingValueEnum::Vec3(value, change))
+        } else {
+            panic!("Regex returned invalid kind");
         };
+        set.remove(name);
         settings.define_variable(name, setting, cap.name("const").is_some());
     }
-    settings.define_variable("render_scale", SettingValueEnum::U32(1), false);
+    settings.define_variable("render_scale", SettingValueEnum::Int(1), false);
     set.remove("render_scale");
     assert!(once, "Regex should get at least one setting");
     find_defines(settings, src, &mut set);

@@ -1,11 +1,12 @@
 use crate::{
     input::Input,
+    parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
 };
 use cgmath::{prelude::*, Vector3};
 use failure::{err_msg, Error};
 use gl::types::*;
-use khygl::{set_arg_f32, set_arg_u32};
+use khygl::{set_arg_f32, set_arg_f32_3, set_arg_u32};
 use std::{
     fmt::Write as FmtWrite,
     fs::{File, OpenOptions},
@@ -70,29 +71,34 @@ impl Settings {
         }
     }
 
+    fn write_one(&self, writer: &mut BufWriter<impl Write>) -> Result<(), Error> {
+        for value in &self.values {
+            if value.key() == "render_scale" {
+                continue;
+            }
+            match value.value() {
+                SettingValueEnum::Int(v) => writeln!(writer, "{} = {}", value.key(), v)?,
+                SettingValueEnum::Float(v, _) => writeln!(writer, "{} = {}", value.key(), v)?,
+                SettingValueEnum::Vec3(v, _) => {
+                    writeln!(writer, "{} = {} {} {}", value.key(), v.x, v.y, v.z)?
+                }
+                SettingValueEnum::Define(v) => writeln!(writer, "{} = {}", value.key(), v)?,
+            }
+        }
+        Ok(())
+    }
+
     pub fn save(&self, file: &str) -> Result<(), Error> {
         let file = File::create(file)?;
         let mut writer = BufWriter::new(&file);
-        for value in &self.values {
-            match value.value() {
-                SettingValueEnum::F32(v, _) => writeln!(&mut writer, "{} = {}", value.key(), v)?,
-                SettingValueEnum::U32(v) => writeln!(&mut writer, "{} = {}", value.key(), v)?,
-                SettingValueEnum::Define(v) => writeln!(&mut writer, "{} = {}", value.key(), v)?,
-            }
-        }
+        self.write_one(&mut writer)?;
         Ok(())
     }
 
     pub fn save_keyframe(&self, file: &str) -> Result<(), Error> {
         let file = OpenOptions::new().append(true).create(true).open(file)?;
         let mut writer = BufWriter::new(&file);
-        for value in &self.values {
-            match value.value() {
-                SettingValueEnum::F32(v, _) => writeln!(&mut writer, "{} = {}", &value.key(), v)?,
-                SettingValueEnum::U32(v) => writeln!(&mut writer, "{} = {}", &value.key(), v)?,
-                SettingValueEnum::Define(v) => writeln!(&mut writer, "{} = {}", &value.key(), v)?,
-            }
-        }
+        self.write_one(&mut writer)?;
         writeln!(&mut writer, "---")?;
         Ok(())
     }
@@ -116,11 +122,18 @@ impl Settings {
             let new_value = split[0].trim();
             let value = self.find_mut(key);
             match *value.value() {
-                SettingValueEnum::F32(_, change) => {
-                    value.set_value(SettingValueEnum::F32(new_value.parse()?, change));
+                SettingValueEnum::Int(_) => {
+                    value.set_value(SettingValueEnum::Int(new_value.parse()?));
                 }
-                SettingValueEnum::U32(_) => {
-                    value.set_value(SettingValueEnum::U32(new_value.parse()?));
+                SettingValueEnum::Float(_, change) => {
+                    value.set_value(SettingValueEnum::Float(new_value.parse()?, change));
+                }
+                SettingValueEnum::Vec3(_, change) => {
+                    value.set_value(SettingValueEnum::Vec3(
+                        parse_vector3(new_value)
+                            .ok_or_else(|| failure::err_msg("invalid vector3 in save file"))?,
+                        change,
+                    ));
                 }
                 SettingValueEnum::Define(_) => {
                     value.set_value(SettingValueEnum::Define(new_value.parse()?));
@@ -146,13 +159,22 @@ impl Settings {
             let constant = if value.is_const() { "@" } else { " " };
             let key = value.key();
             match value.value() {
-                SettingValueEnum::F32(v, _) => {
+                SettingValueEnum::Int(v) => {
                     writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
                         .expect("Failed to write line to file")
                 }
-                SettingValueEnum::U32(v) => {
+                SettingValueEnum::Float(v, _) => {
                     writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
                         .expect("Failed to write line to file")
+                }
+                SettingValueEnum::Vec3(v, _) => {
+                    // TODO
+                    writeln!(
+                        &mut builder,
+                        "{}{}{} = {} {} {}",
+                        selected, constant, key, v.x, v.y, v.z
+                    )
+                    .expect("Failed to write line to file")
                 }
                 SettingValueEnum::Define(v) => {
                     writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
@@ -198,8 +220,17 @@ impl Settings {
     pub fn set_uniforms(&self, compute_shader: GLuint) -> Result<(), Error> {
         for value in &self.values {
             match *value.value() {
-                SettingValueEnum::F32(x, _) => set_arg_f32(compute_shader, value.key(), x)?,
-                SettingValueEnum::U32(x) => set_arg_u32(compute_shader, value.key(), x)?,
+                SettingValueEnum::Int(x) => set_arg_u32(compute_shader, value.key(), x as u32)?,
+                SettingValueEnum::Float(x, _) => {
+                    set_arg_f32(compute_shader, value.key(), x as f32)?
+                }
+                SettingValueEnum::Vec3(x, _) => set_arg_f32_3(
+                    compute_shader,
+                    value.key(),
+                    x.x as f32,
+                    x.y as f32,
+                    x.z as f32,
+                )?,
                 SettingValueEnum::Define(_) => (),
             }
         }
@@ -207,26 +238,12 @@ impl Settings {
     }
 
     pub fn normalize(&mut self) {
-        let mut look = self.read_vector("look_x", "look_y", "look_z");
-        let mut up = self.read_vector("up_x", "up_y", "up_z");
+        let mut look = self.find("look").unwrap_vec3();
+        let mut up = self.find("up").unwrap_vec3();
         look = look.normalize();
         up = Vector3::cross(Vector3::cross(look, up), look).normalize();
-        self.write_vector(look, "look_x", "look_y", "look_z");
-        self.write_vector(up, "up_x", "up_y", "up_z");
-    }
-
-    pub fn read_vector(&self, x: &str, y: &str, z: &str) -> Vector3<f32> {
-        Vector3::new(
-            self.find(x).unwrap_f32(),
-            self.find(y).unwrap_f32(),
-            self.find(z).unwrap_f32(),
-        )
-    }
-
-    pub fn write_vector(&mut self, vec: Vector3<f32>, x: &str, y: &str, z: &str) {
-        *self.find_mut(x).unwrap_f32_mut() = vec.x;
-        *self.find_mut(y).unwrap_f32_mut() = vec.y;
-        *self.find_mut(z).unwrap_f32_mut() = vec.z;
+        *self.find_mut("look").unwrap_vec3_mut() = look;
+        *self.find_mut("up").unwrap_vec3_mut() = up;
     }
 }
 
@@ -235,7 +252,7 @@ pub struct KeyframeList {
     keyframes: Vec<Settings>,
 }
 
-fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32, linear: bool) -> f32 {
+fn interpolate_float(p0: f64, p1: f64, p2: f64, p3: f64, t: f64, linear: bool) -> f64 {
     if linear {
         p1 + (p2 - p1) * t
     } else {
@@ -249,16 +266,31 @@ fn interpolate_f32(p0: f32, p1: f32, p2: f32, p3: f32, t: f32, linear: bool) -> 
     }
 }
 
-fn interpolate_u32(prev: u32, cur: u32, next: u32, next2: u32, time: f32, linear: bool) -> u32 {
-    interpolate_f32(
-        prev as f32,
-        cur as f32,
-        next as f32,
-        next2 as f32,
+fn interpolate_vec3(
+    p0: Vector3<f64>,
+    p1: Vector3<f64>,
+    p2: Vector3<f64>,
+    p3: Vector3<f64>,
+    t: f64,
+    linear: bool,
+) -> Vector3<f64> {
+    Vector3::new(
+        interpolate_float(p0.x, p1.x, p2.x, p3.x, t, linear),
+        interpolate_float(p0.y, p1.y, p2.y, p3.y, t, linear),
+        interpolate_float(p0.z, p1.z, p2.z, p3.z, t, linear),
+    )
+}
+
+fn interpolate_int(prev: u64, cur: u64, next: u64, next2: u64, time: f64, linear: bool) -> u64 {
+    interpolate_float(
+        prev as f64,
+        cur as f64,
+        next as f64,
+        next2 as f64,
         time,
         linear,
     )
-    .round() as u32
+    .round() as u64
 }
 
 fn interpolate(
@@ -266,22 +298,34 @@ fn interpolate(
     cur: &SettingValueEnum,
     next: &SettingValueEnum,
     next2: &SettingValueEnum,
-    time: f32,
+    time: f64,
     linear: bool,
 ) -> SettingValueEnum {
     match (*prev, *cur, *next, *next2) {
         (
-            SettingValueEnum::U32(prev),
-            SettingValueEnum::U32(cur),
-            SettingValueEnum::U32(next),
-            SettingValueEnum::U32(next2),
-        ) => SettingValueEnum::U32(interpolate_u32(prev, cur, next, next2, time, linear)),
+            SettingValueEnum::Int(prev),
+            SettingValueEnum::Int(cur),
+            SettingValueEnum::Int(next),
+            SettingValueEnum::Int(next2),
+        ) => SettingValueEnum::Int(interpolate_int(prev, cur, next, next2, time, linear)),
         (
-            SettingValueEnum::F32(prev, _),
-            SettingValueEnum::F32(cur, delta),
-            SettingValueEnum::F32(next, _),
-            SettingValueEnum::F32(next2, _),
-        ) => SettingValueEnum::F32(interpolate_f32(prev, cur, next, next2, time, linear), delta),
+            SettingValueEnum::Float(prev, _),
+            SettingValueEnum::Float(cur, delta),
+            SettingValueEnum::Float(next, _),
+            SettingValueEnum::Float(next2, _),
+        ) => SettingValueEnum::Float(
+            interpolate_float(prev, cur, next, next2, time, linear),
+            delta,
+        ),
+        (
+            SettingValueEnum::Vec3(prev, _),
+            SettingValueEnum::Vec3(cur, delta),
+            SettingValueEnum::Vec3(next, _),
+            SettingValueEnum::Vec3(next2, _),
+        ) => SettingValueEnum::Vec3(
+            interpolate_vec3(prev, cur, next, next2, time, linear),
+            delta,
+        ),
         (
             SettingValueEnum::Define(_),
             SettingValueEnum::Define(cur),
@@ -311,6 +355,10 @@ impl KeyframeList {
         Ok(Self { base, keyframes })
     }
 
+    pub fn len(&self) -> usize {
+        self.keyframes.len()
+    }
+
     fn clamp(&self, index: isize, wrap: bool) -> usize {
         let len = self.keyframes.len();
         if wrap {
@@ -320,15 +368,15 @@ impl KeyframeList {
         }
     }
 
-    pub fn interpolate(&mut self, time: f32, wrap: bool) -> &mut Settings {
+    pub fn interpolate(&mut self, time: f64, wrap: bool) -> &mut Settings {
         let timelen = if wrap {
             self.keyframes.len()
         } else {
             self.keyframes.len() - 1
         };
-        let time = time * timelen as f32;
+        let time = time * timelen as f64;
         let index_cur = time as usize;
-        let time = time - index_cur as f32;
+        let time = time - index_cur as f64;
         let index_prev = self.clamp(index_cur as isize - 1, wrap);
         let index_next = self.clamp(index_cur as isize + 1, wrap);
         let index_next2 = self.clamp(index_cur as isize + 2, wrap);

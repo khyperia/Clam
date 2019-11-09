@@ -3,18 +3,32 @@ use crate::{
 };
 use cgmath::{prelude::*, Matrix4, Vector3};
 use failure::Error;
-use khygl::Rect;
 use gl::types::*;
 use khygl::{
     display::Display,
-    render_texture::{TextureRendererF32, TextureRendererU8},
     render_text::TextRenderer,
+    render_texture::{TextureRendererF32, TextureRendererU8},
+    Rect,
 };
 
-fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f32> {
+fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f64> {
     Matrix4::new(
-        mat[0][0], mat[1][0], mat[2][0], 0.0, mat[0][1], mat[1][1], mat[2][1], 0.0, mat[0][2],
-        mat[1][2], mat[2][2], 0.0, mat[0][3], mat[1][3], mat[2][3], 1.0,
+        mat[0][0] as f64,
+        mat[1][0] as f64,
+        mat[2][0] as f64,
+        0.0,
+        mat[0][1] as f64,
+        mat[1][1] as f64,
+        mat[2][1] as f64,
+        0.0,
+        mat[0][2] as f64,
+        mat[1][2] as f64,
+        mat[2][2] as f64,
+        0.0,
+        mat[0][3] as f64,
+        mat[1][3] as f64,
+        mat[2][3] as f64,
+        1.0,
     )
 }
 
@@ -23,7 +37,7 @@ unsafe fn hands_eye(
     eye: openvr::Eye,
     head: &openvr::TrackedDevicePose,
     settings: &mut Settings,
-    world: &Matrix4<f32>,
+    world: &Matrix4<f64>,
 ) {
     let eye_to_head = to_cgmath(system.eye_to_head_transform(eye));
     let head_to_absolute = to_cgmath(*head.device_to_absolute_tracking());
@@ -43,21 +57,15 @@ unsafe fn hands_eye(
         (world * head_to_absolute * eye_to_head * Vector3::new(0.0, 0.0, -1.0).extend(0.0))
             .normalize();
 
-    *settings.find_mut("pos_x").unwrap_f32_mut() = pos[0] * 8.0;
-    *settings.find_mut("pos_y").unwrap_f32_mut() = pos[1] * 8.0;
-    *settings.find_mut("pos_z").unwrap_f32_mut() = pos[2] * 8.0;
-    *settings.find_mut("look_x").unwrap_f32_mut() = forwards[0];
-    *settings.find_mut("look_y").unwrap_f32_mut() = forwards[1];
-    *settings.find_mut("look_z").unwrap_f32_mut() = forwards[2];
-    *settings.find_mut("up_x").unwrap_f32_mut() = up[0];
-    *settings.find_mut("up_y").unwrap_f32_mut() = up[1];
-    *settings.find_mut("up_z").unwrap_f32_mut() = up[2];
+    *settings.find_mut("pos").unwrap_vec3_mut() = Vector3::new(pos[0], pos[1], pos[2]) * 8.0;
+    *settings.find_mut("look").unwrap_vec3_mut() = Vector3::new(forwards[0], forwards[1], forwards[2]);
+    *settings.find_mut("up").unwrap_vec3_mut() = Vector3::new(up[0], up[1], up[2]) * 8.0;
 }
 
 struct HandsState {
-    world: Matrix4<f32>,
-    left: Vector3<f32>,
-    right: Vector3<f32>,
+    world: Matrix4<f64>,
+    left: Vector3<f64>,
+    right: Vector3<f64>,
 }
 
 impl HandsState {
@@ -107,7 +115,7 @@ unsafe fn hands(
                 let new_center = (left_pos + right_pos) * 0.5;
                 let translation = new_center - old_center;
 
-                fn scale_around(scale: f32, center: Vector3<f32>) -> Matrix4<f32> {
+                fn scale_around(scale: f64, center: Vector3<f64>) -> Matrix4<f64> {
                     Matrix4::from_translation(center)
                         * Matrix4::from_scale(scale)
                         * Matrix4::from_translation(-center)
@@ -212,37 +220,37 @@ impl Display for VrDisplay {
         *interactive_kernel_left
             .settings
             .find_mut("fov_left")
-            .unwrap_f32_mut() = proj_left.left;
+            .unwrap_f32_mut() = proj_left.left as f64;
         *interactive_kernel_left
             .settings
             .find_mut("fov_right")
-            .unwrap_f32_mut() = proj_left.right;
+            .unwrap_f32_mut() = proj_left.right as f64;
         *interactive_kernel_left
             .settings
             .find_mut("fov_top")
-            .unwrap_f32_mut() = proj_left.top;
+            .unwrap_f32_mut() = proj_left.top as f64;
         *interactive_kernel_left
             .settings
             .find_mut("fov_bottom")
-            .unwrap_f32_mut() = proj_left.bottom;
+            .unwrap_f32_mut() = proj_left.bottom as f64;
 
         let proj_right = system.projection_raw(openvr::Eye::Right);
         *interactive_kernel_right
             .settings
             .find_mut("fov_left")
-            .unwrap_f32_mut() = proj_right.left;
+            .unwrap_f32_mut() = proj_right.left as f64;
         *interactive_kernel_right
             .settings
             .find_mut("fov_right")
-            .unwrap_f32_mut() = proj_right.right;
+            .unwrap_f32_mut() = proj_right.right as f64;
         *interactive_kernel_right
             .settings
             .find_mut("fov_top")
-            .unwrap_f32_mut() = proj_right.top;
+            .unwrap_f32_mut() = proj_right.top as f64;
         *interactive_kernel_right
             .settings
             .find_mut("fov_bottom")
-            .unwrap_f32_mut() = proj_right.bottom;
+            .unwrap_f32_mut() = proj_right.bottom as f64;
 
         interactive_kernel_left.settings.rebuild();
         interactive_kernel_right.settings.rebuild();
@@ -292,10 +300,20 @@ impl Display for VrDisplay {
 
         unsafe { gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT) };
 
-        self.texture_renderer_u8
-            .render(&left_img, None, Rect::new(0.0, 0.0, 0.5, 1.0), None, (1.0, 1.0))?;
-        self.texture_renderer_u8
-            .render(&right_img, None, Rect::new(0.5, 0.0, 0.5, 1.0), None, (1.0, 1.0))?;
+        self.texture_renderer_u8.render(
+            &left_img,
+            None,
+            Rect::new(0.0, 0.0, 0.5, 1.0),
+            None,
+            (1.0, 1.0),
+        )?;
+        self.texture_renderer_u8.render(
+            &right_img,
+            None,
+            Rect::new(0.5, 0.0, 0.5, 1.0),
+            None,
+            (1.0, 1.0),
+        )?;
 
         self.fps.tick();
         let display = format!(
