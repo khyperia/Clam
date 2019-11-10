@@ -143,7 +143,8 @@ impl Input {
             *value = now;
         }
         if let Some(ref mut video) = self.video {
-            let interpolated = video.interpolate(self.cur_video as f64 / self.video_len as f64, false);
+            let interpolated =
+                video.interpolate(self.cur_video as f64 / self.video_len as f64, false);
             *settings = interpolated.clone();
             self.cur_video += 1;
             if self.cur_video > self.video_len {

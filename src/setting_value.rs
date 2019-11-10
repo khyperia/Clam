@@ -193,7 +193,13 @@ impl SettingValue {
             }
             SettingValueEnum::Vec3(x, _) => {
                 if self.is_const() {
-                    let replacement = format!("#define {} vec3({:.16}, {:.16}, {:.16})", self.key(), x.x, x.y, x.z);
+                    let replacement = format!(
+                        "#define {} vec3({:.16}, {:.16}, {:.16})",
+                        self.key(),
+                        x.x,
+                        x.y,
+                        x.z
+                    );
                     *src = src.replace(&format!("uniform vec3 {};", self.key()), &replacement);
                 }
                 None

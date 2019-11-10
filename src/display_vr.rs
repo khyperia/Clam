@@ -58,7 +58,8 @@ unsafe fn hands_eye(
             .normalize();
 
     *settings.find_mut("pos").unwrap_vec3_mut() = Vector3::new(pos[0], pos[1], pos[2]) * 8.0;
-    *settings.find_mut("look").unwrap_vec3_mut() = Vector3::new(forwards[0], forwards[1], forwards[2]);
+    *settings.find_mut("look").unwrap_vec3_mut() =
+        Vector3::new(forwards[0], forwards[1], forwards[2]);
     *settings.find_mut("up").unwrap_vec3_mut() = Vector3::new(up[0], up[1], up[2]) * 8.0;
 }
 
