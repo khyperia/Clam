@@ -4,12 +4,7 @@ use crate::{
 use cgmath::{prelude::*, Matrix4, Vector3};
 use failure::Error;
 use gl::types::*;
-use khygl::{
-    display::Display,
-    render_text::TextRenderer,
-    render_texture::{TextureRendererF32, TextureRendererU8},
-    Rect,
-};
+use khygl::{display::Display, render_text::TextRenderer, render_texture::TextureRenderer, Rect};
 
 fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f64> {
     Matrix4::new(
@@ -179,8 +174,7 @@ struct VrDisplay {
     interactive_kernel_left: SyncInteractiveKernel<[u8; 4]>,
     interactive_kernel_right: SyncInteractiveKernel<[u8; 4]>,
     hands_state: HandsState,
-    texture_renderer_u8: TextureRendererU8,
-    texture_renderer_f32: TextureRendererF32,
+    texture_renderer: TextureRenderer,
     text_renderer: TextRenderer,
     fps: FpsCounter,
     vr_width: u32,
@@ -257,8 +251,7 @@ impl Display for VrDisplay {
         interactive_kernel_right.settings.rebuild();
 
         let fps = FpsCounter::new(1.0);
-        let texture_renderer_u8 = TextureRendererU8::new()?;
-        let texture_renderer_f32 = TextureRendererF32::new()?;
+        let texture_renderer = TextureRenderer::new()?;
         let text_renderer = TextRenderer::new(20.0)?;
         //unsafe { gl::Viewport(0, 0, width as i32, height as i32) };
         unsafe { gl::ClearColor(0.0, 0.0, 0.0, 1.0) };
@@ -269,8 +262,7 @@ impl Display for VrDisplay {
             interactive_kernel_left,
             interactive_kernel_right,
             hands_state,
-            texture_renderer_u8,
-            texture_renderer_f32,
+            texture_renderer,
             text_renderer,
             fps,
             vr_width,
@@ -301,14 +293,14 @@ impl Display for VrDisplay {
 
         unsafe { gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT) };
 
-        self.texture_renderer_u8.render(
+        self.texture_renderer.render(
             &left_img,
             None,
             Rect::new(0.0, 0.0, 0.5, 1.0),
             None,
             (1.0, 1.0),
         )?;
-        self.texture_renderer_u8.render(
+        self.texture_renderer.render(
             &right_img,
             None,
             Rect::new(0.5, 0.0, 0.5, 1.0),
@@ -323,7 +315,7 @@ impl Display for VrDisplay {
             self.interactive_kernel_left.status()
         );
         self.text_renderer.render(
-            &self.texture_renderer_f32,
+            &self.texture_renderer,
             &display,
             [1.0, 0.75, 0.75, 1.0],
             (10, 10),
