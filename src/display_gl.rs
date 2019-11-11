@@ -39,6 +39,7 @@ impl Display for GlDisplay {
             None,
             None,
             None,
+            None,
             (self.width as f32, self.height as f32),
         )?;
 

@@ -298,12 +298,14 @@ impl Display for VrDisplay {
             None,
             Rect::new(0.0, 0.0, 0.5, 1.0),
             None,
+            None,
             (1.0, 1.0),
         )?;
         self.texture_renderer.render(
             &right_img,
             None,
             Rect::new(0.5, 0.0, 0.5, 1.0),
+            None,
             None,
             (1.0, 1.0),
         )?;
