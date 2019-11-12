@@ -293,22 +293,14 @@ impl Display for VrDisplay {
 
         unsafe { gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT) };
 
-        self.texture_renderer.render(
-            &left_img,
-            None,
-            Rect::new(0.0, 0.0, 0.5, 1.0),
-            None,
-            None,
-            (1.0, 1.0),
-        )?;
-        self.texture_renderer.render(
-            &right_img,
-            None,
-            Rect::new(0.5, 0.0, 0.5, 1.0),
-            None,
-            None,
-            (1.0, 1.0),
-        )?;
+        self.texture_renderer
+            .render(&left_img, (1.0, 1.0))
+            .src(Rect::new(0.0, 0.0, 0.5, 1.0))
+            .go()?;
+        self.texture_renderer
+            .render(&right_img, (1.0, 1.0))
+            .src(Rect::new(0.5, 0.0, 0.5, 1.0))
+            .go()?;
 
         self.fps.tick();
         let display = format!(

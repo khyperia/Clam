@@ -134,7 +134,7 @@ dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "gl 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "khygl 0.1.0",
+ "khygl 0.1.0 (git+https://github.com/khyperia/khygl.git)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openvr 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "png 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -459,6 +459,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "khygl"
 version = "0.1.0"
+source = "git+https://github.com/khyperia/khygl.git#64ab7095d6778f0b9f5f68637c36aed933a9766a"
 dependencies = [
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "gl 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1225,6 +1226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum iovec 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum khronos_api 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
+"checksum khygl 0.1.0 (git+https://github.com/khyperia/khygl.git)" = "<none>"
 "checksum lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 "checksum lazycell 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b294d6fa9ee409a054354afc4352b0b9ef7ca222c69b8812cbea9e7d2bf3783f"
 "checksum libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)" = "1a31a0627fdf1f6a39ec0dd577e101440b7db22672c0901fe00a9a6fbb5c24e8"

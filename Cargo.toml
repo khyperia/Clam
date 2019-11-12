@@ -9,7 +9,7 @@ cgmath = { version = "*", default-features = false }
 chrono = { version = "*", default-features = false, features = ["clock"] }
 failure = { version = "*", default-features = false }
 gl = { version = "*", default-features = false }
-khygl = { path = "../khygl" }
+khygl = { git = "https://github.com/khyperia/khygl.git", default-features = false }
 lazy_static = { version = "*", default-features = false }
 openvr = { version = "*", default-features = false, optional = true }
 png = { version = "*", default-features = false, features = ["png-encoding"] }

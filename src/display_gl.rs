@@ -34,14 +34,9 @@ impl Display for GlDisplay {
         self.interactive_kernel.launch()?;
         let img = self.interactive_kernel.texture();
 
-        self.texture_renderer.render(
-            &img,
-            None,
-            None,
-            None,
-            None,
-            (self.width as f32, self.height as f32),
-        )?;
+        self.texture_renderer
+            .render(&img, (self.width as f32, self.height as f32))
+            .go()?;
 
         let display = format!(
             "{:.2} fps\n{}",
