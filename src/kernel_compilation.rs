@@ -101,7 +101,7 @@ pub fn rebuild(settings: &mut Settings, local_size: usize) -> Result<GLuint, Err
     create_compute_program(&[&src])
 }
 
-const PARSE: &'static str = concat!(
+const PARSE: &str = concat!(
     "(?m)^ *(",
     r"uniform *(?P<kinduint>uint) (?P<nameuint>[a-zA-Z0-9_]+) *; *// *(?P<valueuint>([-+]?[0-9]+))|",
     r"uniform *(?P<kindfloat>float) (?P<namefloat>[a-zA-Z0-9_]+) *; *// *(?P<valuefloat>[-+]?[0-9]+(?:\.[0-9]+)?) +(?P<changefloat>[-+]?[0-9]+(?:\.[0-9]+)?)?|",

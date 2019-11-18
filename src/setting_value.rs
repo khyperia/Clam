@@ -9,7 +9,7 @@ pub struct SettingValue {
     needs_rebuild: bool,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SettingValueEnum {
     Int(u64),
     Float(f64, f64),
@@ -21,7 +21,7 @@ impl SettingValue {
     pub fn new(key: String, value: SettingValueEnum, is_const: bool) -> Self {
         Self {
             key,
-            value,
+            value: value.clone(),
             default_value: value,
             is_const,
             needs_rebuild: false,
@@ -81,7 +81,7 @@ impl SettingValue {
                     *value += dt * change;
                 }
             }
-            SettingValueEnum::Vec3(ref mut value, change) => {
+            SettingValueEnum::Vec3(_, _) => {
                 // TODO
             }
             SettingValueEnum::Define(_) | SettingValueEnum::Int(_) => (),
@@ -104,7 +104,7 @@ impl SettingValue {
                 SettingValueEnum::Define(ref mut v) => *v = false,
             }
         } else {
-            self.value = self.default_value;
+            self.value = self.default_value.clone();
         }
         let new_define = def(&self.value);
         if old_define != new_define {
@@ -146,6 +146,7 @@ impl SettingValue {
         }
     }
 
+    #[cfg(feature = "vr")]
     pub fn unwrap_f32_mut(&mut self) -> &mut f64 {
         match self.value {
             SettingValueEnum::Float(ref mut value, _) => value,

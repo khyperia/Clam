@@ -219,19 +219,21 @@ impl Settings {
 
     pub fn set_uniforms(&self, compute_shader: GLuint) -> Result<(), Error> {
         for value in &self.values {
-            match *value.value() {
-                SettingValueEnum::Int(x) => set_arg_u32(compute_shader, value.key(), x as u32)?,
-                SettingValueEnum::Float(x, _) => {
-                    set_arg_f32(compute_shader, value.key(), x as f32)?
+            if !value.is_const() {
+                match *value.value() {
+                    SettingValueEnum::Int(x) => set_arg_u32(compute_shader, value.key(), x as u32)?,
+                    SettingValueEnum::Float(x, _) => {
+                        set_arg_f32(compute_shader, value.key(), x as f32)?
+                    }
+                    SettingValueEnum::Vec3(x, _) => set_arg_f32_3(
+                        compute_shader,
+                        value.key(),
+                        x.x as f32,
+                        x.y as f32,
+                        x.z as f32,
+                    )?,
+                    SettingValueEnum::Define(_) => (),
                 }
-                SettingValueEnum::Vec3(x, _) => set_arg_f32_3(
-                    compute_shader,
-                    value.key(),
-                    x.x as f32,
-                    x.y as f32,
-                    x.z as f32,
-                )?,
-                SettingValueEnum::Define(_) => (),
             }
         }
         Ok(())
@@ -301,36 +303,36 @@ fn interpolate(
     time: f64,
     linear: bool,
 ) -> SettingValueEnum {
-    match (*prev, *cur, *next, *next2) {
+    match (prev, cur, next, next2) {
         (
-            SettingValueEnum::Int(prev),
-            SettingValueEnum::Int(cur),
-            SettingValueEnum::Int(next),
-            SettingValueEnum::Int(next2),
+            &SettingValueEnum::Int(prev),
+            &SettingValueEnum::Int(cur),
+            &SettingValueEnum::Int(next),
+            &SettingValueEnum::Int(next2),
         ) => SettingValueEnum::Int(interpolate_int(prev, cur, next, next2, time, linear)),
         (
-            SettingValueEnum::Float(prev, _),
-            SettingValueEnum::Float(cur, delta),
-            SettingValueEnum::Float(next, _),
-            SettingValueEnum::Float(next2, _),
+            &SettingValueEnum::Float(prev, _),
+            &SettingValueEnum::Float(cur, delta),
+            &SettingValueEnum::Float(next, _),
+            &SettingValueEnum::Float(next2, _),
         ) => SettingValueEnum::Float(
             interpolate_float(prev, cur, next, next2, time, linear),
             delta,
         ),
         (
-            SettingValueEnum::Vec3(prev, _),
-            SettingValueEnum::Vec3(cur, delta),
-            SettingValueEnum::Vec3(next, _),
-            SettingValueEnum::Vec3(next2, _),
+            &SettingValueEnum::Vec3(prev, _),
+            &SettingValueEnum::Vec3(cur, delta),
+            &SettingValueEnum::Vec3(next, _),
+            &SettingValueEnum::Vec3(next2, _),
         ) => SettingValueEnum::Vec3(
             interpolate_vec3(prev, cur, next, next2, time, linear),
             delta,
         ),
         (
-            SettingValueEnum::Define(_),
-            SettingValueEnum::Define(cur),
-            SettingValueEnum::Define(_),
-            SettingValueEnum::Define(_),
+            &SettingValueEnum::Define(_),
+            &SettingValueEnum::Define(cur),
+            &SettingValueEnum::Define(_),
+            &SettingValueEnum::Define(_),
         ) => SettingValueEnum::Define(cur),
         _ => panic!("Inconsistent keyframe types"),
     }

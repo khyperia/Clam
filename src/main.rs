@@ -95,8 +95,9 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
         }
     }
     kernel.sync_renderer()?;
+    println!("render done, downloading");
     let image = kernel.download()?;
-    println!("render done, saving");
+    println!("saving, final time: {}", progress.time_str(1.0));
     let local: DateTime<Local> = Local::now();
     let filename = local.format("%Y-%m-%d_%H-%M-%S.png").to_string();
     save_image(&image, &filename)?;
