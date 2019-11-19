@@ -1,10 +1,11 @@
 use crate::{
-    check_gl, fps_counter::FpsCounter, interactive::SyncInteractiveKernel, settings::Settings, Key,
+    check_gl, display, display::Display, fps_counter::FpsCounter,
+    interactive::SyncInteractiveKernel, settings::Settings, Key,
 };
 use cgmath::{prelude::*, Matrix4, Vector3};
 use failure::Error;
 use gl::types::*;
-use khygl::{display::Display, render_text::TextRenderer, render_texture::TextureRenderer, Rect};
+use khygl::{render_text::TextRenderer, render_texture::TextureRenderer, Rect};
 
 fn to_cgmath(mat: [[f32; 4]; 3]) -> Matrix4<f64> {
     Matrix4::new(
@@ -335,5 +336,5 @@ impl Display for VrDisplay {
 }
 
 pub fn run() -> Result<(), Error> {
-    khygl::display::run::<VrDisplay>((100.0, 100.0))
+    display::run::<VrDisplay>((100.0, 100.0))
 }

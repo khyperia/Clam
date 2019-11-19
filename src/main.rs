@@ -1,3 +1,4 @@
+mod display;
 mod display_gl;
 #[cfg(feature = "vr")]
 mod display_vr;
@@ -12,9 +13,10 @@ mod settings;
 
 use cgmath::Vector3;
 use chrono::prelude::*;
+use display::Key;
 use failure::{err_msg, Error};
 use kernel::Kernel;
-use khygl::{check_gl, display::Key, texture::CpuTexture};
+use khygl::{check_gl, texture::CpuTexture};
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
 use settings::{KeyframeList, Settings};
@@ -239,9 +241,9 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
 fn try_main() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && &arguments[0] == "--render" {
-        khygl::display::run_headless(|| render(&arguments[1..]))??
+        display::run_headless(|| render(&arguments[1..]))??
     } else if arguments.len() > 2 && &arguments[0] == "--video" {
-        khygl::display::run_headless(|| video_cmd(&arguments[1..]))??
+        display::run_headless(|| video_cmd(&arguments[1..]))??
     } else if cfg!(feature = "vr") && arguments.len() == 1 && &arguments[0] == "--vr" {
         #[cfg(feature = "vr")]
         display_vr::run()?

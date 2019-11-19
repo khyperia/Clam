@@ -133,6 +133,7 @@ dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "gl 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glutin 0.22.0-alpha5 (registry+https://github.com/rust-lang/crates.io-index)",
  "khygl 0.1.0 (git+https://github.com/khyperia/khygl.git)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openvr 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -425,11 +426,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "khygl"
 version = "0.1.0"
-source = "git+https://github.com/khyperia/khygl.git#cac3f18e0086b3de495fc616ed9f8e334478d57c"
+source = "git+https://github.com/khyperia/khygl.git#46d81333f8ea4cfca95702397ab0c59769308947"
 dependencies = [
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "gl 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "glutin 0.22.0-alpha5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rusttype 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

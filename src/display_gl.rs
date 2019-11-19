@@ -1,6 +1,9 @@
-use crate::{check_gl, fps_counter::FpsCounter, interactive::SyncInteractiveKernel, Key};
+use crate::{
+    check_gl, display, display::Display, fps_counter::FpsCounter,
+    interactive::SyncInteractiveKernel, Key,
+};
 use failure::Error;
-use khygl::{display::Display, render_text::TextRenderer, render_texture::TextureRenderer};
+use khygl::{render_text::TextRenderer, render_texture::TextureRenderer};
 
 struct GlDisplay {
     interactive_kernel: SyncInteractiveKernel<[f32; 4]>,
@@ -78,5 +81,5 @@ impl Display for GlDisplay {
 }
 
 pub fn run(width: f64, height: f64) -> Result<(), Error> {
-    khygl::display::run::<GlDisplay>((width, height))
+    display::run::<GlDisplay>((width, height))
 }
