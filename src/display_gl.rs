@@ -20,7 +20,6 @@ impl Display for GlDisplay {
 
         let texture_renderer = TextureRenderer::new()?;
         let text_renderer = TextRenderer::new(20.0)?;
-
         let fps = FpsCounter::new(1.0);
 
         Ok(Self {

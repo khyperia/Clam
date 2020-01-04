@@ -72,13 +72,13 @@ fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error>
     Ok(())
 }
 
-// #[cfg(not(windows))]
+#[cfg(not(windows))]
 fn progress_count(rpp: usize) -> usize {
     (rpp / 20).min(4).max(16)
 }
 
-// #[cfg(windows)]
-// fn progress_count(_: usize) -> usize { 1 }
+#[cfg(windows)]
+fn progress_count(_: usize) -> usize { 1 }
 
 fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     let mut settings = Settings::new();

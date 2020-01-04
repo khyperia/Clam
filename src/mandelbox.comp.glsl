@@ -4,7 +4,6 @@ layout(rgba32f, binding = 1) uniform image2D scratch;
 layout(r32ui, binding = 2) uniform uimage2D randbuf;
 // precision highp float;
 
-#define PI  3.1415926538
 #define TAU 6.28318530718
 #define FLT_MAX 1E+37
 #define UINT_MAX 0xFFFFFFFFU
@@ -19,9 +18,11 @@ uniform float folding_limit;             // 1.0 -0.5 const
 uniform float fixed_radius_2;            // 1.0 -0.5 const
 uniform float min_radius_2;              // 0.125 -0.5 const
 uniform float dof_amount;                // 0.01 -1.0
+uniform float bloom_amount;              // 0.1 0.5
+uniform float bloom_size;                // 0.01 -1.0
 uniform float fog_distance;              // 10.0 -1.0
 uniform float fog_brightness;            // 1.0 0.5
-uniform vec3 light_pos_1;               // 3.0 3.5 2.5 1.0
+uniform vec3 light_pos_1;                // 3.0 3.5 2.5 1.0
 uniform float light_radius_1;            // 1.0 -0.5
 uniform float light_brightness_1_hue;    // 0.0 0.25
 uniform float light_brightness_1_sat;    // 0.4 -1.0
@@ -31,7 +32,7 @@ uniform float ambient_brightness_sat;    // 0.2 -1.0
 uniform float ambient_brightness_val;    // 0.5 -1.0
 uniform float surface_color_variance;    // 0.0625 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
-uniform float surface_color_saturation;  // 1.0 0.125
+uniform float surface_color_saturation;  // 0.75 0.125
 uniform float surface_color_value;       // 1.0 0.125
 uniform float surface_color_ior;         // 1.0 0.125
 uniform vec3 plane;                      // 3.0 3.5 2.5 1.0
@@ -136,6 +137,12 @@ void Random_Init(inout Random this_)
     }
 }
 
+vec2 Random_Gaussian(inout Random this_)
+{
+    vec2 polar = vec2(TAU * Random_Next(this_), sqrt(-2 * log(Random_Next(this_))));
+    return vec2(cos(polar.x) * polar.y, sin(polar.x) * polar.y);
+}
+
 vec2 Random_Disk(inout Random this_)
 {
     vec2 polar = vec2(Random_Next(this_), sqrt(Random_Next(this_)));
@@ -205,14 +212,17 @@ vec3 Ray_At(Ray this_, float time)
 
 void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
 {
-    vec3 focalPosition = Ray_At(this_, focalPlane);
     // Normalize because the vectors aren't perpendicular
-    vec3 xShift = normalize(cross(vec3(0, 0, 1), this_.dir));
-    vec3 yShift = cross(this_.dir, xShift);
+    vec3 rightUnit = normalize(cross(vec3(0, 0, 1), this_.dir));
+    vec3 upUnit = cross(this_.dir, rightUnit);
+    vec2 bloomshift2d = Random_Next(rand) < bloom_amount ? Random_Gaussian(rand) * bloom_size : vec2(0, 0);
+    bloomshift2d *= focalPlane;
+    vec3 bloomshift = bloomshift2d.x * rightUnit + bloomshift2d.y * upUnit;
+    vec3 focalPosition = Ray_At(this_, focalPlane);
+    focalPosition += bloomshift;
     vec2 offset = Random_Disk(rand);
-    float dofPickup = dof_amount;
     this_.dir =
-        normalize(this_.dir + offset.x * dofPickup * xShift + offset.y * dofPickup * yShift);
+        normalize(this_.dir + offset.x * dof_amount * rightUnit + offset.y * dof_amount * upUnit);
     this_.org = focalPosition - this_.dir * focalPlane;
 }
 
@@ -533,16 +543,6 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             // hit surface, do material calculations
             material = GetMaterial(newPos);
             rayColor += reflectionColor * material.emissive;  // ~bling~!
-
-            /*
-                // Assuming for example:
-                //   diffuse = albedo / PI;
-                //   specular = my_favorite_glossy_brdf(in_dir, out_dir, roughness);
-                //   fresnel = f0 + (1.0 - f0) * pow(1.0 - dot(E, H), 5.0);
-                //   total_surface_reflection = fresnel
-                color = lightIntensity * dot(L, N) * Lerp(diffuse, specular,
-               total_surface_reflection);
-            */
             float cosTheta = -dot(ray.dir, material.normal);
             // https://en.wikipedia.org/wiki/Schlick%27s_approximation
             float iorAir = 1.0;
