@@ -35,7 +35,7 @@ fn print_name() -> Result<(), Error> {
 pub fn run_headless<T>(func: impl Fn() -> T) -> Result<T, Error> {
     unsafe {
         let el = EventLoop::new();
-        let ctx = ContextBuilder::new().build_headless(&el, PhysicalSize::new(10.0, 10.0))?;
+        let ctx = ContextBuilder::new().build_headless(&el, PhysicalSize::new(10, 10))?;
         let ctx_cur = ctx.make_current().map_err(|(_, e)| e)?;
         gl::load_with(|symbol| ctx_cur.get_proc_address(symbol) as *const _);
         print_name()?;
@@ -59,10 +59,7 @@ pub fn run<Disp: Display + 'static>(request_size: (f64, f64)) -> Result<(), Erro
 
     let windowed_context = unsafe { windowed_context.make_current().map_err(|(_, e)| e)? };
 
-    let initial_size = windowed_context
-        .window()
-        .inner_size()
-        .to_physical(windowed_context.window().hidpi_factor());
+    let initial_size = windowed_context.window().inner_size();
 
     gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
 
@@ -78,24 +75,18 @@ pub fn run<Disp: Display + 'static>(request_size: (f64, f64)) -> Result<(), Erro
 
     print_name()?;
 
-    let dpi = windowed_context.window().hidpi_factor();
-
     let mut display = Some(Disp::setup(
         (initial_size.width as usize, initial_size.height as usize),
-        dpi,
+        1.0,
     )?);
 
     el.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
-            WindowEvent::Resized(logical_size)
-                if logical_size.width > 0.0 && logical_size.height > 0.0 =>
-            {
+            WindowEvent::Resized(physical) if physical.width > 0 && physical.height > 0 => {
                 if let Some(ref mut display) = display {
-                    let dpi_factor = windowed_context.window().hidpi_factor();
-                    let physical = logical_size.to_physical(dpi_factor);
                     handle(display.resize((physical.width as usize, physical.height as usize)));
                     unsafe { gl::Viewport(0, 0, physical.width as i32, physical.height as i32) };
-                    windowed_context.resize(logical_size.to_physical(dpi_factor));
+                    windowed_context.resize(physical);
                 }
             }
             WindowEvent::KeyboardInput { input, .. } => {
@@ -113,16 +104,16 @@ pub fn run<Disp: Display + 'static>(request_size: (f64, f64)) -> Result<(), Erro
                     handle(display.received_character(ch))
                 }
             }
-            WindowEvent::RedrawRequested => {
-                if let Some(ref mut display) = display {
-                    handle(display.render());
-                    handle(windowed_context.swap_buffers().map_err(|e| e.into()));
-                }
-            }
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             _ => (),
         },
-        Event::EventsCleared => {
+        Event::RedrawRequested(_) => {
+            if let Some(ref mut display) = display {
+                handle(display.render());
+                handle(windowed_context.swap_buffers().map_err(|e| e.into()));
+            }
+        }
+        Event::MainEventsCleared => {
             if *control_flow == ControlFlow::Exit {
                 display = None;
             } else {

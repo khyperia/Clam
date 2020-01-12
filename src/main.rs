@@ -59,13 +59,14 @@ fn write_image(image: &CpuTexture<[f32; 4]>, w: impl Write) -> Result<(), Error>
     let mut writer = encoder.write_header()?;
     let (width, height) = image.size;
     let mut output = vec![0; width * height * 3];
+    let data = image.data();
     for y in 0..height {
         for x in 0..width {
             let in_idx = y * width + x;
             let out_idx = (y * width + x) * 3;
-            output[out_idx] = f32_to_u8(image.data[in_idx][0]);
-            output[out_idx + 1] = f32_to_u8(image.data[in_idx][1]);
-            output[out_idx + 2] = f32_to_u8(image.data[in_idx][2]);
+            output[out_idx] = f32_to_u8(data[in_idx][0]);
+            output[out_idx + 1] = f32_to_u8(data[in_idx][1]);
+            output[out_idx + 2] = f32_to_u8(data[in_idx][2]);
         }
     }
     writer.write_image_data(&output)?;
