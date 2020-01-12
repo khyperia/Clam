@@ -183,7 +183,7 @@ struct VrDisplay {
 }
 
 impl Display for VrDisplay {
-    fn setup(_: (usize, usize), _: f64) -> Result<Self, Error> {
+    fn setup(_: (usize, usize)) -> Result<Self, Error> {
         let ovr = unsafe { openvr::init(openvr::ApplicationType::Scene) }?;
         let system = ovr.system()?;
         let compositor = ovr.compositor()?;

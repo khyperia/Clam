@@ -15,7 +15,7 @@ struct GlDisplay {
 }
 
 impl Display for GlDisplay {
-    fn setup(size: (usize, usize), _: f64) -> Result<Self, Error> {
+    fn setup(size: (usize, usize)) -> Result<Self, Error> {
         let interactive_kernel = SyncInteractiveKernel::<[f32; 4]>::create(size.0, size.1)?;
 
         let texture_renderer = TextureRenderer::new()?;
