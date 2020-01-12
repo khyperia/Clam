@@ -50,7 +50,17 @@ impl SettingValue {
     }
 
     pub fn set_default_value(&mut self, value: SettingValueEnum) {
-        self.default_value = value
+        self.default_value = value;
+        // set change rate
+        match (&mut self.value, &self.default_value) {
+            (SettingValueEnum::Float(_, value), SettingValueEnum::Float(_, default)) => {
+                *value = *default
+            }
+            (SettingValueEnum::Vec3(_, value), SettingValueEnum::Vec3(_, default)) => {
+                *value = *default
+            }
+            _ => (),
+        }
     }
 
     pub fn change_one(&mut self, increase: bool) {

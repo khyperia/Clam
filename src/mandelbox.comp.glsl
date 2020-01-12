@@ -34,10 +34,10 @@ uniform float surface_color_variance;    // 0.0625 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
 uniform float surface_color_saturation;  // 0.75 0.125
 uniform float surface_color_value;       // 1.0 0.125
-uniform float surface_color_ior;         // 1.0 0.125
+uniform float surface_color_ior;         // 1.0 -0.125
 uniform vec3 plane;                      // 3.0 3.5 2.5 1.0
 uniform float rotation;                  // 0.0 0.125
-uniform float bailout;                   // 64.0 -1.0 const
+uniform float bailout;                   // 64.0 -0.25 const
 uniform float bailout_normal;            // 1024.0 -1.0 const
 uniform float de_multiplier;             // 0.9375 0.125 const
 uniform float max_ray_dist;              // 16.0 -0.5 const
@@ -443,7 +443,7 @@ Material GetMaterial(vec3 offset)
     else
     {
         result.color = vec3(1, 1, 1);
-        result.ior = 0.0f;
+        result.ior = 1.0f;
         result.emissive = LightBrightness1();
     }
 
@@ -545,15 +545,15 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             rayColor += reflectionColor * material.emissive;  // ~bling~!
             float cosTheta = -dot(ray.dir, material.normal);
             // https://en.wikipedia.org/wiki/Schlick%27s_approximation
-            float iorAir = 1.0;
+            float iorAir = 1.0f;
             float r0 = (iorAir - material.ior) / (iorAir + material.ior);
             r0 *= r0;
             float fresnel =
-                r0 + (1.0f - r0) * pow(1.0 - cosTheta, 5);
-            if (Random_Next(rand) < fresnel)
+                r0 + (1.0f - r0) * pow(1.0f - cosTheta, 5);
+            if (material.ior > 1.0f && Random_Next(rand) < fresnel)
             {
                 // specular
-                newDir = ray.dir + 2.0 * cosTheta * material.normal;
+                newDir = ray.dir + 2.0f * cosTheta * material.normal;
                 // material.color = vec3(1.0, 1.0, 1.0);
             }
             else

@@ -78,7 +78,9 @@ fn progress_count(rpp: usize) -> usize {
 }
 
 #[cfg(windows)]
-fn progress_count(_: usize) -> usize { 1 }
+fn progress_count(_: usize) -> usize {
+    1
+}
 
 fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     let mut settings = Settings::new();
@@ -107,6 +109,31 @@ fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     Ok(())
 }
 
+enum VideoFormat {
+    MP4,
+    Twitter,
+    PngSeq,
+    Gif,
+}
+
+impl std::str::FromStr for VideoFormat {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("mp4") {
+            Ok(VideoFormat::MP4)
+        } else if s.eq_ignore_ascii_case("twitter") {
+            Ok(VideoFormat::Twitter)
+        } else if s.eq_ignore_ascii_case("pngseq") {
+            Ok(VideoFormat::PngSeq)
+        } else if s.eq_ignore_ascii_case("gif") {
+            Ok(VideoFormat::Gif)
+        } else {
+            Err(failure::err_msg("Invalid video format"))
+        }
+    }
+}
+
 fn video_one(
     rpp: usize,
     kernel: &mut Kernel<[f32; 4]>,
@@ -118,6 +145,59 @@ fn video_one(
     }
     let image = kernel.download()?;
     stream.send(image)?;
+    Ok(())
+}
+
+fn pngseq_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, gifize: bool) -> Result<(), Error> {
+    let mut i = 0;
+    if gifize {
+        for item in std::fs::read_dir(".")? {
+            let item = item?;
+            let is_num = item.path().file_stem().map_or(false, |x| {
+                x.to_str().map_or(false, |x| x.parse::<u64>().is_ok())
+            });
+            if is_num {
+                std::fs::remove_file(item.path())?;
+            }
+        }
+    }
+    while let Ok(img) = stream.recv() {
+        save_image(&img, &format!("{:04}.png", i))?;
+        i += 1;
+    }
+    if gifize {
+        fn ffmpeg(args: &[&str]) -> Result<(), Error> {
+            let exe = if cfg!(windows) {
+                "ffmpeg.exe"
+            } else {
+                "ffmpeg"
+            };
+            if Command::new(exe).args(args).status()?.success() {
+                println!("Run okay");
+                Ok(())
+            } else {
+                println!("Run fail");
+                Err(failure::err_msg("ffmpeg failed"))
+            }
+        }
+        println!("A");
+        ffmpeg(&["-i", "%04d.png", "-vf", "palettegen", "-y", "palette.png"])?;
+        println!("B");
+        ffmpeg(&[
+            "-framerate",
+            "50",
+            "-i",
+            "%04d.png",
+            "-i",
+            "palette.png",
+            "-lavfi",
+            "paletteuse",
+            "-y",
+            "output.gif",
+        ])?;
+    }
+    // run(`ffmpeg -v 0 -i $(animdir)/%06d.png -vf palettegen -y palette.png`)
+    // run(`ffmpeg -v 0 -framerate $fps -loop $loop -i $(animdir)/%06d.png -i palette.png -lavfi paletteuse -y $fn`)
     Ok(())
 }
 
@@ -158,7 +238,7 @@ fn video(
     rpp: usize,
     frames: usize,
     wrap: bool,
-    twitter: bool,
+    format: VideoFormat,
 ) -> Result<(), Error> {
     let mut default_settings = Settings::new();
     let mut kernel = Kernel::create(width, height, &mut default_settings)?;
@@ -168,7 +248,12 @@ fn video(
 
     let (send, recv) = mpsc::sync_channel(5);
 
-    let thread_handle = std::thread::spawn(move || video_write(&recv, twitter));
+    let thread_handle = match format {
+        VideoFormat::PngSeq => std::thread::spawn(move || pngseq_write(&recv, false)),
+        VideoFormat::Gif => std::thread::spawn(move || pngseq_write(&recv, true)),
+        VideoFormat::MP4 => std::thread::spawn(move || video_write(&recv, false)),
+        VideoFormat::Twitter => std::thread::spawn(move || video_write(&recv, true)),
+    };
 
     for frame in 0..frames {
         let settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
@@ -182,58 +267,52 @@ fn video(
     Ok(())
 }
 
+fn parse_resolution(res: &str) -> Option<(usize, usize)> {
+    if let Some(dash) = res.find('-') {
+        let (x, y) = res.split_at(dash);
+        let y = &y[1..];
+        Some((x.parse().ok()?, y.parse().ok()?))
+    } else {
+        match res {
+            "32k" => Some((30720, 17280)),
+            "16k" => Some((15360, 8640)),
+            "8k" => Some((7680, 4320)),
+            "4k" => Some((3840, 2160)),
+            "2k" => Some((1920, 1080)),
+            "1k" => Some((960, 540)),
+            "0.5k" => Some((480, 270)),
+            "0.25k" => Some((240, 135)),
+            "twitter" => Some((1280, 720)),
+            _ => None,
+        }
+    }
+}
+
 fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
+        let (width, height) =
+            parse_resolution(&args[0]).ok_or_else(|| failure::err_msg("Invalid resolution"))?;
         let rpp = args[1].parse()?;
-        match &*args[0] {
-            "32k" => image(30720, 17280, rpp),
-            "16k" => image(15360, 8640, rpp),
-            "8k" => image(7680, 4320, rpp),
-            "4k" => image(3840, 2160, rpp),
-            "2k" => image(1920, 1080, rpp),
-            "1k" => image(960, 540, rpp),
-            "0.5k" => image(480, 270, rpp),
-            "0.25k" => image(240, 135, rpp),
-            pix => image(pix.parse()?, pix.parse()?, rpp),
-        }
-    } else if args.len() == 3 {
-        image(args[0].parse()?, args[1].parse()?, args[2].parse()?)
+        image(width, height, rpp)
     } else {
         Err(failure::err_msg(
-            "--render needs two or three args: [width] [height] [rpp], or, [16k|8k|4k|2k|1k] [rpp]",
+            "--render needs two args: [width-height|0.25k..32k|twitter] [rpp]",
         ))
     }
 }
 
 fn video_cmd(args: &[String]) -> Result<(), Error> {
     if args.len() == 5 {
-        video(
-            args[0].parse()?,
-            args[1].parse()?,
-            args[2].parse()?,
-            args[3].parse()?,
-            args[4].parse()?,
-            false,
-        )
-    } else if args.len() == 4 {
+        let (width, height) =
+            parse_resolution(&args[0]).ok_or_else(|| failure::err_msg("Invalid resolution"))?;
         let rpp = args[1].parse()?;
         let frames = args[2].parse()?;
         let wrap = args[3].parse()?;
-        match &*args[0] {
-            "32k" => video(30720, 17280, rpp, frames, wrap, false),
-            "16k" => video(15360, 8640, rpp, frames, wrap, false),
-            "8k" => video(7680, 4320, rpp, frames, wrap, false),
-            "4k" => video(3840, 2160, rpp, frames, wrap, false),
-            "2k" => video(1920, 1080, rpp, frames, wrap, false),
-            "1k" => video(960, 540, rpp, frames, wrap, false),
-            "0.5k" => video(480, 270, rpp, frames, wrap, false),
-            "0.25k" => video(240, 135, rpp, frames, wrap, false),
-            "twitter" => video(1280, 720, rpp, frames, wrap, true),
-            _ => Err(failure::err_msg("Invalid video resolution alias")),
-        }
+        let format = args[4].parse()?;
+        video(width, height, rpp, frames, wrap, format)
     } else {
         Err(failure::err_msg(
-            "--video needs four or five args: [[width] [height]|[0.25k..32k|twitter]] [rpp] [frames] [wrap:true|false]",
+            "--video needs four args: [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]",
         ))
     }
 }
@@ -253,9 +332,7 @@ fn try_main() -> Result<(), Error> {
         println!("Usage:");
         println!("clam5 --render [width] [height] [rpp]");
         println!("clam5 --render [0.25k..32k] [rpp]");
-        println!("clam5 --video [width] [height] [rpp] [frames] [wrap:true|false]");
-        println!("clam5 --video [0.25k..32k] [rpp] [frames] [wrap:true|false]");
-        println!("clam5 --video twitter [rpp] [frames] [wrap:true|false]");
+        println!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
         #[cfg(feature = "vr")]
         println!("clam5 --vr");
         println!("clam5");

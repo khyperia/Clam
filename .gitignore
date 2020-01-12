@@ -2,6 +2,7 @@
 /target/
 *.png
 *.mp4
+*.gif
 settings.clam5
 keyframes.clam5
 *.obj
