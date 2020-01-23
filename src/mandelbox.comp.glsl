@@ -34,7 +34,7 @@ uniform float surface_color_variance;    // 0.0625 -0.25
 uniform float surface_color_shift;       // 0.0 0.125
 uniform float surface_color_saturation;  // 0.75 0.125
 uniform float surface_color_value;       // 1.0 0.125
-uniform float surface_color_ior;         // 1.0 -0.125
+uniform float surface_color_gloss;       // 1.0 0.125
 uniform vec3 plane;                      // 3.0 3.5 2.5 1.0
 uniform float rotation;                  // 0.0 0.125
 uniform float bailout;                   // 64.0 -0.25 const
@@ -421,7 +421,7 @@ struct Material
     vec3 color;
     vec3 normal;
     vec3 emissive;
-    float ior;
+    float gloss;
 };
 
 Material GetMaterial(vec3 offset)
@@ -437,13 +437,13 @@ Material GetMaterial(vec3 offset)
         float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
         vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
         result.color = color;
-        result.ior = surface_color_ior;
+        result.gloss = surface_color_gloss;
         result.emissive = vec3(0, 0, 0);
     }
     else
     {
         result.color = vec3(1, 1, 1);
-        result.ior = 1.0f;
+        result.gloss = 1.0f;
         result.emissive = LightBrightness1();
     }
 
@@ -535,7 +535,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             reflectionColor *= fog_brightness;
             material.color = vec3(1, 1, 1);
             material.normal = vec3(0, 0, 0);
-            material.ior = 0;
+            material.gloss = 0;
             material.emissive = vec3(0, 0, 0);
         }
         else
@@ -544,13 +544,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             material = GetMaterial(newPos);
             rayColor += reflectionColor * material.emissive;  // ~bling~!
             float cosTheta = -dot(ray.dir, material.normal);
-            // https://en.wikipedia.org/wiki/Schlick%27s_approximation
-            float iorAir = 1.0f;
-            float r0 = (iorAir - material.ior) / (iorAir + material.ior);
-            r0 *= r0;
-            float fresnel =
-                r0 + (1.0f - r0) * pow(1.0f - cosTheta, 5);
-            if (material.ior > 1.0f && Random_Next(rand) < fresnel)
+            if (Random_Next(rand) < material.gloss)
             {
                 // specular
                 newDir = ray.dir + 2.0f * cosTheta * material.normal;

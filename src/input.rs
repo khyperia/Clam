@@ -12,6 +12,7 @@ use std::{
 #[derive(Default)]
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
+    spaceship: Option<(Vector3<f64>, Vector3<f64>)>,
     video: Option<KeyframeList>,
     cur_video: usize,
     video_len: usize,
@@ -122,13 +123,24 @@ impl Input {
                 let pos = settings.find("pos").value().clone();
                 settings.find_mut("light_pos_1").set_value(pos);
             }
+            Key::Grave => {
+                if self.spaceship.is_none() {
+                    self.spaceship = Some((Vector3::zero(), Vector3::zero()));
+                } else {
+                    self.spaceship = None;
+                }
+            }
             _ => (),
         }
         Ok(())
     }
 
     fn run(&mut self, settings: &mut Settings, now: Instant) {
-        self.camera_3d(settings, now);
+        if self.spaceship.is_some() {
+            self.spaceship(settings, now);
+        } else {
+            self.camera_3d(settings, now);
+        }
         self.exp_setting(
             settings,
             now,
@@ -241,5 +253,72 @@ impl Input {
         if let Some(dt) = self.is_pressed(now, Key::Left) {
             settings.values[self.index].change(false, dt);
         }
+    }
+
+    fn spaceship(&mut self, settings: &mut Settings, now: Instant) {
+        let move_speed = settings.find("focal_distance").unwrap_f32() / 256.0;
+        let turn_speed = settings.find("fov").unwrap_f32() / 64.0;
+        let roll_speed = 1.0 / 128.0;
+        let mut look = settings.find("look").unwrap_vec3();
+        let mut up = settings.find("up").unwrap_vec3();
+        let right = Vector3::cross(look, up);
+        let mut thrust = Vector3::zero();
+        let mut angular_thrust = Vector3::zero();
+        if let Some(dt) = self.is_pressed(now, Key::W) {
+            thrust += look * (move_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::S) {
+            thrust -= look * (move_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::D) {
+            thrust += right * (move_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::A) {
+            thrust -= right * (move_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Space) {
+            thrust += up * (move_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::Z) {
+            thrust -= up * (move_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::I) {
+            angular_thrust += right * (turn_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::K) {
+            angular_thrust += right * (-turn_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::L) {
+            angular_thrust += up * (-turn_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::J) {
+            angular_thrust += up * (turn_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::O) {
+            angular_thrust += look * (roll_speed * dt);
+        }
+        if let Some(dt) = self.is_pressed(now, Key::U) {
+            angular_thrust += look * (-roll_speed * dt);
+        }
+
+        let (velocity, angularvel) = self.spaceship.as_mut().unwrap();
+        *velocity += thrust;
+        *angularvel += angular_thrust;
+
+        let mag = angularvel.magnitude();
+        if mag > 0.0 {
+            let roll = Quaternion::from_axis_angle(angularvel.normalize(), Rad(mag));
+            look = roll * look;
+            up = roll * up;
+        }
+
+        let mut pos = settings.find("pos").unwrap_vec3();
+        pos += *velocity;
+
+        look = look.normalize();
+        up = Vector3::cross(Vector3::cross(look, up), look).normalize();
+        *settings.find_mut("pos").unwrap_vec3_mut() = pos;
+        *settings.find_mut("look").unwrap_vec3_mut() = look;
+        *settings.find_mut("up").unwrap_vec3_mut() = up;
     }
 }

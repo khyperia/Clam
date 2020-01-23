@@ -331,8 +331,7 @@ fn try_main() -> Result<(), Error> {
         display_gl::run(1920.0, 1080.0)?
     } else {
         println!("Usage:");
-        println!("clam5 --render [width] [height] [rpp]");
-        println!("clam5 --render [0.25k..32k] [rpp]");
+        println!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
         println!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
         #[cfg(feature = "vr")]
         println!("clam5 --vr");
