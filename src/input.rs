@@ -12,7 +12,7 @@ use std::{
 #[derive(Default)]
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
-    spaceship: Option<(Vector3<f64>, Vector3<f64>)>,
+    spaceship: Option<(Vector3<f64>, Vector3<f64>, Instant)>,
     video: Option<KeyframeList>,
     cur_video: usize,
     video_len: usize,
@@ -39,6 +39,7 @@ impl Input {
         println!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
         println!("C: Toggle constant. B: Recompile kernel with new constants.");
         println!("X: Copy position to lightsource position");
+        println!("`: Spaceship!");
         println!("H: Print this message");
     }
 
@@ -125,10 +126,24 @@ impl Input {
             }
             Key::Grave => {
                 if self.spaceship.is_none() {
-                    self.spaceship = Some((Vector3::zero(), Vector3::zero()));
+                    self.spaceship = Some((Vector3::zero(), Vector3::zero(), Instant::now()));
                 } else {
                     self.spaceship = None;
                 }
+            }
+            Key::Key1 => {
+                unsafe {
+                    gl::Enable(gl::FRAMEBUFFER_SRGB);
+                }
+                crate::check_gl()?;
+                *settings.find_mut("gamma").unwrap_float_mut() = 1.0;
+            }
+            Key::Key2 => {
+                unsafe {
+                    gl::Disable(gl::FRAMEBUFFER_SRGB);
+                }
+                crate::check_gl()?;
+                *settings.find_mut("gamma").unwrap_float_mut() = 0.0;
             }
             _ => (),
         }
@@ -145,7 +160,7 @@ impl Input {
             settings,
             now,
             "focal_distance",
-            settings.find("fov").unwrap_f32(),
+            settings.find("fov").unwrap_float(),
             Key::R,
             Key::F,
         );
@@ -167,17 +182,15 @@ impl Input {
 
     fn is_pressed(&self, now: Instant, key: Key) -> Option<f64> {
         if let Some(&old) = self.pressed_keys.get(&key) {
-            let dt = now.duration_since(old);
-            let flt = dt.as_secs() as f64 + dt.subsec_nanos() as f64 * 1e-9;
-            Some(flt)
+            Some(now.duration_since(old).as_secs_f64())
         } else {
             None
         }
     }
 
     fn camera_3d(&self, settings: &mut Settings, now: Instant) {
-        let move_speed = settings.find("focal_distance").unwrap_f32() * 0.5;
-        let turn_speed = settings.find("fov").unwrap_f32();
+        let move_speed = settings.find("focal_distance").unwrap_float() * 0.5;
+        let turn_speed = settings.find("fov").unwrap_float();
         let roll_speed = 1.0;
         let mut pos = settings.find("pos").unwrap_vec3();
         let mut look = settings.find("look").unwrap_vec3();
@@ -256,9 +269,9 @@ impl Input {
     }
 
     fn spaceship(&mut self, settings: &mut Settings, now: Instant) {
-        let move_speed = settings.find("focal_distance").unwrap_f32() / 256.0;
-        let turn_speed = settings.find("fov").unwrap_f32() / 64.0;
-        let roll_speed = 1.0 / 128.0;
+        let move_speed = settings.find("focal_distance").unwrap_float() / 16.0;
+        let turn_speed = settings.find("fov").unwrap_float() / 2.0;
+        let roll_speed = 1.0 / 4.0;
         let mut look = settings.find("look").unwrap_vec3();
         let mut up = settings.find("up").unwrap_vec3();
         let right = Vector3::cross(look, up);
@@ -301,11 +314,13 @@ impl Input {
             angular_thrust += look * (-roll_speed * dt);
         }
 
-        let (velocity, angularvel) = self.spaceship.as_mut().unwrap();
+        let (velocity, angularvel, last_update) = self.spaceship.as_mut().unwrap();
+        let dt = now.duration_since(*last_update).as_secs_f64();
+        *last_update = now;
         *velocity += thrust;
         *angularvel += angular_thrust;
 
-        let mag = angularvel.magnitude();
+        let mag = angularvel.magnitude() * dt;
         if mag > 0.0 {
             let roll = Quaternion::from_axis_angle(angularvel.normalize(), Rad(mag));
             look = roll * look;
@@ -313,7 +328,7 @@ impl Input {
         }
 
         let mut pos = settings.find("pos").unwrap_vec3();
-        pos += *velocity;
+        pos += *velocity * dt;
 
         look = look.normalize();
         up = Vector3::cross(Vector3::cross(look, up), look).normalize();

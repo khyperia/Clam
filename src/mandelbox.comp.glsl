@@ -661,11 +661,11 @@ float GammaCompression(float value)
     float gam = gamma;
     if (gam < 0)
     {
-        return GammaSRGB(value);
+        return GammaFast(value);
     }
     else if (gam == 0)
     {
-        return GammaFast(value);
+        return GammaSRGB(value);
     }
     else
     {
@@ -738,6 +738,9 @@ void main()
     uint x = idx % width;
     uint y = idx / width;
 
+#ifdef GAMMA_TEST
+    vec3 newColor = GammaTest(x, y, width, height);
+#else
     vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
 
     Random rand = GetRand(x, y);
@@ -747,9 +750,6 @@ void main()
 #else
     vec3 colorComponents = Trace(ray, width, height, rand);
 #endif
-#ifdef GAMMA_TEST
-    vec3 newColor = GammaTest(x, y, width, height);
-#else
     vec3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
     SetScratch(x, y, newColor);
     SetRand(x, y, rand);

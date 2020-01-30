@@ -149,18 +149,18 @@ impl SettingValue {
         }
     }
 
-    pub fn unwrap_f32(&self) -> f64 {
+    pub fn unwrap_float(&self) -> f64 {
         match self.value {
             SettingValueEnum::Float(value, _) => value,
-            _ => panic!("unwrap_f32 not F32"),
+            _ => panic!("unwrap_float not float"),
         }
     }
 
-    #[cfg(feature = "vr")]
-    pub fn unwrap_f32_mut(&mut self) -> &mut f64 {
+    //#[cfg(feature = "vr")]
+    pub fn unwrap_float_mut(&mut self) -> &mut f64 {
         match self.value {
             SettingValueEnum::Float(ref mut value, _) => value,
-            _ => panic!("unwrap_f32 not F32"),
+            _ => panic!("unwrap_float not float"),
         }
     }
 
@@ -182,7 +182,7 @@ impl SettingValue {
     pub fn unwrap_define_mut(&mut self) -> &mut bool {
         match self.value {
             SettingValueEnum::Define(ref mut value) => value,
-            _ => panic!("unwrap_f32 not F32"),
+            _ => panic!("unwrap_define not define"),
         }
     }
 

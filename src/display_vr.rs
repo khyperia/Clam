@@ -206,47 +206,47 @@ impl Display for VrDisplay {
         *interactive_kernel_left
             .settings
             .find_mut("dof_amount")
-            .unwrap_f32_mut() = 0.0;
+            .unwrap_float_mut() = 0.0;
         *interactive_kernel_right
             .settings
             .find_mut("dof_amount")
-            .unwrap_f32_mut() = 0.0;
+            .unwrap_float_mut() = 0.0;
 
         let proj_left = system.projection_raw(openvr::Eye::Left);
         *interactive_kernel_left
             .settings
             .find_mut("fov_left")
-            .unwrap_f32_mut() = proj_left.left as f64;
+            .unwrap_float_mut() = proj_left.left as f64;
         *interactive_kernel_left
             .settings
             .find_mut("fov_right")
-            .unwrap_f32_mut() = proj_left.right as f64;
+            .unwrap_float_mut() = proj_left.right as f64;
         *interactive_kernel_left
             .settings
             .find_mut("fov_top")
-            .unwrap_f32_mut() = proj_left.top as f64;
+            .unwrap_float_mut() = proj_left.top as f64;
         *interactive_kernel_left
             .settings
             .find_mut("fov_bottom")
-            .unwrap_f32_mut() = proj_left.bottom as f64;
+            .unwrap_float_mut() = proj_left.bottom as f64;
 
         let proj_right = system.projection_raw(openvr::Eye::Right);
         *interactive_kernel_right
             .settings
             .find_mut("fov_left")
-            .unwrap_f32_mut() = proj_right.left as f64;
+            .unwrap_float_mut() = proj_right.left as f64;
         *interactive_kernel_right
             .settings
             .find_mut("fov_right")
-            .unwrap_f32_mut() = proj_right.right as f64;
+            .unwrap_float_mut() = proj_right.right as f64;
         *interactive_kernel_right
             .settings
             .find_mut("fov_top")
-            .unwrap_f32_mut() = proj_right.top as f64;
+            .unwrap_float_mut() = proj_right.top as f64;
         *interactive_kernel_right
             .settings
             .find_mut("fov_bottom")
-            .unwrap_f32_mut() = proj_right.bottom as f64;
+            .unwrap_float_mut() = proj_right.bottom as f64;
 
         interactive_kernel_left.settings.rebuild();
         interactive_kernel_right.settings.rebuild();
