@@ -8,49 +8,51 @@ layout(r32ui, binding = 2) uniform uimage2D randbuf;
 #define FLT_MAX 1E+37
 #define UINT_MAX 0xFFFFFFFFU
 
-uniform vec3 pos;                        // 0.0 0.0 5.0 1.0
-uniform vec3 look;                       // 0.0 0.0 -1.0 1.0
-uniform vec3 up;                         // 0.0 1.0 0.0 1.0
-uniform float fov;                       // 1.0 -1.0
-uniform float focal_distance;            // 3.0 -1.0
-uniform float scale;                     // -2.0 0.5 const
-uniform float folding_limit;             // 1.0 -0.5 const
-uniform float fixed_radius_2;            // 1.0 -0.5 const
-uniform float min_radius_2;              // 0.125 -0.5 const
-uniform float dof_amount;                // 0.01 -1.0
-uniform float bloom_amount;              // 0.1 0.5
-uniform float bloom_size;                // 0.01 -1.0
-uniform float fog_distance;              // 10.0 -1.0
-uniform float fog_brightness;            // 1.0 0.5
-uniform vec3 light_pos_1;                // 3.0 3.5 2.5 1.0
-uniform float light_radius_1;            // 1.0 -0.5
-uniform float light_brightness_1_hue;    // 0.0 0.25
-uniform float light_brightness_1_sat;    // 0.4 -1.0
-uniform float light_brightness_1_val;    // 4.0 -1.0
-uniform float ambient_brightness_hue;    // 0.65 0.25
-uniform float ambient_brightness_sat;    // 0.2 -1.0
-uniform float ambient_brightness_val;    // 0.5 -1.0
-uniform float surface_color_variance;    // 0.0625 -0.25
-uniform float surface_color_shift;       // 0.0 0.125
-uniform float surface_color_saturation;  // 0.75 0.125
-uniform float surface_color_value;       // 1.0 0.125
-uniform float surface_color_gloss;       // 1.0 0.125
-uniform vec3 plane;                      // 3.0 3.5 2.5 1.0
-uniform float rotation;                  // 0.0 0.125
-uniform float bailout;                   // 64.0 -0.25 const
-uniform float bailout_normal;            // 1024.0 -1.0 const
-uniform float de_multiplier;             // 0.9375 0.125 const
-uniform float max_ray_dist;              // 16.0 -0.5 const
-uniform float quality_first_ray;         // 2.0 -0.5 const
-uniform float quality_rest_ray;          // 64.0 -0.5 const
-uniform float gamma;                     // 0.0 0.25 const
-uniform float fov_left;                  // -1.0 1.0 const
-uniform float fov_right;                 // 1.0 1.0 const
-uniform float fov_top;                   // 1.0 1.0 const
-uniform float fov_bottom;                // -1.0 1.0 const
-uniform uint max_iters;                  // 20 const
-uniform uint max_ray_steps;              // 256 const
-uniform uint num_ray_bounces;            // 4 const
+uniform vec3 pos;                       // 0.0 0.0 5.0 1.0
+uniform vec3 look;                      // 0.0 0.0 -1.0 1.0
+uniform vec3 up;                        // 0.0 1.0 0.0 1.0
+uniform float fov;                      // 1.0 -1.0
+uniform float focal_distance;           // 3.0 -1.0
+uniform float scale;                    // -2.0 0.5 const
+uniform float folding_limit;            // 1.0 -0.5 const
+uniform float fixed_radius_2;           // 1.0 -0.5 const
+uniform float min_radius_2;             // 0.125 -0.5 const
+uniform float dof_amount;               // 0.01 -1.0
+uniform float bloom_amount;             // 0.1 0.5
+uniform float bloom_size;               // 0.01 -1.0
+uniform float fog_distance;             // 10.0 -1.0
+uniform float fog_brightness;           // 1.0 -0.5
+uniform float fog_high_iter;            // 1.0 -2.0
+uniform float fog_high_iter_pow;        // 1.0 -1.0
+uniform vec3 light_pos_1;               // 3.0 3.5 2.5 1.0
+uniform float light_radius_1;           // 1.0 -0.5
+uniform float light_brightness_1_hue;   // 0.0 0.25
+uniform float light_brightness_1_sat;   // 0.4 -1.0
+uniform float light_brightness_1_val;   // 4.0 -1.0
+uniform float ambient_brightness_hue;   // 0.65 0.25
+uniform float ambient_brightness_sat;   // 0.2 -1.0
+uniform float ambient_brightness_val;   // 0.5 -1.0
+uniform float surface_color_variance;   // 0.0625 -0.25
+uniform float surface_color_shift;      // 0.0 0.125
+uniform float surface_color_saturation; // 0.75 0.125
+uniform float surface_color_value;      // 1.0 0.125
+uniform float surface_color_gloss;      // 1.0 0.125
+uniform vec3 plane;                     // 3.0 3.5 2.5 1.0
+uniform float rotation;                 // 0.0 0.125
+uniform float bailout;                  // 64.0 -0.25 const
+uniform float bailout_normal;           // 1024.0 -1.0 const
+uniform float de_multiplier;            // 0.9375 0.125 const
+uniform float max_ray_dist;             // 16.0 -0.5 const
+uniform float quality_first_ray;        // 2.0 -0.5 const
+uniform float quality_rest_ray;         // 64.0 -0.5 const
+uniform float gamma;                    // 0.0 0.25 const
+uniform float fov_left;                 // -1.0 1.0 const
+uniform float fov_right;                // 1.0 1.0 const
+uniform float fov_top;                  // 1.0 1.0 const
+uniform float fov_bottom;               // -1.0 1.0 const
+uniform uint max_iters;                 // 20 const
+uniform uint max_ray_steps;             // 256 const
+uniform uint num_ray_bounces;           // 4 const
 uniform uint width;
 uniform uint height;
 uniform uint frame;
@@ -63,18 +65,18 @@ vec3 HueToRGB(float hue, float saturation, float value)
     vec3 color;
     switch (int(hue))
     {
-        case 0:
-            color = vec3(1 - frac, frac, 0);
-            break;
-        case 1:
-            color = vec3(0, 1 - frac, frac);
-            break;
-        case 2:
-            color = vec3(frac, 0, 1 - frac);
-            break;
-        default:
-            color = vec3(1, 1, 1);
-            break;
+    case 0:
+        color = vec3(1 - frac, frac, 0);
+        break;
+    case 1:
+        color = vec3(0, 1 - frac, frac);
+        break;
+    case 2:
+        color = vec3(frac, 0, 1 - frac);
+        break;
+    default:
+        color = vec3(1, 1, 1);
+        break;
     }
     saturation = value * (1 - saturation);
     color = color * (value - saturation) + vec3(saturation, saturation, saturation);
@@ -83,17 +85,13 @@ vec3 HueToRGB(float hue, float saturation, float value)
 
 vec3 LightBrightness1()
 {
-    return HueToRGB(light_brightness_1_hue,
-                    light_brightness_1_sat,
-                    light_brightness_1_val) /
+    return HueToRGB(light_brightness_1_hue, light_brightness_1_sat, light_brightness_1_val) /
            surface_color_value;
 }
 
 vec3 AmbientBrightness()
 {
-    return HueToRGB(ambient_brightness_hue,
-                    ambient_brightness_sat,
-                    ambient_brightness_val) /
+    return HueToRGB(ambient_brightness_hue, ambient_brightness_sat, ambient_brightness_val) /
            surface_color_value;
 }
 
@@ -104,16 +102,13 @@ struct Random
 
 uint xorshift32(inout uint x)
 {
-	x ^= x << 13;
-	x ^= x >> 17;
-	x ^= x << 5;
-	return x;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return x;
 }
 
-float Random_Next(inout Random this_)
-{
-    return float(xorshift32(this_.seed)) / UINT_MAX;
-}
+float Random_Next(inout Random this_) { return float(xorshift32(this_.seed)) / UINT_MAX; }
 
 /*
 struct Random new_Random(uint idx, uint frame, uint global_size)
@@ -162,7 +157,7 @@ vec3 Random_Sphere(inout Random this_)
 
 vec3 Random_Ball(inout Random this_)
 {
-    return pow(Random_Next(this_), 1.0/3.0) * Random_Sphere(this_);
+    return pow(Random_Next(this_), 1.0 / 3.0) * Random_Sphere(this_);
 }
 
 vec3 Random_Lambertian(inout Random this_, vec3 normal)
@@ -205,17 +200,15 @@ vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords, float calcFov)
 }
 #endif
 
-vec3 Ray_At(Ray this_, float time)
-{
-    return this_.org + this_.dir * time;
-}
+vec3 Ray_At(Ray this_, float time) { return this_.org + this_.dir * time; }
 
 void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
 {
     // Normalize because the vectors aren't perpendicular
     vec3 rightUnit = normalize(cross(vec3(0, 0, 1), this_.dir));
     vec3 upUnit = cross(this_.dir, rightUnit);
-    vec2 bloomshift2d = Random_Next(rand) < bloom_amount ? Random_Gaussian(rand) * bloom_size : vec2(0, 0);
+    vec2 bloomshift2d =
+        Random_Next(rand) < bloom_amount ? Random_Gaussian(rand) * bloom_size : vec2(0, 0);
     bloomshift2d *= focalPlane;
     vec3 bloomshift = bloomshift2d.x * rightUnit + bloomshift2d.y * upUnit;
     vec3 focalPosition = Ray_At(this_, focalPlane);
@@ -260,10 +253,7 @@ vec3 Mandelbulb(vec3 z, inout float dz, float Power)
     return zr * vec3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
 }
 
-vec3 BoxfoldD(vec3 z)
-{
-    return clamp(z, -folding_limit, folding_limit) * 2.0f - z;
-}
+vec3 BoxfoldD(vec3 z) { return clamp(z, -folding_limit, folding_limit) * 2.0f - z; }
 
 vec3 ContBoxfoldD(vec3 z)
 {
@@ -278,8 +268,7 @@ vec3 ContBoxfoldD(vec3 z)
 
 vec3 SpherefoldD(vec3 z, inout float dz)
 {
-    float factor =
-        fixed_radius_2 / clamp(dot(z, z), min_radius_2, fixed_radius_2);
+    float factor = fixed_radius_2 / clamp(dot(z, z), min_radius_2, fixed_radius_2);
     dz *= factor;
     return z * factor;
 }
@@ -363,7 +352,7 @@ float DeSphere(vec3 org, float radius, vec3 test)
     return length(test - org) - radius;
 }
 
-float DeMandelbox(vec3 offset, bool isNormal, inout int color)
+float DeMandelbox(vec3 offset, bool isNormal, inout int color, out int iters)
 {
     vec3 z = vec3(offset.x, offset.y, offset.z);
     float dz = 1.0f;
@@ -373,6 +362,7 @@ float DeMandelbox(vec3 offset, bool isNormal, inout int color)
     {
         z = MandelboxD(z, dz, offset, color);
     } while (dot(z, z) < bail * bail && --n != 0);
+    iters = int(max(max_iters, 1) - n);
     return length(z) / dz;
 }
 
@@ -389,24 +379,21 @@ float DeMandelbulb(vec3 offset, inout int color)
     return 0.5f * log(r) * r / dz;
 }
 
-float DeFractal(vec3 offset, bool isNormal, inout int color)
+float DeFractal(vec3 offset, bool isNormal, inout int color, out int iters)
 {
 #ifdef MANDELBULB
     return DeMandelbulb(offset, color);
 #else
-    return DeMandelbox(offset, isNormal, color);
+    return DeMandelbox(offset, isNormal, color, iters);
 #endif
 }
 
-float Plane(vec3 org, vec3 planedef)
-{
-    return dot(org, normalize(planedef)) - length(planedef);
-}
+float Plane(vec3 org, vec3 planedef) { return dot(org, normalize(planedef)) - length(planedef); }
 
-float De(vec3 offset, bool isNormal)
+float De(vec3 offset, bool isNormal, out int iters)
 {
     int color;
-    float mbox = DeFractal(offset, isNormal, color);
+    float mbox = DeFractal(offset, isNormal, color, iters);
     float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 #ifdef PLANE
     float cut = Plane(offset, plane);
@@ -427,7 +414,8 @@ struct Material
 Material GetMaterial(vec3 offset)
 {
     int raw_color_data = 0;
-    float de = DeFractal(offset, true, raw_color_data);
+    int iters = 0;
+    float de = DeFractal(offset, true, raw_color_data, iters);
 
     float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 
@@ -447,45 +435,51 @@ Material GetMaterial(vec3 offset)
         result.emissive = LightBrightness1();
     }
 
-    float delta = max(1e-6f, de * 0.5f);  // aprox. 8.3x float epsilon
+    float delta = max(1e-6f, de * 0.5f); // aprox. 8.3x float epsilon
 #ifdef CUBE_NORMAL
-    float dppp = De(offset + vec3(+delta, +delta, +delta), true);
-    float dppn = De(offset + vec3(+delta, +delta, -delta), true);
-    float dpnp = De(offset + vec3(+delta, -delta, +delta), true);
-    float dpnn = De(offset + vec3(+delta, -delta, -delta), true);
-    float dnpp = De(offset + vec3(-delta, +delta, +delta), true);
-    float dnpn = De(offset + vec3(-delta, +delta, -delta), true);
-    float dnnp = De(offset + vec3(-delta, -delta, +delta), true);
-    float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
+    float dppp = De(offset + vec3(+delta, +delta, +delta), true, iters);
+    float dppn = De(offset + vec3(+delta, +delta, -delta), true, iters);
+    float dpnp = De(offset + vec3(+delta, -delta, +delta), true, iters);
+    float dpnn = De(offset + vec3(+delta, -delta, -delta), true, iters);
+    float dnpp = De(offset + vec3(-delta, +delta, +delta), true, iters);
+    float dnpn = De(offset + vec3(-delta, +delta, -delta), true, iters);
+    float dnnp = De(offset + vec3(-delta, -delta, +delta), true, iters);
+    float dnnn = De(offset + vec3(-delta, -delta, -delta), true, iters);
     result.normal = vec3((dppp + dppn + dpnp + dpnn) - (dnpp + dnpn + dnnp + dnnn),
-                             (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn),
-                             (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
+                         (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn),
+                         (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
 #else
-    float dnpp = De(offset + vec3(-delta, delta, delta), true);
-    float dpnp = De(offset + vec3(delta, -delta, delta), true);
-    float dppn = De(offset + vec3(delta, delta, -delta), true);
-    float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
-    result.normal = vec3((dppn + dpnp) - (dnpp + dnnn),
-                             (dppn + dnpp) - (dpnp + dnnn),
-                             (dpnp + dnpp) - (dppn + dnnn));
+    float dnpp = De(offset + vec3(-delta, delta, delta), true, iters);
+    float dpnp = De(offset + vec3(delta, -delta, delta), true, iters);
+    float dppn = De(offset + vec3(delta, delta, -delta), true, iters);
+    float dnnn = De(offset + vec3(-delta, -delta, -delta), true, iters);
+    result.normal = vec3((dppn + dpnp) - (dnpp + dnnn), (dppn + dnpp) - (dpnp + dnnn),
+                         (dpnp + dnpp) - (dppn + dnnn));
 #endif
-    result.normal.x += (dot(result.normal, result.normal) == 0.0f ? 1.0 : 0.0);  // ensure nonzero
+    result.normal.x += (dot(result.normal, result.normal) == 0.0f ? 1.0 : 0.0); // ensure nonzero
     result.normal = normalize(result.normal);
 
     return result;
 }
 
-float Cast(Ray ray, float quality, float maxDist)
+float Cast(Ray ray, float quality, float maxDist, inout Random rand, out bool isFog)
 {
     float distance;
     float totalDistance = 0.0f;
     uint i = uint(max(max_ray_steps, 1));
     do
     {
-        distance = De(Ray_At(ray, totalDistance), false) * de_multiplier;
+        int iters = 0;
+        distance = De(Ray_At(ray, totalDistance), false, iters) * de_multiplier;
         totalDistance += distance;
         i--;
+        if (Random_Next(rand) > 1 / (pow(float(iters), fog_high_iter_pow) / fog_high_iter + 1))
+        {
+            isFog = true;
+            return totalDistance;
+        }
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
+    isFog = false;
 
     // correction step
     if (distance * quality <= totalDistance)
@@ -493,7 +487,8 @@ float Cast(Ray ray, float quality, float maxDist)
         totalDistance -= totalDistance / quality;
         for (int correctStep = 0; correctStep < 4; correctStep++)
         {
-            distance = De(Ray_At(ray, totalDistance), false) * de_multiplier;
+            int iters = 0;
+            distance = De(Ray_At(ray, totalDistance), false, iters) * de_multiplier;
             totalDistance += distance - totalDistance / quality;
         }
     }
@@ -508,10 +503,10 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
 
     for (int photonIndex = 0; photonIndex < num_ray_bounces; photonIndex++)
     {
-        float fog_dist =
-            fog_distance == 0 ? FLT_MAX : -log(Random_Next(rand)) * fog_distance;
+        float fog_dist = fog_distance == 0 ? FLT_MAX : -log(Random_Next(rand)) * fog_distance;
         float max_dist = min(max_ray_dist, fog_dist);
-        float distance = min(Cast(ray, quality, max_dist), fog_dist);
+        bool isFog = false;
+        float distance = min(Cast(ray, quality, max_dist, rand, isFog), fog_dist);
 
         if (distance >= max_ray_dist ||
             (photonIndex + 1 == num_ray_bounces && distance >= fog_dist))
@@ -527,7 +522,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
         vec3 newDir;
         Material material;
 
-        bool is_fog = (distance >= fog_dist);
+        bool is_fog = isFog || (distance >= fog_dist);
         if (is_fog)
         {
             // hit fog, do fog calculations
@@ -542,7 +537,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
         {
             // hit surface, do material calculations
             material = GetMaterial(newPos);
-            rayColor += reflectionColor * material.emissive;  // ~bling~!
+            rayColor += reflectionColor * material.emissive; // ~bling~!
             float cosTheta = -dot(ray.dir, material.normal);
             if (Random_Next(rand) < material.gloss)
             {
@@ -566,7 +561,8 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             dir = normalize(dir);
             if (is_fog || dot(dir, material.normal) > 0)
             {
-                float dist = Cast(Ray(newPos, dir), quality_rest_ray, light_dist);
+                bool isFog = false;
+                float dist = Cast(Ray(newPos, dir), quality_rest_ray, light_dist, rand, isFog);
                 if (dist >= light_dist)
                 {
                     float prod = is_fog ? 1.0f : dot(material.normal, dir);
@@ -574,7 +570,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
                     float fixed_dist = max(distance / 2.0f, light_dist);
                     vec3 color =
                         prod / (fixed_dist * fixed_dist) * material.color * LightBrightness1();
-                    rayColor += reflectionColor * color;  // ~bling~!
+                    rayColor += reflectionColor * color; // ~bling~!
                 }
             }
         }
@@ -592,11 +588,12 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
     return rayColor;
 }
 
-vec3 PreviewTrace(Ray ray, uint width, uint height)
+vec3 PreviewTrace(Ray ray, uint width, uint height, inout Random rand)
 {
     float quality = quality_first_ray * (float(width + height) / float(2 * fov));
     float max_dist = min(max_ray_dist, focal_distance * 10);
-    float distance = Cast(ray, quality, max_dist);
+    bool isFog;
+    float distance = Cast(ray, quality, max_dist, rand, isFog);
 #ifdef PREVIEW_NORMAL
     vec3 org = Ray_At(ray, distance);
     return abs(GetMaterial(org).normal);
@@ -651,10 +648,7 @@ float GammaFast(float value)
     return (b / sqrt(value + a) - c) * value;
 }
 
-float GammaPow(float value, float power)
-{
-    return pow(value, power);
-}
+float GammaPow(float value, float power) { return pow(value, power); }
 
 float GammaCompression(float value)
 {
@@ -698,15 +692,9 @@ vec3 PackPixel(vec3 pixel)
     return pixel;
 }
 
-vec3 GetScratch(uint x, uint y)
-{
-    return imageLoad(scratch, ivec2(x, y)).xyz;
-}
+vec3 GetScratch(uint x, uint y) { return imageLoad(scratch, ivec2(x, y)).xyz; }
 
-void SetScratch(uint x, uint y, vec3 value)
-{
-    imageStore(scratch, ivec2(x, y), vec4(value, 1.0));
-}
+void SetScratch(uint x, uint y, vec3 value) { imageStore(scratch, ivec2(x, y), vec4(value, 1.0)); }
 
 Random GetRand(uint x, uint y)
 {
@@ -734,7 +722,10 @@ void main()
 {
     uint idx = gl_GlobalInvocationID.x;
     uint size = width * height;
-    if (idx >= size) { return; }
+    if (idx >= size)
+    {
+        return;
+    }
     uint x = idx % width;
     uint y = idx / width;
 
@@ -746,7 +737,7 @@ void main()
     Random rand = GetRand(x, y);
     Ray ray = Camera(x, y, width, height, rand);
 #ifdef PREVIEW
-    vec3 colorComponents = PreviewTrace(ray, width, height);
+    vec3 colorComponents = PreviewTrace(ray, width, height, rand);
 #else
     vec3 colorComponents = Trace(ray, width, height, rand);
 #endif
