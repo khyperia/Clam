@@ -22,8 +22,6 @@ uniform float bloom_amount;             // 0.1 0.5
 uniform float bloom_size;               // 0.01 -1.0
 uniform float fog_distance;             // 10.0 -1.0
 uniform float fog_brightness;           // 1.0 -0.5
-uniform float fog_high_iter;            // 1.0 -2.0
-uniform float fog_high_iter_pow;        // 1.0 -1.0
 uniform vec3 light_pos_1;               // 3.0 3.5 2.5 1.0
 uniform float light_radius_1;           // 1.0 -0.5
 uniform float light_brightness_1_hue;   // 0.0 0.25
@@ -352,7 +350,7 @@ float DeSphere(vec3 org, float radius, vec3 test)
     return length(test - org) - radius;
 }
 
-float DeMandelbox(vec3 offset, bool isNormal, inout int color, out int iters)
+float DeMandelbox(vec3 offset, bool isNormal, inout int color)
 {
     vec3 z = vec3(offset.x, offset.y, offset.z);
     float dz = 1.0f;
@@ -362,7 +360,6 @@ float DeMandelbox(vec3 offset, bool isNormal, inout int color, out int iters)
     {
         z = MandelboxD(z, dz, offset, color);
     } while (dot(z, z) < bail * bail && --n != 0);
-    iters = int(max(max_iters, 1) - n);
     return length(z) / dz;
 }
 
@@ -379,21 +376,21 @@ float DeMandelbulb(vec3 offset, inout int color)
     return 0.5f * log(r) * r / dz;
 }
 
-float DeFractal(vec3 offset, bool isNormal, inout int color, out int iters)
+float DeFractal(vec3 offset, bool isNormal, inout int color)
 {
 #ifdef MANDELBULB
     return DeMandelbulb(offset, color);
 #else
-    return DeMandelbox(offset, isNormal, color, iters);
+    return DeMandelbox(offset, isNormal, color);
 #endif
 }
 
 float Plane(vec3 org, vec3 planedef) { return dot(org, normalize(planedef)) - length(planedef); }
 
-float De(vec3 offset, bool isNormal, out int iters)
+float De(vec3 offset, bool isNormal)
 {
     int color;
-    float mbox = DeFractal(offset, isNormal, color, iters);
+    float mbox = DeFractal(offset, isNormal, color);
     float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 #ifdef PLANE
     float cut = Plane(offset, plane);
@@ -414,8 +411,7 @@ struct Material
 Material GetMaterial(vec3 offset)
 {
     int raw_color_data = 0;
-    int iters = 0;
-    float de = DeFractal(offset, true, raw_color_data, iters);
+    float de = DeFractal(offset, true, raw_color_data);
 
     float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 
@@ -437,22 +433,22 @@ Material GetMaterial(vec3 offset)
 
     float delta = max(1e-6f, de * 0.5f); // aprox. 8.3x float epsilon
 #ifdef CUBE_NORMAL
-    float dppp = De(offset + vec3(+delta, +delta, +delta), true, iters);
-    float dppn = De(offset + vec3(+delta, +delta, -delta), true, iters);
-    float dpnp = De(offset + vec3(+delta, -delta, +delta), true, iters);
-    float dpnn = De(offset + vec3(+delta, -delta, -delta), true, iters);
-    float dnpp = De(offset + vec3(-delta, +delta, +delta), true, iters);
-    float dnpn = De(offset + vec3(-delta, +delta, -delta), true, iters);
-    float dnnp = De(offset + vec3(-delta, -delta, +delta), true, iters);
-    float dnnn = De(offset + vec3(-delta, -delta, -delta), true, iters);
+    float dppp = De(offset + vec3(+delta, +delta, +delta), true);
+    float dppn = De(offset + vec3(+delta, +delta, -delta), true);
+    float dpnp = De(offset + vec3(+delta, -delta, +delta), true);
+    float dpnn = De(offset + vec3(+delta, -delta, -delta), true);
+    float dnpp = De(offset + vec3(-delta, +delta, +delta), true);
+    float dnpn = De(offset + vec3(-delta, +delta, -delta), true);
+    float dnnp = De(offset + vec3(-delta, -delta, +delta), true);
+    float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
     result.normal = vec3((dppp + dppn + dpnp + dpnn) - (dnpp + dnpn + dnnp + dnnn),
                          (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn),
                          (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
 #else
-    float dnpp = De(offset + vec3(-delta, delta, delta), true, iters);
-    float dpnp = De(offset + vec3(delta, -delta, delta), true, iters);
-    float dppn = De(offset + vec3(delta, delta, -delta), true, iters);
-    float dnnn = De(offset + vec3(-delta, -delta, -delta), true, iters);
+    float dnpp = De(offset + vec3(-delta, delta, delta), true);
+    float dpnp = De(offset + vec3(delta, -delta, delta), true);
+    float dppn = De(offset + vec3(delta, delta, -delta), true);
+    float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
     result.normal = vec3((dppn + dpnp) - (dnpp + dnnn), (dppn + dnpp) - (dpnp + dnnn),
                          (dpnp + dnpp) - (dppn + dnnn));
 #endif
@@ -462,24 +458,17 @@ Material GetMaterial(vec3 offset)
     return result;
 }
 
-float Cast(Ray ray, float quality, float maxDist, inout Random rand, out bool isFog)
+float Cast(Ray ray, float quality, float maxDist)
 {
     float distance;
     float totalDistance = 0.0f;
     uint i = uint(max(max_ray_steps, 1));
     do
     {
-        int iters = 0;
-        distance = De(Ray_At(ray, totalDistance), false, iters) * de_multiplier;
+        distance = De(Ray_At(ray, totalDistance), false) * de_multiplier;
         totalDistance += distance;
         i--;
-        if (Random_Next(rand) > 1 / (pow(float(iters), fog_high_iter_pow) / fog_high_iter + 1))
-        {
-            isFog = true;
-            return totalDistance;
-        }
     } while (totalDistance < maxDist && distance * quality > totalDistance && i > 0);
-    isFog = false;
 
     // correction step
     if (distance * quality <= totalDistance)
@@ -487,8 +476,7 @@ float Cast(Ray ray, float quality, float maxDist, inout Random rand, out bool is
         totalDistance -= totalDistance / quality;
         for (int correctStep = 0; correctStep < 4; correctStep++)
         {
-            int iters = 0;
-            distance = De(Ray_At(ray, totalDistance), false, iters) * de_multiplier;
+            distance = De(Ray_At(ray, totalDistance), false) * de_multiplier;
             totalDistance += distance - totalDistance / quality;
         }
     }
@@ -505,8 +493,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
     {
         float fog_dist = fog_distance == 0 ? FLT_MAX : -log(Random_Next(rand)) * fog_distance;
         float max_dist = min(max_ray_dist, fog_dist);
-        bool isFog = false;
-        float distance = min(Cast(ray, quality, max_dist, rand, isFog), fog_dist);
+        float distance = min(Cast(ray, quality, max_dist), fog_dist);
 
         if (distance >= max_ray_dist ||
             (photonIndex + 1 == num_ray_bounces && distance >= fog_dist))
@@ -522,7 +509,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
         vec3 newDir;
         Material material;
 
-        bool is_fog = isFog || (distance >= fog_dist);
+        bool is_fog = (distance >= fog_dist);
         if (is_fog)
         {
             // hit fog, do fog calculations
@@ -561,8 +548,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             dir = normalize(dir);
             if (is_fog || dot(dir, material.normal) > 0)
             {
-                bool isFog = false;
-                float dist = Cast(Ray(newPos, dir), quality_rest_ray, light_dist, rand, isFog);
+                float dist = Cast(Ray(newPos, dir), quality_rest_ray, light_dist);
                 if (dist >= light_dist)
                 {
                     float prod = is_fog ? 1.0f : dot(material.normal, dir);
@@ -588,12 +574,11 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
     return rayColor;
 }
 
-vec3 PreviewTrace(Ray ray, uint width, uint height, inout Random rand)
+vec3 PreviewTrace(Ray ray, uint width, uint height)
 {
     float quality = quality_first_ray * (float(width + height) / float(2 * fov));
     float max_dist = min(max_ray_dist, focal_distance * 10);
-    bool isFog;
-    float distance = Cast(ray, quality, max_dist, rand, isFog);
+    float distance = Cast(ray, quality, max_dist);
 #ifdef PREVIEW_NORMAL
     vec3 org = Ray_At(ray, distance);
     return abs(GetMaterial(org).normal);
@@ -737,7 +722,7 @@ void main()
     Random rand = GetRand(x, y);
     Ray ray = Camera(x, y, width, height, rand);
 #ifdef PREVIEW
-    vec3 colorComponents = PreviewTrace(ray, width, height, rand);
+    vec3 colorComponents = PreviewTrace(ray, width, height);
 #else
     vec3 colorComponents = Trace(ray, width, height, rand);
 #endif
