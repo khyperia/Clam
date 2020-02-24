@@ -14,7 +14,6 @@ use std::{
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
     spaceship: Option<(Vector3<f64>, Vector3<f64>, Instant)>,
-    video: Option<KeyframeList>,
     cur_video: usize,
     video_len: usize,
     pub index: usize,
@@ -48,6 +47,7 @@ impl Input {
         &mut self,
         key: Key,
         settings: &mut Settings,
+        keyframes: &mut KeyframeList,
         realized_source: &RealizedSource,
     ) {
         let time = Instant::now();
@@ -58,31 +58,32 @@ impl Input {
             false
         };
         if new_key {
-            self.run(settings, time);
+            self.run(settings, keyframes, time);
         }
-        match self.run_down(key, settings, realized_source) {
+        match self.run_down(key, settings, keyframes, realized_source) {
             Ok(()) => (),
             Err(err) => println!("Error handling key down event: {}", err),
         }
     }
 
-    pub fn key_up(&mut self, key: Key, settings: &mut Settings) {
+    pub fn key_up(&mut self, key: Key, settings: &mut Settings, keyframes: &KeyframeList) {
         let time = Instant::now();
         if self.pressed_keys.contains_key(&key) {
-            self.run(settings, time);
+            self.run(settings, keyframes, time);
             self.pressed_keys.remove(&key);
         }
     }
 
-    pub fn integrate(&mut self, settings: &mut Settings) {
+    pub fn integrate(&mut self, settings: &mut Settings, keyframes: &KeyframeList) {
         let now = Instant::now();
-        self.run(settings, now);
+        self.run(settings, keyframes, now);
     }
 
     fn run_down(
         &mut self,
         key: Key,
         settings: &mut Settings,
+        keyframes: &mut KeyframeList,
         realized_source: &RealizedSource,
     ) -> Result<(), Error> {
         match key {
@@ -94,22 +95,19 @@ impl Input {
                 println!("Settings loaded");
             }
             Key::Y => {
-                settings.save("settings.clam5")?;
+                settings.save("settings.clam5", realized_source)?;
                 println!("Settings saved");
             }
             Key::V => {
-                settings.save_keyframe("keyframes.clam5")?;
+                keyframes.push(settings.clone());
+                keyframes.save("keyframes.clam5", realized_source)?;
                 println!("Keyframe saved");
             }
-            Key::G => match KeyframeList::new("keyframes.clam5", realized_source) {
-                Ok(ok) => {
-                    self.cur_video = 0;
-                    self.video_len = ok.len() * 100;
-                    self.video = Some(ok);
-                    println!("Playing video")
-                }
-                Err(err) => println!("Failed to open keyframes.clam5: {}", err),
-            },
+            Key::G => {
+                self.cur_video = 0;
+                self.video_len = keyframes.len() * 100;
+                println!("Playing video")
+            }
             Key::Up => {
                 if self.index == 0 {
                     self.index = settings.values.len() - 1;
@@ -160,7 +158,7 @@ impl Input {
         Ok(())
     }
 
-    fn run(&mut self, settings: &mut Settings, now: Instant) {
+    fn run(&mut self, settings: &mut Settings, keyframes: &KeyframeList, now: Instant) {
         if self.spaceship.is_some() {
             self.spaceship(settings, now);
         } else {
@@ -179,13 +177,9 @@ impl Input {
         for value in self.pressed_keys.values_mut() {
             *value = now;
         }
-        if let Some(ref mut video) = self.video {
-            *settings = video.interpolate(self.cur_video as f64 / self.video_len as f64, false);
+        if self.cur_video < self.video_len {
+            *settings = keyframes.interpolate(self.cur_video as f64 / self.video_len as f64, false);
             self.cur_video += 1;
-            if self.cur_video > self.video_len {
-                // TODO
-                self.video = None;
-            }
         }
     }
 

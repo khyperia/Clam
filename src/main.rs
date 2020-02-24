@@ -242,7 +242,7 @@ fn video(
     format: VideoFormat,
 ) -> Result<(), Error> {
     let realized_source = MANDELBOX.get()?;
-    let mut keyframes = KeyframeList::new("keyframes.clam5", &realized_source)?;
+    let keyframes = KeyframeList::load("keyframes.clam5", &realized_source)?;
     let mut kernel = Kernel::create(realized_source, width, height)?;
     let progress = Progress::new();
 

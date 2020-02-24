@@ -10,7 +10,7 @@ use gl::types::*;
 use khygl::{set_arg_f32, set_arg_f32_3, set_arg_u32};
 use std::{
     fmt::Write as FmtWrite,
-    fs::{File, OpenOptions},
+    fs::File,
     io::{BufRead, BufReader, BufWriter, Lines, Write},
 };
 
@@ -68,11 +68,19 @@ impl Settings {
         }
     }
 
-    // TODO: minimize outputs
-    fn write_one(&self, writer: &mut BufWriter<impl Write>) -> Result<(), Error> {
+    fn write_one(
+        &self,
+        writer: &mut BufWriter<impl Write>,
+        reference: &Settings,
+    ) -> Result<(), Error> {
         for value in &self.values {
             if value.key() == "render_scale" {
                 continue;
+            }
+            if let Some(reference) = reference.get(value.key()) {
+                if value.value() == reference.value() {
+                    continue;
+                }
             }
             match value.value() {
                 SettingValueEnum::Int(v) => writeln!(writer, "{} = {}", value.key(), v)?,
@@ -86,18 +94,10 @@ impl Settings {
         Ok(())
     }
 
-    pub fn save(&self, file: &str) -> Result<(), Error> {
+    pub fn save(&self, file: &str, realized_source: &RealizedSource) -> Result<(), Error> {
         let file = File::create(file)?;
         let mut writer = BufWriter::new(&file);
-        self.write_one(&mut writer)?;
-        Ok(())
-    }
-
-    pub fn save_keyframe(&self, file: &str) -> Result<(), Error> {
-        let file = OpenOptions::new().append(true).create(true).open(file)?;
-        let mut writer = BufWriter::new(&file);
-        self.write_one(&mut writer)?;
-        writeln!(&mut writer, "---")?;
+        self.write_one(&mut writer, realized_source.default_settings())?;
         Ok(())
     }
 
@@ -367,7 +367,13 @@ fn interpolate(
 }
 
 impl KeyframeList {
-    pub fn new(file: &str, realized_source: &RealizedSource) -> Result<Self, Error> {
+    pub fn new() -> KeyframeList {
+        KeyframeList {
+            keyframes: Vec::new(),
+        }
+    }
+
+    pub fn load(file: &str, realized_source: &RealizedSource) -> Result<Self, Error> {
         let file = File::open(file)?;
         let reader = BufReader::new(&file);
         let mut lines = reader.lines();
@@ -384,8 +390,24 @@ impl KeyframeList {
         Ok(Self { keyframes })
     }
 
+    pub fn save(&self, file: &str, realized_source: &RealizedSource) -> Result<(), Error> {
+        let file = File::create(file)?;
+        let mut writer = BufWriter::new(&file);
+        let mut previous = realized_source.default_settings();
+        for keyframe in &self.keyframes {
+            keyframe.write_one(&mut writer, previous)?;
+            writeln!(&mut writer, "---")?;
+            previous = keyframe;
+        }
+        Ok(())
+    }
+
     pub fn len(&self) -> usize {
         self.keyframes.len()
+    }
+
+    pub fn push(&mut self, keyframe: Settings) {
+        self.keyframes.push(keyframe);
     }
 
     fn clamp(&self, index: isize, wrap: bool) -> usize {
@@ -397,7 +419,7 @@ impl KeyframeList {
         }
     }
 
-    pub fn interpolate(&mut self, time: f64, wrap: bool) -> Settings {
+    pub fn interpolate(&self, time: f64, wrap: bool) -> Settings {
         let timelen = if wrap {
             self.keyframes.len()
         } else {

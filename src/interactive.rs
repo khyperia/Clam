@@ -2,7 +2,7 @@ use crate::{
     input::Input,
     kernel::Kernel,
     kernel_compilation::{SourceInfo, MANDELBOX},
-    settings::Settings,
+    settings::{KeyframeList, Settings},
     Key,
 };
 use failure::Error;
@@ -17,6 +17,7 @@ pub struct SyncInteractiveKernel<T: TextureType> {
     source_info: SourceInfo,
     pub kernel: Kernel<T>,
     pub settings: Settings,
+    pub keyframes: KeyframeList,
     pub input: Input,
 }
 
@@ -36,6 +37,8 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
 
         let realized_source = source_info.get()?;
         let settings = realized_source.default_settings().clone();
+        let keyframes = KeyframeList::load("keyframes.clam5", &realized_source)
+            .unwrap_or_else(|_| KeyframeList::new());
         let input = Input::new();
         let kernel = Kernel::create(realized_source, width, height)?;
         let result = Self {
@@ -43,18 +46,23 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
             source_info,
             kernel,
             settings,
+            keyframes,
             input,
         };
         Ok(result)
     }
 
     pub fn key_down(&mut self, key: Key) {
-        self.input
-            .key_down(key, &mut self.settings, self.kernel.realized_source());
+        self.input.key_down(
+            key,
+            &mut self.settings,
+            &mut self.keyframes,
+            self.kernel.realized_source(),
+        );
     }
 
     pub fn key_up(&mut self, key: Key) {
-        self.input.key_up(key, &mut self.settings);
+        self.input.key_up(key, &mut self.settings, &self.keyframes);
     }
 
     pub fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
@@ -62,7 +70,7 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
     }
 
     pub fn launch(&mut self) -> Result<(), Error> {
-        self.input.integrate(&mut self.settings);
+        self.input.integrate(&mut self.settings, &self.keyframes);
         if self.reload.swap(false, Ordering::Relaxed) {
             let realized_source = self.source_info.get()?;
             let mut new_settings = realized_source.default_settings().clone();

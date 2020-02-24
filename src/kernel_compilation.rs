@@ -62,8 +62,8 @@ impl SourceInfo {
     pub fn get(&self) -> Result<RealizedSource, Error> {
         let mut file = match File::open(self.path) {
             Ok(f) => f,
-            Err(_) => {
-                println!("Warning: {} not found", self.path);
+            Err(err) => {
+                println!("Warning for {}: {}", self.path, err);
                 return Ok(RealizedSource::new(self.source.to_string()));
             }
         };
