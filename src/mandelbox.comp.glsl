@@ -696,7 +696,6 @@ void SetRand(uint x, uint y, Random value)
 
 void SetScreen(uint x, uint y, vec3 value)
 {
-    y = height - (y + 1);
 #ifdef VR
     value *= 255;
 #endif
@@ -720,7 +719,7 @@ void main()
     vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
 
     Random rand = GetRand(x, y);
-    Ray ray = Camera(x, y, width, height, rand);
+    Ray ray = Camera(x, height - (y + 1), width, height, rand);
 #ifdef PREVIEW
     vec3 colorComponents = PreviewTrace(ray, width, height);
 #else

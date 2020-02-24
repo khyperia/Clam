@@ -248,9 +248,6 @@ impl Display for VrDisplay {
             .find_mut("fov_bottom")
             .unwrap_float_mut() = proj_right.bottom as f64;
 
-        interactive_kernel_left.settings.rebuild();
-        interactive_kernel_right.settings.rebuild();
-
         let fps = FpsCounter::new(1.0);
         let texture_renderer = TextureRenderer::new()?;
         let text_renderer = TextRenderer::new(20.0)?;

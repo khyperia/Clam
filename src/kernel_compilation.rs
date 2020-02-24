@@ -1,11 +1,14 @@
-use crate::{check_gl, parse_vector3, setting_value::SettingValueEnum, settings::Settings};
+use crate::{
+    check_gl, parse_vector3,
+    setting_value::{SettingValue, SettingValueEnum},
+    settings::Settings,
+};
 use failure::{err_msg, Error};
 use gl::types::*;
 use khygl::create_compute_program;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
-    collections::HashSet,
     ffi::CStr,
     fmt::Write,
     fs,
@@ -15,46 +18,80 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-const MANDELBOX: &str = include_str!("mandelbox.comp.glsl");
-const MANDELBOX_PATH: &str = "src/mandelbox.comp.glsl";
-
-// the "notify" crate is broken af, so roll our own
-pub fn watch_src<F: Fn() + Send + 'static>(on_changed: F) {
-    thread::spawn(move || {
-        fn get_time() -> Option<SystemTime> {
-            let meta = match fs::metadata(MANDELBOX_PATH) {
-                Ok(v) => v,
-                Err(_) => return None,
-            };
-            let time = match meta.modified() {
-                Ok(v) => v,
-                Err(_) => return None,
-            };
-            Some(time)
-        }
-        let mut time = get_time();
-        loop {
-            thread::sleep(Duration::from_secs(1));
-            let new_time = get_time();
-            if new_time != time {
-                time = new_time;
-                on_changed();
-            }
-        }
-    });
+pub struct SourceInfo {
+    source: &'static str,
+    path: &'static str,
 }
 
-fn get_src() -> Result<String, Error> {
-    let mut file = match File::open(MANDELBOX_PATH) {
-        Ok(f) => f,
-        Err(_) => {
-            println!("Warning: {} not found", MANDELBOX_PATH);
-            return Ok(MANDELBOX.to_string());
-        }
-    };
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-    Ok(contents)
+pub const MANDELBOX: SourceInfo = SourceInfo {
+    source: include_str!("mandelbox.comp.glsl"),
+    path: "src/mandelbox.comp.glsl",
+};
+
+impl SourceInfo {
+    // the "notify" crate is broken af, so roll our own
+    // the function returns false when the thread should die
+    pub fn watch<F: Fn() -> bool + Send + 'static>(&self, on_changed: F) {
+        let path = self.path;
+        thread::spawn(move || {
+            fn get_time(path: &str) -> Option<SystemTime> {
+                let meta = match fs::metadata(path) {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                let time = match meta.modified() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                Some(time)
+            }
+            let mut time = get_time(path);
+            loop {
+                thread::sleep(Duration::from_secs(1));
+                let new_time = get_time(path);
+                if new_time != time {
+                    time = new_time;
+                    if !on_changed() {
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn get(&self) -> Result<RealizedSource, Error> {
+        let mut file = match File::open(self.path) {
+            Ok(f) => f,
+            Err(_) => {
+                println!("Warning: {} not found", self.path);
+                return Ok(RealizedSource::new(self.source.to_string()));
+            }
+        };
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        Ok(RealizedSource::new(contents))
+    }
+}
+pub struct RealizedSource {
+    source: String,
+    settings: Settings,
+}
+
+impl RealizedSource {
+    fn new(source: String) -> Self {
+        let settings = settings_from_str(&source);
+        Self { source, settings }
+    }
+
+    pub fn default_settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    pub fn rebuild(&self, settings: &Settings, local_size: usize) -> Result<GLuint, Error> {
+        let mut to_compile = self.source.clone();
+        generate_src(&mut to_compile, settings, local_size);
+        create_compute_program(&[&to_compile])
+    }
 }
 
 fn shader_version() -> Result<String, Error> {
@@ -88,19 +125,6 @@ fn generate_src(original_source: &mut String, settings: &Settings, local_size: u
     *original_source = original_source.replace("#version 430", &header);
 }
 
-pub fn refresh_settings(settings: &mut Settings) -> Result<(), Error> {
-    let src = get_src()?;
-    set_src(settings, &src);
-    Ok(())
-}
-
-pub fn rebuild(settings: &mut Settings, local_size: usize) -> Result<GLuint, Error> {
-    let mut src = get_src()?;
-    set_src(settings, &src);
-    generate_src(&mut src, settings, local_size);
-    create_compute_program(&[&src])
-}
-
 const PARSE: &str = concat!(
     "(?m)^ *(",
     r"uniform *(?P<kinduint>uint) (?P<nameuint>[a-zA-Z0-9_]+) *; *// *(?P<valueuint>([-+]?[0-9]+))|",
@@ -109,15 +133,13 @@ const PARSE: &str = concat!(
     ") *(?P<const>const)? *\r?$"
 );
 
-fn set_src(settings: &mut Settings, src: &str) {
+fn settings_from_str(src: &str) -> Settings {
     lazy_static! {
         static ref RE: Regex = Regex::new(PARSE).expect("Failed to create regex");
+        static ref DEFINES: Regex = Regex::new(r#"(?m)^ *#ifdef +(?P<name>[a-zA-Z0-9_]+) *\r?$"#)
+            .expect("Failed to create regex");
     }
-    let mut set: HashSet<String> = settings
-        .values
-        .iter()
-        .map(|x| x.key().to_string())
-        .collect();
+    let mut result = Settings::new();
     let mut once = false;
     for cap in RE.captures_iter(src) {
         once = true;
@@ -135,27 +157,24 @@ fn set_src(settings: &mut Settings, src: &str) {
         } else {
             panic!("Regex returned invalid kind");
         };
-        set.remove(name);
-        settings.define_variable(name, setting, cap.name("const").is_some());
+        result.values.push(SettingValue::new(
+            name.to_string(),
+            setting,
+            cap.name("const").is_some(),
+        ));
     }
-    settings.define_variable("render_scale", SettingValueEnum::Int(1), false);
-    set.remove("render_scale");
     assert!(once, "Regex should get at least one setting");
-    find_defines(settings, src, &mut set);
-    for to_delete in set {
-        settings.delete_variable(&to_delete);
-    }
-}
-
-fn find_defines(settings: &mut Settings, src: &str, variables: &mut HashSet<String>) {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r#"(?m)^ *#ifdef +(?P<name>[a-zA-Z0-9_]+) *\r?$"#)
-            .expect("Failed to create regex");
-    }
-    for cap in RE.captures_iter(src) {
-        let name = &cap["name"];
+    result.values.push(SettingValue::new(
+        "render_scale".to_string(),
+        SettingValueEnum::Int(1),
+        false,
+    ));
+    for cap in DEFINES.captures_iter(src) {
+        let name = cap["name"].to_string();
         let new_value = SettingValueEnum::Define(false);
-        variables.remove(name);
-        settings.define_variable(name, new_value, false);
+        result
+            .values
+            .push(SettingValue::new(name, new_value, false));
     }
+    result
 }

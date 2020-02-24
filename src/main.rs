@@ -16,6 +16,7 @@ use chrono::prelude::*;
 use display::Key;
 use failure::{err_msg, Error};
 use kernel::Kernel;
+use kernel_compilation::MANDELBOX;
 use khygl::{check_gl, texture::CpuTexture};
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
@@ -84,15 +85,14 @@ fn progress_count(_: usize) -> usize {
 }
 
 fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
-    let mut settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, &mut settings)?;
-    settings.load("settings.clam5")?;
-    settings.all_constants();
-    kernel.rebuild(&mut settings, false)?;
+    let realized_source = MANDELBOX.get()?;
+    let mut loaded_settings = Settings::load("settings.clam5", realized_source.default_settings())?;
+    loaded_settings.all_constants();
+    let mut kernel = Kernel::create(realized_source, width, height)?;
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     for ray in 0..rpp {
-        kernel.run(&mut settings, false)?;
+        kernel.run(&loaded_settings)?;
         if ray > 0 && ray % progress_count == 0 {
             kernel.sync_renderer()?;
             let value = ray as f64 / rpp as f64;
@@ -138,11 +138,11 @@ impl std::str::FromStr for VideoFormat {
 fn video_one(
     rpp: usize,
     kernel: &mut Kernel<[f32; 4]>,
-    settings: &mut Settings,
+    settings: &Settings,
     stream: &mpsc::SyncSender<CpuTexture<[f32; 4]>>,
 ) -> Result<(), Error> {
     for _ in 0..rpp {
-        kernel.run(settings, false)?;
+        kernel.run(settings)?;
     }
     let image = kernel.download()?;
     stream.send(image)?;
@@ -241,10 +241,9 @@ fn video(
     wrap: bool,
     format: VideoFormat,
 ) -> Result<(), Error> {
-    let mut default_settings = Settings::new();
-    let mut kernel = Kernel::create(width, height, &mut default_settings)?;
-    default_settings.clear_constants();
-    let mut keyframes = KeyframeList::new("keyframes.clam5", default_settings)?;
+    let realized_source = MANDELBOX.get()?;
+    let mut keyframes = KeyframeList::new("keyframes.clam5", &realized_source)?;
+    let mut kernel = Kernel::create(realized_source, width, height)?;
     let progress = Progress::new();
 
     let (send, recv) = mpsc::sync_channel(5);
@@ -257,8 +256,9 @@ fn video(
     };
 
     for frame in 0..frames {
-        let settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
-        video_one(rpp, &mut kernel, settings, &send)?;
+        let mut settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
+        settings.clear_constants();
+        video_one(rpp, &mut kernel, &settings, &send)?;
         let value = (frame + 1) as f64 / frames as f64;
         println!("{}", progress.time_str(value));
     }

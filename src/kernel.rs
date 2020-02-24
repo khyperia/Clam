@@ -1,4 +1,4 @@
-use crate::{check_gl, kernel_compilation, settings::Settings};
+use crate::{check_gl, kernel_compilation::RealizedSource, settings::Settings};
 use failure::{self, Error};
 use gl::types::*;
 use khygl::{
@@ -55,13 +55,17 @@ pub struct Kernel<T: TextureType> {
     kernel: Option<GLuint>,
     data: KernelImage<T>,
     old_settings: Settings,
-    frame: u32,
+    realized_source: RealizedSource,
     local_size: usize,
+    frame: u32,
 }
 
 impl<T: TextureType> Kernel<T> {
-    pub fn create(width: usize, height: usize, settings: &mut Settings) -> Result<Self, Error> {
-        kernel_compilation::refresh_settings(settings)?;
+    pub fn create(
+        realized_source: RealizedSource,
+        width: usize,
+        height: usize,
+    ) -> Result<Self, Error> {
         let mut local_size = 0;
         unsafe {
             gl::GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, 0, &mut local_size);
@@ -71,17 +75,27 @@ impl<T: TextureType> Kernel<T> {
         let result = Self {
             kernel: None,
             data: KernelImage::new(width, height)?,
-            old_settings: settings.clone(),
-            frame: 0,
+            old_settings: Settings::new(),
+            realized_source,
             local_size: local_size as usize,
+            frame: 0,
         };
         Ok(result)
     }
 
-    pub fn rebuild(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
-        if settings.check_rebuild() || self.kernel.is_none() || force_rebuild {
+    pub fn set_src(&mut self, src: RealizedSource) {
+        self.realized_source = src;
+        self.kernel = None;
+    }
+
+    pub fn realized_source(&self) -> &RealizedSource {
+        &self.realized_source
+    }
+
+    fn try_rebuild(&mut self, settings: &Settings) -> Result<(), Error> {
+        if settings.check_rebuild(&self.old_settings) || self.kernel.is_none() {
             println!("Rebuilding");
-            let new_kernel = kernel_compilation::rebuild(settings, self.local_size);
+            let new_kernel = self.realized_source.rebuild(settings, self.local_size);
             match new_kernel {
                 Ok(k) => {
                     self.kernel = Some(k);
@@ -146,8 +160,8 @@ impl<T: TextureType> Kernel<T> {
         Ok(())
     }
 
-    pub fn run(&mut self, settings: &mut Settings, force_rebuild: bool) -> Result<(), Error> {
-        self.rebuild(settings, force_rebuild)?;
+    pub fn run(&mut self, settings: &Settings) -> Result<(), Error> {
+        self.try_rebuild(settings)?;
         self.update(settings)?;
         self.launch()?;
         Ok(())

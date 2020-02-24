@@ -6,7 +6,6 @@ pub struct SettingValue {
     value: SettingValueEnum,
     default_value: SettingValueEnum,
     is_const: bool,
-    needs_rebuild: bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -24,7 +23,6 @@ impl SettingValue {
             value: value.clone(),
             default_value: value,
             is_const,
-            needs_rebuild: false,
         }
     }
 
@@ -37,30 +35,7 @@ impl SettingValue {
     }
 
     pub fn set_value(&mut self, value: SettingValueEnum) {
-        if let SettingValueEnum::Define(new_val) = value {
-            if let SettingValueEnum::Define(old_val) = self.value {
-                self.needs_rebuild = old_val != new_val;
-            } else {
-                self.needs_rebuild = true;
-            }
-        } else if self.is_const && self.value != value {
-            self.needs_rebuild = true;
-        }
         self.value = value
-    }
-
-    pub fn set_default_value(&mut self, value: SettingValueEnum) {
-        self.default_value = value;
-        // set change rate
-        match (&mut self.value, &self.default_value) {
-            (SettingValueEnum::Float(_, value), SettingValueEnum::Float(_, default)) => {
-                *value = *default
-            }
-            (SettingValueEnum::Vec3(_, value), SettingValueEnum::Vec3(_, default)) => {
-                *value = *default
-            }
-            _ => (),
-        }
     }
 
     pub fn change_one(&mut self, increase: bool) {
@@ -76,7 +51,6 @@ impl SettingValue {
             }
             SettingValueEnum::Define(ref mut value) => {
                 *value = !*value;
-                self.needs_rebuild = true;
             }
         }
     }
@@ -99,13 +73,6 @@ impl SettingValue {
     }
 
     pub fn toggle(&mut self) {
-        fn def(val: &SettingValueEnum) -> Option<bool> {
-            match *val {
-                SettingValueEnum::Define(v) => Some(v),
-                _ => None,
-            }
-        }
-        let old_define = def(&self.value);
         if self.value == self.default_value {
             match self.value {
                 SettingValueEnum::Int(ref mut v) => *v = 0,
@@ -115,10 +82,6 @@ impl SettingValue {
             }
         } else {
             self.value = self.default_value.clone();
-        }
-        let new_define = def(&self.value);
-        if old_define != new_define {
-            self.needs_rebuild = true;
         }
     }
 
@@ -130,16 +93,7 @@ impl SettingValue {
         if let SettingValueEnum::Define(_) = self.value {
             return;
         }
-        if self.is_const != value {
-            self.needs_rebuild = true;
-        }
         self.is_const = value;
-    }
-
-    pub fn check_reset_needs_rebuild(&mut self) -> bool {
-        let result = self.needs_rebuild;
-        self.needs_rebuild = false;
-        result
     }
 
     pub fn unwrap_u32(&self) -> u64 {
@@ -222,6 +176,25 @@ impl SettingValue {
                     None
                 }
             }
+        }
+    }
+}
+
+impl SettingValueEnum {
+    pub fn is_define(&self) -> bool {
+        match self {
+            SettingValueEnum::Define(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn kinds_match(&self, other: &SettingValueEnum) -> bool {
+        match (self, other) {
+            (SettingValueEnum::Int(_), SettingValueEnum::Int(_)) => true,
+            (SettingValueEnum::Float(_, _), SettingValueEnum::Float(_, _)) => true,
+            (SettingValueEnum::Vec3(_, _), SettingValueEnum::Vec3(_, _)) => true,
+            (SettingValueEnum::Define(_), SettingValueEnum::Define(_)) => true,
+            _ => false,
         }
     }
 }

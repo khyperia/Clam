@@ -1,4 +1,5 @@
 use crate::{
+    kernel_compilation::RealizedSource,
     settings::{KeyframeList, Settings},
     Key,
 };
@@ -43,7 +44,12 @@ impl Input {
         println!("H: Print this message");
     }
 
-    pub fn key_down(&mut self, key: Key, settings: &mut Settings) {
+    pub fn key_down(
+        &mut self,
+        key: Key,
+        settings: &mut Settings,
+        realized_source: &RealizedSource,
+    ) {
         let time = Instant::now();
         let new_key = if let Entry::Vacant(entry) = self.pressed_keys.entry(key) {
             entry.insert(time);
@@ -54,7 +60,7 @@ impl Input {
         if new_key {
             self.run(settings, time);
         }
-        match self.run_down(key, settings) {
+        match self.run_down(key, settings, realized_source) {
             Ok(()) => (),
             Err(err) => println!("Error handling key down event: {}", err),
         }
@@ -73,13 +79,18 @@ impl Input {
         self.run(settings, now);
     }
 
-    fn run_down(&mut self, key: Key, settings: &mut Settings) -> Result<(), Error> {
+    fn run_down(
+        &mut self,
+        key: Key,
+        settings: &mut Settings,
+        realized_source: &RealizedSource,
+    ) -> Result<(), Error> {
         match key {
             Key::H => {
                 Self::help();
             }
             Key::P => {
-                settings.load("settings.clam5")?;
+                *settings = Settings::load("settings.clam5", settings)?;
                 println!("Settings loaded");
             }
             Key::Y => {
@@ -90,7 +101,7 @@ impl Input {
                 settings.save_keyframe("keyframes.clam5")?;
                 println!("Keyframe saved");
             }
-            Key::G => match KeyframeList::new("keyframes.clam5", settings.clone()) {
+            Key::G => match KeyframeList::new("keyframes.clam5", realized_source) {
                 Ok(ok) => {
                     self.cur_video = 0;
                     self.video_len = ok.len() * 100;
@@ -119,7 +130,6 @@ impl Input {
                 let is_const = settings.values[self.index].is_const();
                 settings.values[self.index].set_const(!is_const);
             }
-            Key::B => settings.rebuild(),
             Key::X => {
                 let pos = settings.find("pos").value().clone();
                 settings.find_mut("light_pos_1").set_value(pos);
@@ -170,11 +180,10 @@ impl Input {
             *value = now;
         }
         if let Some(ref mut video) = self.video {
-            let interpolated =
-                video.interpolate(self.cur_video as f64 / self.video_len as f64, false);
-            *settings = interpolated.clone();
+            *settings = video.interpolate(self.cur_video as f64 / self.video_len as f64, false);
             self.cur_video += 1;
             if self.cur_video > self.video_len {
+                // TODO
                 self.video = None;
             }
         }

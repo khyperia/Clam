@@ -1,4 +1,10 @@
-use crate::{input::Input, kernel::Kernel, kernel_compilation, settings::Settings, Key};
+use crate::{
+    input::Input,
+    kernel::Kernel,
+    kernel_compilation::{SourceInfo, MANDELBOX},
+    settings::Settings,
+    Key,
+};
 use failure::Error;
 use khygl::texture::{Texture, TextureType};
 use std::sync::{
@@ -7,7 +13,8 @@ use std::sync::{
 };
 
 pub struct SyncInteractiveKernel<T: TextureType> {
-    rebuild: Arc<AtomicBool>,
+    reload: Arc<AtomicBool>,
+    source_info: SourceInfo,
     pub kernel: Kernel<T>,
     pub settings: Settings,
     pub input: Input,
@@ -15,17 +22,26 @@ pub struct SyncInteractiveKernel<T: TextureType> {
 
 impl<T: TextureType> SyncInteractiveKernel<T> {
     pub fn create(width: usize, height: usize) -> Result<Self, Error> {
-        let rebuild = Arc::new(AtomicBool::new(false));
-        let rebuild2 = rebuild.clone();
+        let source_info = MANDELBOX;
+        let reload = Arc::new(AtomicBool::new(false));
+        let reload2 = Arc::downgrade(&reload);
         // TODO: stop watching once `self` dies
-        kernel_compilation::watch_src(move || rebuild2.store(true, Ordering::Relaxed));
+        source_info.watch(move || match reload2.upgrade() {
+            Some(r) => {
+                r.store(true, Ordering::Relaxed);
+                true
+            }
+            None => false,
+        });
 
-        let mut settings = Settings::new();
+        let realized_source = source_info.get()?;
+        let settings = realized_source.default_settings().clone();
         let input = Input::new();
-        let kernel = Kernel::create(width, height, &mut settings)?;
+        let kernel = Kernel::create(realized_source, width, height)?;
         let result = Self {
+            reload,
+            source_info,
             kernel,
-            rebuild,
             settings,
             input,
         };
@@ -33,7 +49,8 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
     }
 
     pub fn key_down(&mut self, key: Key) {
-        self.input.key_down(key, &mut self.settings);
+        self.input
+            .key_down(key, &mut self.settings, self.kernel.realized_source());
     }
 
     pub fn key_up(&mut self, key: Key) {
@@ -46,21 +63,20 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
 
     pub fn launch(&mut self) -> Result<(), Error> {
         self.input.integrate(&mut self.settings);
-        self.kernel.run(
-            &mut self.settings,
-            self.rebuild.swap(false, Ordering::Relaxed),
-        )?;
+        if self.reload.swap(false, Ordering::Relaxed) {
+            let realized_source = self.source_info.get()?;
+            let mut new_settings = realized_source.default_settings().clone();
+            new_settings.apply(&self.settings);
+            self.settings = new_settings;
+            self.kernel.set_src(realized_source);
+        }
+        self.kernel.run(&self.settings)?;
         Ok(())
     }
 
     pub fn texture(&mut self) -> &Texture<T> {
         self.kernel.texture()
     }
-
-    // pub fn download(&mut self) -> Result<CpuTexture<T>, Error> {
-    //     let image = self.kernel.download()?;
-    //     Ok(image)
-    // }
 
     pub fn status(&self) -> String {
         self.settings.status(&self.input)

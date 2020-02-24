@@ -1,5 +1,6 @@
 use crate::{
     input::Input,
+    kernel_compilation::RealizedSource,
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
 };
@@ -16,15 +17,11 @@ use std::{
 #[derive(Clone, Default, PartialEq)]
 pub struct Settings {
     pub values: Vec<SettingValue>,
-    rebuild: bool,
 }
 
 impl Settings {
     pub fn new() -> Self {
-        Self {
-            values: Vec::new(),
-            rebuild: false,
-        }
+        Self { values: Vec::new() }
     }
 
     pub fn clear_constants(&mut self) {
@@ -71,6 +68,7 @@ impl Settings {
         }
     }
 
+    // TODO: minimize outputs
     fn write_one(&self, writer: &mut BufWriter<impl Write>) -> Result<(), Error> {
         for value in &self.values {
             if value.key() == "render_scale" {
@@ -103,12 +101,17 @@ impl Settings {
         Ok(())
     }
 
-    pub fn load_iter<T: BufRead>(&mut self, lines: &mut Lines<T>) -> Result<(usize, bool), Error> {
-        let mut count = 0;
+    pub fn load_iter<T: BufRead>(
+        lines: &mut Lines<T>,
+        reference: &Settings,
+    ) -> Result<(Settings, bool), Error> {
+        let mut result = Settings::new();
+        let mut read_any = false;
         for line in lines {
+            read_any = true;
             let line = line?;
             if &line == "---" || &line == "" {
-                return Ok((count, true));
+                break;
             }
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();
             if split.len() != 2 {
@@ -117,37 +120,37 @@ impl Settings {
                     line
                 )));
             }
-            count += 1;
             let key = split[1].trim();
             let new_value = split[0].trim();
-            let value = self.find_mut(key);
-            match *value.value() {
-                SettingValueEnum::Int(_) => {
-                    value.set_value(SettingValueEnum::Int(new_value.parse()?));
-                }
+            let reference = reference.find(key);
+            let val_enum = match *reference.value() {
+                SettingValueEnum::Int(_) => SettingValueEnum::Int(new_value.parse()?),
                 SettingValueEnum::Float(_, change) => {
-                    value.set_value(SettingValueEnum::Float(new_value.parse()?, change));
+                    SettingValueEnum::Float(new_value.parse()?, change)
                 }
-                SettingValueEnum::Vec3(_, change) => {
-                    value.set_value(SettingValueEnum::Vec3(
-                        parse_vector3(new_value)
-                            .ok_or_else(|| failure::err_msg("invalid vector3 in save file"))?,
-                        change,
-                    ));
-                }
-                SettingValueEnum::Define(_) => {
-                    value.set_value(SettingValueEnum::Define(new_value.parse()?));
-                }
+                SettingValueEnum::Vec3(_, change) => SettingValueEnum::Vec3(
+                    parse_vector3(new_value)
+                        .ok_or_else(|| failure::err_msg("invalid vector3 in save file"))?,
+                    change,
+                ),
+                SettingValueEnum::Define(_) => SettingValueEnum::Define(new_value.parse()?),
             };
+            result.values.push(SettingValue::new(
+                key.to_string(),
+                val_enum,
+                reference.is_const(),
+            ));
         }
-        Ok((count, false))
+        Ok((result, read_any))
     }
 
-    pub fn load(&mut self, file: &str) -> Result<(), Error> {
+    pub fn load(file: &str, reference: &Settings) -> Result<Settings, Error> {
         let file = File::open(file)?;
         let reader = BufReader::new(&file);
-        self.load_iter(&mut reader.lines())?;
-        Ok(())
+        let (loaded, _) = Self::load_iter(&mut reader.lines(), reference)?;
+        let mut result = reference.clone();
+        result.apply(&loaded);
+        Ok(result)
     }
 
     pub fn status(&self, input: &Input) -> String {
@@ -185,36 +188,52 @@ impl Settings {
         builder
     }
 
-    pub fn rebuild(&mut self) {
-        self.rebuild = true;
-    }
-
-    pub fn check_rebuild(&mut self) -> bool {
-        fn check(v: &mut bool) -> bool {
-            let result = *v;
-            *v = false;
-            result
+    #[allow(clippy::float_cmp)]
+    pub fn check_rebuild(&self, against: &Settings) -> bool {
+        for value in &self.values {
+            if let Some(corresponding) = against.get(value.key()) {
+                if value.is_const() != corresponding.is_const() {
+                    return true;
+                }
+                if value.is_const() || value.value().is_define() {
+                    match (value.value(), corresponding.value()) {
+                        (SettingValueEnum::Int(value), SettingValueEnum::Int(corresponding)) => {
+                            if value != corresponding {
+                                return true;
+                            }
+                        }
+                        (
+                            SettingValueEnum::Float(value, _),
+                            SettingValueEnum::Float(corresponding, _),
+                        ) => {
+                            if value != corresponding {
+                                return true;
+                            }
+                        }
+                        (
+                            SettingValueEnum::Vec3(value, _),
+                            SettingValueEnum::Vec3(corresponding, _),
+                        ) => {
+                            if value != corresponding {
+                                return true;
+                            }
+                        }
+                        (
+                            SettingValueEnum::Define(value),
+                            SettingValueEnum::Define(corresponding),
+                        ) => {
+                            if value != corresponding {
+                                return true;
+                            }
+                        }
+                        _ => return true,
+                    }
+                }
+            } else {
+                return true;
+            }
         }
-        let mut result = check(&mut self.rebuild);
-        for value in &mut self.values {
-            result |= value.check_reset_needs_rebuild();
-        }
-        result
-    }
-
-    pub fn define_variable(&mut self, name: &str, new_value: SettingValueEnum, is_const: bool) {
-        let old_value = self.get_mut(name);
-        if let Some(old_value) = old_value {
-            // TODO: Type change check
-            old_value.set_default_value(new_value);
-        } else {
-            self.values
-                .push(SettingValue::new(name.to_string(), new_value, is_const));
-        }
-    }
-
-    pub fn delete_variable(&mut self, name: &str) {
-        self.values.retain(|e| e.key() != name);
+        false
     }
 
     pub fn set_uniforms(&self, compute_shader: GLuint) -> Result<(), Error> {
@@ -247,10 +266,19 @@ impl Settings {
         *self.find_mut("look").unwrap_vec3_mut() = look;
         *self.find_mut("up").unwrap_vec3_mut() = up;
     }
+
+    pub fn apply(&mut self, other: &Settings) {
+        for value in &mut self.values {
+            if let Some(other) = other.get(value.key()) {
+                if value.value().kinds_match(other.value()) {
+                    *value = other.clone();
+                }
+            }
+        }
+    }
 }
 
 pub struct KeyframeList {
-    base: Settings,
     keyframes: Vec<Settings>,
 }
 
@@ -339,22 +367,21 @@ fn interpolate(
 }
 
 impl KeyframeList {
-    pub fn new(file: &str, mut base: Settings) -> Result<Self, Error> {
+    pub fn new(file: &str, realized_source: &RealizedSource) -> Result<Self, Error> {
         let file = File::open(file)?;
         let reader = BufReader::new(&file);
         let mut lines = reader.lines();
+        let mut running_settings = realized_source.default_settings().clone();
         let mut keyframes = Vec::new();
         loop {
-            let (count, more) = base.load_iter(&mut lines)?;
-            if !more {
+            let (new_settings, read_any) = Settings::load_iter(&mut lines, &running_settings)?;
+            if !read_any {
                 break;
             }
-            if count == 0 {
-                continue;
-            }
-            keyframes.push(base.clone());
+            running_settings.apply(&new_settings);
+            keyframes.push(running_settings.clone());
         }
-        Ok(Self { base, keyframes })
+        Ok(Self { keyframes })
     }
 
     pub fn len(&self) -> usize {
@@ -370,7 +397,7 @@ impl KeyframeList {
         }
     }
 
-    pub fn interpolate(&mut self, time: f64, wrap: bool) -> &mut Settings {
+    pub fn interpolate(&mut self, time: f64, wrap: bool) -> Settings {
         let timelen = if wrap {
             self.keyframes.len()
         } else {
@@ -382,7 +409,8 @@ impl KeyframeList {
         let index_prev = self.clamp(index_cur as isize - 1, wrap);
         let index_next = self.clamp(index_cur as isize + 1, wrap);
         let index_next2 = self.clamp(index_cur as isize + 2, wrap);
-        for value in &mut self.base.values {
+        let mut base = self.keyframes[index_cur].clone();
+        for value in &mut base.values {
             let prev = self.keyframes[index_prev].find(&value.key()).value();
             let cur = self.keyframes[index_cur].find(&value.key()).value();
             let next = self.keyframes[index_next].find(&value.key()).value();
@@ -397,7 +425,7 @@ impl KeyframeList {
             );
             value.set_value(result);
         }
-        self.base.normalize();
-        &mut self.base
+        base.normalize();
+        base
     }
 }
