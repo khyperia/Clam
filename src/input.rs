@@ -10,18 +10,25 @@ use std::{
     time::Instant,
 };
 
-#[derive(Default)]
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
     spaceship: Option<(Vector3<f64>, Vector3<f64>, Instant)>,
-    cur_video: usize,
-    video_len: usize,
+    cur_video_secs: f64,
+    video_len_secs: f64,
+    last_update: Instant,
     pub index: usize,
 }
 
 impl Input {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            pressed_keys: Default::default(),
+            spaceship: Default::default(),
+            cur_video_secs: Default::default(),
+            video_len_secs: Default::default(),
+            last_update: Instant::now(),
+            index: Default::default(),
+        }
     }
 
     fn help() {
@@ -104,8 +111,8 @@ impl Input {
                 println!("Keyframe saved");
             }
             Key::G => {
-                self.cur_video = 0;
-                self.video_len = keyframes.len() * 100;
+                self.cur_video_secs = 0.0;
+                self.video_len_secs = keyframes.len() as f64 * (10.0 / 6.0);
                 println!("Playing video")
             }
             Key::Up => {
@@ -159,6 +166,8 @@ impl Input {
     }
 
     fn run(&mut self, settings: &mut Settings, keyframes: &KeyframeList, now: Instant) {
+        let dt = (now - self.last_update).as_secs_f64();
+        self.last_update = now;
         if self.spaceship.is_some() {
             self.spaceship(settings, now);
         } else {
@@ -177,9 +186,9 @@ impl Input {
         for value in self.pressed_keys.values_mut() {
             *value = now;
         }
-        if self.cur_video < self.video_len {
-            *settings = keyframes.interpolate(self.cur_video as f64 / self.video_len as f64, false);
-            self.cur_video += 1;
+        if self.cur_video_secs < self.video_len_secs {
+            *settings = keyframes.interpolate(self.cur_video_secs / self.video_len_secs, false);
+            self.cur_video_secs += dt;
         }
     }
 

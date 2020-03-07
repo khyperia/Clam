@@ -87,10 +87,124 @@ impl RealizedSource {
         &self.settings
     }
 
-    pub fn rebuild(&self, settings: &Settings, local_size: usize) -> Result<GLuint, Error> {
+    pub fn rebuild(&self, settings: &Settings, local_size: usize) -> Result<ComputeShader, Error> {
         let mut to_compile = self.source.clone();
         generate_src(&mut to_compile, settings, local_size);
-        create_compute_program(&[&to_compile])
+        ComputeShader::new(&[&to_compile])
+    }
+}
+
+pub struct ComputeShader {
+    pub shader: GLuint,
+    uniforms: Vec<Uniform>,
+}
+
+impl ComputeShader {
+    fn new(sources: &[&str]) -> Result<Self, Error> {
+        let shader = create_compute_program(sources)?;
+        Ok(Self {
+            shader,
+            uniforms: uniforms(shader)?,
+        })
+    }
+
+    pub fn uniforms(&self) -> &[Uniform] {
+        &self.uniforms
+    }
+}
+
+impl Drop for ComputeShader {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteProgram(self.shader);
+        }
+    }
+}
+
+pub struct Uniform {
+    pub name: String,
+    pub ty: GLenum,
+    pub location: GLint,
+    // TODO: unsafe lifetime
+    pub program: GLuint,
+}
+
+impl Uniform {
+    fn new(name: String, ty: GLenum, location: GLint, program: GLuint) -> Self {
+        Self {
+            name,
+            ty,
+            location,
+            program,
+        }
+    }
+
+    pub fn set_arg_f32(&self, value: f32) -> Result<(), Error> {
+        unsafe {
+            gl::UseProgram(self.program);
+            gl::Uniform1f(self.location, value);
+            gl::UseProgram(0);
+        }
+        check_gl()?;
+        Ok(())
+    }
+
+    pub fn set_arg_f32_3(&self, x: f32, y: f32, z: f32) -> Result<(), Error> {
+        unsafe {
+            gl::UseProgram(self.program);
+            gl::Uniform3f(self.location, x, y, z);
+            gl::UseProgram(0);
+        }
+        check_gl()?;
+        Ok(())
+    }
+
+    pub fn set_arg_u32(&self, value: u32) -> Result<(), Error> {
+        unsafe {
+            gl::UseProgram(self.program);
+            gl::Uniform1ui(self.location, value);
+            gl::UseProgram(0);
+        }
+        check_gl()?;
+        Ok(())
+    }
+}
+
+fn uniforms(program: GLuint) -> Result<Vec<Uniform>, Error> {
+    unsafe {
+        let mut uniform_length = 0;
+        gl::GetProgramiv(program, gl::ACTIVE_UNIFORM_MAX_LENGTH, &mut uniform_length);
+        check_gl()?;
+        let mut count = 0;
+        gl::GetProgramiv(program, gl::ACTIVE_UNIFORMS, &mut count);
+        check_gl()?;
+        let mut buffer = vec![0; uniform_length as usize];
+        let mut results = Vec::new();
+        for i in 0..count {
+            let mut length = 0;
+            let mut size = 0;
+            let mut ty = 0;
+            gl::GetActiveUniform(
+                program,
+                i as _,
+                uniform_length,
+                &mut length,
+                &mut size,
+                &mut ty,
+                buffer.as_mut_ptr(),
+            );
+            check_gl()?;
+            let name_slice = &buffer[0..(length as usize)];
+            let name_slice_u8 = &*(name_slice as *const [i8] as *const [u8]);
+            let name = std::str::from_utf8(name_slice_u8)?.to_string();
+            let location = gl::GetUniformLocation(program, name_slice.as_ptr());
+            check_gl()?;
+            if location < 0 {
+                return Err(err_msg(format!("Could not find uniform: {}", name)));
+            }
+            results.push(Uniform::new(name, ty, location, program));
+        }
+        Ok(results)
     }
 }
 

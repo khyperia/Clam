@@ -6,8 +6,6 @@ use crate::{
 };
 use cgmath::{prelude::*, Vector3};
 use failure::{err_msg, Error};
-use gl::types::*;
-use khygl::{set_arg_f32, set_arg_f32_3, set_arg_u32};
 use std::{
     fmt::Write as FmtWrite,
     fs::File,
@@ -234,28 +232,6 @@ impl Settings {
             }
         }
         false
-    }
-
-    pub fn set_uniforms(&self, compute_shader: GLuint) -> Result<(), Error> {
-        for value in &self.values {
-            if !value.is_const() {
-                match *value.value() {
-                    SettingValueEnum::Int(x) => set_arg_u32(compute_shader, value.key(), x as u32)?,
-                    SettingValueEnum::Float(x, _) => {
-                        set_arg_f32(compute_shader, value.key(), x as f32)?
-                    }
-                    SettingValueEnum::Vec3(x, _) => set_arg_f32_3(
-                        compute_shader,
-                        value.key(),
-                        x.x as f32,
-                        x.y as f32,
-                        x.z as f32,
-                    )?,
-                    SettingValueEnum::Define(_) => (),
-                }
-            }
-        }
-        Ok(())
     }
 
     pub fn normalize(&mut self) {

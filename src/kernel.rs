@@ -1,10 +1,10 @@
-use crate::{check_gl, kernel_compilation::RealizedSource, settings::Settings};
-use failure::{self, Error};
-use gl::types::*;
-use khygl::{
-    set_arg_u32,
-    texture::{CpuTexture, Texture, TextureType},
+use crate::{
+    check_gl,
+    kernel_compilation::{ComputeShader, RealizedSource},
+    settings::Settings,
 };
+use failure::{self, Error};
+use khygl::texture::{CpuTexture, Texture, TextureType};
 
 struct KernelImage<T: TextureType> {
     width: usize,
@@ -52,7 +52,7 @@ impl<T: TextureType> KernelImage<T> {
 }
 
 pub struct Kernel<T: TextureType> {
-    kernel: Option<GLuint>,
+    kernel: Option<ComputeShader>,
     data: KernelImage<T>,
     old_settings: Settings,
     realized_source: RealizedSource,
@@ -126,25 +126,30 @@ impl<T: TextureType> Kernel<T> {
             self.frame = 0;
         }
 
-        if let Some(kernel) = self.kernel {
+        if let Some(kernel) = &self.kernel {
             let (width, height) = self.data.size();
-            settings.set_uniforms(kernel)?;
-            set_arg_u32(kernel, "width", width as u32)?;
-            set_arg_u32(kernel, "height", height as u32)?;
-            set_arg_u32(kernel, "frame", self.frame)?;
+            for uniform in kernel.uniforms() {
+                match (&uniform.name as &str, uniform.ty) {
+                    ("width", _) => uniform.set_arg_u32(width as u32)?,
+                    ("height", _) => uniform.set_arg_u32(height as u32)?,
+                    ("frame", _) => uniform.set_arg_u32(self.frame)?,
+                    (_, gl::IMAGE_2D) | (_, gl::UNSIGNED_INT_IMAGE_2D) => (),
+                    (name, _) => settings.find(name).value().set_uniform(uniform)?,
+                }
+            }
         }
 
         Ok(())
     }
 
     fn launch(&mut self) -> Result<(), Error> {
-        if let Some(kernel) = self.kernel {
+        if let Some(kernel) = &self.kernel {
             let (width, height) = self.data.size();
             let total_size = width * height;
             let local_size = self.local_size;
             let launch_size = (total_size + local_size - 1) / local_size;
             unsafe {
-                gl::UseProgram(kernel);
+                gl::UseProgram(kernel.shader);
                 check_gl()?;
                 self.data.output.bind(0)?;
                 self.data.scratch.bind(1)?;

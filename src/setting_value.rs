@@ -1,4 +1,6 @@
+use crate::kernel_compilation::Uniform;
 use cgmath::Vector3;
+use failure::Error;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SettingValue {
@@ -195,6 +197,17 @@ impl SettingValueEnum {
             (SettingValueEnum::Vec3(_, _), SettingValueEnum::Vec3(_, _)) => true,
             (SettingValueEnum::Define(_), SettingValueEnum::Define(_)) => true,
             _ => false,
+        }
+    }
+
+    pub fn set_uniform(&self, uniform: &Uniform) -> Result<(), Error> {
+        match *self {
+            SettingValueEnum::Int(x) => uniform.set_arg_u32(x as u32),
+            SettingValueEnum::Float(x, _) => uniform.set_arg_f32(x as f32),
+            SettingValueEnum::Vec3(x, _) => {
+                uniform.set_arg_f32_3(x.x as f32, x.y as f32, x.z as f32)
+            }
+            _ => panic!("Unknown variable type in set_uniform"),
         }
     }
 }
