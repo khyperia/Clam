@@ -2,7 +2,8 @@ use crate::{
     input::Input,
     kernel::Kernel,
     kernel_compilation::{SourceInfo, MANDELBOX},
-    settings::{KeyframeList, Settings},
+    keyframe_list::KeyframeList,
+    settings::Settings,
     Key,
 };
 use failure::Error;

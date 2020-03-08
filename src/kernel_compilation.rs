@@ -9,11 +9,11 @@ use khygl::create_compute_program;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
-    ffi::CStr,
-    fmt::Write,
+    ffi::{c_void, CStr},
     fs,
     fs::File,
     io::prelude::*,
+    path::Path,
     thread,
     time::{Duration, SystemTime},
 };
@@ -102,6 +102,9 @@ pub struct ComputeShader {
 impl ComputeShader {
     fn new(sources: &[&str]) -> Result<Self, Error> {
         let shader = create_compute_program(sources)?;
+        if let Ok(path) = std::env::var("CLAM5_BINARY") {
+            dump_binary(shader, path)?;
+        }
         Ok(Self {
             shader,
             uniforms: uniforms(shader)?,
@@ -221,6 +224,7 @@ fn shader_version() -> Result<String, Error> {
 }
 
 fn generate_src(original_source: &mut String, settings: &Settings, local_size: usize) {
+    use std::fmt::Write;
     let mut header = String::new();
     let version = match shader_version() {
         Ok(v) => v,
@@ -291,4 +295,36 @@ fn settings_from_str(src: &str) -> Settings {
             .push(SettingValue::new(name, new_value, false));
     }
     result
+}
+
+fn dump_binary(program: GLuint, path: impl AsRef<Path>) -> Result<(), Error> {
+    unsafe {
+        let mut program_binary_length = 0;
+        gl::GetProgramiv(
+            program,
+            gl::PROGRAM_BINARY_LENGTH,
+            &mut program_binary_length,
+        );
+        check_gl()?;
+        let mut binary = vec![0u8; program_binary_length as usize];
+        let mut length = 0;
+        let mut binary_format = 0;
+        gl::GetProgramBinary(
+            program,
+            program_binary_length,
+            &mut length,
+            &mut binary_format,
+            binary.as_mut_ptr() as *mut c_void,
+        );
+        check_gl()?;
+        if program_binary_length != length {
+            println!(
+                "Warning: GL_PROGRAM_BINARY_LENGTH ({}) didn't match glGetProgramBinary length ({})",
+                program_binary_length, length
+            );
+        }
+        File::create(path)?.write_all(&binary[0..(length as usize)])?;
+        println!("Wrote binary (of format 0x{:x})", binary_format);
+    }
+    Ok(())
 }

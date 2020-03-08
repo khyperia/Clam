@@ -12,6 +12,7 @@ struct GlDisplay {
     fps: FpsCounter,
     width: usize,
     height: usize,
+    no_text: bool,
 }
 
 impl Display for GlDisplay {
@@ -21,6 +22,7 @@ impl Display for GlDisplay {
         let texture_renderer = TextureRenderer::new()?;
         let text_renderer = TextRenderer::new(20.0)?;
         let fps = FpsCounter::new(1.0);
+        let no_text = std::env::var("CLAM5_NO_TEXT").is_ok();
 
         Ok(Self {
             interactive_kernel,
@@ -29,6 +31,7 @@ impl Display for GlDisplay {
             fps,
             width: size.0,
             height: size.1,
+            no_text,
         })
     }
 
@@ -40,18 +43,20 @@ impl Display for GlDisplay {
             .render(&img, (self.width as f32, self.height as f32))
             .go()?;
 
-        let display = format!(
-            "{:.2} fps\n{}",
-            self.fps.value(),
-            self.interactive_kernel.status()
-        );
-        self.text_renderer.render(
-            &self.texture_renderer,
-            &display,
-            [1.0, 0.75, 0.75, 1.0],
-            (10, 10),
-            (self.width, self.height),
-        )?;
+        if !self.no_text {
+            let display = format!(
+                "{:.2} fps\n{}",
+                self.fps.value(),
+                self.interactive_kernel.status()
+            );
+            self.text_renderer.render(
+                &self.texture_renderer,
+                &display,
+                [1.0, 0.75, 0.75, 1.0],
+                (10, 10),
+                (self.width, self.height),
+            )?;
+        }
         self.fps.tick();
         check_gl()?;
         Ok(())

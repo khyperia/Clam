@@ -1,7 +1,5 @@
 use crate::{
-    kernel_compilation::RealizedSource,
-    settings::{KeyframeList, Settings},
-    Key,
+    kernel_compilation::RealizedSource, keyframe_list::KeyframeList, settings::Settings, Key,
 };
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
 use failure::Error;
@@ -159,6 +157,12 @@ impl Input {
                 }
                 crate::check_gl()?;
                 *settings.find_mut("gamma").unwrap_float_mut() = 0.0;
+            }
+            Key::Q => {
+                settings.all_constants();
+            }
+            Key::E => {
+                settings.clear_constants();
             }
             _ => (),
         }

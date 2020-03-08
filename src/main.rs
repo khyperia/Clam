@@ -7,6 +7,7 @@ mod input;
 mod interactive;
 mod kernel;
 mod kernel_compilation;
+mod keyframe_list;
 mod progress;
 mod setting_value;
 mod settings;
@@ -17,10 +18,11 @@ use display::Key;
 use failure::{err_msg, Error};
 use kernel::Kernel;
 use kernel_compilation::MANDELBOX;
+use keyframe_list::KeyframeList;
 use khygl::{check_gl, texture::CpuTexture};
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
-use settings::{KeyframeList, Settings};
+use settings::Settings;
 use std::{
     env::args,
     fs::File,
@@ -197,8 +199,6 @@ fn pngseq_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, gifize: bool) -> 
             "output.gif",
         ])?;
     }
-    // run(`ffmpeg -v 0 -i $(animdir)/%06d.png -vf palettegen -y palette.png`)
-    // run(`ffmpeg -v 0 -framerate $fps -loop $loop -i $(animdir)/%06d.png -i palette.png -lavfi paletteuse -y $fn`)
     Ok(())
 }
 

@@ -2,7 +2,6 @@
 layout(rgba32f, binding = 0) uniform image2D img_output;
 layout(rgba32f, binding = 1) uniform image2D scratch;
 layout(r32ui, binding = 2) uniform uimage2D randbuf;
-// precision highp float;
 
 #define TAU 6.28318530718
 #define FLT_MAX 1E+37
@@ -180,7 +179,8 @@ float Remap(float value, float iMin, float iMax, float oMin, float oMax)
 vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords)
 {
     float x = Remap(screenCoords.x, 0, 1, fov_left, fov_right);
-    float y = Remap(screenCoords.y, 0, 1, fov_top, fov_bottom);
+    // flip y
+    float y = Remap(screenCoords.y, 1, 0, fov_top, fov_bottom);
     float z = 1.0f;
     vec3 dir = normalize(vec3(x, y, z));
     vec3 right = cross(forward, upvec);
@@ -192,7 +192,8 @@ vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords, float calcFov)
 {
     screenCoords *= -calcFov;
     float len2 = dot(screenCoords, screenCoords);
-    vec3 lookvec = vec3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+    // flip y
+    vec3 lookvec = vec3(2 * screenCoords.x, -2 * screenCoords.y, len2 - 1) / -(len2 + 1);
     vec3 right = cross(forward, upvec);
     return lookvec.x * right + lookvec.y * upvec + lookvec.z * forward;
 }
@@ -719,7 +720,7 @@ void main()
     vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
 
     Random rand = GetRand(x, y);
-    Ray ray = Camera(x, height - (y + 1), width, height, rand);
+    Ray ray = Camera(x, y, width, height, rand);
 #ifdef PREVIEW
     vec3 colorComponents = PreviewTrace(ray, width, height);
 #else
