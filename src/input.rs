@@ -158,12 +158,6 @@ impl Input {
                 crate::check_gl()?;
                 *settings.find_mut("gamma").unwrap_float_mut() = 0.0;
             }
-            Key::Q => {
-                settings.all_constants();
-            }
-            Key::E => {
-                settings.clear_constants();
-            }
             _ => (),
         }
         Ok(())

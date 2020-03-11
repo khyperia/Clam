@@ -54,7 +54,7 @@ pub fn run<Disp: Display + 'static>(request_size: (f64, f64)) -> Result<(), Erro
             request_size.1,
         ));
     let windowed_context = ContextBuilder::new()
-        .with_vsync(true)
+        //.with_vsync(true)
         .build_windowed(wb, &el)?;
 
     let windowed_context = unsafe { windowed_context.make_current().map_err(|(_, e)| e)? };

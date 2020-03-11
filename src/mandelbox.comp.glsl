@@ -17,8 +17,8 @@ uniform float folding_limit;            // 1.0 -0.5 const
 uniform float fixed_radius_2;           // 1.0 -0.5 const
 uniform float min_radius_2;             // 0.125 -0.5 const
 uniform float dof_amount;               // 0.01 -1.0
-uniform float bloom_amount;             // 0.1 0.5
-uniform float bloom_size;               // 0.01 -1.0
+uniform float bloom_amount;             // 0.1 -0.125
+uniform float bloom_size;               // 0.01 -0.25
 uniform float fog_distance;             // 10.0 -1.0
 uniform float fog_brightness;           // 1.0 -0.5
 uniform vec3 light_pos_1;               // 3.0 3.5 2.5 1.0
@@ -33,7 +33,7 @@ uniform float surface_color_variance;   // 0.0625 -0.25
 uniform float surface_color_shift;      // 0.0 0.125
 uniform float surface_color_saturation; // 0.75 0.125
 uniform float surface_color_value;      // 1.0 0.125
-uniform float surface_color_gloss;      // 1.0 0.125
+uniform float surface_color_gloss;      // 0.0 0.25
 uniform vec3 plane;                     // 3.0 3.5 2.5 1.0
 uniform float rotation;                 // 0.0 0.125
 uniform float bailout;                  // 64.0 -0.25 const
@@ -224,7 +224,11 @@ Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
     vec2 screenCoords = vec2(float(x) / float(width), float(y) / float(height));
     vec3 direction = RayDir(look, up, screenCoords);
 #else
+#ifdef NOANTIALIAS
+    vec2 antialias = vec2(0, 0);
+#else
     vec2 antialias = vec2(Random_Next(rand), Random_Next(rand)) - vec2(0.5f, 0.5f);
+#endif
     vec2 screenCoords =
         vec2(float(x) - float(width) / 2.0, float(y) - float(height) / 2.0) + antialias;
     float calcFov = fov * 2.0 / float(width + height);
@@ -530,7 +534,14 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             if (Random_Next(rand) < material.gloss)
             {
                 // specular
-                newDir = ray.dir + 2.0f * cosTheta * material.normal;
+                if (dot(ray.dir, material.normal) > 0)
+                {
+                    newDir = ray.dir;
+                }
+                else
+                {
+                    newDir = ray.dir + 2.0f * cosTheta * material.normal;
+                }
                 // material.color = vec3(1.0, 1.0, 1.0);
             }
             else

@@ -122,6 +122,7 @@ impl<T: TextureType> Kernel<T> {
         )?;
 
         if *settings != self.old_settings {
+            //println!("Settings out of date, resetting frame");
             self.old_settings = settings.clone();
             self.frame = 0;
         }
