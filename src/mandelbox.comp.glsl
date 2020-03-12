@@ -12,12 +12,12 @@ uniform vec3 look;                      // 0.0 0.0 -1.0 1.0
 uniform vec3 up;                        // 0.0 1.0 0.0 1.0
 uniform float fov;                      // 1.0 -1.0
 uniform float focal_distance;           // 3.0 -1.0
-uniform float scale;                    // -2.0 0.5 const
-uniform float folding_limit;            // 1.0 -0.5 const
-uniform float fixed_radius_2;           // 1.0 -0.5 const
-uniform float min_radius_2;             // 0.125 -0.5 const
+uniform float scale;                    // -2.0 0.5
+uniform float folding_limit;            // 1.0 -0.5
+uniform float fixed_radius_2;           // 1.0 -0.5
+uniform float min_radius_2;             // 0.125 -0.5
 uniform float dof_amount;               // 0.01 -1.0
-uniform float bloom_amount;             // 0.1 -0.125
+uniform float bloom_amount;             // 0.1 -0.25
 uniform float bloom_size;               // 0.01 -0.25
 uniform float fog_distance;             // 10.0 -1.0
 uniform float fog_brightness;           // 1.0 -0.5
@@ -36,20 +36,20 @@ uniform float surface_color_value;      // 1.0 0.125
 uniform float surface_color_gloss;      // 0.0 0.25
 uniform vec3 plane;                     // 3.0 3.5 2.5 1.0
 uniform float rotation;                 // 0.0 0.125
-uniform float bailout;                  // 64.0 -0.25 const
-uniform float bailout_normal;           // 1024.0 -1.0 const
-uniform float de_multiplier;            // 0.9375 0.125 const
-uniform float max_ray_dist;             // 16.0 -0.5 const
-uniform float quality_first_ray;        // 2.0 -0.5 const
-uniform float quality_rest_ray;         // 64.0 -0.5 const
-uniform float gamma;                    // 0.0 0.25 const
-uniform float fov_left;                 // -1.0 1.0 const
-uniform float fov_right;                // 1.0 1.0 const
-uniform float fov_top;                  // 1.0 1.0 const
-uniform float fov_bottom;               // -1.0 1.0 const
-uniform uint max_iters;                 // 20 const
-uniform uint max_ray_steps;             // 256 const
-uniform uint num_ray_bounces;           // 4 const
+uniform float bailout;                  // 64.0 -0.25
+uniform float bailout_normal;           // 1024.0 -1.0
+uniform float de_multiplier;            // 0.9375 0.125
+uniform float max_ray_dist;             // 16.0 -0.5
+uniform float quality_first_ray;        // 2.0 -0.5
+uniform float quality_rest_ray;         // 64.0 -0.5
+uniform float gamma;                    // 0.0 0.25
+uniform float fov_left;                 // -1.0 1.0
+uniform float fov_right;                // 1.0 1.0
+uniform float fov_top;                  // 1.0 1.0
+uniform float fov_bottom;               // -1.0 1.0
+uniform uint max_iters;                 // 20
+uniform uint max_ray_steps;             // 256
+uniform uint num_ray_bounces;           // 4
 uniform uint width;
 uniform uint height;
 uniform uint frame;

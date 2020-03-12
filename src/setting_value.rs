@@ -7,7 +7,6 @@ pub struct SettingValue {
     key: String,
     value: SettingValueEnum,
     default_value: SettingValueEnum,
-    is_const: bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -19,12 +18,11 @@ pub enum SettingValueEnum {
 }
 
 impl SettingValue {
-    pub fn new(key: String, value: SettingValueEnum, is_const: bool) -> Self {
+    pub fn new(key: String, value: SettingValueEnum) -> Self {
         Self {
             key,
             value: value.clone(),
             default_value: value,
-            is_const,
         }
     }
 
@@ -87,17 +85,6 @@ impl SettingValue {
         }
     }
 
-    pub fn is_const(&self) -> bool {
-        self.is_const
-    }
-
-    pub fn set_const(&mut self, value: bool) {
-        if let SettingValueEnum::Define(_) = self.value {
-            return;
-        }
-        self.is_const = value;
-    }
-
     pub fn unwrap_u32(&self) -> u64 {
         match self.value {
             SettingValueEnum::Int(value) => value,
@@ -142,35 +129,9 @@ impl SettingValue {
         }
     }
 
-    pub fn format_glsl(&self, src: &mut String) -> Option<String> {
+    pub fn format_glsl(&self) -> Option<String> {
+        // TODO
         match self.value {
-            SettingValueEnum::Int(x) => {
-                if self.is_const() {
-                    let replacement = format!("#define {} {}", self.key(), x);
-                    *src = src.replace(&format!("uniform uint {};", self.key()), &replacement);
-                }
-                None
-            }
-            SettingValueEnum::Float(x, _) => {
-                if self.is_const() {
-                    let replacement = format!("#define {} {:.16}", self.key(), x);
-                    *src = src.replace(&format!("uniform float {};", self.key()), &replacement);
-                }
-                None
-            }
-            SettingValueEnum::Vec3(x, _) => {
-                if self.is_const() {
-                    let replacement = format!(
-                        "#define {} vec3({:.16}, {:.16}, {:.16})",
-                        self.key(),
-                        x.x,
-                        x.y,
-                        x.z
-                    );
-                    *src = src.replace(&format!("uniform vec3 {};", self.key()), &replacement);
-                }
-                None
-            }
             SettingValueEnum::Define(val) => {
                 if val {
                     Some(format!("#define {} 1", self.key()))
@@ -178,18 +139,12 @@ impl SettingValue {
                     None
                 }
             }
+            _ => None,
         }
     }
 }
 
 impl SettingValueEnum {
-    pub fn is_define(&self) -> bool {
-        match self {
-            SettingValueEnum::Define(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn kinds_match(&self, other: &SettingValueEnum) -> bool {
         match (self, other) {
             (SettingValueEnum::Int(_), SettingValueEnum::Int(_)) => true,

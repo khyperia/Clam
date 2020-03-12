@@ -95,6 +95,7 @@ impl<T: TextureType> Kernel<T> {
     fn try_rebuild(&mut self, settings: &Settings) -> Result<(), Error> {
         if settings.check_rebuild(&self.old_settings) || self.kernel.is_none() {
             println!("Rebuilding");
+            self.old_settings = Settings::new();
             let new_kernel = self.realized_source.rebuild(settings, self.local_size);
             match new_kernel {
                 Ok(k) => {
@@ -122,10 +123,9 @@ impl<T: TextureType> Kernel<T> {
         )?;
 
         if *settings != self.old_settings {
-            //println!("Settings out of date, resetting frame");
-            self.old_settings = settings.clone();
             self.frame = 0;
         }
+        let old_settings = std::mem::replace(&mut self.old_settings, settings.clone());
 
         if let Some(kernel) = &self.kernel {
             let (width, height) = self.data.size();
@@ -135,7 +135,13 @@ impl<T: TextureType> Kernel<T> {
                     ("height", _) => uniform.set_arg_u32(height as u32)?,
                     ("frame", _) => uniform.set_arg_u32(self.frame)?,
                     (_, gl::IMAGE_2D) | (_, gl::UNSIGNED_INT_IMAGE_2D) => (),
-                    (name, _) => settings.find(name).value().set_uniform(uniform)?,
+                    (name, _) => {
+                        let old = old_settings.get(&name).map(|v| v.value());
+                        let new = settings.find(name).value();
+                        if old != Some(new) {
+                            new.set_uniform(uniform)?;
+                        }
+                    }
                 }
             }
         }

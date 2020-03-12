@@ -88,8 +88,7 @@ fn progress_count(_: usize) -> usize {
 
 fn image(width: usize, height: usize, rpp: usize) -> Result<(), Error> {
     let realized_source = MANDELBOX.get()?;
-    let mut loaded_settings = Settings::load("settings.clam5", realized_source.default_settings())?;
-    loaded_settings.all_constants();
+    let loaded_settings = Settings::load("settings.clam5", realized_source.default_settings())?;
     let mut kernel = Kernel::create(realized_source, width, height)?;
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
@@ -256,8 +255,7 @@ fn video(
     };
 
     for frame in 0..frames {
-        let mut settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
-        settings.clear_constants();
+        let settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
         video_one(rpp, &mut kernel, &settings, &send)?;
         let value = (frame + 1) as f64 / frames as f64;
         println!("{}", progress.time_str(value));

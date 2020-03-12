@@ -20,11 +20,8 @@ impl FpsCounter {
         let duration = now.duration_since(self.last_fps);
         self.last_fps = now;
 
-        // as_secs returns u64, subsec_nanos returns u32
-        let time = duration.as_secs() as f64 + f64::from(duration.subsec_nanos()) / 1_000_000_000.0;
-
         let weight = self.weight / self.spf;
-        self.spf = (time + (self.spf * weight)) / (weight + 1.0);
+        self.spf = (duration.as_secs_f64() + (self.spf * weight)) / (weight + 1.0);
     }
 
     pub fn value(&self) -> f64 {

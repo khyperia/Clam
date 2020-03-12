@@ -34,7 +34,7 @@ impl Input {
         // free:
         // QE
         //
-        //
+        // CB
         println!("WASD, [space]Z, IJKL, OU: move camera");
         println!("RF: focal distance/move speed");
         println!("NM: field of view");
@@ -42,7 +42,6 @@ impl Input {
             "Y: Write settings to disk. P: Read settings. V: Write keyframe. G: Play keyframes."
         );
         println!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
-        println!("C: Toggle constant. B: Recompile kernel with new constants.");
         println!("X: Copy position to lightsource position");
         println!("`: Spaceship!");
         println!("H: Print this message");
@@ -129,10 +128,6 @@ impl Input {
             Key::Left => settings.values[self.index].change_one(false),
             Key::Right => settings.values[self.index].change_one(true),
             Key::T => settings.values[self.index].toggle(),
-            Key::C => {
-                let is_const = settings.values[self.index].is_const();
-                settings.values[self.index].set_const(!is_const);
-            }
             Key::X => {
                 let pos = settings.find("pos").value().clone();
                 settings.find_mut("light_pos_1").set_value(pos);

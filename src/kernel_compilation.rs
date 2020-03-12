@@ -102,6 +102,13 @@ pub struct ComputeShader {
 impl ComputeShader {
     fn new(sources: &[&str]) -> Result<Self, Error> {
         let shader = create_compute_program(sources)?;
+        if !shader.success {
+            return Err(err_msg(format!("Failed to compile shader: {}", shader.log)));
+        }
+        if !shader.log.is_empty() {
+            println!("Shader compilation log: {}", shader.log);
+        }
+        let shader = shader.shader;
         if let Ok(path) = std::env::var("CLAM5_BINARY") {
             dump_binary(shader, path)?;
         }
@@ -236,7 +243,7 @@ fn generate_src(original_source: &mut String, settings: &Settings, local_size: u
     writeln!(&mut header, "#version {}", version).unwrap();
     writeln!(&mut header, "layout(local_size_x = {}) in;", local_size).unwrap();
     for value in &settings.values {
-        if let Some(header_item) = value.format_glsl(original_source) {
+        if let Some(header_item) = value.format_glsl() {
             writeln!(&mut header, "{}", header_item).unwrap();
         }
     }
@@ -248,7 +255,7 @@ const PARSE: &str = concat!(
     r"uniform *(?P<kinduint>uint) (?P<nameuint>[a-zA-Z0-9_]+) *; *// *(?P<valueuint>([-+]?[0-9]+))|",
     r"uniform *(?P<kindfloat>float) (?P<namefloat>[a-zA-Z0-9_]+) *; *// *(?P<valuefloat>[-+]?[0-9]+(?:\.[0-9]+)?) +(?P<changefloat>[-+]?[0-9]+(?:\.[0-9]+)?)?|",
     r"uniform *(?P<kindvec3>vec3) (?P<namevec3>[a-zA-Z0-9_]+) *; *// *(?P<valuevec3>([-+]?[0-9]+(?:\.[0-9]+)? +){3}) *(?P<changevec3>[-+]?[0-9]+(?:\.[0-9]+)?)?",
-    ") *(?P<const>const)? *\r?$"
+    ") *\r?$"
 );
 
 fn settings_from_str(src: &str) -> Settings {
@@ -275,24 +282,19 @@ fn settings_from_str(src: &str) -> Settings {
         } else {
             panic!("Regex returned invalid kind");
         };
-        result.values.push(SettingValue::new(
-            name.to_string(),
-            setting,
-            cap.name("const").is_some(),
-        ));
+        result
+            .values
+            .push(SettingValue::new(name.to_string(), setting));
     }
     assert!(once, "Regex should get at least one setting");
     result.values.push(SettingValue::new(
         "render_scale".to_string(),
         SettingValueEnum::Int(1),
-        false,
     ));
     for cap in DEFINES.captures_iter(src) {
         let name = cap["name"].to_string();
         let new_value = SettingValueEnum::Define(false);
-        result
-            .values
-            .push(SettingValue::new(name, new_value, false));
+        result.values.push(SettingValue::new(name, new_value));
     }
     result
 }

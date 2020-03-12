@@ -22,19 +22,7 @@ impl Settings {
         Self { values: Vec::new() }
     }
 
-    pub fn clear_constants(&mut self) {
-        for value in &mut self.values {
-            value.set_const(false);
-        }
-    }
-
-    pub fn all_constants(&mut self) {
-        for value in &mut self.values {
-            value.set_const(true);
-        }
-    }
-
-    fn get(&self, key: &str) -> Option<&SettingValue> {
+    pub fn get(&self, key: &str) -> Option<&SettingValue> {
         for value in &self.values {
             if value.key() == key {
                 return Some(value);
@@ -43,7 +31,7 @@ impl Settings {
         None
     }
 
-    fn get_mut(&mut self, key: &str) -> Option<&mut SettingValue> {
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut SettingValue> {
         for value in &mut self.values {
             if value.key() == key {
                 return Some(value);
@@ -133,11 +121,9 @@ impl Settings {
                 ),
                 SettingValueEnum::Define(_) => SettingValueEnum::Define(new_value.parse()?),
             };
-            result.values.push(SettingValue::new(
-                key.to_string(),
-                val_enum,
-                reference.is_const(),
-            ));
+            result
+                .values
+                .push(SettingValue::new(key.to_string(), val_enum));
         }
         Ok((result, read_any))
     }
@@ -157,28 +143,25 @@ impl Settings {
         let mut builder = String::new();
         for (ind, value) in self.values.iter().enumerate() {
             let selected = if ind == input.index { "*" } else { " " };
-            let constant = if value.is_const() { "@" } else { " " };
             let key = value.key();
             match value.value() {
-                SettingValueEnum::Int(v) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
-                        .expect("Failed to write line to file")
-                }
+                SettingValueEnum::Int(v) => writeln!(&mut builder, "{} {} = {}", selected, key, v)
+                    .expect("Failed to write line to file"),
                 SettingValueEnum::Float(v, _) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
+                    writeln!(&mut builder, "{} {} = {}", selected, key, v)
                         .expect("Failed to write line to file")
                 }
                 SettingValueEnum::Vec3(v, _) => {
                     // TODO
                     writeln!(
                         &mut builder,
-                        "{}{}{} = {} {} {}",
-                        selected, constant, key, v.x, v.y, v.z
+                        "{} {} = {} {} {}",
+                        selected, key, v.x, v.y, v.z
                     )
                     .expect("Failed to write line to file")
                 }
                 SettingValueEnum::Define(v) => {
-                    writeln!(&mut builder, "{}{}{} = {}", selected, constant, key, v)
+                    writeln!(&mut builder, "{} {} = {}", selected, key, v)
                         .expect("Failed to write line to file")
                 }
             }
@@ -186,45 +169,22 @@ impl Settings {
         builder
     }
 
-    #[allow(clippy::float_cmp)]
     pub fn check_rebuild(&self, against: &Settings) -> bool {
         for value in &self.values {
             if let Some(corresponding) = against.get(value.key()) {
-                if value.is_const() != corresponding.is_const() {
-                    return true;
-                }
-                if value.is_const() || value.value().is_define() {
-                    match (value.value(), corresponding.value()) {
-                        (SettingValueEnum::Int(value), SettingValueEnum::Int(corresponding)) => {
-                            if value != corresponding {
-                                return true;
-                            }
+                match (value.value(), corresponding.value()) {
+                    (
+                        SettingValueEnum::Define(define_value),
+                        SettingValueEnum::Define(corresponding),
+                    ) => {
+                        if define_value != corresponding {
+                            return true;
                         }
-                        (
-                            SettingValueEnum::Float(value, _),
-                            SettingValueEnum::Float(corresponding, _),
-                        ) => {
-                            if value != corresponding {
-                                return true;
-                            }
+                    }
+                    _ => {
+                        if !value.value().kinds_match(corresponding.value()) {
+                            return true;
                         }
-                        (
-                            SettingValueEnum::Vec3(value, _),
-                            SettingValueEnum::Vec3(corresponding, _),
-                        ) => {
-                            if value != corresponding {
-                                return true;
-                            }
-                        }
-                        (
-                            SettingValueEnum::Define(value),
-                            SettingValueEnum::Define(corresponding),
-                        ) => {
-                            if value != corresponding {
-                                return true;
-                            }
-                        }
-                        _ => return true,
                     }
                 }
             } else {
