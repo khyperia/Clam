@@ -1,9 +1,8 @@
 use crate::{
     check_gl, display, display::Display, fps_counter::FpsCounter,
-    interactive::SyncInteractiveKernel, settings::Settings, Key,
+    interactive::SyncInteractiveKernel, settings::Settings, Error, Key,
 };
 use cgmath::{prelude::*, Matrix4, Vector3};
-use failure::Error;
 use gl::types::*;
 use khygl::{render_text::TextRenderer, render_texture::TextureRenderer, Rect};
 

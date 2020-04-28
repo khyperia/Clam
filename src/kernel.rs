@@ -2,8 +2,8 @@ use crate::{
     check_gl,
     kernel_compilation::{ComputeShader, RealizedSource},
     settings::Settings,
+    Error,
 };
-use failure::{self, Error};
 use khygl::texture::{CpuTexture, Texture, TextureType};
 
 struct KernelImage<T: TextureType> {
@@ -36,7 +36,7 @@ impl<T: TextureType> KernelImage<T> {
         new_width: usize,
         new_height: usize,
         new_scale: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         let old_size = self.size();
         self.width = new_width;
         self.height = new_height;
@@ -46,8 +46,10 @@ impl<T: TextureType> KernelImage<T> {
             self.output = Texture::new(new_size)?;
             self.scratch = Texture::new(new_size)?;
             self.randbuf = Texture::new(new_size)?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 }
 
@@ -110,41 +112,47 @@ impl<T: TextureType> Kernel<T> {
     }
 
     pub fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
-        self.data.resize(width, height, self.data.scale)?;
-        self.frame = 0;
+        if self.data.resize(width, height, self.data.scale)? {
+            self.frame = 0;
+        }
         Ok(())
     }
 
     fn update(&mut self, settings: &Settings) -> Result<(), Error> {
-        self.data.resize(
+        if self.data.resize(
             self.data.width,
             self.data.height,
             settings.find("render_scale").unwrap_u32() as usize,
-        )?;
-
-        if *settings != self.old_settings {
+        )? {
             self.frame = 0;
         }
-        let old_settings = std::mem::replace(&mut self.old_settings, settings.clone());
 
         if let Some(kernel) = &self.kernel {
+            let mut frame = None;
             let (width, height) = self.data.size();
             for uniform in kernel.uniforms() {
                 match (&uniform.name as &str, uniform.ty) {
                     ("width", _) => uniform.set_arg_u32(width as u32)?,
                     ("height", _) => uniform.set_arg_u32(height as u32)?,
-                    ("frame", _) => uniform.set_arg_u32(self.frame)?,
+                    ("frame", _) => frame = Some(uniform),
                     (_, gl::IMAGE_2D) | (_, gl::UNSIGNED_INT_IMAGE_2D) => (),
                     (name, _) => {
-                        let old = old_settings.get(&name).map(|v| v.value());
+                        let old = self.old_settings.get(&name).map(|v| v.value());
                         let new = settings.find(name).value();
                         if old != Some(new) {
                             new.set_uniform(uniform)?;
+                            self.frame = 0;
                         }
                     }
                 }
             }
+            // delay setting frame to get the reset if another variable changes
+            if let Some(frame) = frame {
+                frame.set_arg_u32(self.frame)?;
+            }
         }
+
+        self.old_settings = settings.clone();
 
         Ok(())
     }

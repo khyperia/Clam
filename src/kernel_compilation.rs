@@ -2,8 +2,8 @@ use crate::{
     check_gl, parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
     settings::Settings,
+    Error,
 };
-use failure::{err_msg, Error};
 use gl::types::*;
 use khygl::create_compute_program;
 use lazy_static::lazy_static;
@@ -103,7 +103,7 @@ impl ComputeShader {
     fn new(sources: &[&str]) -> Result<Self, Error> {
         let shader = create_compute_program(sources)?;
         if !shader.success {
-            return Err(err_msg(format!("Failed to compile shader: {}", shader.log)));
+            return Err(format!("Failed to compile shader: {}", shader.log).into());
         }
         if !shader.log.is_empty() {
             println!("Shader compilation log: {}", shader.log);
@@ -210,7 +210,7 @@ fn uniforms(program: GLuint) -> Result<Vec<Uniform>, Error> {
             let location = gl::GetUniformLocation(program, name_slice.as_ptr());
             check_gl()?;
             if location < 0 {
-                return Err(err_msg(format!("Could not find uniform: {}", name)));
+                return Err(format!("Could not find uniform: {}", name).into());
             }
             results.push(Uniform::new(name, ty, location, program));
         }
@@ -225,7 +225,7 @@ fn shader_version() -> Result<String, Error> {
         .to_str()?
         .split_whitespace()
         .next()
-        .ok_or_else(|| err_msg("GL_SHADING_LANGUAGE_VERSION is empty"))?
+        .ok_or_else(|| "GL_SHADING_LANGUAGE_VERSION is empty")?
         .replace(".", "");
     Ok(ver)
 }

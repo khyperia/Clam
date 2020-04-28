@@ -1,6 +1,5 @@
-use crate::kernel_compilation::Uniform;
+use crate::{kernel_compilation::Uniform, Error};
 use cgmath::Vector3;
-use failure::Error;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SettingValue {

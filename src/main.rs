@@ -15,7 +15,6 @@ mod settings;
 use cgmath::Vector3;
 use chrono::prelude::*;
 use display::Key;
-use failure::{err_msg, Error};
 use kernel::Kernel;
 use kernel_compilation::MANDELBOX;
 use keyframe_list::KeyframeList;
@@ -32,6 +31,8 @@ use std::{
     str,
     sync::mpsc,
 };
+
+type Error = Box<dyn std::error::Error>;
 
 fn parse_vector3(v: &str) -> Option<Vector3<f64>> {
     let mut split = v.split_ascii_whitespace();
@@ -131,7 +132,7 @@ impl std::str::FromStr for VideoFormat {
         } else if s.eq_ignore_ascii_case("gif") {
             Ok(VideoFormat::Gif)
         } else {
-            Err(failure::err_msg("Invalid video format"))
+            Err("Invalid video format".into())
         }
     }
 }
@@ -179,7 +180,7 @@ fn pngseq_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, gifize: bool) -> 
                 Ok(())
             } else {
                 println!("Run fail");
-                Err(failure::err_msg("ffmpeg failed"))
+                Err("ffmpeg failed".into())
             }
         }
         println!("A");
@@ -228,7 +229,7 @@ fn video_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, twitter: bool) -> 
     if res.success() {
         Ok(())
     } else {
-        Err(err_msg(format!("ffmpeg exited with error code: {}", res)))
+        Err(format!("ffmpeg exited with error code: {}", res).into())
     }
 }
 
@@ -248,10 +249,18 @@ fn video(
     let (send, recv) = mpsc::sync_channel(5);
 
     let thread_handle = match format {
-        VideoFormat::PngSeq => std::thread::spawn(move || pngseq_write(&recv, false)),
-        VideoFormat::Gif => std::thread::spawn(move || pngseq_write(&recv, true)),
-        VideoFormat::MP4 => std::thread::spawn(move || video_write(&recv, false)),
-        VideoFormat::Twitter => std::thread::spawn(move || video_write(&recv, true)),
+        VideoFormat::PngSeq => {
+            std::thread::spawn(move || pngseq_write(&recv, false).expect("Couldn't write frame"))
+        }
+        VideoFormat::Gif => {
+            std::thread::spawn(move || pngseq_write(&recv, true).expect("Couldn't write frame"))
+        }
+        VideoFormat::MP4 => {
+            std::thread::spawn(move || video_write(&recv, false).expect("Couldn't write frame"))
+        }
+        VideoFormat::Twitter => {
+            std::thread::spawn(move || video_write(&recv, true).expect("Couldn't write frame"))
+        }
     };
 
     for frame in 0..frames {
@@ -261,7 +270,7 @@ fn video(
         println!("{}", progress.time_str(value));
     }
     drop(send);
-    thread_handle.join().expect("Couldn't join thread")?;
+    thread_handle.join().expect("Couldn't join thread");
     println!("done");
     Ok(())
 }
@@ -289,30 +298,24 @@ fn parse_resolution(res: &str) -> Option<(usize, usize)> {
 
 fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
-        let (width, height) =
-            parse_resolution(&args[0]).ok_or_else(|| failure::err_msg("Invalid resolution"))?;
+        let (width, height) = parse_resolution(&args[0]).ok_or_else(|| "Invalid resolution")?;
         let rpp = args[1].parse()?;
         image(width, height, rpp)
     } else {
-        Err(failure::err_msg(
-            "--render needs two args: [width-height|0.25k..32k|twitter] [rpp]",
-        ))
+        Err("--render needs two args: [width-height|0.25k..32k|twitter] [rpp]".into())
     }
 }
 
 fn video_cmd(args: &[String]) -> Result<(), Error> {
     if args.len() == 5 {
-        let (width, height) =
-            parse_resolution(&args[0]).ok_or_else(|| failure::err_msg("Invalid resolution"))?;
+        let (width, height) = parse_resolution(&args[0]).ok_or_else(|| "Invalid resolution")?;
         let rpp = args[1].parse()?;
         let frames = args[2].parse()?;
         let wrap = args[3].parse()?;
         let format = args[4].parse()?;
         video(width, height, rpp, frames, wrap, format)
     } else {
-        Err(failure::err_msg(
-            "--video needs four args: [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]",
-        ))
+        Err("--video needs four args: [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]".into())
     }
 }
 

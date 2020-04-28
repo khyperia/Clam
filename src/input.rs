@@ -1,8 +1,7 @@
 use crate::{
-    kernel_compilation::RealizedSource, keyframe_list::KeyframeList, settings::Settings, Key,
+    kernel_compilation::RealizedSource, keyframe_list::KeyframeList, settings::Settings, Error, Key,
 };
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
-use failure::Error;
 use std::{
     collections::{hash_map::Entry, HashMap},
     time::Instant,

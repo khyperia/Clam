@@ -1,8 +1,7 @@
 use crate::{
-    kernel_compilation::RealizedSource, setting_value::SettingValueEnum, settings::Settings,
+    kernel_compilation::RealizedSource, setting_value::SettingValueEnum, settings::Settings, Error,
 };
 use cgmath::Vector3;
-use failure::Error;
 use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter, Write},
@@ -18,11 +17,11 @@ fn interpolate_float(p0: f64, p1: f64, p2: f64, p3: f64, t: f64, linear: bool) -
     } else {
         let t2 = t * t;
         let t3 = t2 * t;
-        (((2.0 * p1)
+        ((2.0 * p1)
             + (-p0 + p2) * t
             + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
             + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
-            / 2.0)
+            / 2.0
     }
 }
 

@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 cgmath = { version = "*", default-features = false }
 chrono = { version = "*", default-features = false, features = ["clock"] }
-failure = { version = "*", default-features = false }
 gl = { version = "*", default-features = false }
 glutin = { version = "*", default-features = false }
 khygl = { git = "https://github.com/khyperia/khygl.git", default-features = false }

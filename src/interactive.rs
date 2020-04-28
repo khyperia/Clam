@@ -4,9 +4,8 @@ use crate::{
     kernel_compilation::{SourceInfo, MANDELBOX},
     keyframe_list::KeyframeList,
     settings::Settings,
-    Key,
+    Error, Key,
 };
-use failure::Error;
 use khygl::texture::{Texture, TextureType};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -27,7 +26,6 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
         let source_info = MANDELBOX;
         let reload = Arc::new(AtomicBool::new(false));
         let reload2 = Arc::downgrade(&reload);
-        // TODO: stop watching once `self` dies
         source_info.watch(move || match reload2.upgrade() {
             Some(r) => {
                 r.store(true, Ordering::Relaxed);

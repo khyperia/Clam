@@ -1,4 +1,4 @@
-use failure::Error;
+use crate::Error;
 pub use glutin::event::VirtualKeyCode as Key;
 use glutin::{
     self,
@@ -64,7 +64,7 @@ pub fn run<Disp: Display + 'static>(request_size: (f64, f64)) -> Result<(), Erro
     gl::load_with(|symbol| windowed_context.get_proc_address(symbol) as *const _);
 
     if !gl::GetError::is_loaded() {
-        return Err(failure::err_msg("glGetError not loaded"));
+        return Err("glGetError not loaded".into());
     }
 
     if cfg!(debug_assertions) {

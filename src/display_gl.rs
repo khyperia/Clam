@@ -1,8 +1,7 @@
 use crate::{
     check_gl, display, display::Display, fps_counter::FpsCounter,
-    interactive::SyncInteractiveKernel, Key,
+    interactive::SyncInteractiveKernel, Error, Key,
 };
-use failure::Error;
 use khygl::{render_text::TextRenderer, render_texture::TextureRenderer};
 
 struct GlDisplay {
@@ -63,9 +62,11 @@ impl Display for GlDisplay {
     }
 
     fn resize(&mut self, size: (usize, usize)) -> Result<(), Error> {
-        self.width = size.0;
-        self.height = size.1;
-        self.interactive_kernel.resize(size.0, size.1)?;
+        if size != (self.width, self.height) {
+            self.width = size.0;
+            self.height = size.1;
+            self.interactive_kernel.resize(size.0, size.1)?;
+        }
         Ok(())
     }
 

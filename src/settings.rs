@@ -3,9 +3,9 @@ use crate::{
     kernel_compilation::RealizedSource,
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
+    Error,
 };
 use cgmath::{prelude::*, Vector3};
-use failure::{err_msg, Error};
 use std::{
     fmt::Write as FmtWrite,
     fs::File,
@@ -101,10 +101,7 @@ impl Settings {
             }
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();
             if split.len() != 2 {
-                return Err(err_msg(format!(
-                    "Invalid format in settings file: {}",
-                    line
-                )));
+                return Err(format!("Invalid format in settings file: {}", line).into());
             }
             let key = split[1].trim();
             let new_value = split[0].trim();
@@ -115,8 +112,7 @@ impl Settings {
                     SettingValueEnum::Float(new_value.parse()?, change)
                 }
                 SettingValueEnum::Vec3(_, change) => SettingValueEnum::Vec3(
-                    parse_vector3(new_value)
-                        .ok_or_else(|| failure::err_msg("invalid vector3 in save file"))?,
+                    parse_vector3(new_value).ok_or_else(|| "invalid vector3 in save file")?,
                     change,
                 ),
                 SettingValueEnum::Define(_) => SettingValueEnum::Define(new_value.parse()?),
@@ -151,15 +147,12 @@ impl Settings {
                     writeln!(&mut builder, "{} {} = {}", selected, key, v)
                         .expect("Failed to write line to file")
                 }
-                SettingValueEnum::Vec3(v, _) => {
-                    // TODO
-                    writeln!(
-                        &mut builder,
-                        "{} {} = {} {} {}",
-                        selected, key, v.x, v.y, v.z
-                    )
-                    .expect("Failed to write line to file")
-                }
+                SettingValueEnum::Vec3(v, _) => writeln!(
+                    &mut builder,
+                    "{} {} = {} {} {}",
+                    selected, key, v.x, v.y, v.z
+                )
+                .expect("Failed to write line to file"),
                 SettingValueEnum::Define(v) => {
                     writeln!(&mut builder, "{} {} = {}", selected, key, v)
                         .expect("Failed to write line to file")
