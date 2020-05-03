@@ -11,6 +11,7 @@ mod keyframe_list;
 mod progress;
 mod setting_value;
 mod settings;
+mod settings_input;
 
 use cgmath::Vector3;
 use chrono::prelude::*;

@@ -57,6 +57,7 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
             &mut self.settings,
             &mut self.keyframes,
             self.kernel.realized_source(),
+            self.kernel.kernel(),
         );
     }
 
@@ -86,6 +87,8 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
     }
 
     pub fn status(&self) -> String {
-        self.settings.status(&self.input)
+        self.input
+            .settings_input
+            .status(&self.settings, self.kernel.kernel())
     }
 }

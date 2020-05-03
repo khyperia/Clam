@@ -293,8 +293,10 @@ fn settings_from_str(src: &str) -> Settings {
     ));
     for cap in DEFINES.captures_iter(src) {
         let name = cap["name"].to_string();
-        let new_value = SettingValueEnum::Define(false);
-        result.values.push(SettingValue::new(name, new_value));
+        if result.get(&name) == None {
+            let new_value = SettingValueEnum::Define(false);
+            result.values.push(SettingValue::new(name, new_value));
+        }
     }
     result
 }

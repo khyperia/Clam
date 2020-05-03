@@ -54,7 +54,7 @@ impl SettingValue {
         }
     }
 
-    pub fn change(&mut self, increase: bool, mut dt: f64) {
+    pub fn change(&mut self, component: usize, increase: bool, mut dt: f64) {
         dt *= if increase { 1.0 } else { -1.0 };
         match self.value {
             SettingValueEnum::Float(ref mut value, change) => {
@@ -64,8 +64,18 @@ impl SettingValue {
                     *value += dt * change;
                 }
             }
-            SettingValueEnum::Vec3(_, _) => {
-                // TODO
+            SettingValueEnum::Vec3(ref mut value, change) => {
+                let value = match component {
+                    0 => &mut value.x,
+                    1 => &mut value.y,
+                    2 => &mut value.z,
+                    _ => panic!("Invalid component index"),
+                };
+                if change < 0.0 {
+                    *value *= (-change + 1.0).powf(dt);
+                } else {
+                    *value += dt * change;
+                }
             }
             SettingValueEnum::Define(_) | SettingValueEnum::Int(_) => (),
         }

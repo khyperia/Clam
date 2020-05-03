@@ -1,5 +1,9 @@
 use crate::{
-    kernel_compilation::RealizedSource, keyframe_list::KeyframeList, settings::Settings, Error, Key,
+    kernel_compilation::{ComputeShader, RealizedSource},
+    keyframe_list::KeyframeList,
+    settings::Settings,
+    settings_input::SettingsInput,
+    Error, Key,
 };
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
 use std::{
@@ -13,18 +17,18 @@ pub struct Input {
     cur_video_secs: f64,
     video_len_secs: f64,
     last_update: Instant,
-    pub index: usize,
+    pub settings_input: SettingsInput,
 }
 
 impl Input {
     pub fn new() -> Self {
         Self {
-            pressed_keys: Default::default(),
-            spaceship: Default::default(),
-            cur_video_secs: Default::default(),
-            video_len_secs: Default::default(),
+            pressed_keys: HashMap::new(),
+            spaceship: None,
+            cur_video_secs: 0.0,
+            video_len_secs: 0.0,
             last_update: Instant::now(),
-            index: Default::default(),
+            settings_input: SettingsInput::new(),
         }
     }
 
@@ -52,6 +56,7 @@ impl Input {
         settings: &mut Settings,
         keyframes: &mut KeyframeList,
         realized_source: &RealizedSource,
+        kernel: &Option<ComputeShader>,
     ) {
         let time = Instant::now();
         let new_key = if let Entry::Vacant(entry) = self.pressed_keys.entry(key) {
@@ -63,7 +68,7 @@ impl Input {
         if new_key {
             self.run(settings, keyframes, time);
         }
-        match self.run_down(key, settings, keyframes, realized_source) {
+        match self.run_down(key, settings, keyframes, realized_source, kernel) {
             Ok(()) => (),
             Err(err) => println!("Error handling key down event: {}", err),
         }
@@ -88,6 +93,7 @@ impl Input {
         settings: &mut Settings,
         keyframes: &mut KeyframeList,
         realized_source: &RealizedSource,
+        kernel: &Option<ComputeShader>,
     ) -> Result<(), Error> {
         match key {
             Key::H => {
@@ -111,22 +117,11 @@ impl Input {
                 self.video_len_secs = keyframes.len() as f64 * (10.0 / 6.0);
                 println!("Playing video")
             }
-            Key::Up => {
-                if self.index == 0 {
-                    self.index = settings.values.len() - 1;
-                } else {
-                    self.index -= 1;
-                }
-            }
-            Key::Down => {
-                self.index += 1;
-                if self.index >= settings.values.len() {
-                    self.index = 0;
-                }
-            }
-            Key::Left => settings.values[self.index].change_one(false),
-            Key::Right => settings.values[self.index].change_one(true),
-            Key::T => settings.values[self.index].toggle(),
+            Key::Up => self.settings_input.up_one(settings, kernel),
+            Key::Down => self.settings_input.down_one(settings, kernel),
+            Key::Left => self.settings_input.left_one(settings),
+            Key::Right => self.settings_input.right_one(settings),
+            Key::T => self.settings_input.toggle(settings),
             Key::X => {
                 let pos = settings.find("pos").value().clone();
                 settings.find_mut("light_pos_1").set_value(pos);
@@ -256,19 +251,19 @@ impl Input {
         decrease: Key,
     ) {
         if let Some(dt) = self.is_pressed(now, increase) {
-            settings.find_mut(key).change(true, dt * mul);
+            settings.find_mut(key).change(0, true, dt * mul);
         }
         if let Some(dt) = self.is_pressed(now, decrease) {
-            settings.find_mut(key).change(false, dt * mul);
+            settings.find_mut(key).change(0, false, dt * mul);
         }
     }
 
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
         if let Some(dt) = self.is_pressed(now, Key::Right) {
-            settings.values[self.index].change(true, dt);
+            self.settings_input.right_hold(settings, dt)
         }
         if let Some(dt) = self.is_pressed(now, Key::Left) {
-            settings.values[self.index].change(false, dt);
+            self.settings_input.left_hold(settings, dt)
         }
     }
 

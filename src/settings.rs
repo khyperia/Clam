@@ -1,5 +1,4 @@
 use crate::{
-    input::Input,
     kernel_compilation::RealizedSource,
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
@@ -7,7 +6,6 @@ use crate::{
 };
 use cgmath::{prelude::*, Vector3};
 use std::{
-    fmt::Write as FmtWrite,
     fs::File,
     io::{BufRead, BufReader, BufWriter, Lines, Write},
 };
@@ -131,35 +129,6 @@ impl Settings {
         let mut result = reference.clone();
         result.apply(&loaded);
         Ok(result)
-    }
-
-    pub fn status(&self, input: &Input) -> String {
-        //let mut keys = self.value_map.keys().collect::<Vec<_>>();
-        //keys.sort();
-        let mut builder = String::new();
-        for (ind, value) in self.values.iter().enumerate() {
-            let selected = if ind == input.index { "*" } else { " " };
-            let key = value.key();
-            match value.value() {
-                SettingValueEnum::Int(v) => writeln!(&mut builder, "{} {} = {}", selected, key, v)
-                    .expect("Failed to write line to file"),
-                SettingValueEnum::Float(v, _) => {
-                    writeln!(&mut builder, "{} {} = {}", selected, key, v)
-                        .expect("Failed to write line to file")
-                }
-                SettingValueEnum::Vec3(v, _) => writeln!(
-                    &mut builder,
-                    "{} {} = {} {} {}",
-                    selected, key, v.x, v.y, v.z
-                )
-                .expect("Failed to write line to file"),
-                SettingValueEnum::Define(v) => {
-                    writeln!(&mut builder, "{} {} = {}", selected, key, v)
-                        .expect("Failed to write line to file")
-                }
-            }
-        }
-        builder
     }
 
     pub fn check_rebuild(&self, against: &Settings) -> bool {

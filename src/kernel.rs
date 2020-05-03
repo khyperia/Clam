@@ -201,4 +201,8 @@ impl<T: TextureType> Kernel<T> {
             check_gl()
         }
     }
+
+    pub fn kernel(&self) -> &Option<ComputeShader> {
+        &self.kernel
+    }
 }
