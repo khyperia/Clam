@@ -35,7 +35,6 @@ uniform float surface_color_saturation; // 0.75 0.125
 uniform float surface_color_value;      // 1.0 0.125
 uniform float surface_color_gloss;      // 0.0 0.25
 uniform vec3 plane;                     // 3.0 3.5 2.5 1.0
-uniform float plane_radius;             // 1.0 -1.0
 uniform float rotation;                 // 0.0 0.125
 uniform float bailout;                  // 64.0 -0.25
 uniform float bailout_normal;           // 1024.0 -1.0
@@ -399,8 +398,7 @@ float De(vec3 offset, bool isNormal)
     float mbox = DeFractal(offset, isNormal, color);
     float light1 = DeSphere(light_pos_1, light_radius_1, offset);
 #ifdef PLANE
-    //float cut = Plane(offset, plane);
-    float cut = -DeSphere(plane, plane_radius, offset);
+    float cut = Plane(offset, plane);
     return min(light1, max(mbox, cut));
 #else
     return min(light1, mbox);

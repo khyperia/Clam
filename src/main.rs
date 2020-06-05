@@ -152,6 +152,36 @@ fn video_one(
     Ok(())
 }
 
+fn ffmpeg(args: &[&str]) -> Result<(), Error> {
+    let exe = if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    };
+    if Command::new(exe).args(args).status()?.success() {
+        Ok(())
+    } else {
+        Err("ffmpeg failed".into())
+    }
+}
+
+fn do_gifize() -> Result<(), Error> {
+    ffmpeg(&["-i", "%04d.png", "-vf", "palettegen", "-y", "palette.png"])?;
+    ffmpeg(&[
+        "-framerate",
+        "50",
+        "-i",
+        "%04d.png",
+        "-i",
+        "palette.png",
+        "-lavfi",
+        "paletteuse",
+        "-y",
+        "output.gif",
+    ])?;
+    Ok(())
+}
+
 fn pngseq_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, gifize: bool) -> Result<(), Error> {
     let mut i = 0;
     if gifize {
@@ -170,37 +200,19 @@ fn pngseq_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, gifize: bool) -> 
         i += 1;
     }
     if gifize {
-        fn ffmpeg(args: &[&str]) -> Result<(), Error> {
-            let exe = if cfg!(windows) {
-                "ffmpeg.exe"
-            } else {
-                "ffmpeg"
-            };
-            if Command::new(exe).args(args).status()?.success() {
-                println!("Run okay");
-                Ok(())
-            } else {
-                println!("Run fail");
-                Err("ffmpeg failed".into())
-            }
-        }
-        println!("A");
-        ffmpeg(&["-i", "%04d.png", "-vf", "palettegen", "-y", "palette.png"])?;
-        println!("B");
-        ffmpeg(&[
-            "-framerate",
-            "50",
-            "-i",
-            "%04d.png",
-            "-i",
-            "palette.png",
-            "-lavfi",
-            "paletteuse",
-            "-y",
-            "output.gif",
-        ])?;
+        do_gifize()?;
     }
     Ok(())
+}
+
+fn video_write_from_pngseq(twitter: bool) -> Result<(), Error> {
+    let mut args = Vec::new();
+    args.extend_from_slice(&["-framerate", "60", "-i", "%04d.png"]);
+    if twitter {
+        args.extend_from_slice(&["-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "2048K"]);
+    }
+    args.extend_from_slice(&["video.mp4", "-y"]);
+    ffmpeg(&args)
 }
 
 fn video_write(stream: &mpsc::Receiver<CpuTexture<[f32; 4]>>, twitter: bool) -> Result<(), Error> {
@@ -320,12 +332,31 @@ fn video_cmd(args: &[String]) -> Result<(), Error> {
     }
 }
 
-fn try_main() -> Result<(), Error> {
+fn pngseq(format: VideoFormat) -> Result<(), Error> {
+    match format {
+        VideoFormat::Gif => do_gifize(),
+        VideoFormat::MP4 => video_write_from_pngseq(false),
+        VideoFormat::Twitter => video_write_from_pngseq(false),
+        VideoFormat::PngSeq => Err("--video needs one arg: [format:mp4|twitter|gif]".into()),
+    }
+}
+
+fn pngseq_cmd(args: &[String]) -> Result<(), Error> {
+    if args.len() == 1 {
+        pngseq(args[0].parse()?)
+    } else {
+        Err("--video needs one arg: [format:mp4|twitter|gif]".into())
+    }
+}
+
+fn main() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && &arguments[0] == "--render" {
         display::run_headless(|| render(&arguments[1..]))??
     } else if arguments.len() > 2 && &arguments[0] == "--video" {
         display::run_headless(|| video_cmd(&arguments[1..]))??
+    } else if arguments.len() == 2 && &arguments[0] == "--pngseq" {
+        pngseq_cmd(&arguments[1..])?
     } else if cfg!(feature = "vr") && arguments.len() == 1 && &arguments[0] == "--vr" {
         #[cfg(feature = "vr")]
         display_vr::run()?
@@ -335,16 +366,10 @@ fn try_main() -> Result<(), Error> {
         println!("Usage:");
         println!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
         println!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
+        println!("clam5 --pngseq [format:mp4|twitter|gif]");
         #[cfg(feature = "vr")]
         println!("clam5 --vr");
         println!("clam5");
     }
     Ok(())
-}
-
-fn main() {
-    match try_main() {
-        Ok(()) => (),
-        Err(err) => println!("Error in main: {:?}", err),
-    }
 }
