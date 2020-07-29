@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 mv *.png ~/sync/photos/Fractals
 cd
 unison

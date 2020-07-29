@@ -14,7 +14,7 @@ impl Progress {
     fn elapsed(&self) -> f64 {
         let now = Instant::now();
         let duration = now - self.start;
-        duration.as_secs() as f64 + f64::from(duration.subsec_nanos()) / 1_000_000_000.0
+        duration.as_secs_f64()
     }
 
     pub fn time(&self, value: f64) -> f64 {

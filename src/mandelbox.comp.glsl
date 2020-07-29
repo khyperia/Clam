@@ -107,19 +107,6 @@ uint xorshift32(inout uint x)
 
 float Random_Next(inout Random this_) { return float(xorshift32(this_.seed)) / UINT_MAX; }
 
-/*
-struct Random new_Random(uint idx, uint frame, uint global_size)
-{
-    struct Random result;
-    result.seed = (ulong)idx + (ulong)global_size * (ulong)frame;
-    for (int i = 0; i < 8; i++)
-    {
-        Random_Next(result);
-    }
-    return result;
-}
-*/
-
 void Random_Init(inout Random this_)
 {
     this_.seed += gl_GlobalInvocationID.x + 10;
@@ -241,7 +228,7 @@ Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
     return result;
 }
 
-vec3 Mandelbulb(vec3 z, inout float dz, float Power)
+void Mandelbulb(inout vec3 z, inout float dz, float Power)
 {
     float r = length(z.xyz);
     // convert to polar coordinates
@@ -253,47 +240,44 @@ vec3 Mandelbulb(vec3 z, inout float dz, float Power)
     theta = theta * Power;
     phi = phi * Power;
     // convert back to cartesian coordinates
-    return zr * vec3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
+    z = zr * vec3(cos(theta) * cos(phi), cos(theta) * sin(phi), sin(theta));
 }
 
-vec3 BoxfoldD(vec3 z) { return clamp(z, -folding_limit, folding_limit) * 2.0f - z; }
+void Boxfold(inout vec3 z) { z = clamp(z, -folding_limit, folding_limit) * 2.0f - z; }
 
-vec3 ContBoxfoldD(vec3 z)
+void ContBoxfold(inout vec3 z)
 {
-    vec3 znew = z.xyz;
-    vec3 zsq = vec3(znew.x * znew.x, znew.y * znew.y, znew.z * znew.z);
+    vec3 zsq = z * z;
     zsq += vec3(1, 1, 1);
-    vec3 res = vec3(znew.x / sqrt(zsq.x), znew.y / sqrt(zsq.y), znew.z / sqrt(zsq.z));
+    vec3 res = z / sqrt(zsq);
     res *= sqrt(8.0f);
-    res = znew - res;
-    return vec3(res.x, res.y, res.z);
+    z -= res;
 }
 
-vec3 SpherefoldD(vec3 z, inout float dz)
+void Spherefold(inout vec3 z, inout float dz)
 {
     float factor = fixed_radius_2 / clamp(dot(z, z), min_radius_2, fixed_radius_2);
     dz *= factor;
-    return z * factor;
+    z *= factor;
 }
 
-vec3 ContSpherefoldD(vec3 z, inout float dz)
+void ContSpherefold(inout vec3 z, inout float dz)
 {
     float mul = min_radius_2 / dot(z, z) + fixed_radius_2;
     z *= mul;
     dz *= mul;
-    return z;
 }
 
-vec3 TScaleD(vec3 z, inout float dz)
+void TScale(inout vec3 z, inout float dz)
 {
     dz *= abs(scale);
-    return z * scale;
+    z *= scale;
 }
 
-vec3 TOffsetD(vec3 z, inout float dz, vec3 offset)
+void TOffset(inout vec3 z, inout float dz, vec3 offset)
 {
     dz += 1.0f;
-    return z + offset;
+    z += offset;
 }
 
 vec3 Rotate(vec3 z)
@@ -304,12 +288,12 @@ vec3 Rotate(vec3 z)
            (1 - cos(angle)) * dot(axis, vec3(angle)) * axis;
 }
 
-vec3 MandelboxD(vec3 z, inout float dz, vec3 offset, inout int color)
+void Mandelbox(inout vec3 z, inout float dz, vec3 offset, inout int color)
 {
 #ifdef CONT_FOLD
-    z = ContBoxfoldD(z);
+    ContBoxfold(z);
 #else
-    z = BoxfoldD(z);
+    Boxfold(z);
 #endif
     if (dot(z, z) < min_radius_2)
     {
@@ -323,18 +307,17 @@ vec3 MandelboxD(vec3 z, inout float dz, vec3 offset, inout int color)
     z = Rotate(z);
 #endif
 #ifdef CONT_FOLD
-    z = ContSpherefoldD(z, dz);
+    ContSpherefold(z, dz);
 #else
-    z = SpherefoldD(z, dz);
+    Spherefold(z, dz);
 #endif
-    z = TScaleD(z, dz);
-    z = TOffsetD(z, dz, offset);
-    return z;
+    TScale(z, dz);
+    TOffset(z, dz, offset);
 }
 
-vec3 MandelbulbD(vec3 z, inout float dz, vec3 offset, inout int color)
+void Mandelbulb(inout vec3 z, inout float dz, vec3 offset, inout int color)
 {
-    z = Mandelbulb(z, dz, abs(scale));
+    Mandelbulb(z, dz, abs(scale));
     if (color == 0)
     {
         color = 1 << 30;
@@ -343,7 +326,7 @@ vec3 MandelbulbD(vec3 z, inout float dz, vec3 offset, inout int color)
 #ifdef ROTATE
     z = Rotate(z);
 #endif
-    return z + offset;
+    z += offset;
 }
 
 float DeSphere(vec3 org, float radius, vec3 test)
@@ -363,7 +346,7 @@ float DeMandelbox(vec3 offset, bool isNormal, inout int color)
     float bail = isNormal ? bailout_normal : bailout;
     do
     {
-        z = MandelboxD(z, dz, offset, color);
+        Mandelbox(z, dz, offset, color);
     } while (dot(z, z) < bail * bail && --n != 0);
     return length(z) / dz;
 }
@@ -375,7 +358,7 @@ float DeMandelbulb(vec3 offset, inout int color)
     uint n = max(max_iters, 1);
     do
     {
-        z = MandelbulbD(z, dz, offset, color);
+        Mandelbulb(z, dz, offset, color);
     } while (dot(z, z) < 4 && --n != 0);
     float r = length(z);
     return 0.5f * log(r) * r / dz;
