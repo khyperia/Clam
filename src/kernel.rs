@@ -1,6 +1,8 @@
-use crate::cast_slice;
-use crate::setting_value::{SettingValue, SettingValueEnum};
-use crate::settings::Settings;
+use crate::{
+    cast_slice,
+    setting_value::{SettingValue, SettingValueEnum},
+    settings::Settings,
+};
 use cgmath::Vector3;
 use glam::Vec4;
 
@@ -608,8 +610,9 @@ impl Kernel {
             self.frame = 0;
         }
         let mut uniforms = KernelUniforms::from_settings(settings);
-        uniforms.width = self.data.width;
-        uniforms.height = self.data.height;
+        let (width, height) = self.data.size();
+        uniforms.width = width;
+        uniforms.height = height;
         uniforms.frame = self.frame;
         let uniforms_arr = [uniforms];
         let uniforms_u8: &[u8] = cast_slice(&uniforms_arr);

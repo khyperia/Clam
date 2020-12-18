@@ -58,22 +58,19 @@ impl SettingsInput {
 
     fn next(&mut self, settings: &Settings, delta: isize) {
         assert!(delta == -1 || delta == 1);
-        loop {
-            let num_components_at_current = self.num_components_at_current(settings);
-            if delta < 0 && self.component > 0 {
-                self.component -= 1;
-            } else if delta > 0 && self.component + 1 < num_components_at_current {
-                self.component += 1;
+        let num_components_at_current = self.num_components_at_current(settings);
+        if delta < 0 && self.component > 0 {
+            self.component -= 1;
+        } else if delta > 0 && self.component + 1 < num_components_at_current {
+            self.component += 1;
+        } else {
+            self.index =
+                (self.index as isize + delta).rem_euclid(settings.values.len() as isize) as usize;
+            self.component = if delta < 0 {
+                self.num_components_at_current(settings) - 1
             } else {
-                self.index = (self.index as isize + delta)
-                    .rem_euclid(settings.values.len() as isize)
-                    as usize;
-                self.component = if delta < 0 {
-                    self.num_components_at_current(settings) - 1
-                } else {
-                    0
-                };
-            }
+                0
+            };
         }
     }
 

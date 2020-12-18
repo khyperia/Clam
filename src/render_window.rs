@@ -1,13 +1,13 @@
-use crate::fps_counter::FpsCounter;
-use crate::interactive::SyncInteractiveKernel;
-use crate::texture_blit::TextureBlit;
+use crate::{
+    fps_counter::FpsCounter, interactive::SyncInteractiveKernel, texture_blit::TextureBlit,
+};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
 
-struct RenderContext {
+struct RenderWindow {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -19,11 +19,11 @@ struct RenderContext {
     interactive: SyncInteractiveKernel,
 }
 
-impl RenderContext {
+impl RenderWindow {
     async fn new(window: &Window) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::BackendBit::VULKAN);
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -32,6 +32,8 @@ impl RenderContext {
             })
             .await
             .unwrap();
+
+        println!("Got thing: {:?}", adapter.get_info());
 
         let (device, queue) = adapter
             .request_device(
@@ -56,7 +58,11 @@ impl RenderContext {
 
         let interactive = SyncInteractiveKernel::create(&device, size.width, size.height);
 
-        let texture_blit = TextureBlit::new(&device, sc_desc.format);
+        let texture_blit = TextureBlit::new(
+            &device,
+            sc_desc.format,
+            &interactive.texture().create_view(&Default::default()),
+        );
 
         Self {
             surface,
@@ -78,6 +84,10 @@ impl RenderContext {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
         self.interactive
             .resize(&self.device, self.size.width, self.size.height);
+        self.texture_blit.set_src(
+            &self.device,
+            &self.interactive.texture().create_view(&Default::default()),
+        );
     }
 
     fn input(&mut self, event: &WindowEvent) {
@@ -98,39 +108,37 @@ impl RenderContext {
         }
     }
 
-    fn update(&mut self) {
-        // remove `todo!()`
-    }
-
     fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
         let frame = self.swap_chain.get_current_frame()?.output;
 
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-        {
-            self.interactive
-                .run(&self.device, &self.queue, &mut encoder);
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-            self.texture_blit.blit(
-                &self.device,
-                &mut encoder,
-                &self
-                    .interactive
-                    .texture()
-                    .create_view(&wgpu::TextureViewDescriptor::default()),
-                &frame.view,
-            );
-        }
+        self.interactive
+            .run(&self.device, &self.queue, &mut encoder);
+
+        self.texture_blit.blit(
+            &self.device,
+            &mut encoder,
+            &self
+                .interactive
+                .texture()
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+            &frame.view,
+        );
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
 
         self.fps_counter.tick();
-        println!("{} fps", self.fps_counter.value());
-        println!("{}", self.interactive.status());
+        // let thing = format!(
+        //     "{}\n{}",
+        //     self.fps_counter.value(),
+        //     self.interactive.status()
+        // );
+        // print!("{}", thing);
+        println!("{}", self.fps_counter.value());
 
         Ok(())
     }
@@ -140,7 +148,7 @@ pub fn run() -> ! {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let mut state = futures::executor::block_on(RenderContext::new(&window));
+    let mut state = futures::executor::block_on(RenderWindow::new(&window));
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
@@ -160,7 +168,6 @@ pub fn run() -> ! {
             }
         }
         Event::RedrawRequested(_) => {
-            state.update();
             match state.render() {
                 Ok(_) => {}
                 // Recreate the swap_chain if lost

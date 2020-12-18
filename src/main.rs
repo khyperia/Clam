@@ -4,7 +4,7 @@ mod interactive;
 mod kernel;
 mod keyframe_list;
 mod progress;
-mod render_context;
+mod render_window;
 mod setting_value;
 mod settings;
 mod settings_input;
@@ -376,5 +376,5 @@ fn main() -> Result<(), Error> {
 
 fn main() {
     env_logger::init();
-    render_context::run();
+    render_window::run();
 }

@@ -1,6 +1,11 @@
-use crate::kernel::KernelUniforms;
-use crate::setting_value::{SettingValue, SettingValueEnum};
-use crate::{input::Input, kernel::Kernel, keyframe_list::KeyframeList, settings::Settings, Key};
+use crate::{
+    input::Input,
+    kernel::{Kernel, KernelUniforms},
+    keyframe_list::KeyframeList,
+    setting_value::{SettingValue, SettingValueEnum},
+    settings::Settings,
+    Key,
+};
 
 pub struct SyncInteractiveKernel {
     pub kernel: Kernel,
