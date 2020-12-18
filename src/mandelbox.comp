@@ -1,58 +1,60 @@
 #version 430
-layout(rgba32f, binding = 0) uniform image2D img_output;
-layout(rgba32f, binding = 1) uniform image2D scratch;
-layout(r32ui, binding = 2) uniform uimage2D randbuf;
+layout(rgba32f, binding = 0) uniform image2D img;
+layout(r32ui, binding = 1) uniform uimage2D randbuf;
 
 #define TAU 6.28318530718
 #define FLT_MAX 1E+37
 #define UINT_MAX 0xFFFFFFFFU
 
-uniform vec3 pos;                       // 0.0 0.0 5.0 1.0
-uniform vec3 look;                      // 0.0 0.0 -1.0 1.0
-uniform vec3 up;                        // 0.0 1.0 0.0 1.0
-uniform float fov;                      // 1.0 -1.0
-uniform float focal_distance;           // 3.0 -1.0
-uniform float scale;                    // -2.0 0.5
-uniform float folding_limit;            // 1.0 -0.5
-uniform float fixed_radius_2;           // 1.0 -0.5
-uniform float min_radius_2;             // 0.125 -0.5
-uniform float dof_amount;               // 0.01 -1.0
-uniform float bloom_amount;             // 0.1 -0.25
-uniform float bloom_size;               // 0.01 -0.25
-uniform float fog_distance;             // 10.0 -1.0
-uniform float fog_brightness;           // 1.0 -0.5
-uniform vec3 light_pos_1;               // 3.0 3.5 2.5 1.0
-uniform float light_radius_1;           // 1.0 -0.5
-uniform float light_brightness_1_hue;   // 0.0 0.25
-uniform float light_brightness_1_sat;   // 0.4 -1.0
-uniform float light_brightness_1_val;   // 4.0 -1.0
-uniform float ambient_brightness_hue;   // 0.65 0.25
-uniform float ambient_brightness_sat;   // 0.2 -1.0
-uniform float ambient_brightness_val;   // 0.5 -1.0
-uniform float surface_color_variance;   // 0.0625 -0.25
-uniform float surface_color_shift;      // 0.0 0.125
-uniform float surface_color_saturation; // 0.75 0.125
-uniform float surface_color_value;      // 1.0 0.125
-uniform float surface_color_gloss;      // 0.0 0.25
-uniform vec3 plane;                     // 3.0 3.5 2.5 1.0
-uniform float rotation;                 // 0.0 0.125
-uniform float bailout;                  // 64.0 -0.25
-uniform float bailout_normal;           // 1024.0 -1.0
-uniform float de_multiplier;            // 0.9375 0.125
-uniform float max_ray_dist;             // 16.0 -0.5
-uniform float quality_first_ray;        // 2.0 -0.5
-uniform float quality_rest_ray;         // 64.0 -0.5
-uniform float gamma;                    // 0.0 0.25
-uniform float fov_left;                 // -1.0 1.0
-uniform float fov_right;                // 1.0 1.0
-uniform float fov_top;                  // 1.0 1.0
-uniform float fov_bottom;               // -1.0 1.0
-uniform uint max_iters;                 // 20
-uniform uint max_ray_steps;             // 256
-uniform uint num_ray_bounces;           // 4
-uniform uint width;
-uniform uint height;
-uniform uint frame;
+layout(binding = 2) uniform Data
+{
+    vec4 pos;                       // 0.0 0.0 5.0 1.0
+    vec4 look;                      // 0.0 0.0 -1.0 1.0
+    vec4 up;                        // 0.0 1.0 0.0 1.0
+    float fov;                      // 1.0 -1.0
+    float focal_distance;           // 3.0 -1.0
+    float scale;                    // -2.0 0.5
+    float folding_limit;            // 1.0 -0.5
+    float fixed_radius_2;           // 1.0 -0.5
+    float min_radius_2;             // 0.125 -0.5
+    float dof_amount;               // 0.01 -1.0
+    float bloom_amount;             // 0.1 -0.25
+    float bloom_size;               // 0.01 -0.25
+    float fog_distance;             // 10.0 -1.0
+    float fog_brightness;           // 1.0 -0.5
+    vec4 light_pos_1;               // 3.0 3.5 2.5 1.0
+    float light_radius_1;           // 1.0 -0.5
+    float light_brightness_1_hue;   // 0.0 0.25
+    float light_brightness_1_sat;   // 0.4 -1.0
+    float light_brightness_1_val;   // 4.0 -1.0
+    float ambient_brightness_hue;   // 0.65 0.25
+    float ambient_brightness_sat;   // 0.2 -1.0
+    float ambient_brightness_val;   // 0.5 -1.0
+    float surface_color_variance;   // 0.0625 -0.25
+    float surface_color_shift;      // 0.0 0.125
+    float surface_color_saturation; // 0.75 0.125
+    float surface_color_value;      // 1.0 0.125
+    float surface_color_gloss;      // 0.0 0.25
+    vec4 plane;                     // 3.0 3.5 2.5 1.0
+    float rotation;                 // 0.0 0.125
+    float bailout;                  // 64.0 -0.25
+    float bailout_normal;           // 1024.0 -1.0
+    float de_multiplier;            // 0.9375 0.125
+    float max_ray_dist;             // 16.0 -0.5
+    float quality_first_ray;        // 2.0 -0.5
+    float quality_rest_ray;         // 64.0 -0.5
+    float gamma;                    // 0.0 0.25
+    float fov_left;                 // -1.0 1.0
+    float fov_right;                // 1.0 1.0
+    float fov_top;                  // 1.0 1.0
+    float fov_bottom;               // -1.0 1.0
+    uint max_iters;                 // 20
+    uint max_ray_steps;             // 256
+    uint num_ray_bounces;           // 4
+    uint width;
+    uint height;
+    uint frame;
+};
 
 vec3 HueToRGB(float hue, float saturation, float value)
 {
@@ -179,8 +181,7 @@ vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords, float calcFov)
 {
     screenCoords *= -calcFov;
     float len2 = dot(screenCoords, screenCoords);
-    // flip y
-    vec3 lookvec = vec3(2 * screenCoords.x, -2 * screenCoords.y, len2 - 1) / -(len2 + 1);
+    vec3 lookvec = vec3(2 * screenCoords.x, 2 * screenCoords.y, len2 - 1) / -(len2 + 1);
     vec3 right = cross(forward, upvec);
     return lookvec.x * right + lookvec.y * upvec + lookvec.z * forward;
 }
@@ -219,9 +220,9 @@ Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
     vec2 screenCoords =
         vec2(float(x) - float(width) / 2.0, float(y) - float(height) / 2.0) + antialias;
     float calcFov = fov * 2.0 / float(width + height);
-    vec3 direction = RayDir(look, up, screenCoords, calcFov);
+    vec3 direction = RayDir(look.xyz, up.xyz, screenCoords, calcFov);
 #endif
-    Ray result = Ray(pos, direction);
+    Ray result = Ray(pos.xyz, direction);
 #ifndef VR
     Ray_Dof(result, focal_distance, rand);
 #endif
@@ -282,7 +283,7 @@ void TOffset(inout vec3 z, inout float dz, vec3 offset)
 
 vec3 Rotate(vec3 z)
 {
-    vec3 axis = normalize(plane);
+    vec3 axis = normalize(plane.xyz);
     float angle = rotation;
     return cos(angle) * z + sin(angle) * cross(z, axis) +
            (1 - cos(angle)) * dot(axis, vec3(angle)) * axis;
@@ -379,7 +380,7 @@ float De(vec3 offset, bool isNormal)
 {
     int color;
     float mbox = DeFractal(offset, isNormal, color);
-    float light1 = DeSphere(light_pos_1, light_radius_1, offset);
+    float light1 = DeSphere(light_pos_1.xyz, light_radius_1, offset);
 #ifdef PLANE
     float cut = Plane(offset, plane);
     return min(light1, max(mbox, cut));
@@ -401,7 +402,7 @@ Material GetMaterial(vec3 offset)
     int raw_color_data = 0;
     float de = DeFractal(offset, true, raw_color_data);
 
-    float light1 = DeSphere(light_pos_1, light_radius_1, offset);
+    float light1 = DeSphere(light_pos_1.xyz, light_radius_1, offset);
 
     Material result;
     if (de < light1)
@@ -537,7 +538,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
 
         if (light_radius_1 == 0)
         {
-            vec3 lightPos = light_pos_1;
+            vec3 lightPos = light_pos_1.xyz;
             vec3 dir = lightPos - newPos;
             float light_dist = length(dir);
             dir = normalize(dir);
@@ -604,77 +605,9 @@ vec3 GammaTest(uint x, uint y, uint width, uint height)
     return vec3(result, result, result);
 }
 
-// Perfect, original sRGB
-float GammaSRGB(float value)
-{
-    if (value < 0.0031308f)
-    {
-        return 12.92f * value;
-    }
-    else
-    {
-        float a = 0.055f;
-        return (1 + a) * pow(value, 1.0f / 2.4f) - a;
-    }
-}
+vec3 GetImg(uint x, uint y) { return imageLoad(img, ivec2(x, y)).xyz; }
 
-// http://mimosa-pudica.net/fast-gamma/
-float GammaFast(float value)
-{
-    float a = 0.00279491f;
-    float b = 1.15907984f;
-    // float c = b * rsqrt(1.0f + a) - 1.0f;
-    float c = 0.15746346551f;
-    return (b / sqrt(value + a) - c) * value;
-}
-
-float GammaPow(float value, float power) { return pow(value, power); }
-
-float GammaCompression(float value)
-{
-    float gam = gamma;
-    if (gam < 0)
-    {
-        return GammaFast(value);
-    }
-    else if (gam == 0)
-    {
-        return GammaSRGB(value);
-    }
-    else
-    {
-        return GammaPow(value, 1.0 / gam);
-    }
-}
-
-vec3 PackPixel(vec3 pixel)
-{
-    if (isnan(pixel.x) || isnan(pixel.y) || isnan(pixel.z))
-    {
-        return vec3(1.0f, 0.0f, 1.0f);
-    }
-
-#ifdef CLAMP_PRESERVE_COLOR
-    float maxVal = max(max(pixel.x, pixel.y), pixel.z);
-    if (maxVal > 1)
-    {
-        pixel *= 1.0f / maxVal;
-    }
-    pixel = max(pixel, vec3(0.0f, 0.0f, 0.0f));
-#else
-    pixel = clamp(pixel, 0.0f, 1.0f);
-#endif
-
-    pixel.x = GammaCompression(pixel.x);
-    pixel.y = GammaCompression(pixel.y);
-    pixel.z = GammaCompression(pixel.z);
-
-    return pixel;
-}
-
-vec3 GetScratch(uint x, uint y) { return imageLoad(scratch, ivec2(x, y)).xyz; }
-
-void SetScratch(uint x, uint y, vec3 value) { imageStore(scratch, ivec2(x, y), vec4(value, 1.0)); }
+void SetImg(uint x, uint y, vec3 value) { imageStore(img, ivec2(x, y), vec4(value, 1.0)); }
 
 Random GetRand(uint x, uint y)
 {
@@ -687,14 +620,6 @@ Random GetRand(uint x, uint y)
 void SetRand(uint x, uint y, Random value)
 {
     imageStore(randbuf, ivec2(x, y), uvec4(value.seed, 0, 0, 0));
-}
-
-void SetScreen(uint x, uint y, vec3 value)
-{
-#ifdef VR
-    value *= 255;
-#endif
-    imageStore(img_output, ivec2(x, y), vec4(value, 1.0));
 }
 
 void main()
@@ -711,7 +636,7 @@ void main()
 #ifdef GAMMA_TEST
     vec3 newColor = GammaTest(x, y, width, height);
 #else
-    vec3 oldColor = frame > 0 ? GetScratch(x, y) : vec3(0, 0, 0);
+    vec3 oldColor = frame > 0 ? GetImg(x, y) : vec3(0, 0, 0);
 
     Random rand = GetRand(x, y);
     Ray ray = Camera(x, y, width, height, rand);
@@ -721,10 +646,7 @@ void main()
     vec3 colorComponents = Trace(ray, width, height, rand);
 #endif
     vec3 newColor = (colorComponents + oldColor * frame) / (frame + 1);
-    SetScratch(x, y, newColor);
     SetRand(x, y, rand);
 #endif
-    vec3 packedColor = PackPixel(newColor);
-
-    SetScreen(x, y, packedColor);
+    SetImg(x, y, newColor);
 }

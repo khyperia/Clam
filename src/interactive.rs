@@ -1,63 +1,42 @@
-use crate::{
-    input::Input,
-    kernel::Kernel,
-    kernel_compilation::{SourceInfo, MANDELBOX},
-    keyframe_list::KeyframeList,
-    settings::Settings,
-    Error, Key,
-};
-use khygl::texture::{Texture, TextureType};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use crate::kernel::KernelUniforms;
+use crate::setting_value::{SettingValue, SettingValueEnum};
+use crate::{input::Input, kernel::Kernel, keyframe_list::KeyframeList, settings::Settings, Key};
 
-pub struct SyncInteractiveKernel<T: TextureType> {
-    reload: Arc<AtomicBool>,
-    source_info: SourceInfo,
-    pub kernel: Kernel<T>,
+pub struct SyncInteractiveKernel {
+    pub kernel: Kernel,
     pub settings: Settings,
+    pub default_settings: Settings,
     pub keyframes: KeyframeList,
     pub input: Input,
 }
 
-impl<T: TextureType> SyncInteractiveKernel<T> {
-    pub fn create(width: usize, height: usize) -> Result<Self, Error> {
-        let source_info = MANDELBOX;
-        let reload = Arc::new(AtomicBool::new(false));
-        let reload2 = Arc::downgrade(&reload);
-        source_info.watch(move || match reload2.upgrade() {
-            Some(r) => {
-                r.store(true, Ordering::Relaxed);
-                true
-            }
-            None => false,
-        });
-
-        let realized_source = source_info.get()?;
-        let settings = realized_source.default_settings().clone();
-        let keyframes = KeyframeList::load("keyframes.clam5", &realized_source)
+impl SyncInteractiveKernel {
+    pub fn create(device: &wgpu::Device, width: u32, height: u32) -> Self {
+        let mut default_settings = Settings::new();
+        KernelUniforms::fill_defaults(&mut default_settings);
+        default_settings.values.push(SettingValue::new(
+            "render_scale".to_string(),
+            SettingValueEnum::Int(1),
+        ));
+        let keyframes = KeyframeList::load("keyframes.clam5", default_settings.clone())
             .unwrap_or_else(|_| KeyframeList::new());
         let input = Input::new();
-        let kernel = Kernel::create(realized_source, width, height)?;
-        let result = Self {
-            reload,
-            source_info,
+        let kernel = Kernel::create(device, width, height);
+        Self {
             kernel,
-            settings,
+            settings: default_settings.clone(),
+            default_settings,
             keyframes,
             input,
-        };
-        Ok(result)
+        }
     }
 
     pub fn key_down(&mut self, key: Key) {
         self.input.key_down(
             key,
             &mut self.settings,
+            &self.default_settings,
             &mut self.keyframes,
-            self.kernel.realized_source(),
-            self.kernel.kernel(),
         );
     }
 
@@ -65,30 +44,25 @@ impl<T: TextureType> SyncInteractiveKernel<T> {
         self.input.key_up(key, &mut self.settings, &self.keyframes);
     }
 
-    pub fn resize(&mut self, width: usize, height: usize) -> Result<(), Error> {
-        self.kernel.resize(width, height)
+    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        self.kernel.resize(device, width, height)
     }
 
-    pub fn launch(&mut self) -> Result<(), Error> {
+    pub fn run(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         self.input.integrate(&mut self.settings, &self.keyframes);
-        if self.reload.swap(false, Ordering::Relaxed) {
-            let realized_source = self.source_info.get()?;
-            let mut new_settings = realized_source.default_settings().clone();
-            new_settings.apply(&self.settings);
-            self.settings = new_settings;
-            self.kernel.set_src(realized_source);
-        }
-        self.kernel.run(&self.settings)?;
-        Ok(())
+        self.kernel.run(device, queue, encoder, &self.settings);
     }
 
-    pub fn texture(&mut self) -> &Texture<T> {
+    pub fn texture(&self) -> &wgpu::Texture {
         self.kernel.texture()
     }
 
     pub fn status(&self) -> String {
-        self.input
-            .settings_input
-            .status(&self.settings, self.kernel.kernel())
+        self.input.settings_input.status(&self.settings)
     }
 }

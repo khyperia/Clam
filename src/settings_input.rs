@@ -1,6 +1,4 @@
-use crate::{
-    kernel_compilation::ComputeShader, setting_value::SettingValueEnum, settings::Settings,
-};
+use crate::{setting_value::SettingValueEnum, settings::Settings};
 use std::fmt::Write;
 
 pub struct SettingsInput {
@@ -16,34 +14,9 @@ impl SettingsInput {
         }
     }
 
-    fn valid(index: usize, settings: &Settings, kernel: &Option<ComputeShader>) -> bool {
-        if let Some(kernel) = kernel {
-            let value = &settings.values[index];
-            if let SettingValueEnum::Define(_) = value.value() {
-                return true;
-            }
-            let current_name = value.key();
-            if current_name == "render_scale" {
-                return true;
-            }
-            for uniform in kernel.uniforms() {
-                if uniform.name == current_name {
-                    return true;
-                }
-            }
-            false
-        } else {
-            true
-        }
-    }
-
-    pub fn status(&self, settings: &Settings, kernel: &Option<ComputeShader>) -> String {
+    pub fn status(&self, settings: &Settings) -> String {
         let mut builder = String::new();
         for (ind, value) in settings.values.iter().enumerate() {
-            let valid = Self::valid(ind, settings, kernel);
-            if !valid {
-                continue;
-            }
             let selected = if ind == self.index { "*" } else { " " };
             let key = value.key();
             match value.value() {
@@ -71,9 +44,6 @@ impl SettingsInput {
                     )
                     .unwrap()
                 }
-                SettingValueEnum::Define(v) => {
-                    writeln!(&mut builder, "{} {} = {}", selected, key, v).unwrap()
-                }
             }
         }
         builder
@@ -86,8 +56,7 @@ impl SettingsInput {
         }
     }
 
-    fn next(&mut self, settings: &Settings, kernel: &Option<ComputeShader>, delta: isize) {
-        let start = (self.index, self.component);
+    fn next(&mut self, settings: &Settings, delta: isize) {
         assert!(delta == -1 || delta == 1);
         loop {
             let num_components_at_current = self.num_components_at_current(settings);
@@ -105,19 +74,15 @@ impl SettingsInput {
                     0
                 };
             }
-            // don't infinite loop if all are invalid
-            if Self::valid(self.index, settings, kernel) || start == (self.index, self.component) {
-                break;
-            }
         }
     }
 
-    pub fn up_one(&mut self, settings: &Settings, kernel: &Option<ComputeShader>) {
-        self.next(settings, kernel, -1)
+    pub fn up_one(&mut self, settings: &Settings) {
+        self.next(settings, -1)
     }
 
-    pub fn down_one(&mut self, settings: &Settings, kernel: &Option<ComputeShader>) {
-        self.next(settings, kernel, 1)
+    pub fn down_one(&mut self, settings: &Settings) {
+        self.next(settings, 1)
     }
 
     pub fn left_one(&mut self, settings: &mut Settings) {

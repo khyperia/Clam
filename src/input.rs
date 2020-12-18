@@ -1,9 +1,5 @@
 use crate::{
-    kernel_compilation::{ComputeShader, RealizedSource},
-    keyframe_list::KeyframeList,
-    settings::Settings,
-    settings_input::SettingsInput,
-    Error, Key,
+    keyframe_list::KeyframeList, settings::Settings, settings_input::SettingsInput, Error, Key,
 };
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
 use std::{
@@ -54,9 +50,8 @@ impl Input {
         &mut self,
         key: Key,
         settings: &mut Settings,
+        default_settings: &Settings,
         keyframes: &mut KeyframeList,
-        realized_source: &RealizedSource,
-        kernel: &Option<ComputeShader>,
     ) {
         let time = Instant::now();
         let new_key = if let Entry::Vacant(entry) = self.pressed_keys.entry(key) {
@@ -68,7 +63,7 @@ impl Input {
         if new_key {
             self.run(settings, keyframes, time);
         }
-        match self.run_down(key, settings, keyframes, realized_source, kernel) {
+        match self.run_down(key, settings, default_settings, keyframes) {
             Ok(()) => (),
             Err(err) => println!("Error handling key down event: {}", err),
         }
@@ -91,9 +86,8 @@ impl Input {
         &mut self,
         key: Key,
         settings: &mut Settings,
+        default_settings: &Settings,
         keyframes: &mut KeyframeList,
-        realized_source: &RealizedSource,
-        kernel: &Option<ComputeShader>,
     ) -> Result<(), Error> {
         match key {
             Key::H => {
@@ -104,12 +98,12 @@ impl Input {
                 println!("Settings loaded");
             }
             Key::Y => {
-                settings.save("settings.clam5", realized_source)?;
+                settings.save("settings.clam5", default_settings)?;
                 println!("Settings saved");
             }
             Key::V => {
                 keyframes.push(settings.clone());
-                keyframes.save("keyframes.clam5", realized_source)?;
+                keyframes.save("keyframes.clam5", default_settings)?;
                 println!("Keyframe saved");
             }
             Key::G => {
@@ -117,8 +111,8 @@ impl Input {
                 self.video_len_secs = keyframes.len() as f64 * (10.0 / 6.0);
                 println!("Playing video")
             }
-            Key::Up => self.settings_input.up_one(settings, kernel),
-            Key::Down => self.settings_input.down_one(settings, kernel),
+            Key::Up => self.settings_input.up_one(settings),
+            Key::Down => self.settings_input.down_one(settings),
             Key::Left => self.settings_input.left_one(settings),
             Key::Right => self.settings_input.right_one(settings),
             Key::T => self.settings_input.toggle(settings),
@@ -132,20 +126,6 @@ impl Input {
                 } else {
                     self.spaceship = None;
                 }
-            }
-            Key::Key1 => {
-                unsafe {
-                    gl::Enable(gl::FRAMEBUFFER_SRGB);
-                }
-                crate::check_gl()?;
-                *settings.find_mut("gamma").unwrap_float_mut() = 1.0;
-            }
-            Key::Key2 => {
-                unsafe {
-                    gl::Disable(gl::FRAMEBUFFER_SRGB);
-                }
-                crate::check_gl()?;
-                *settings.find_mut("gamma").unwrap_float_mut() = 0.0;
             }
             _ => (),
         }

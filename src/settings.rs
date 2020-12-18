@@ -1,5 +1,4 @@
 use crate::{
-    kernel_compilation::RealizedSource,
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
     Error,
@@ -72,16 +71,15 @@ impl Settings {
                 SettingValueEnum::Vec3(v, _) => {
                     writeln!(writer, "{} = {} {} {}", value.key(), v.x, v.y, v.z)?
                 }
-                SettingValueEnum::Define(v) => writeln!(writer, "{} = {}", value.key(), v)?,
             }
         }
         Ok(())
     }
 
-    pub fn save(&self, file: &str, realized_source: &RealizedSource) -> Result<(), Error> {
+    pub fn save(&self, file: &str, default_settings: &Settings) -> Result<(), Error> {
         let file = File::create(file)?;
         let mut writer = BufWriter::new(&file);
-        self.write_one(&mut writer, realized_source.default_settings())?;
+        self.write_one(&mut writer, default_settings)?;
         Ok(())
     }
 
@@ -110,10 +108,9 @@ impl Settings {
                     SettingValueEnum::Float(new_value.parse()?, change)
                 }
                 SettingValueEnum::Vec3(_, change) => SettingValueEnum::Vec3(
-                    parse_vector3(new_value).ok_or_else(|| "invalid vector3 in save file")?,
+                    parse_vector3(new_value).ok_or("invalid vector3 in save file")?,
                     change,
                 ),
-                SettingValueEnum::Define(_) => SettingValueEnum::Define(new_value.parse()?),
             };
             result
                 .values
@@ -129,31 +126,6 @@ impl Settings {
         let mut result = reference.clone();
         result.apply(&loaded);
         Ok(result)
-    }
-
-    pub fn check_rebuild(&self, against: &Settings) -> bool {
-        for value in &self.values {
-            if let Some(corresponding) = against.get(value.key()) {
-                match (value.value(), corresponding.value()) {
-                    (
-                        SettingValueEnum::Define(define_value),
-                        SettingValueEnum::Define(corresponding),
-                    ) => {
-                        if define_value != corresponding {
-                            return true;
-                        }
-                    }
-                    _ => {
-                        if !value.value().kinds_match(corresponding.value()) {
-                            return true;
-                        }
-                    }
-                }
-            } else {
-                return true;
-            }
-        }
-        false
     }
 
     pub fn normalize(&mut self) {

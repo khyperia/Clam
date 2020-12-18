@@ -1,37 +1,35 @@
-mod display;
-mod display_gl;
-#[cfg(feature = "vr")]
-mod display_vr;
 mod fps_counter;
 mod input;
 mod interactive;
 mod kernel;
-mod kernel_compilation;
 mod keyframe_list;
 mod progress;
+mod render_context;
 mod setting_value;
 mod settings;
 mod settings_input;
+mod texture_blit;
 
 use cgmath::Vector3;
-use chrono::prelude::*;
-use display::Key;
-use kernel::Kernel;
-use kernel_compilation::MANDELBOX;
-use keyframe_list::KeyframeList;
-use khygl::{check_gl, texture::CpuTexture};
-use png::{BitDepth, ColorType, Encoder};
-use progress::Progress;
-use settings::Settings;
-use std::{
-    env::args,
-    fs::File,
-    io::{BufWriter, Write},
-    mem::drop,
-    process::{Command, Stdio},
-    str,
-    sync::mpsc,
-};
+// use chrono::prelude::*;
+// use display::Key;
+// use kernel::Kernel;
+// use kernel_compilation::MANDELBOX;
+// use keyframe_list::KeyframeList;
+// use png::{BitDepth, ColorType, Encoder};
+// use progress::Progress;
+// use settings::Settings;
+// use std::{
+//     env::args,
+//     fs::File,
+//     io::{BufWriter, Write},
+//     mem::drop,
+//     process::{Command, Stdio},
+//     str,
+//     sync::mpsc,
+// };
+
+use winit::event::VirtualKeyCode as Key;
 
 type Error = Box<dyn std::error::Error>;
 
@@ -47,10 +45,16 @@ fn parse_vector3(v: &str) -> Option<Vector3<f64>> {
     }
 }
 
+fn cast_slice<A, B>(a: &[A]) -> &[B] {
+    let new_len = std::mem::size_of_val(a) / std::mem::size_of::<B>();
+    unsafe { std::slice::from_raw_parts(a.as_ptr() as *const B, new_len) }
+}
+
 fn f32_to_u8(px: f32) -> u8 {
     (px * 255.0).max(0.0).min(255.0) as u8
 }
 
+/*
 fn save_image(image: &CpuTexture<[f32; 4]>, path: &str) -> Result<(), Error> {
     let file = File::create(path)?;
     let w = &mut BufWriter::new(file);
@@ -357,9 +361,6 @@ fn main() -> Result<(), Error> {
         display::run_headless(|| video_cmd(&arguments[1..]))??
     } else if arguments.len() == 2 && &arguments[0] == "--pngseq" {
         pngseq_cmd(&arguments[1..])?
-    } else if cfg!(feature = "vr") && arguments.len() == 1 && &arguments[0] == "--vr" {
-        #[cfg(feature = "vr")]
-        display_vr::run()?
     } else if arguments.is_empty() {
         display_gl::run(1920.0, 1080.0)?
     } else {
@@ -367,9 +368,13 @@ fn main() -> Result<(), Error> {
         println!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
         println!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
         println!("clam5 --pngseq [format:mp4|twitter|gif]");
-        #[cfg(feature = "vr")]
-        println!("clam5 --vr");
         println!("clam5");
     }
     Ok(())
+}
+*/
+
+fn main() {
+    env_logger::init();
+    render_context::run();
 }

@@ -1,9 +1,10 @@
+*.gif
+*.mp4
+*.obj
+*.png
+*.spv
 .vs/
 /target/
-*.png
-*.mp4
-*.gif
-settings.clam5
-keyframes.clam5
-*.obj
 /test/output
+keyframes.clam5
+settings.clam5

@@ -1,6 +1,4 @@
-use crate::{
-    kernel_compilation::RealizedSource, setting_value::SettingValueEnum, settings::Settings, Error,
-};
+use crate::{setting_value::SettingValueEnum, settings::Settings, Error};
 use cgmath::Vector3;
 use std::{
     fs::File,
@@ -85,12 +83,6 @@ fn interpolate(
             interpolate_vec3(prev, cur, next, next2, time, linear),
             delta,
         ),
-        (
-            &SettingValueEnum::Define(_),
-            &SettingValueEnum::Define(cur),
-            &SettingValueEnum::Define(_),
-            &SettingValueEnum::Define(_),
-        ) => SettingValueEnum::Define(cur),
         _ => panic!("Inconsistent keyframe types"),
     }
 }
@@ -102,11 +94,11 @@ impl KeyframeList {
         }
     }
 
-    pub fn load(file: &str, realized_source: &RealizedSource) -> Result<Self, Error> {
+    pub fn load(file: &str, default_settings: Settings) -> Result<Self, Error> {
         let file = File::open(file)?;
         let reader = BufReader::new(&file);
         let mut lines = reader.lines();
-        let mut running_settings = realized_source.default_settings().clone();
+        let mut running_settings = default_settings;
         let mut keyframes = Vec::new();
         loop {
             let (new_settings, read_any) = Settings::load_iter(&mut lines, &running_settings)?;
@@ -119,10 +111,10 @@ impl KeyframeList {
         Ok(Self { keyframes })
     }
 
-    pub fn save(&self, file: &str, realized_source: &RealizedSource) -> Result<(), Error> {
+    pub fn save(&self, file: &str, default_settings: &Settings) -> Result<(), Error> {
         let file = File::create(file)?;
         let mut writer = BufWriter::new(&file);
-        let mut previous = realized_source.default_settings();
+        let mut previous = default_settings;
         for keyframe in &self.keyframes {
             keyframe.write_one(&mut writer, previous)?;
             writeln!(&mut writer, "---")?;
