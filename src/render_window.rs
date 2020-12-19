@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     fps_counter::FpsCounter, interactive::SyncInteractiveKernel, texture_blit::TextureBlit,
 };
@@ -7,16 +9,62 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+fn find_font() -> Result<&'static Path, &'static str> {
+    let locations: [&'static Path; 6] = [
+        "C:\\Windows\\Fonts\\arial.ttf".as_ref(),
+        "/usr/share/fonts/TTF/DejaVuSansMono.ttf".as_ref(),
+        "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
+        "/usr/share/fonts/TTF/DejaVuSans.ttf".as_ref(),
+        "/usr/share/fonts/TTF/LiberationSans-Regular.ttf".as_ref(),
+        "/Library/Fonts/Andale Mono.ttf".as_ref(),
+    ];
+    for &location in &locations {
+        if location.exists() {
+            return Ok(location);
+        }
+    }
+    Err("No font found")
+}
+
 struct RenderWindow {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    staging_belt: wgpu::util::StagingBelt,
+    local_pool: futures::executor::LocalPool,
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
+    glyph: wgpu_glyph::GlyphBrush<()>,
     size: winit::dpi::PhysicalSize<u32>,
     texture_blit: TextureBlit,
     fps_counter: FpsCounter,
     interactive: SyncInteractiveKernel,
+}
+
+pub fn run_headless() -> (wgpu::Device, wgpu::Queue) {
+    futures::executor::block_on(run_headless_async())
+}
+
+pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
+    let instance = wgpu::Instance::new(wgpu::BackendBit::VULKAN);
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: None,
+        })
+        .await
+        .unwrap();
+    adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                features: wgpu::Features::empty(),
+                limits: wgpu::Limits::default(),
+                shader_validation: true,
+            },
+            None, // Trace path
+        )
+        .await
+        .unwrap()
 }
 
 impl RenderWindow {
@@ -47,6 +95,9 @@ impl RenderWindow {
             .await
             .unwrap();
 
+        let staging_belt = wgpu::util::StagingBelt::new(1024);
+        let local_pool = futures::executor::LocalPool::new();
+
         let sc_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
@@ -64,12 +115,20 @@ impl RenderWindow {
             &interactive.texture().create_view(&Default::default()),
         );
 
+        let font_path = find_font().unwrap();
+        let font_data = std::fs::read(font_path).unwrap();
+        let font = wgpu_glyph::ab_glyph::FontArc::try_from_vec(font_data).expect("load font");
+        let glyph = wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, sc_desc.format);
+
         Self {
             surface,
             device,
             queue,
+            staging_belt,
+            local_pool,
             sc_desc,
             swap_chain,
+            glyph,
             size,
             texture_blit,
             fps_counter: FpsCounter::new(1.0),
@@ -84,10 +143,6 @@ impl RenderWindow {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
         self.interactive
             .resize(&self.device, self.size.width, self.size.height);
-        self.texture_blit.set_src(
-            &self.device,
-            &self.interactive.texture().create_view(&Default::default()),
-        );
     }
 
     fn input(&mut self, event: &WindowEvent) {
@@ -118,27 +173,47 @@ impl RenderWindow {
         self.interactive
             .run(&self.device, &self.queue, &mut encoder);
 
-        self.texture_blit.blit(
+        self.texture_blit.set_src(
             &self.device,
-            &mut encoder,
             &self
                 .interactive
                 .texture()
                 .create_view(&wgpu::TextureViewDescriptor::default()),
-            &frame.view,
         );
-
-        // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.texture_blit.blit(&mut encoder, &frame.view);
 
         self.fps_counter.tick();
-        // let thing = format!(
-        //     "{}\n{}",
-        //     self.fps_counter.value(),
-        //     self.interactive.status()
-        // );
-        // print!("{}", thing);
-        println!("{}", self.fps_counter.value());
+        let display_text = format!(
+            "{} fps\n{}",
+            self.fps_counter.value(),
+            self.interactive.status()
+        );
+        let section = wgpu_glyph::Section {
+            screen_position: (10.0, 10.0),
+            text: vec![wgpu_glyph::Text::new(&display_text)],
+            ..Default::default()
+        };
+        self.glyph.queue(section);
+        self.glyph
+            .draw_queued(
+                &self.device,
+                &mut self.staging_belt,
+                &mut encoder,
+                &frame.view,
+                self.size.width,
+                self.size.height,
+            )
+            .unwrap();
+
+        self.staging_belt.finish();
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        use futures::task::SpawnExt;
+        self.local_pool
+            .spawner()
+            .spawn(self.staging_belt.recall())
+            .unwrap();
+        self.local_pool.run_until_stalled();
 
         Ok(())
     }

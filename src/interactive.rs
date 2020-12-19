@@ -1,11 +1,4 @@
-use crate::{
-    input::Input,
-    kernel::{Kernel, KernelUniforms},
-    keyframe_list::KeyframeList,
-    setting_value::{SettingValue, SettingValueEnum},
-    settings::Settings,
-    Key,
-};
+use crate::{input::Input, kernel::Kernel, keyframe_list::KeyframeList, settings::Settings, Key};
 
 pub struct SyncInteractiveKernel {
     pub kernel: Kernel,
@@ -17,12 +10,7 @@ pub struct SyncInteractiveKernel {
 
 impl SyncInteractiveKernel {
     pub fn create(device: &wgpu::Device, width: u32, height: u32) -> Self {
-        let mut default_settings = Settings::new();
-        KernelUniforms::fill_defaults(&mut default_settings);
-        default_settings.values.push(SettingValue::new(
-            "render_scale".to_string(),
-            SettingValueEnum::Int(1),
-        ));
+        let default_settings = Settings::get_default();
         let keyframes = KeyframeList::load("keyframes.clam5", default_settings.clone())
             .unwrap_or_else(|_| KeyframeList::new());
         let input = Input::new();

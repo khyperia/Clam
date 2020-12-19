@@ -12,6 +12,7 @@ futures = ""
 glam = ""
 png = ""
 wgpu = ""
+wgpu_glyph = ""
 winit = ""
 
 [build-dependencies]

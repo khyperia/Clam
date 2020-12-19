@@ -129,13 +129,7 @@ impl TextureBlit {
             Self::create_bind_group(device, &self.bind_group_layout, src, &self.sampler);
     }
 
-    pub fn blit(
-        &self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
-        src: &wgpu::TextureView,
-        dst: &wgpu::TextureView,
-    ) {
+    pub fn blit(&self, encoder: &mut wgpu::CommandEncoder, dst: &wgpu::TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &dst,

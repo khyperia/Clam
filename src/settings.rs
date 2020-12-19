@@ -1,3 +1,4 @@
+use crate::kernel::KernelUniforms;
 use crate::{
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
@@ -17,6 +18,16 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self { values: Vec::new() }
+    }
+
+    pub fn get_default() -> Self {
+        let mut default_settings = Self::new();
+        KernelUniforms::fill_defaults(&mut default_settings);
+        default_settings.values.push(SettingValue::new(
+            "render_scale".to_string(),
+            SettingValueEnum::Int(1),
+        ));
+        default_settings
     }
 
     pub fn get(&self, key: &str) -> Option<&SettingValue> {

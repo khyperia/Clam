@@ -102,13 +102,6 @@ impl SettingValue {
         }
     }
 
-    pub fn unwrap_float_mut(&mut self) -> &mut f64 {
-        match self.value {
-            SettingValueEnum::Float(ref mut value, _) => value,
-            _ => panic!("unwrap_float not float"),
-        }
-    }
-
     pub fn unwrap_vec3(&self) -> Vector3<f64> {
         match self.value {
             SettingValueEnum::Vec3(value, _) => value,

@@ -1,3 +1,5 @@
+use crate::texture_blit::TextureBlit;
+use crate::CpuTexture;
 use crate::{
     cast_slice,
     setting_value::{SettingValue, SettingValueEnum},
@@ -631,20 +633,91 @@ impl Kernel {
         &self.data.img
     }
 
-    /*
-    pub fn download(&mut self) -> Result<CpuTexture<T>, Error> {
-        self.data.output.download()
+    pub fn download(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> CpuTexture {
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let size = wgpu::Extent3d {
+            width: self.data.width,
+            height: self.data.height,
+            depth: 1,
+        };
+        let texture = Self::render_to_texture(device, &mut encoder, &self.data.img, size);
+        let data = Self::download_texture(device, queue, encoder, &texture, size);
+        let mut result = CpuTexture {
+            data,
+            size: (size.width, size.height),
+        };
+        result.rgba_to_rgb();
+        result
     }
 
-    pub fn sync_renderer(&mut self) -> Result<(), Error> {
-        unsafe {
-            gl::Finish();
-            check_gl()
-        }
+    fn render_to_texture(
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        src: &wgpu::Texture,
+        size: wgpu::Extent3d,
+    ) -> wgpu::Texture {
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        let dst = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsage::COPY_SRC | wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        });
+        let texture_blit = TextureBlit::new(device, format, &src.create_view(&Default::default()));
+        texture_blit.blit(encoder, &dst.create_view(&Default::default()));
+        dst
     }
 
-    pub fn kernel(&self) -> &Option<ComputeShader> {
-        &self.kernel
+    fn download_texture(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        mut encoder: wgpu::CommandEncoder,
+        texture: &wgpu::Texture,
+        size: wgpu::Extent3d,
+    ) -> Vec<u8> {
+        let pixel_bytes = 4;
+        let output_size =
+            pixel_bytes * size.width as wgpu::BufferAddress * size.height as wgpu::BufferAddress;
+        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: output_size,
+            usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        encoder.copy_texture_to_buffer(
+            wgpu::TextureCopyView {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+            },
+            wgpu::BufferCopyView {
+                buffer: &output_buffer,
+                layout: wgpu::TextureDataLayout {
+                    offset: 0,
+                    bytes_per_row: size.width * pixel_bytes as u32,
+                    rows_per_image: size.height,
+                },
+            },
+            size,
+        );
+        queue.submit(std::iter::once(encoder.finish()));
+
+        let output_slice = output_buffer.slice(..);
+        println!("Download 1");
+        let future = output_slice.map_async(wgpu::MapMode::Read);
+        println!("Download 2");
+        device.poll(wgpu::Maintain::Wait);
+        println!("Download 3");
+        futures::executor::block_on(future).unwrap();
+        println!("Download 4");
+        let data = output_slice.get_mapped_range().to_vec();
+        println!("Download 5");
+        output_buffer.unmap();
+        data
     }
-    */
 }
