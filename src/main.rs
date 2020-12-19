@@ -88,6 +88,7 @@ fn progress_count(rpp: usize) -> usize {
     (rpp / 20).min(4).max(16)
 }
 
+// Special windows handling for TDR
 #[cfg(windows)]
 fn progress_count(_: usize) -> usize {
     1
@@ -111,12 +112,14 @@ fn image(
             queue.submit(std::iter::once(encoder.finish()));
             encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.poll(wgpu::Maintain::Wait);
             let value = ray as f64 / rpp as f64;
             println!("{}", progress.time_str(value));
         }
         kernel.run(device, queue, &mut encoder, &loaded_settings);
     }
     queue.submit(std::iter::once(encoder.finish()));
+    device.poll(wgpu::Maintain::Wait);
     println!("render done, downloading");
     let image = kernel.download(device, queue);
     println!("saving, final time: {}", progress.time_str(1.0));

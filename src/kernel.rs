@@ -708,15 +708,10 @@ impl Kernel {
         queue.submit(std::iter::once(encoder.finish()));
 
         let output_slice = output_buffer.slice(..);
-        println!("Download 1");
         let future = output_slice.map_async(wgpu::MapMode::Read);
-        println!("Download 2");
         device.poll(wgpu::Maintain::Wait);
-        println!("Download 3");
         futures::executor::block_on(future).unwrap();
-        println!("Download 4");
         let data = output_slice.get_mapped_range().to_vec();
-        println!("Download 5");
         output_buffer.unmap();
         data
     }

@@ -20,6 +20,3 @@ anyhow = ""
 fs_extra = ""
 glob = ""
 shaderc = ""
-
-[profile.release]
-debug = true

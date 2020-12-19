@@ -59,7 +59,7 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
-                shader_validation: true,
+                shader_validation: cfg!(debug_assertions),
             },
             None, // Trace path
         )
@@ -88,7 +88,7 @@ impl RenderWindow {
                 &wgpu::DeviceDescriptor {
                     features: wgpu::Features::empty(),
                     limits: wgpu::Limits::default(),
-                    shader_validation: true,
+                    shader_validation: cfg!(debug_assertions),
                 },
                 None, // Trace path
             )
