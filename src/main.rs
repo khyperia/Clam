@@ -2,6 +2,7 @@ mod fps_counter;
 mod input;
 mod interactive;
 mod kernel;
+mod kernel_uniforms;
 mod keyframe_list;
 mod progress;
 mod render_window;
@@ -102,7 +103,7 @@ fn image(
     rpp: usize,
 ) -> Result<(), Error> {
     let loaded_settings = Settings::load("settings.clam5", &Settings::get_default())?;
-    let mut kernel = Kernel::create(device, width, height);
+    let mut kernel = Kernel::create(device, queue, width, height);
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     let mut encoder =
@@ -116,7 +117,7 @@ fn image(
             let value = ray as f64 / rpp as f64;
             println!("{}", progress.time_str(value));
         }
-        kernel.run(device, queue, &mut encoder, &loaded_settings);
+        kernel.run(device, &mut encoder, &loaded_settings);
     }
     queue.submit(std::iter::once(encoder.finish()));
     device.poll(wgpu::Maintain::Wait);
@@ -166,7 +167,7 @@ fn video_one(
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     for _ in 0..rpp {
-        kernel.run(device, queue, &mut encoder, settings);
+        kernel.run(device, &mut encoder, settings);
     }
     queue.submit(std::iter::once(encoder.finish()));
     let image = kernel.download(device, queue);
@@ -268,6 +269,7 @@ fn video_write(stream: &mpsc::Receiver<CpuTexture>, twitter: bool) -> Result<(),
     }
 }
 
+#[allow(clippy::clippy::too_many_arguments)]
 fn video(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -279,7 +281,7 @@ fn video(
     format: VideoFormat,
 ) -> Result<(), Error> {
     let keyframes = KeyframeList::load("keyframes.clam5", Settings::get_default())?;
-    let mut kernel = Kernel::create(device, width, height);
+    let mut kernel = Kernel::create(device, queue, width, height);
     let progress = Progress::new();
 
     let (send, recv) = mpsc::sync_channel(5);
@@ -334,7 +336,7 @@ fn parse_resolution(res: &str) -> Option<(u32, u32)> {
 
 fn render(args: &[String]) -> Result<(), Error> {
     if args.len() == 2 {
-        let (width, height) = parse_resolution(&args[0]).ok_or_else(|| "Invalid resolution")?;
+        let (width, height) = parse_resolution(&args[0]).ok_or("Invalid resolution")?;
         let rpp = args[1].parse()?;
         let (device, queue) = render_window::run_headless();
         image(&device, &queue, width, height, rpp)
@@ -345,7 +347,7 @@ fn render(args: &[String]) -> Result<(), Error> {
 
 fn video_cmd(args: &[String]) -> Result<(), Error> {
     if args.len() == 5 {
-        let (width, height) = parse_resolution(&args[0]).ok_or_else(|| "Invalid resolution")?;
+        let (width, height) = parse_resolution(&args[0]).ok_or("Invalid resolution")?;
         let rpp = args[1].parse()?;
         let frames = args[2].parse()?;
         let wrap = args[3].parse()?;
@@ -361,7 +363,7 @@ fn pngseq(format: VideoFormat) -> Result<(), Error> {
     match format {
         VideoFormat::Gif => do_gifize(),
         VideoFormat::MP4 => video_write_from_pngseq(false),
-        VideoFormat::Twitter => video_write_from_pngseq(false),
+        VideoFormat::Twitter => video_write_from_pngseq(true),
         VideoFormat::PngSeq => Err("--video needs one arg: [format:mp4|twitter|gif]".into()),
     }
 }

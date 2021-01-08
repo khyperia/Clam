@@ -9,12 +9,12 @@ pub struct SyncInteractiveKernel {
 }
 
 impl SyncInteractiveKernel {
-    pub fn create(device: &wgpu::Device, width: u32, height: u32) -> Self {
+    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
         let default_settings = Settings::get_default();
         let keyframes = KeyframeList::load("keyframes.clam5", default_settings.clone())
             .unwrap_or_else(|_| KeyframeList::new());
         let input = Input::new();
-        let kernel = Kernel::create(device, width, height);
+        let kernel = Kernel::create(device, queue, width, height);
         Self {
             kernel,
             settings: default_settings.clone(),
@@ -41,14 +41,9 @@ impl SyncInteractiveKernel {
         self.kernel.resize(device, width, height)
     }
 
-    pub fn run(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-    ) {
+    pub fn run(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
         self.input.integrate(&mut self.settings, &self.keyframes);
-        self.kernel.run(device, queue, encoder, &self.settings);
+        self.kernel.run(device, encoder, &self.settings);
     }
 
     pub fn texture(&self) -> &wgpu::Texture {

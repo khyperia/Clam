@@ -6,14 +6,15 @@ edition = "2018"
 
 [dependencies]
 cgmath = ""
-chrono = ""
-env_logger = ""
-futures = ""
+chrono = { version = "", default-features = false, features = ["clock"] }
+env_logger = { version = "", default-features = false }
+futures = { version = "", default-features = false }
 glam = ""
-png = ""
+hdrldr = ""
+png = { version = "", default-features = false, features = ["png-encoding"] }
 wgpu = ""
 wgpu_glyph = ""
-winit = ""
+winit = { version = "", default-features = false }
 
 [build-dependencies]
 anyhow = ""

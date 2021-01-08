@@ -2,6 +2,8 @@
 layout(local_size_x = 64) in;
 layout(rgba32f, binding = 0) uniform image2D img;
 layout(r32ui, binding = 1) uniform uimage2D randbuf;
+layout(binding = 3) uniform sampler samp;
+layout(binding = 4) uniform texture2D sky;
 
 #define TAU 6.28318530718
 #define FLT_MAX 1E+37
@@ -23,14 +25,6 @@ layout(binding = 2) uniform Data
     float bloom_size;               // 0.01 -0.25
     float fog_distance;             // 10.0 -1.0
     float fog_brightness;           // 1.0 -0.5
-    vec4 light_pos_1;               // 3.0 3.5 2.5 1.0
-    float light_radius_1;           // 1.0 -0.5
-    float light_brightness_1_hue;   // 0.0 0.25
-    float light_brightness_1_sat;   // 0.4 -1.0
-    float light_brightness_1_val;   // 4.0 -1.0
-    float ambient_brightness_hue;   // 0.65 0.25
-    float ambient_brightness_sat;   // 0.2 -1.0
-    float ambient_brightness_val;   // 0.5 -1.0
     float surface_color_variance;   // 0.0625 -0.25
     float surface_color_shift;      // 0.0 0.125
     float surface_color_saturation; // 0.75 0.125
@@ -83,16 +77,19 @@ vec3 HueToRGB(float hue, float saturation, float value)
     return color;
 }
 
-vec3 LightBrightness1()
+const vec2 invAtan = vec2(1, 2)/TAU;
+vec2 SampleSphericalMap(vec3 v)
 {
-    return HueToRGB(light_brightness_1_hue, light_brightness_1_sat, light_brightness_1_val) /
-           surface_color_value;
+    // TODO: hack -v.y
+    vec2 uv = vec2(atan(v.z, v.x), asin(-v.y));
+    uv *= invAtan;
+    uv += 0.5;
+    return uv;
 }
 
-vec3 AmbientBrightness()
-{
-    return HueToRGB(ambient_brightness_hue, ambient_brightness_sat, ambient_brightness_val) /
-           surface_color_value;
+vec3 SampleSky(vec3 dir) {
+    vec2 coords = SampleSphericalMap(dir);
+    return texture(sampler2D(sky, samp), coords).rgb;
 }
 
 struct Random
@@ -158,25 +155,6 @@ struct Ray
     vec3 dir;
 };
 
-#ifdef VR
-float Remap(float value, float iMin, float iMax, float oMin, float oMax)
-{
-    float slope = (oMax - oMin) / (iMax - iMin);
-    float offset = oMin - iMin * slope;
-    return value * slope + offset;
-}
-
-vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords)
-{
-    float x = Remap(screenCoords.x, 0, 1, fov_left, fov_right);
-    // flip y
-    float y = Remap(screenCoords.y, 1, 0, fov_top, fov_bottom);
-    float z = 1.0f;
-    vec3 dir = normalize(vec3(x, y, z));
-    vec3 right = cross(forward, upvec);
-    return dir.x * right + dir.y * upvec + dir.z * forward;
-}
-#else
 // http://en.wikipedia.org/wiki/Stereographic_projection
 vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords, float calcFov)
 {
@@ -186,7 +164,6 @@ vec3 RayDir(vec3 forward, vec3 upvec, vec2 screenCoords, float calcFov)
     vec3 right = cross(forward, upvec);
     return lookvec.x * right + lookvec.y * upvec + lookvec.z * forward;
 }
-#endif
 
 vec3 Ray_At(Ray this_, float time) { return this_.org + this_.dir * time; }
 
@@ -209,10 +186,6 @@ void Ray_Dof(inout Ray this_, float focalPlane, inout Random rand)
 
 Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
 {
-#ifdef VR
-    vec2 screenCoords = vec2(float(x) / float(width), float(y) / float(height));
-    vec3 direction = RayDir(look, up, screenCoords);
-#else
 #ifdef NOANTIALIAS
     vec2 antialias = vec2(0, 0);
 #else
@@ -222,11 +195,8 @@ Ray Camera(uint x, uint y, uint width, uint height, inout Random rand)
         vec2(float(x) - float(width) / 2.0, float(y) - float(height) / 2.0) + antialias;
     float calcFov = fov * 2.0 / float(width + height);
     vec3 direction = RayDir(look.xyz, up.xyz, screenCoords, calcFov);
-#endif
     Ray result = Ray(pos.xyz, direction);
-#ifndef VR
     Ray_Dof(result, focal_distance, rand);
-#endif
     return result;
 }
 
@@ -247,27 +217,11 @@ void Mandelbulb(inout vec3 z, inout float dz, float Power)
 
 void Boxfold(inout vec3 z) { z = clamp(z, -folding_limit, folding_limit) * 2.0f - z; }
 
-void ContBoxfold(inout vec3 z)
-{
-    vec3 zsq = z * z;
-    zsq += vec3(1, 1, 1);
-    vec3 res = z / sqrt(zsq);
-    res *= sqrt(8.0f);
-    z -= res;
-}
-
 void Spherefold(inout vec3 z, inout float dz)
 {
     float factor = fixed_radius_2 / clamp(dot(z, z), min_radius_2, fixed_radius_2);
     dz *= factor;
     z *= factor;
-}
-
-void ContSpherefold(inout vec3 z, inout float dz)
-{
-    float mul = min_radius_2 / dot(z, z) + fixed_radius_2;
-    z *= mul;
-    dz *= mul;
 }
 
 void TScale(inout vec3 z, inout float dz)
@@ -292,11 +246,7 @@ vec3 Rotate(vec3 z)
 
 void Mandelbox(inout vec3 z, inout float dz, vec3 offset, inout int color)
 {
-#ifdef CONT_FOLD
-    ContBoxfold(z);
-#else
     Boxfold(z);
-#endif
     if (dot(z, z) < min_radius_2)
     {
         color--;
@@ -308,11 +258,7 @@ void Mandelbox(inout vec3 z, inout float dz, vec3 offset, inout int color)
 #ifdef ROTATE
     z = Rotate(z);
 #endif
-#ifdef CONT_FOLD
-    ContSpherefold(z, dz);
-#else
     Spherefold(z, dz);
-#endif
     TScale(z, dz);
     TOffset(z, dz, offset);
 }
@@ -381,12 +327,11 @@ float De(vec3 offset, bool isNormal)
 {
     int color;
     float mbox = DeFractal(offset, isNormal, color);
-    float light1 = DeSphere(light_pos_1.xyz, light_radius_1, offset);
 #ifdef PLANE
     float cut = Plane(offset, plane);
-    return min(light1, max(mbox, cut));
+    return max(mbox, cut);
 #else
-    return min(light1, mbox);
+    return mbox;
 #endif
 }
 
@@ -403,23 +348,12 @@ Material GetMaterial(vec3 offset)
     int raw_color_data = 0;
     float de = DeFractal(offset, true, raw_color_data);
 
-    float light1 = DeSphere(light_pos_1.xyz, light_radius_1, offset);
-
     Material result;
-    if (de < light1)
-    {
-        float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
-        vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
-        result.color = color;
-        result.gloss = surface_color_gloss;
-        result.emissive = vec3(0, 0, 0);
-    }
-    else
-    {
-        result.color = vec3(1, 1, 1);
-        result.gloss = 1.0f;
-        result.emissive = LightBrightness1();
-    }
+    float hue = float(raw_color_data) * surface_color_variance + surface_color_shift;
+    vec3 color = HueToRGB(hue, surface_color_saturation, surface_color_value);
+    result.color = color;
+    result.gloss = surface_color_gloss;
+    result.emissive = vec3(0, 0, 0);
 
     float delta = max(1e-6f, de * 0.5f); // aprox. 8.3x float epsilon
 #ifdef CUBE_NORMAL
@@ -489,7 +423,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             (photonIndex + 1 == num_ray_bounces && distance >= fog_dist))
         {
             // went out-of-bounds, or last fog ray didn't hit anything
-            vec3 color = AmbientBrightness();
+            vec3 color = SampleSky(ray.dir);
             rayColor += color * reflectionColor;
             break;
         }
@@ -518,14 +452,11 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             float cosTheta = -dot(ray.dir, material.normal);
             if (Random_Next(rand) < material.gloss)
             {
+                newDir = ray.dir;
                 // specular
-                if (dot(ray.dir, material.normal) > 0)
+                if (dot(ray.dir, material.normal) < 0)
                 {
-                    newDir = ray.dir;
-                }
-                else
-                {
-                    newDir = ray.dir + 2.0f * cosTheta * material.normal;
+                    newDir += 2.0f * cosTheta * material.normal;
                 }
                 // material.color = vec3(1.0, 1.0, 1.0);
             }
@@ -534,27 +465,6 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
                 // diffuse
                 newDir = Random_Lambertian(rand, material.normal);
                 quality = quality_rest_ray;
-            }
-        }
-
-        if (light_radius_1 == 0)
-        {
-            vec3 lightPos = light_pos_1.xyz;
-            vec3 dir = lightPos - newPos;
-            float light_dist = length(dir);
-            dir = normalize(dir);
-            if (is_fog || dot(dir, material.normal) > 0)
-            {
-                float dist = Cast(Ray(newPos, dir), quality_rest_ray, light_dist);
-                if (dist >= light_dist)
-                {
-                    float prod = is_fog ? 1.0f : dot(material.normal, dir);
-                    // Fixes tiny lil bright pixels
-                    float fixed_dist = max(distance / 2.0f, light_dist);
-                    vec3 color =
-                        prod / (fixed_dist * fixed_dist) * material.color * LightBrightness1();
-                    rayColor += reflectionColor * color; // ~bling~!
-                }
             }
         }
 

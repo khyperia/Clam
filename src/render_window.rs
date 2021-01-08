@@ -107,7 +107,7 @@ impl RenderWindow {
         };
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
-        let interactive = SyncInteractiveKernel::create(&device, size.width, size.height);
+        let interactive = SyncInteractiveKernel::create(&device, &queue, size.width, size.height);
 
         let texture_blit = TextureBlit::new(
             &device,
@@ -170,8 +170,7 @@ impl RenderWindow {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        self.interactive
-            .run(&self.device, &self.queue, &mut encoder);
+        self.interactive.run(&self.device, &mut encoder);
 
         self.texture_blit.set_src(
             &self.device,

@@ -1,5 +1,5 @@
-use crate::kernel::KernelUniforms;
 use crate::{
+    kernel_uniforms::KernelUniforms,
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
     Error,
