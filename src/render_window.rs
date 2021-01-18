@@ -10,13 +10,14 @@ use winit::{
 };
 
 fn find_font() -> Result<&'static Path, &'static str> {
-    let locations: [&'static Path; 6] = [
+    let locations: [&'static Path; 7] = [
         "C:\\Windows\\Fonts\\arial.ttf".as_ref(),
         "/usr/share/fonts/TTF/DejaVuSansMono.ttf".as_ref(),
         "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
         "/usr/share/fonts/TTF/DejaVuSans.ttf".as_ref(),
         "/usr/share/fonts/TTF/LiberationSans-Regular.ttf".as_ref(),
         "/Library/Fonts/Andale Mono.ttf".as_ref(),
+        "/Library/Fonts/Arial Unicode.ttf".as_ref(),
     ];
     for &location in &locations {
         if location.exists() {
@@ -46,7 +47,7 @@ pub fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 }
 
 pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(wgpu::BackendBit::VULKAN);
+    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
@@ -71,7 +72,7 @@ impl RenderWindow {
     async fn new(window: &Window) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::BackendBit::VULKAN);
+        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
