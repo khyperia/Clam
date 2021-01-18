@@ -429,25 +429,18 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
         }
 
         vec3 newPos = Ray_At(ray, min(distance, fog_dist));
-
         vec3 newDir;
-        Material material;
 
-        bool is_fog = (distance >= fog_dist);
-        if (is_fog)
+        if (distance >= fog_dist)
         {
             // hit fog, do fog calculations
             newDir = Random_Sphere(rand);
             reflectionColor *= fog_brightness;
-            material.color = vec3(1, 1, 1);
-            material.normal = vec3(0, 0, 0);
-            material.gloss = 0;
-            material.emissive = vec3(0, 0, 0);
         }
         else
         {
             // hit surface, do material calculations
-            material = GetMaterial(newPos);
+            Material material = GetMaterial(newPos);
             rayColor += reflectionColor * material.emissive; // ~bling~!
             float cosTheta = -dot(ray.dir, material.normal);
             if (Random_Next(rand) < material.gloss)
@@ -466,10 +459,9 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
                 newDir = Random_Lambertian(rand, material.normal);
                 quality = quality_rest_ray;
             }
+            float incident_angle_weakening = dot(material.normal, newDir);
+            reflectionColor *= incident_angle_weakening * material.color;
         }
-
-        float incident_angle_weakening = (is_fog ? 1.0f : dot(material.normal, newDir));
-        reflectionColor *= incident_angle_weakening * material.color;
 
         ray = Ray(newPos, newDir);
 
