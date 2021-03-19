@@ -8,7 +8,7 @@ edition = "2018"
 cgmath = ""
 chrono = { version = "", default-features = false, features = ["clock"] }
 env_logger = { version = "", default-features = false }
-futures = { version = "", default-features = false }
+futures = { version = "", default-features = false, features = ["executor"] }
 glam = ""
 hdrldr = ""
 png = { version = "", default-features = false, features = ["png-encoding"] }

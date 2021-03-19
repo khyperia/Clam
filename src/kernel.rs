@@ -1,11 +1,9 @@
-use std::fs::File;
-
-use wgpu::util::DeviceExt;
-
 use crate::{
     cast_slice, kernel_uniforms::KernelUniforms, settings::Settings, texture_blit::TextureBlit,
     CpuTexture,
 };
+use std::fs::File;
+use wgpu::util::DeviceExt;
 
 struct KernelImage {
     width: u32,
@@ -146,7 +144,11 @@ fn create_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::Buffer(uniforms.slice(..)),
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: uniforms,
+                    offset: 0,
+                    size: None,
+                },
             },
             wgpu::BindGroupEntry {
                 binding: 3,
@@ -171,9 +173,9 @@ impl KernelImage {
                     binding: 0,
                     visibility: wgpu::ShaderStage::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
-                        dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: wgpu::TextureViewDimension::D2,
                         format: wgpu::TextureFormat::Rgba32Float,
-                        readonly: false,
+                        access: wgpu::StorageTextureAccess::ReadWrite,
                     },
                     count: None,
                 },
@@ -181,17 +183,18 @@ impl KernelImage {
                     binding: 1,
                     visibility: wgpu::ShaderStage::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
-                        dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: wgpu::TextureViewDimension::D2,
                         format: wgpu::TextureFormat::R32Uint,
-                        readonly: false,
+                        access: wgpu::StorageTextureAccess::ReadWrite,
                     },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::COMPUTE,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
@@ -199,15 +202,18 @@ impl KernelImage {
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStage::COMPUTE,
-                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    ty: wgpu::BindingType::Sampler {
+                        comparison: false,
+                        filtering: false,
+                    },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
                     visibility: wgpu::ShaderStage::COMPUTE,
-                    ty: wgpu::BindingType::SampledTexture {
-                        dimension: wgpu::TextureViewDimension::D2,
-                        component_type: wgpu::TextureComponentType::Float,
+                    ty: wgpu::BindingType::Texture {
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         multisampled: false,
                     },
                     count: None,
@@ -295,7 +301,7 @@ pub struct Kernel {
 
 impl Kernel {
     pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
-        let module = device.create_shader_module(wgpu::include_spirv!("mandelbox.comp.spv"));
+        let module = device.create_shader_module(&wgpu::include_spirv!("mandelbox.comp.spv"));
 
         let data = KernelImage::new(device, queue, width, height);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -306,10 +312,8 @@ impl Kernel {
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
-            compute_stage: wgpu::ProgrammableStageDescriptor {
-                module: &module,
-                entry_point: "main",
-            },
+            module: &module,
+            entry_point: "main",
         });
 
         Self {
@@ -365,7 +369,7 @@ impl Kernel {
         // queue.write_buffer(&self.data.uniforms, 0, uniforms_u8);
         self.old_settings = settings.clone();
 
-        let mut pass = encoder.begin_compute_pass();
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         pass.set_pipeline(&self.kernel);
         pass.set_bind_group(0, &self.data.bind_group, &[]);
         let (width, height) = self.data.size();
@@ -409,7 +413,7 @@ impl Kernel {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsage::COPY_SRC | wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::COPY_SRC | wgpu::TextureUsage::RENDER_ATTACHMENT,
         });
         let texture_blit = TextureBlit::new(device, format, &src.create_view(&Default::default()));
         texture_blit.blit(encoder, &dst.create_view(&Default::default()));

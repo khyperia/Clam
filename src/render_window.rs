@@ -50,7 +50,7 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
+            power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
         })
         .await
@@ -58,9 +58,9 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
     adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                features: wgpu::Features::empty(),
+                label: None,
+                features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                 limits: wgpu::Limits::default(),
-                shader_validation: cfg!(debug_assertions),
             },
             None, // Trace path
         )
@@ -76,7 +76,7 @@ impl RenderWindow {
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
             })
             .await
@@ -87,9 +87,9 @@ impl RenderWindow {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    label: None,
+                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     limits: wgpu::Limits::default(),
-                    shader_validation: cfg!(debug_assertions),
                 },
                 None, // Trace path
             )
@@ -100,7 +100,7 @@ impl RenderWindow {
         let local_pool = futures::executor::LocalPool::new();
 
         let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
             width: size.width,
             height: size.height,
