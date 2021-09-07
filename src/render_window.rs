@@ -29,12 +29,11 @@ fn find_font() -> Result<&'static Path, &'static str> {
 
 struct RenderWindow {
     surface: wgpu::Surface,
+    surface_config: wgpu::SurfaceConfiguration,
     device: wgpu::Device,
     queue: wgpu::Queue,
     staging_belt: wgpu::util::StagingBelt,
     local_pool: futures::executor::LocalPool,
-    sc_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
     glyph: wgpu_glyph::GlyphBrush<()>,
     size: winit::dpi::PhysicalSize<u32>,
     texture_blit: TextureBlit,
@@ -47,7 +46,7 @@ pub fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 }
 
 pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -59,7 +58,8 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
                 limits: wgpu::Limits::default(),
             },
             None, // Trace path
@@ -70,9 +70,7 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
 
 impl RenderWindow {
     async fn new(window: &Window) -> Self {
-        let size = window.inner_size();
-
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -88,7 +86,8 @@ impl RenderWindow {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                        | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
                     limits: wgpu::Limits::default(),
                 },
                 None, // Trace path
@@ -96,39 +95,44 @@ impl RenderWindow {
             .await
             .unwrap();
 
-        let staging_belt = wgpu::util::StagingBelt::new(1024);
-        let local_pool = futures::executor::LocalPool::new();
+        let swapchain_format = surface.get_preferred_format(&adapter).unwrap();
 
-        let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        let size = window.inner_size();
+
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: swapchain_format,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
-        let swap_chain = device.create_swap_chain(&surface, &sc_desc);
+
+        surface.configure(&device, &surface_config);
+
+        let staging_belt = wgpu::util::StagingBelt::new(1024);
+        let local_pool = futures::executor::LocalPool::new();
 
         let interactive = SyncInteractiveKernel::create(&device, &queue, size.width, size.height);
 
         let texture_blit = TextureBlit::new(
             &device,
-            sc_desc.format,
+            swapchain_format,
             &interactive.texture().create_view(&Default::default()),
         );
 
         let font_path = find_font().unwrap();
         let font_data = std::fs::read(font_path).unwrap();
         let font = wgpu_glyph::ab_glyph::FontArc::try_from_vec(font_data).expect("load font");
-        let glyph = wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, sc_desc.format);
+        let glyph =
+            wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, swapchain_format);
 
         Self {
             surface,
+            surface_config,
             device,
             queue,
             staging_belt,
             local_pool,
-            sc_desc,
-            swap_chain,
             glyph,
             size,
             texture_blit,
@@ -139,9 +143,9 @@ impl RenderWindow {
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
-        self.sc_desc.width = new_size.width;
-        self.sc_desc.height = new_size.height;
-        self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+        self.surface_config.width = new_size.width;
+        self.surface_config.height = new_size.height;
+        self.surface.configure(&self.device, &self.surface_config);
         self.interactive
             .resize(&self.device, self.size.width, self.size.height);
     }
@@ -164,8 +168,15 @@ impl RenderWindow {
         }
     }
 
-    fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
-        let frame = self.swap_chain.get_current_frame()?.output;
+    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let frame = self.surface.get_current_frame()?;
+        if frame.suboptimal {
+            println!("suboptimal");
+        }
+        let frame_view = frame
+            .output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
@@ -180,7 +191,7 @@ impl RenderWindow {
                 .texture()
                 .create_view(&wgpu::TextureViewDescriptor::default()),
         );
-        self.texture_blit.blit(&mut encoder, &frame.view);
+        self.texture_blit.blit(&mut encoder, &frame_view);
 
         self.fps_counter.tick();
         let display_text = format!(
@@ -199,7 +210,7 @@ impl RenderWindow {
                 &self.device,
                 &mut self.staging_belt,
                 &mut encoder,
-                &frame.view,
+                &frame_view,
                 self.size.width,
                 self.size.height,
             )
@@ -242,17 +253,13 @@ pub fn run() -> ! {
                 _ => {}
             }
         }
-        Event::RedrawRequested(_) => {
-            match state.render() {
-                Ok(_) => {}
-                // Recreate the swap_chain if lost
-                Err(wgpu::SwapChainError::Lost) => state.resize(state.size),
-                // The system is out of memory, we should probably quit
-                Err(wgpu::SwapChainError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                // All other errors (Outdated, Timeout) should be resolved by the next frame
-                Err(e) => eprintln!("{:?}", e),
-            }
-        }
+        Event::RedrawRequested(_) => match state.render() {
+            Ok(_) => {}
+            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+            Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+            Err(wgpu::SurfaceError::Timeout) => eprintln!("Error: Timeout"),
+            Err(wgpu::SurfaceError::Outdated) => eprintln!("Error: Outdated"),
+        },
         Event::MainEventsCleared => {
             // RedrawRequested will only trigger once, unless we manually
             // request it.

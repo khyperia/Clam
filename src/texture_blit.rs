@@ -31,7 +31,7 @@ impl TextureBlit {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
                         view_dimension: wgpu::TextureViewDimension::D2,
@@ -41,7 +41,7 @@ impl TextureBlit {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler {
                         filtering: false,
                         comparison: false,
@@ -59,8 +59,12 @@ impl TextureBlit {
             push_constant_ranges: &[],
         });
 
-        let vs_module = device.create_shader_module(&wgpu::include_spirv!("texture_blit.vert.spv"));
-        let fs_module = device.create_shader_module(&wgpu::include_spirv!("texture_blit.frag.spv"));
+        let vs_module = unsafe {
+            device.create_shader_module_spirv(&wgpu::include_spirv_raw!("texture_blit.vert.spv"))
+        };
+        let fs_module = unsafe {
+            device.create_shader_module_spirv(&wgpu::include_spirv_raw!("texture_blit.frag.spv"))
+        };
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -74,8 +78,10 @@ impl TextureBlit {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Back,
+                cull_mode: None,
+                clamp_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
@@ -84,9 +90,8 @@ impl TextureBlit {
                 entry_point: "main",
                 targets: &[wgpu::ColorTargetState {
                     format: target_format,
-                    color_blend: wgpu::BlendState::REPLACE,
-                    alpha_blend: wgpu::BlendState::REPLACE,
-                    write_mask: wgpu::ColorWrite::ALL,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
                 }],
             }),
         });
@@ -129,8 +134,8 @@ impl TextureBlit {
     pub fn blit(&self, encoder: &mut wgpu::CommandEncoder, dst: &wgpu::TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &dst,
+            color_attachments: &[wgpu::RenderPassColorAttachment {
+                view: dst,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {

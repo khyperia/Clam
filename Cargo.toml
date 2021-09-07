@@ -3,6 +3,7 @@ name = "clam5"
 version = "0.1.0"
 authors = ["khyperia <khyperia@live.com>"]
 edition = "2018"
+resolver = "2"
 
 [dependencies]
 cgmath = ""
@@ -14,7 +15,7 @@ hdrldr = ""
 png = { version = "", default-features = false, features = ["png-encoding"] }
 wgpu = ""
 wgpu_glyph = ""
-winit = { version = "", default-features = false }
+winit = { version = "", default-features = false, features = ["x11"] }
 
 [build-dependencies]
 anyhow = ""

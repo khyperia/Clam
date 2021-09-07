@@ -22,13 +22,13 @@ fn new_tex(
     device: &wgpu::Device,
     width: u32,
     height: u32,
-    usage: wgpu::TextureUsage,
+    usage: wgpu::TextureUsages,
     format: wgpu::TextureFormat,
 ) -> wgpu::Texture {
     let texture_size = wgpu::Extent3d {
         width,
         height,
-        depth: 1,
+        depth_or_array_layers: 1,
     };
     device.create_texture(&wgpu::TextureDescriptor {
         size: texture_size,
@@ -46,14 +46,14 @@ fn new_texes(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture, 
         device,
         width,
         height,
-        wgpu::TextureUsage::STORAGE | wgpu::TextureUsage::SAMPLED,
+        wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
         wgpu::TextureFormat::Rgba32Float,
     );
     let randbuf = new_tex(
         device,
         width,
         height,
-        wgpu::TextureUsage::STORAGE,
+        wgpu::TextureUsages::STORAGE_BINDING,
         wgpu::TextureFormat::R32Uint,
     );
     (img, randbuf)
@@ -74,13 +74,13 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
         size: wgpu::Extent3d {
             width: image.width as u32,
             height: image.height as u32,
-            depth: 1,
+            depth_or_array_layers: 1,
         },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba32Float,
-        usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     });
 
     let mut encoder =
@@ -89,26 +89,27 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
     let image_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
         contents,
-        usage: wgpu::BufferUsage::COPY_SRC,
+        usage: wgpu::BufferUsages::COPY_SRC,
     });
     encoder.copy_buffer_to_texture(
-        wgpu::BufferCopyView {
+        wgpu::ImageCopyBuffer {
             buffer: &image_buf,
-            layout: wgpu::TextureDataLayout {
+            layout: wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: image.width as u32 * 16,
-                rows_per_image: image.height as u32,
+                bytes_per_row: std::num::NonZeroU32::new(image.width as u32 * 16),
+                rows_per_image: std::num::NonZeroU32::new(image.height as u32),
             },
         },
-        wgpu::TextureCopyView {
+        wgpu::ImageCopyTexture {
             texture: &texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
         },
         wgpu::Extent3d {
             width: image.width as u32,
             height: image.height as u32,
-            depth: 1,
+            depth_or_array_layers: 1,
         },
     );
 
@@ -144,11 +145,11 @@ fn create_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::Buffer {
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: uniforms,
                     offset: 0,
                     size: None,
-                },
+                }),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
@@ -171,7 +172,7 @@ impl KernelImage {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStage::COMPUTE,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         view_dimension: wgpu::TextureViewDimension::D2,
                         format: wgpu::TextureFormat::Rgba32Float,
@@ -181,7 +182,7 @@ impl KernelImage {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStage::COMPUTE,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::StorageTexture {
                         view_dimension: wgpu::TextureViewDimension::D2,
                         format: wgpu::TextureFormat::R32Uint,
@@ -191,7 +192,7 @@ impl KernelImage {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStage::COMPUTE,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -201,16 +202,16 @@ impl KernelImage {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
-                    visibility: wgpu::ShaderStage::COMPUTE,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Sampler {
                         comparison: false,
-                        filtering: false,
+                        filtering: true,
                     },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
-                    visibility: wgpu::ShaderStage::COMPUTE,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Texture {
                         view_dimension: wgpu::TextureViewDimension::D2,
                         sample_type: wgpu::TextureSampleType::Float { filterable: false },
@@ -224,7 +225,7 @@ impl KernelImage {
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: std::mem::size_of::<KernelUniforms>() as u64,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -301,7 +302,9 @@ pub struct Kernel {
 
 impl Kernel {
     pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
-        let module = device.create_shader_module(&wgpu::include_spirv!("mandelbox.comp.spv"));
+        let module = unsafe {
+            device.create_shader_module_spirv(&wgpu::include_spirv_raw!("mandelbox.comp.spv"))
+        };
 
         let data = KernelImage::new(device, queue, width, height);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -356,7 +359,7 @@ impl Kernel {
         let uniforms_staging = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: uniforms_u8,
-            usage: wgpu::BufferUsage::COPY_SRC,
+            usage: wgpu::BufferUsages::COPY_SRC,
         });
         encoder.copy_buffer_to_buffer(
             &uniforms_staging,
@@ -387,7 +390,7 @@ impl Kernel {
         let size = wgpu::Extent3d {
             width: self.data.width,
             height: self.data.height,
-            depth: 1,
+            depth_or_array_layers: 1,
         };
         let texture = Self::render_to_texture(device, &mut encoder, &self.data.img, size);
         let data = Self::download_texture(device, queue, encoder, &texture, size);
@@ -413,7 +416,7 @@ impl Kernel {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsage::COPY_SRC | wgpu::TextureUsage::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
         let texture_blit = TextureBlit::new(device, format, &src.create_view(&Default::default()));
         texture_blit.blit(encoder, &dst.create_view(&Default::default()));
@@ -433,22 +436,23 @@ impl Kernel {
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: output_size,
-            usage: wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
 
         encoder.copy_texture_to_buffer(
-            wgpu::TextureCopyView {
+            wgpu::ImageCopyTexture {
                 texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
             },
-            wgpu::BufferCopyView {
+            wgpu::ImageCopyBuffer {
                 buffer: &output_buffer,
-                layout: wgpu::TextureDataLayout {
+                layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: size.width * pixel_bytes as u32,
-                    rows_per_image: size.height,
+                    bytes_per_row: std::num::NonZeroU32::new(size.width * pixel_bytes as u32),
+                    rows_per_image: std::num::NonZeroU32::new(size.height),
                 },
             },
             size,
