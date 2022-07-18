@@ -203,10 +203,7 @@ impl KernelImage {
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Sampler {
-                        comparison: false,
-                        filtering: true,
-                    },
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), // idk might be wrong
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
@@ -376,7 +373,7 @@ impl Kernel {
         pass.set_pipeline(&self.kernel);
         pass.set_bind_group(0, &self.data.bind_group, &[]);
         let (width, height) = self.data.size();
-        pass.dispatch(width * height, 1, 1);
+        pass.dispatch_workgroups((width * height + 63) / 64, 1, 1); // TODO: Workgroups??
         self.frame += 1;
     }
 
@@ -460,9 +457,13 @@ impl Kernel {
         queue.submit(std::iter::once(encoder.finish()));
 
         let output_slice = output_buffer.slice(..);
-        let future = output_slice.map_async(wgpu::MapMode::Read);
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        output_slice.map_async(wgpu::MapMode::Read, move |asdf| {
+            asdf.unwrap();
+            tx.send(0).unwrap();
+        });
         device.poll(wgpu::Maintain::Wait);
-        futures::executor::block_on(future).unwrap();
+        rx.recv().unwrap();
         let data = output_slice.get_mapped_range().to_vec();
         output_buffer.unmap();
         data

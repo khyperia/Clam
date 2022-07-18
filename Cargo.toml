@@ -6,19 +6,19 @@ edition = "2018"
 resolver = "2"
 
 [dependencies]
-cgmath = ""
-chrono = { version = "", default-features = false, features = ["clock"] }
-env_logger = { version = "", default-features = false }
-futures = { version = "", default-features = false, features = ["executor"] }
-glam = ""
-hdrldr = ""
-png = { version = "", default-features = false, features = ["png-encoding"] }
-wgpu = ""
-wgpu_glyph = ""
-winit = { version = "", default-features = false, features = ["x11"] }
+cgmath = "*"
+chrono = { version = "*", default-features = false, features = ["clock"] }
+env_logger = { version = "*", default-features = false }
+futures = { version = "*", default-features = false, features = ["executor"] }
+glam = "*"
+hdrldr = "*"
+png = { version = "*", default-features = false, features = ["png-encoding"] }
+wgpu = "*"
+wgpu_glyph = "*"
+winit = { version = "*", default-features = false, features = ["x11"] }
 
 [build-dependencies]
-anyhow = ""
-fs_extra = ""
-glob = ""
-shaderc = ""
+anyhow = "*"
+fs_extra = "*"
+glob = "*"
+shaderc = "*"

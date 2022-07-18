@@ -55,7 +55,7 @@ fn main() -> Result<()> {
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
 
-    let mut compiler = shaderc::Compiler::new().context("Unable to create shader compiler")?;
+    let compiler = shaderc::Compiler::new().context("Unable to create shader compiler")?;
 
     // This can't be parallelized. The [shaderc::Compiler] is not
     // thread safe. Also, it creates a lot of resources. You could
@@ -75,7 +75,7 @@ fn main() -> Result<()> {
         let compiled = compiler.compile_into_spirv(
             &shader.src,
             shader.kind,
-            &shader.src_path.to_str().unwrap(),
+            shader.src_path.to_str().unwrap(),
             "main",
             Some(&options),
         )?;

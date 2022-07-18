@@ -33,7 +33,6 @@ struct RenderWindow {
     device: wgpu::Device,
     queue: wgpu::Queue,
     staging_belt: wgpu::util::StagingBelt,
-    local_pool: futures::executor::LocalPool,
     glyph: wgpu_glyph::GlyphBrush<()>,
     size: winit::dpi::PhysicalSize<u32>,
     texture_blit: TextureBlit,
@@ -50,6 +49,7 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
+            force_fallback_adapter: false,
             compatible_surface: None,
         })
         .await
@@ -75,6 +75,7 @@ impl RenderWindow {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
             })
             .await
@@ -95,7 +96,7 @@ impl RenderWindow {
             .await
             .unwrap();
 
-        let swapchain_format = surface.get_preferred_format(&adapter).unwrap();
+        let swapchain_format = surface.get_supported_formats(&adapter)[0];
 
         let size = window.inner_size();
 
@@ -110,7 +111,6 @@ impl RenderWindow {
         surface.configure(&device, &surface_config);
 
         let staging_belt = wgpu::util::StagingBelt::new(1024);
-        let local_pool = futures::executor::LocalPool::new();
 
         let interactive = SyncInteractiveKernel::create(&device, &queue, size.width, size.height);
 
@@ -132,7 +132,6 @@ impl RenderWindow {
             device,
             queue,
             staging_belt,
-            local_pool,
             glyph,
             size,
             texture_blit,
@@ -169,12 +168,11 @@ impl RenderWindow {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let frame = self.surface.get_current_frame()?;
+        let frame = self.surface.get_current_texture()?;
         if frame.suboptimal {
             println!("suboptimal");
         }
         let frame_view = frame
-            .output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -218,13 +216,9 @@ impl RenderWindow {
 
         self.staging_belt.finish();
         self.queue.submit(std::iter::once(encoder.finish()));
+        frame.present();
 
-        use futures::task::SpawnExt;
-        self.local_pool
-            .spawner()
-            .spawn(self.staging_belt.recall())
-            .unwrap();
-        self.local_pool.run_until_stalled();
+        self.staging_belt.recall();
 
         Ok(())
     }

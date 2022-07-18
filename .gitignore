@@ -4,6 +4,7 @@
 *.png
 *.spv
 .vs/
+.idea/
 /target/
 /test/output
 keyframes.clam5
