@@ -60,7 +60,7 @@ fn new_texes(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture, 
 }
 
 fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
-    let file = File::open("Arches_E_PineTree_3k.hdr").unwrap();
+    let file = File::open("HDR_029_Sky_Cloudy_Env.hdr").unwrap();
     let image = hdrldr::load(file).unwrap();
     let image_rgba: Vec<(f32, f32, f32, f32)> = image
         .data

@@ -25,6 +25,7 @@ layout(binding = 2) uniform Data
     float bloom_size;               // 0.01 -0.25
     float fog_distance;             // 10.0 -1.0
     float fog_brightness;           // 1.0 -0.5
+    float exposure;                 // 1.0 -0.5
     float surface_color_variance;   // 0.0625 -0.25
     float surface_color_shift;      // 0.0 0.125
     float surface_color_saturation; // 0.75 0.125
@@ -470,7 +471,7 @@ vec3 Trace(Ray ray, uint width, uint height, inout Random rand)
             break;
         }
     }
-    return rayColor;
+    return rayColor * exposure;
 }
 
 vec3 PreviewTrace(Ray ray, uint width, uint height)

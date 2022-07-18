@@ -22,6 +22,7 @@ pub struct KernelUniforms {
     bloom_size: f32,
     fog_distance: f32,
     fog_brightness: f32,
+    exposure: f32,
     surface_color_variance: f32,
     surface_color_shift: f32,
     surface_color_saturation: f32,
@@ -158,6 +159,7 @@ const UNIFORM_METADATA: &[Meta] = &[
         |s| &s.fog_brightness,
         |s| &mut s.fog_brightness,
     ),
+    Meta::Float("exposure", 1.0, -0.5, |s| &s.exposure, |s| &mut s.exposure),
     Meta::Float(
         "surface_color_variance",
         0.0625,
