@@ -119,11 +119,11 @@ impl SettingValue {
 
 impl SettingValueEnum {
     pub fn kinds_match(&self, other: &SettingValueEnum) -> bool {
-        match (self, other) {
-            (SettingValueEnum::Int(_), SettingValueEnum::Int(_)) => true,
-            (SettingValueEnum::Float(_, _), SettingValueEnum::Float(_, _)) => true,
-            (SettingValueEnum::Vec3(_, _), SettingValueEnum::Vec3(_, _)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (SettingValueEnum::Int(_), SettingValueEnum::Int(_))
+                | (SettingValueEnum::Float(_, _), SettingValueEnum::Float(_, _))
+                | (SettingValueEnum::Vec3(_, _), SettingValueEnum::Vec3(_, _))
+        )
     }
 }

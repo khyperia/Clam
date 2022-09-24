@@ -103,7 +103,7 @@ impl Settings {
         for line in lines {
             read_any = true;
             let line = line?;
-            if &line == "---" || &line == "" {
+            if &line == "---" || line.is_empty() {
                 break;
             }
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();

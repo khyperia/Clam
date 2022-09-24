@@ -13,6 +13,7 @@ fn interpolate_float(p0: f64, p1: f64, p2: f64, p3: f64, t: f64, linear: bool) -
     if linear {
         p1 + (p2 - p1) * t
     } else {
+        // catmull rom
         let t2 = t * t;
         let t3 = t2 * t;
         ((2.0 * p1)
@@ -154,10 +155,10 @@ impl KeyframeList {
         let index_next2 = self.clamp(index_cur as isize + 2, wrap);
         let mut base = self.keyframes[index_cur].clone();
         for value in &mut base.values {
-            let prev = self.keyframes[index_prev].find(&value.key()).value();
-            let cur = self.keyframes[index_cur].find(&value.key()).value();
-            let next = self.keyframes[index_next].find(&value.key()).value();
-            let next2 = self.keyframes[index_next2].find(&value.key()).value();
+            let prev = self.keyframes[index_prev].find(value.key()).value();
+            let cur = self.keyframes[index_cur].find(value.key()).value();
+            let next = self.keyframes[index_next].find(value.key()).value();
+            let next2 = self.keyframes[index_next2].find(value.key()).value();
             let result = interpolate(
                 prev,
                 cur,

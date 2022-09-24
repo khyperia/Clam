@@ -166,7 +166,13 @@ fn video_one(
 ) -> Result<(), Error> {
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-    for _ in 0..rpp {
+    for i in 0..rpp {
+        if cfg!(windows) && i % 64 == 0 {
+            queue.submit(std::iter::once(encoder.finish()));
+            encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            device.poll(wgpu::Maintain::Wait);
+        }
         kernel.run(device, &mut encoder, settings);
     }
     queue.submit(std::iter::once(encoder.finish()));
@@ -233,6 +239,9 @@ fn video_write_from_pngseq(twitter: bool) -> Result<(), Error> {
     args.extend_from_slice(&["-framerate", "60", "-i", "%04d.png"]);
     if twitter {
         args.extend_from_slice(&["-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "2048K"]);
+    } else {
+        // video is corrupted otherwise for some reason
+        args.extend_from_slice(&["-pix_fmt", "yuv420p"]);
     }
     args.extend_from_slice(&["video.mp4", "-y"]);
     ffmpeg(&args)
@@ -269,7 +278,7 @@ fn video_write(stream: &mpsc::Receiver<CpuTexture>, twitter: bool) -> Result<(),
     }
 }
 
-#[allow(clippy::clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn video(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
