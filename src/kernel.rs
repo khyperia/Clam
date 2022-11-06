@@ -299,9 +299,7 @@ pub struct Kernel {
 
 impl Kernel {
     pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
-        let module = unsafe {
-            device.create_shader_module_spirv(&wgpu::include_spirv_raw!("mandelbox.comp.spv"))
-        };
+        let module = device.create_shader_module(wgpu::include_wgsl!("mandelbox.wgsl"));
 
         let data = KernelImage::new(device, queue, width, height);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

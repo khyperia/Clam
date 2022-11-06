@@ -2,10 +2,8 @@ use crate::{
     keyframe_list::KeyframeList, settings::Settings, settings_input::SettingsInput, Error, Key,
 };
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    time::Instant,
-};
+use instant::Instant;
+use std::collections::{hash_map::Entry, HashMap};
 
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,

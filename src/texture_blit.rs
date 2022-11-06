@@ -56,19 +56,14 @@ impl TextureBlit {
             push_constant_ranges: &[],
         });
 
-        let vs_module = unsafe {
-            device.create_shader_module_spirv(&wgpu::include_spirv_raw!("texture_blit.vert.spv"))
-        };
-        let fs_module = unsafe {
-            device.create_shader_module_spirv(&wgpu::include_spirv_raw!("texture_blit.frag.spv"))
-        };
+        let module = device.create_shader_module(wgpu::include_wgsl!("texture_blit.wgsl"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &vs_module,
-                entry_point: "main",
+                module: &module,
+                entry_point: "vert",
                 buffers: &[],
             },
             primitive: wgpu::PrimitiveState {
@@ -83,8 +78,8 @@ impl TextureBlit {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                module: &fs_module,
-                entry_point: "main",
+                module: &module,
+                entry_point: "frag",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
                     blend: None,

@@ -1,5 +1,8 @@
 use std::path::Path;
 
+#[cfg(target_arch = "wasm32")]
+use winit::platform::web::WindowExtWebSys;
+
 use crate::{
     fps_counter::FpsCounter, interactive::SyncInteractiveKernel, texture_blit::TextureBlit,
 };
@@ -27,7 +30,9 @@ fn find_font() -> Result<&'static Path, &'static str> {
     Err("No font found")
 }
 
-struct RenderWindow {
+pub struct RenderWindow {
+    event_loop: Option<EventLoop<()>>,
+    window: Window,
     surface: wgpu::Surface,
     surface_config: wgpu::SurfaceConfiguration,
     device: wgpu::Device,
@@ -40,11 +45,7 @@ struct RenderWindow {
     interactive: SyncInteractiveKernel,
 }
 
-pub fn run_headless() -> (wgpu::Device, wgpu::Queue) {
-    futures::executor::block_on(run_headless_async())
-}
-
-pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
+pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -69,9 +70,27 @@ pub async fn run_headless_async() -> (wgpu::Device, wgpu::Queue) {
 }
 
 impl RenderWindow {
-    async fn new(window: &Window) -> Self {
+    pub async fn new() -> Self {
+        let event_loop = EventLoop::new();
+        let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::dpi::PhysicalSize;
+            window.set_inner_size(PhysicalSize::new(450, 400));
+
+            web_sys::window()
+                .and_then(|win| {
+                    win.document()?
+                        .body()?
+                        .append_child(&web_sys::Element::from(window.canvas()))
+                        .ok()
+                })
+                .expect("couldn't append canvas to document body");
+        }
+
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-        let surface = unsafe { instance.create_surface(window) };
+        let surface = unsafe { instance.create_surface(&window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -87,8 +106,7 @@ impl RenderWindow {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                        | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
+                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     limits: wgpu::Limits::default(),
                 },
                 None, // Trace path
@@ -106,6 +124,7 @@ impl RenderWindow {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
         };
 
         surface.configure(&device, &surface_config);
@@ -127,6 +146,8 @@ impl RenderWindow {
             wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, swapchain_format);
 
         Self {
+            event_loop: Some(event_loop),
+            window,
             surface,
             surface_config,
             device,
@@ -222,43 +243,39 @@ impl RenderWindow {
 
         Ok(())
     }
-}
 
-pub fn run() -> ! {
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
-
-    let mut state = futures::executor::block_on(RenderWindow::new(&window));
-
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == window.id() => {
-            state.input(event);
-            match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized(physical_size) => {
-                    state.resize(*physical_size);
+    pub fn run(mut self) -> ! {
+        let event_loop = self.event_loop.take().unwrap();
+        event_loop.run(move |event, _, control_flow| match event {
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == self.window.id() => {
+                self.input(event);
+                match event {
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::Resized(physical_size) => {
+                        self.resize(*physical_size);
+                    }
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                        self.resize(**new_inner_size);
+                    }
+                    _ => {}
                 }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    state.resize(**new_inner_size);
-                }
-                _ => {}
             }
-        }
-        Event::RedrawRequested(_) => match state.render() {
-            Ok(_) => {}
-            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-            Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-            Err(wgpu::SurfaceError::Timeout) => eprintln!("Error: Timeout"),
-            Err(wgpu::SurfaceError::Outdated) => eprintln!("Error: Outdated"),
-        },
-        Event::MainEventsCleared => {
-            // RedrawRequested will only trigger once, unless we manually
-            // request it.
-            window.request_redraw();
-        }
-        _ => {}
-    });
+            Event::RedrawRequested(_) => match self.render() {
+                Ok(_) => {}
+                Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
+                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                Err(wgpu::SurfaceError::Timeout) => eprintln!("Error: Timeout"),
+                Err(wgpu::SurfaceError::Outdated) => eprintln!("Error: Outdated"),
+            },
+            Event::MainEventsCleared => {
+                // RedrawRequested will only trigger once, unless we manually
+                // request it.
+                self.window.request_redraw();
+            }
+            _ => {}
+        });
+    }
 }
