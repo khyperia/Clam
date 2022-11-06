@@ -30,9 +30,3 @@ console_error_panic_hook = "*"
 wasm-bindgen-futures = "*"
 console_log = { version = "*", features = ["color"] }
 wgpu = "*"
-
-[build-dependencies]
-anyhow = "*"
-fs_extra = "*"
-glob = "*"
-shaderc = "*"

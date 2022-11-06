@@ -2,7 +2,6 @@
 *.mp4
 *.obj
 *.png
-*.spv
 .vs/
 .idea/
 /target/

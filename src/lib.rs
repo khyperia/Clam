@@ -35,7 +35,7 @@ use winit::event::VirtualKeyCode as Key;
 
 pub type Error = Box<dyn std::error::Error>;
 
-struct CpuTexture {
+pub struct CpuTexture {
     data: Vec<u8>,
     size: (u32, u32),
 }
