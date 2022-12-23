@@ -44,6 +44,7 @@ pub struct KernelUniforms {
     max_iters: u32,
     max_ray_steps: u32,
     num_ray_bounces: u32,
+    gamma_test: u32,
     pub width: u32,
     pub height: u32,
     pub frame: u32,
@@ -269,6 +270,7 @@ const UNIFORM_METADATA: &[Meta] = &[
         |s| &s.num_ray_bounces,
         |s| &mut s.num_ray_bounces,
     ),
+    Meta::Int("gamma_test", 0, |s| &s.gamma_test, |s| &mut s.gamma_test),
 ];
 
 impl KernelUniforms {

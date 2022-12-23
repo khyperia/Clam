@@ -142,6 +142,8 @@ impl RenderWindow {
             swapchain_format,
             &interactive.texture(),
             interactive.texture_size(),
+            // "lol", I said, "lmao"
+            !format!("{:?}", swapchain_format).contains("Srgb"),
         );
 
         #[cfg(target_arch = "wasm32")]
@@ -219,6 +221,7 @@ impl RenderWindow {
             &self.device,
             &self.interactive.texture(),
             self.interactive.texture_size(),
+            None,
         );
         self.buffer_blit
             .blit(&self.device, &mut encoder, &frame_view);

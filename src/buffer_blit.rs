@@ -1,14 +1,24 @@
+use log::info;
 use wgpu::util::DeviceExt;
 
 use crate::cast_slice;
+
+#[repr(C)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+struct Uniforms {
+    width: u32,
+    height: u32,
+    output_srgb: u32,
+    dummy: u32,
+}
 
 pub struct BufferBlit {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
-    sizebuf: wgpu::Buffer,
-    sizebufdata: (u32, u32),
-    size: (u32, u32),
+    uniforms_buf: wgpu::Buffer,
+    uniforms_data: Uniforms,
+    uniforms: Uniforms,
 }
 
 impl BufferBlit {
@@ -17,6 +27,7 @@ impl BufferBlit {
         target_format: wgpu::TextureFormat,
         src: &wgpu::Buffer,
         size: (u32, u32),
+        output_srgb: bool,
     ) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -44,14 +55,14 @@ impl BufferBlit {
             ],
         });
 
-        let sizebuf = device.create_buffer(&wgpu::BufferDescriptor {
+        let uniforms_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: 8,
+            size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let bind_group = Self::create_bind_group(device, &bind_group_layout, src, &sizebuf);
+        let bind_group = Self::create_bind_group(device, &bind_group_layout, src, &uniforms_buf);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -96,9 +107,14 @@ impl BufferBlit {
             pipeline,
             bind_group_layout,
             bind_group,
-            sizebuf,
-            size,
-            sizebufdata: (0, 0),
+            uniforms_buf,
+            uniforms_data: Default::default(),
+            uniforms: Uniforms {
+                width: size.0,
+                height: size.1,
+                output_srgb: if output_srgb { 1 } else { 0 },
+                dummy: 0,
+            },
         }
     }
 
@@ -132,26 +148,42 @@ impl BufferBlit {
         })
     }
 
-    pub fn set_src(&mut self, device: &wgpu::Device, src: &wgpu::Buffer, size: (u32, u32)) {
-        self.size = size;
+    pub fn set_src(
+        &mut self,
+        device: &wgpu::Device,
+        src: &wgpu::Buffer,
+        size: (u32, u32),
+        output_srgb: Option<bool>,
+    ) {
+        self.uniforms.width = size.0;
+        self.uniforms.height = size.1;
+        if let Some(output_srgb) = output_srgb {
+            self.uniforms.output_srgb = if output_srgb { 1 } else { 0 };
+        }
         self.bind_group =
-            Self::create_bind_group(device, &self.bind_group_layout, src, &self.sizebuf);
+            Self::create_bind_group(device, &self.bind_group_layout, src, &self.uniforms_buf);
     }
 
-    fn set_size(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
-        if self.size == self.sizebufdata {
+    fn set_uniforms(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
+        if self.uniforms == self.uniforms_data {
             return;
         }
-        self.sizebufdata = self.size;
+        self.uniforms_data = self.uniforms;
 
-        let size = [self.size];
-        let size_u8: &[u8] = cast_slice(&size);
+        let slice = [self.uniforms];
+        let slice_u8: &[u8] = cast_slice(&slice);
         let staging = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: size_u8,
+            contents: slice_u8,
             usage: wgpu::BufferUsages::COPY_SRC,
         });
-        encoder.copy_buffer_to_buffer(&staging, 0, &self.sizebuf, 0, 8);
+        encoder.copy_buffer_to_buffer(
+            &staging,
+            0,
+            &self.uniforms_buf,
+            0,
+            std::mem::size_of::<Uniforms>() as u64,
+        );
     }
 
     pub fn blit(
@@ -160,7 +192,7 @@ impl BufferBlit {
         encoder: &mut wgpu::CommandEncoder,
         dst: &wgpu::TextureView,
     ) {
-        self.set_size(device, encoder);
+        self.set_uniforms(device, encoder);
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {

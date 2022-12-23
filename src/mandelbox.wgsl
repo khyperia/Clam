@@ -51,6 +51,7 @@ struct Data {
     max_iters: u32,
     max_ray_steps: u32,
     num_ray_bounces: u32,
+    gamma_test: u32,
     width: u32,
     height: u32,
     frame: u32,
@@ -519,9 +520,8 @@ fn main(@builtin(global_invocation_id) gl_GlobalInvocationID: vec3<u32>) {
     let x = idx % data.width;
     let y = idx / data.width;
 
-    let gamma_test = false;
     var newColor: vec3<f32>;
-    if gamma_test {
+    if data.gamma_test != 0u {
         newColor = GammaTest(x, y, data.width, data.height);
     } else {
         var oldColor: vec3<f32>;
