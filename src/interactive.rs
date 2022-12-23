@@ -46,8 +46,12 @@ impl SyncInteractiveKernel {
         self.kernel.run(device, encoder, &self.settings);
     }
 
-    pub fn texture(&self) -> &wgpu::Texture {
+    pub fn texture(&self) -> &wgpu::Buffer {
         self.kernel.texture()
+    }
+
+    pub fn texture_size(&self) -> (u32, u32) {
+        self.kernel.texture_size()
     }
 
     pub fn status(&self) -> String {

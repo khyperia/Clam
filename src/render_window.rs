@@ -3,9 +3,7 @@ use std::path::Path;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
 
-use crate::{
-    fps_counter::FpsCounter, interactive::SyncInteractiveKernel, texture_blit::TextureBlit,
-};
+use crate::{buffer_blit::BufferBlit, fps_counter::FpsCounter, interactive::SyncInteractiveKernel};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -40,7 +38,7 @@ pub struct RenderWindow {
     staging_belt: wgpu::util::StagingBelt,
     glyph: wgpu_glyph::GlyphBrush<()>,
     size: winit::dpi::PhysicalSize<u32>,
-    texture_blit: TextureBlit,
+    buffer_blit: BufferBlit,
     fps_counter: FpsCounter,
     interactive: SyncInteractiveKernel,
 }
@@ -133,15 +131,23 @@ impl RenderWindow {
 
         let interactive = SyncInteractiveKernel::create(&device, &queue, size.width, size.height);
 
-        let texture_blit = TextureBlit::new(
+        let buffer_blit = BufferBlit::new(
             &device,
             swapchain_format,
-            &interactive.texture().create_view(&Default::default()),
+            &interactive.texture(),
+            interactive.texture_size(),
         );
 
-        let font_path = find_font().unwrap();
-        let font_data = std::fs::read(font_path).unwrap();
-        let font = wgpu_glyph::ab_glyph::FontArc::try_from_vec(font_data).expect("load font");
+        #[cfg(target_arch = "wasm32")]
+        let font = wgpu_glyph::ab_glyph::FontArc::try_from_slice(include_bytes!(
+            "C:\\Windows\\Fonts\\arial.ttf"
+        ))
+        .expect("load font");
+        #[cfg(not(target_arch = "wasm32"))]
+        let font = wgpu_glyph::ab_glyph::FontArc::try_from_vec(
+            std::fs::read(find_font().unwrap()).unwrap(),
+        )
+        .expect("load font");
         let glyph =
             wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, swapchain_format);
 
@@ -155,7 +161,7 @@ impl RenderWindow {
             staging_belt,
             glyph,
             size,
-            texture_blit,
+            buffer_blit,
             fps_counter: FpsCounter::new(1.0),
             interactive,
         }
@@ -203,14 +209,13 @@ impl RenderWindow {
 
         self.interactive.run(&self.device, &mut encoder);
 
-        self.texture_blit.set_src(
+        self.buffer_blit.set_src(
             &self.device,
-            &self
-                .interactive
-                .texture()
-                .create_view(&wgpu::TextureViewDescriptor::default()),
+            &self.interactive.texture(),
+            self.interactive.texture_size(),
         );
-        self.texture_blit.blit(&mut encoder, &frame_view);
+        self.buffer_blit
+            .blit(&self.device, &mut encoder, &frame_view);
 
         self.fps_counter.tick();
         let display_text = format!(

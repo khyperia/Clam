@@ -1,5 +1,5 @@
 use crate::{
-    cast_slice, kernel_uniforms::KernelUniforms, settings::Settings, texture_blit::TextureBlit,
+    buffer_blit::BufferBlit, cast_slice, kernel_uniforms::KernelUniforms, settings::Settings,
     CpuTexture,
 };
 use std::fs::File;
@@ -9,8 +9,8 @@ struct KernelImage {
     width: u32,
     height: u32,
     scale: u32,
-    img: wgpu::Texture,
-    randbuf: wgpu::Texture,
+    img: wgpu::Buffer,
+    randbuf: wgpu::Buffer,
     uniforms: wgpu::Buffer,
     sampler: wgpu::Sampler,
     sky: wgpu::Texture,
@@ -18,48 +18,26 @@ struct KernelImage {
     bind_group: wgpu::BindGroup,
 }
 
-fn new_tex(
-    device: &wgpu::Device,
-    width: u32,
-    height: u32,
-    usage: wgpu::TextureUsages,
-    format: wgpu::TextureFormat,
-) -> wgpu::Texture {
-    let texture_size = wgpu::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-    };
-    device.create_texture(&wgpu::TextureDescriptor {
-        size: texture_size,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage,
+fn new_texes(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Buffer, wgpu::Buffer) {
+    let img = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-    })
-}
-
-fn new_texes(device: &wgpu::Device, width: u32, height: u32) -> (wgpu::Texture, wgpu::Texture) {
-    let img = new_tex(
-        device,
-        width,
-        height,
-        wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-        wgpu::TextureFormat::Rgba32Float,
-    );
-    let randbuf = new_tex(
-        device,
-        width,
-        height,
-        wgpu::TextureUsages::STORAGE_BINDING,
-        wgpu::TextureFormat::R32Uint,
-    );
+        size: width as u64 * height as u64 * (4 * 4),
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
+    let randbuf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: width as u64 * height as u64 * 4,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+    });
     (img, randbuf)
 }
 
 fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
+    #[cfg(target_arch = "wasm32")]
+    let file = include_bytes!("../HDR_029_Sky_Cloudy_Env.hdr") as &[u8];
+    #[cfg(not(target_arch = "wasm32"))]
     let file = File::open("HDR_029_Sky_Cloudy_Env.hdr").unwrap();
     let image = hdrldr::load(file).unwrap();
     let image_rgba: Vec<(f32, f32, f32, f32)> = image
@@ -121,8 +99,8 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
 fn create_bind_group(
     device: &wgpu::Device,
     bind_group_layout: &wgpu::BindGroupLayout,
-    img: &wgpu::Texture,
-    randbuf: &wgpu::Texture,
+    img: &wgpu::Buffer,
+    randbuf: &wgpu::Buffer,
     uniforms: &wgpu::Buffer,
     sampler: &wgpu::Sampler,
     sky: &wgpu::Texture,
@@ -133,15 +111,19 @@ fn create_bind_group(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(
-                    &img.create_view(&wgpu::TextureViewDescriptor::default()),
-                ),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: img,
+                    offset: 0,
+                    size: None,
+                }),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::TextureView(
-                    &randbuf.create_view(&wgpu::TextureViewDescriptor::default()),
-                ),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: randbuf,
+                    offset: 0,
+                    size: None,
+                }),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
@@ -173,20 +155,20 @@ impl KernelImage {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        format: wgpu::TextureFormat::Rgba32Float,
-                        access: wgpu::StorageTextureAccess::ReadWrite,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        format: wgpu::TextureFormat::R32Uint,
-                        access: wgpu::StorageTextureAccess::ReadWrite,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -375,95 +357,101 @@ impl Kernel {
         self.frame += 1;
     }
 
-    pub fn texture(&self) -> &wgpu::Texture {
+    pub fn texture(&self) -> &wgpu::Buffer {
         &self.data.img
     }
 
+    pub fn texture_size(&self) -> (u32, u32) {
+        (self.data.width, self.data.height)
+    }
+
     pub fn download(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> CpuTexture {
+        let size = self.texture_size();
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        let size = wgpu::Extent3d {
-            width: self.data.width,
-            height: self.data.height,
-            depth_or_array_layers: 1,
-        };
-        let texture = Self::render_to_texture(device, &mut encoder, &self.data.img, size);
-        let data = Self::download_texture(device, queue, encoder, &texture, size);
+        let tex = Self::copy_buffer_to_texture(device, &mut encoder, &self.data.img, size);
+        let buf = Self::copy_texture_to_buffer(device, &mut encoder, &tex, size);
+        queue.submit(std::iter::once(encoder.finish()));
+        let data = Self::download_buffer(device, queue, &buf);
         let mut result = CpuTexture {
             data,
-            size: (size.width, size.height),
+            size: (self.data.width, self.data.height),
         };
         result.rgba_to_rgb();
         result
     }
 
-    fn render_to_texture(
+    fn copy_buffer_to_texture(
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
-        src: &wgpu::Texture,
-        size: wgpu::Extent3d,
+        src: &wgpu::Buffer,
+        size: (u32, u32),
     ) -> wgpu::Texture {
         let format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let dst = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            size,
+            size: wgpu::Extent3d {
+                width: size.0,
+                height: size.1,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
-        let texture_blit = TextureBlit::new(device, format, &src.create_view(&Default::default()));
-        texture_blit.blit(encoder, &dst.create_view(&Default::default()));
+        let mut texture_blit = BufferBlit::new(device, format, &src, size);
+        texture_blit.blit(device, encoder, &dst.create_view(&Default::default()));
         dst
     }
 
-    fn download_texture(
+    fn copy_texture_to_buffer(
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        mut encoder: wgpu::CommandEncoder,
-        texture: &wgpu::Texture,
-        size: wgpu::Extent3d,
-    ) -> Vec<u8> {
-        let pixel_bytes = 4;
-        let output_size =
-            pixel_bytes * size.width as wgpu::BufferAddress * size.height as wgpu::BufferAddress;
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        encoder: &mut wgpu::CommandEncoder,
+        src: &wgpu::Texture,
+        size: (u32, u32),
+    ) -> wgpu::Buffer {
+        let dst = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: output_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            size: size.0 as u64 * size.1 as u64 * 4,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-
         encoder.copy_texture_to_buffer(
             wgpu::ImageCopyTexture {
-                texture,
+                texture: src,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::ImageCopyBuffer {
-                buffer: &output_buffer,
+                buffer: &dst,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: std::num::NonZeroU32::new(size.width * pixel_bytes as u32),
-                    rows_per_image: std::num::NonZeroU32::new(size.height),
+                    bytes_per_row: std::num::NonZeroU32::new(size.0 * 4),
+                    rows_per_image: std::num::NonZeroU32::new(size.1),
                 },
             },
-            size,
+            wgpu::Extent3d {
+                width: size.0,
+                height: size.1,
+                depth_or_array_layers: 1,
+            },
         );
-        queue.submit(std::iter::once(encoder.finish()));
+        dst
+    }
 
-        let output_slice = output_buffer.slice(..);
+    fn download_buffer(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        buffer: &wgpu::Buffer,
+    ) -> Vec<u8> {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        output_slice.map_async(wgpu::MapMode::Read, move |asdf| {
-            asdf.unwrap();
-            tx.send(0).unwrap();
+        wgpu::util::DownloadBuffer::read_buffer(device, queue, &buffer.slice(..), move |dl| {
+            tx.send(dl.unwrap().to_vec()).unwrap()
         });
         device.poll(wgpu::Maintain::Wait);
-        rx.recv().unwrap();
-        let data = output_slice.get_mapped_range().to_vec();
-        output_buffer.unmap();
-        data
+        rx.recv().unwrap()
     }
 }

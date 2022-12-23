@@ -1,8 +1,8 @@
 // layout(local_size_x = 64) in;
 @group(0) @binding(0) 
-var img: texture_storage_2d<rgba32float,read_write>;
+var<storage,read_write> img: array<vec4<f32>>;
 @group(0) @binding(1) 
-var randbuf: texture_storage_2d<r32uint,read_write>;
+var<storage,read_write> randbuf: array<u32>;
 @group(0) @binding(3) 
 var samp: sampler;
 @group(0) @binding(4) 
@@ -491,22 +491,22 @@ fn GammaTest(x: u32, y: u32, width: u32, height: u32) -> vec3<f32> {
 }
 
 fn GetImg(x: u32, y: u32) -> vec3<f32> {
-    return textureLoad(img, vec2<i32>(i32(x), i32(y))).xyz;
+    return img[y * data.width + x].xyz;
 }
 
 fn SetImg(x: u32, y: u32, value: vec3<f32>) {
-    textureStore(img, vec2<i32>(i32(x), i32(y)), vec4<f32>(value, 1.0));
+    img[y * data.width + x] = vec4<f32>(value, 0.0);
 }
 
 fn GetRand(x: u32, y: u32, gl_GlobalInvocationID: u32) -> Random {
-    let value = textureLoad(randbuf, vec2<i32>(i32(x), i32(y))).x;
+    let value = randbuf[y * data.width + x];
     var rand = Random(value);
     Random_Init(&rand, gl_GlobalInvocationID);
     return rand;
 }
 
 fn SetRand(x: u32, y: u32, value: Random) {
-    textureStore(randbuf, vec2<i32>(i32(x), i32(y)), vec4<u32>(value.seed, 0u, 0u, 0u));
+    randbuf[y * data.width + x] = value.seed;
 }
 
 @compute @workgroup_size(64, 1, 1) 
@@ -519,25 +519,26 @@ fn main(@builtin(global_invocation_id) gl_GlobalInvocationID: vec3<u32>) {
     let x = idx % data.width;
     let y = idx / data.width;
 
-    // #ifdef GAMMA_TEST
-    //     vec3 newColor = GammaTest(x, y, width, height);
-    // #else
-    var oldColor: vec3<f32>;
-    if data.frame > 0u {
-        oldColor = GetImg(x, y);
+    let gamma_test = false;
+    var newColor: vec3<f32>;
+    if gamma_test {
+        newColor = GammaTest(x, y, data.width, data.height);
     } else {
-        oldColor = vec3<f32>(0.0);
-    }
+        var oldColor: vec3<f32>;
+        if data.frame > 0u {
+            oldColor = GetImg(x, y);
+        } else {
+            oldColor = vec3<f32>(0.0);
+        }
 
-    var rand = GetRand(x, y, idx);
-    let ray = Camera(x, y, data.width, data.height, &rand);
-    // #ifdef PREVIEW
-    //     vec3 colorComponents = PreviewTrace(ray, width, height);
-    // #else
-    let colorComponents = Trace(ray, data.width, data.height, &rand);
-    // #endif
-    let newColor = (colorComponents + oldColor * f32(data.frame)) / vec3<f32>(f32(data.frame + 1u));
-    SetRand(x, y, rand);
-    // #endif
+        var rand = GetRand(x, y, idx);
+        let ray = Camera(x, y, data.width, data.height, &rand);
+        // #ifdef PREVIEW
+        //     vec3 colorComponents = PreviewTrace(ray, width, height);
+        // #else
+        let colorComponents = Trace(ray, data.width, data.height, &rand);
+        newColor = (colorComponents + oldColor * f32(data.frame)) / vec3<f32>(f32(data.frame + 1u));
+        SetRand(x, y, rand);
+    }
     SetImg(x, y, newColor);
 }

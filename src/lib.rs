@@ -1,3 +1,4 @@
+mod buffer_blit;
 mod fps_counter;
 mod input;
 mod interactive;
@@ -9,7 +10,6 @@ mod render_window;
 mod setting_value;
 mod settings;
 mod settings_input;
-mod texture_blit;
 
 use cgmath::Vector3;
 use chrono::prelude::*;
