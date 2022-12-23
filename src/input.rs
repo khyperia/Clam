@@ -3,6 +3,7 @@ use crate::{
 };
 use cgmath::{prelude::*, Quaternion, Rad, Vector3};
 use instant::Instant;
+use log::info;
 use std::collections::{hash_map::Entry, HashMap};
 
 pub struct Input {
@@ -27,21 +28,19 @@ impl Input {
     }
 
     fn help() {
-        println!("Keybindings:");
+        info!("Keybindings:");
         // free:
         // QE
         //
         // CB
-        println!("WASD, [space]Z, IJKL, OU: move camera");
-        println!("RF: focal distance/move speed");
-        println!("NM: field of view");
-        println!(
-            "Y: Write settings to disk. P: Read settings. V: Write keyframe. G: Play keyframes."
-        );
-        println!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
-        println!("X: Copy position to lightsource position");
-        println!("`: Spaceship!");
-        println!("H: Print this message");
+        info!("WASD, [space]Z, IJKL, OU: move camera");
+        info!("RF: focal distance/move speed");
+        info!("NM: field of view");
+        info!("Y: Write settings to disk. P: Read settings. V: Write keyframe. G: Play keyframes.");
+        info!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
+        info!("X: Copy position to lightsource position");
+        info!("`: Spaceship!");
+        info!("H: Print this message");
     }
 
     pub fn key_down(
@@ -63,7 +62,7 @@ impl Input {
         }
         match self.run_down(key, settings, default_settings, keyframes) {
             Ok(()) => (),
-            Err(err) => println!("Error handling key down event: {}", err),
+            Err(err) => info!("Error handling key down event: {}", err),
         }
     }
 
@@ -93,21 +92,21 @@ impl Input {
             }
             Key::P => {
                 *settings = Settings::load("settings.clam5", settings)?;
-                println!("Settings loaded");
+                info!("Settings loaded");
             }
             Key::Y => {
                 settings.save("settings.clam5", default_settings)?;
-                println!("Settings saved");
+                info!("Settings saved");
             }
             Key::V => {
                 keyframes.push(settings.clone());
                 keyframes.save("keyframes.clam5", default_settings)?;
-                println!("Keyframe saved");
+                info!("Keyframe saved");
             }
             Key::G => {
                 self.cur_video_secs = 0.0;
                 self.video_len_secs = keyframes.len() as f64 * (10.0 / 6.0);
-                println!("Playing video")
+                info!("Playing video")
             }
             Key::Up => self.settings_input.up_one(settings),
             Key::Down => self.settings_input.down_one(settings),

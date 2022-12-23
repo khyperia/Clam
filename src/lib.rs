@@ -15,6 +15,7 @@ use cgmath::Vector3;
 use chrono::prelude::*;
 use kernel::Kernel;
 use keyframe_list::KeyframeList;
+use log::info;
 use png::{BitDepth, ColorType, Encoder};
 use progress::Progress;
 use settings::Settings;
@@ -118,19 +119,19 @@ fn image(
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
             device.poll(wgpu::Maintain::Wait);
             let value = ray as f64 / rpp as f64;
-            println!("{}", progress.time_str(value));
+            info!("{}", progress.time_str(value));
         }
         kernel.run(device, &mut encoder, &loaded_settings);
     }
     queue.submit(std::iter::once(encoder.finish()));
     device.poll(wgpu::Maintain::Wait);
-    println!("render done, downloading");
+    info!("render done, downloading");
     let image = kernel.download(device, queue);
-    println!("saving, final time: {}", progress.time_str(1.0));
+    info!("saving, final time: {}", progress.time_str(1.0));
     let local: DateTime<Local> = Local::now();
     let filename = local.format("%Y-%m-%d_%H-%M-%S.png").to_string();
     save_image(&image, &filename)?;
-    println!("done");
+    info!("done");
     Ok(())
 }
 
@@ -317,11 +318,11 @@ fn video(
         let settings = keyframes.interpolate(frame as f64 / frames as f64, wrap);
         video_one(device, queue, rpp, &mut kernel, &settings, &send)?;
         let value = (frame + 1) as f64 / frames as f64;
-        println!("{}", progress.time_str(value));
+        info!("{}", progress.time_str(value));
     }
     drop(send);
     thread_handle.join().expect("Couldn't join thread");
-    println!("done");
+    info!("done");
     Ok(())
 }
 
@@ -390,7 +391,9 @@ fn pngseq_cmd(args: &[String]) -> Result<(), Error> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn run() -> Result<(), Error> {
-    env_logger::init();
+    env_logger::builder()
+        .filter(Some("clam5"), log::LevelFilter::Trace)
+        .init();
 
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && &arguments[0] == "--render" {
@@ -402,11 +405,11 @@ pub async fn run() -> Result<(), Error> {
     } else if arguments.is_empty() {
         render_window::RenderWindow::new().await.run();
     } else {
-        println!("Usage:");
-        println!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
-        println!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
-        println!("clam5 --pngseq [format:mp4|twitter|gif]");
-        println!("clam5");
+        info!("Usage:");
+        info!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
+        info!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
+        info!("clam5 --pngseq [format:mp4|twitter|gif]");
+        info!("clam5");
     }
     Ok(())
 }

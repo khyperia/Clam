@@ -1,3 +1,4 @@
+use log::{error, info, warn};
 use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
@@ -98,7 +99,7 @@ impl RenderWindow {
             .await
             .unwrap();
 
-        println!("Got thing: {:?}", adapter.get_info());
+        info!("Using adapter: {:?}", adapter.get_info());
 
         let (device, queue) = adapter
             .request_device(
@@ -107,12 +108,17 @@ impl RenderWindow {
                     features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     limits: wgpu::Limits::default(),
                 },
-                None, // Trace path
+                None,
             )
             .await
             .unwrap();
 
-        let swapchain_format = surface.get_supported_formats(&adapter)[0];
+        let supported_formats = surface.get_supported_formats(&adapter);
+        let swapchain_format = supported_formats[0];
+        info!(
+            "Supported formats: {:?}. Using {:?}.",
+            supported_formats, swapchain_format
+        );
 
         let size = window.inner_size();
 
@@ -197,7 +203,7 @@ impl RenderWindow {
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
         if frame.suboptimal {
-            println!("suboptimal");
+            warn!("suboptimal");
         }
         let frame_view = frame
             .texture
@@ -258,6 +264,14 @@ impl RenderWindow {
             } if window_id == self.window.id() => {
                 self.input(event);
                 match event {
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    } => *control_flow = ControlFlow::Exit,
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
                         self.resize(*physical_size);
@@ -272,8 +286,8 @@ impl RenderWindow {
                 Ok(_) => {}
                 Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
                 Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                Err(wgpu::SurfaceError::Timeout) => eprintln!("Error: Timeout"),
-                Err(wgpu::SurfaceError::Outdated) => eprintln!("Error: Outdated"),
+                Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
+                Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
             },
             Event::MainEventsCleared => {
                 // RedrawRequested will only trigger once, unless we manually
