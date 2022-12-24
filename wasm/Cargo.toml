@@ -1,0 +1,15 @@
+[package]
+name = "wasm"
+version = "0.1.0"
+edition = "2018"
+resolver = "2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+clam5 = { path = ".." }
+console_error_panic_hook = "*"
+console_log = { version = "*", features = ["color"] }
+wasm-bindgen = "*"
+wasm-bindgen-futures = "*"

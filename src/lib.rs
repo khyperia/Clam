@@ -29,9 +29,6 @@ use std::{
     sync::mpsc,
 };
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
 use winit::event::VirtualKeyCode as Key;
 
 pub type Error = Box<dyn std::error::Error>;
@@ -391,10 +388,6 @@ fn pngseq_cmd(args: &[String]) -> Result<(), Error> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn run() -> Result<(), Error> {
-    env_logger::builder()
-        .filter(Some("clam5"), log::LevelFilter::Trace)
-        .init();
-
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && &arguments[0] == "--render" {
         render(&arguments[1..]).await?
@@ -415,12 +408,9 @@ pub async fn run() -> Result<(), Error> {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub async fn start() -> Result<(), JsValue> {
-    console_log::init().unwrap();
-    console_error_panic_hook::set_once();
+pub async fn run() {
     match render_window::RenderWindow::new().await {
         Ok(window) => window.run(),
-        Err(()) => Ok(()),
+        Err(()) => (),
     }
 }

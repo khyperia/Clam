@@ -1,0 +1,11 @@
+[package]
+name = "native"
+version = "0.1.0"
+edition = "2018"
+resolver = "2"
+
+[dependencies]
+clam5 = { path = ".." }
+env_logger = { version = "*", default-features = false }
+log = "*"
+pollster = "*"
