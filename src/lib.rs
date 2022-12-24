@@ -403,7 +403,7 @@ pub async fn run() -> Result<(), Error> {
     } else if arguments.len() == 2 && &arguments[0] == "--pngseq" {
         pngseq_cmd(&arguments[1..])?
     } else if arguments.is_empty() {
-        render_window::RenderWindow::new().await.run();
+        render_window::RenderWindow::new().await.unwrap().run();
     } else {
         info!("Usage:");
         info!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
@@ -419,23 +419,8 @@ pub async fn run() -> Result<(), Error> {
 pub async fn start() -> Result<(), JsValue> {
     console_log::init().unwrap();
     console_error_panic_hook::set_once();
-
-    // Use `web_sys`'s global `window` function to get a handle on the global
-    // window object.
-    // let window = web_sys::window().expect("no global `window` exists");
-    // let document = window.document().expect("should have a document on window");
-    // let body = document.body().expect("document should have a body");
-    // body.append_child(&web_sys::Element::from(window.canvas()))
-    //     .expect("adding canvas to body");
-
-    let window = render_window::RenderWindow::new().await;
-    window.run();
-
-    // Manufacture the element we're gonna append
-    // let val = document.create_element("p")?;
-    // val.set_inner_html("Hello from Rust!");
-
-    // body.append_child(&val)?;
-
-    // Ok(())
+    match render_window::RenderWindow::new().await {
+        Ok(window) => window.run(),
+        Err(()) => Ok(()),
+    }
 }

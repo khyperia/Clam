@@ -362,7 +362,7 @@ impl Kernel {
     }
 
     pub fn texture_size(&self) -> (u32, u32) {
-        (self.data.width, self.data.height)
+        self.data.size()
     }
 
     pub fn download(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> CpuTexture {

@@ -1,4 +1,3 @@
-use log::info;
 use wgpu::util::DeviceExt;
 
 use crate::cast_slice;

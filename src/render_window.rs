@@ -69,23 +69,32 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 }
 
 impl RenderWindow {
-    pub async fn new() -> Self {
+    pub async fn new() -> Result<Self, ()> {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new().build(&event_loop).unwrap();
 
         #[cfg(target_arch = "wasm32")]
         {
-            use winit::dpi::PhysicalSize;
-            window.set_inner_size(PhysicalSize::new(450, 400));
-
-            web_sys::window()
-                .and_then(|win| {
-                    win.document()?
+            if matches!(window.canvas().get_context("webgpu"), Ok(Some(_))) {
+                let append = || {
+                    web_sys::window()?
+                        .document()?
                         .body()?
                         .append_child(&web_sys::Element::from(window.canvas()))
                         .ok()
-                })
-                .expect("couldn't append canvas to document body");
+                };
+                append().expect("couldn't append to document body");
+            } else {
+                let append = || {
+                    web_sys::window()?
+                        .document()?
+                        .body()?
+                        .set_inner_text("canvas.getContext('webgpu') returned null. Maybe your browser doesn't support webgpu, or you don't have it enabled?");
+                    Some(())
+                };
+                append().expect("couldn't append to document body");
+                return Err(());
+            };
         }
 
         let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
@@ -159,7 +168,7 @@ impl RenderWindow {
         let glyph =
             wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, swapchain_format);
 
-        Self {
+        Ok(Self {
             event_loop: Some(event_loop),
             window,
             surface,
@@ -172,7 +181,7 @@ impl RenderWindow {
             buffer_blit,
             fps_counter: FpsCounter::new(1.0),
             interactive,
-        }
+        })
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -293,6 +302,21 @@ impl RenderWindow {
                 Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
             },
             Event::MainEventsCleared => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    // resize to fullscreen
+                    use winit::dpi::PhysicalSize;
+                    let window = web_sys::window().unwrap();
+                    let width = window.inner_width().unwrap().as_f64().unwrap() as u32;
+                    let height = window.inner_height().unwrap().as_f64().unwrap() as u32;
+                    let inner_size = self.window.inner_size();
+                    let new_size = PhysicalSize::new(width, height);
+                    if inner_size != new_size {
+                        info!("resize from {:?} to {:?}", inner_size, new_size);
+                        self.window.set_inner_size(new_size);
+                    }
+                }
+
                 // RedrawRequested will only trigger once, unless we manually
                 // request it.
                 self.window.request_redraw();
