@@ -149,7 +149,7 @@ impl RenderWindow {
         let buffer_blit = BufferBlit::new(
             &device,
             swapchain_format,
-            &interactive.texture(),
+            interactive.texture(),
             interactive.texture_size(),
             // "lol", I said, "lmao"
             !format!("{:?}", swapchain_format).contains("Srgb"),
@@ -228,7 +228,7 @@ impl RenderWindow {
 
         self.buffer_blit.set_src(
             &self.device,
-            &self.interactive.texture(),
+            self.interactive.texture(),
             self.interactive.texture_size(),
             None,
         );

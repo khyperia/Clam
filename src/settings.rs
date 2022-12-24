@@ -31,21 +31,11 @@ impl Settings {
     }
 
     pub fn get(&self, key: &str) -> Option<&SettingValue> {
-        for value in &self.values {
-            if value.key() == key {
-                return Some(value);
-            }
-        }
-        None
+        self.values.iter().find(|&value| value.key() == key)
     }
 
     pub fn get_mut(&mut self, key: &str) -> Option<&mut SettingValue> {
-        for value in &mut self.values {
-            if value.key() == key {
-                return Some(value);
-            }
-        }
-        None
+        self.values.iter_mut().find(|value| value.key() == key)
     }
 
     pub fn find(&self, key: &str) -> &SettingValue {

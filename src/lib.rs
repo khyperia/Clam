@@ -77,7 +77,7 @@ fn save_image(image: &CpuTexture, path: &str) -> Result<(), Error> {
 }
 
 fn write_image(image: &CpuTexture, w: impl Write) -> Result<(), Error> {
-    let mut encoder = Encoder::new(w, image.size.0 as u32, image.size.1 as u32);
+    let mut encoder = Encoder::new(w, image.size.0, image.size.1);
     encoder.set_color(ColorType::RGB);
     encoder.set_depth(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
@@ -256,11 +256,11 @@ fn video_write(stream: &mpsc::Receiver<CpuTexture>, twitter: bool) -> Result<(),
     };
     let mut ffmpeg = Command::new(exe);
     ffmpeg.stdin(Stdio::piped());
-    ffmpeg.args(&["-f", "image2pipe", "-framerate", "60", "-i", "-"]);
+    ffmpeg.args(["-f", "image2pipe", "-framerate", "60", "-i", "-"]);
     if twitter {
-        ffmpeg.args(&["-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "2048K"]);
+        ffmpeg.args(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "2048K"]);
     }
-    ffmpeg.args(&["video.mp4", "-y"]);
+    ffmpeg.args(["video.mp4", "-y"]);
     let mut ffmpeg = ffmpeg.spawn()?;
     while let Ok(img) = stream.recv() {
         let ffmpeg_stdin = ffmpeg

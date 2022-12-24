@@ -137,7 +137,7 @@ impl KeyframeList {
         if wrap {
             index.rem_euclid(len as isize) as usize
         } else {
-            index.max(0).min(len as isize - 1) as usize
+            index.clamp(0, len as isize - 1) as usize
         }
     }
 

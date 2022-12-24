@@ -401,7 +401,7 @@ impl Kernel {
             format,
             usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
-        let mut texture_blit = BufferBlit::new(device, format, &src, size, false);
+        let mut texture_blit = BufferBlit::new(device, format, src, size, false);
         texture_blit.blit(device, encoder, &dst.create_view(&Default::default()));
         dst
     }

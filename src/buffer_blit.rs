@@ -111,7 +111,7 @@ impl BufferBlit {
             uniforms: Uniforms {
                 width: size.0,
                 height: size.1,
-                output_srgb: if output_srgb { 1 } else { 0 },
+                output_srgb: u32::from(output_srgb),
                 dummy: 0,
             },
         }
@@ -157,7 +157,7 @@ impl BufferBlit {
         self.uniforms.width = size.0;
         self.uniforms.height = size.1;
         if let Some(output_srgb) = output_srgb {
-            self.uniforms.output_srgb = if output_srgb { 1 } else { 0 };
+            self.uniforms.output_srgb = u32::from(output_srgb);
         }
         self.bind_group =
             Self::create_bind_group(device, &self.bind_group_layout, src, &self.uniforms_buf);
