@@ -9,6 +9,6 @@ use wasm_bindgen::prelude::*;
 pub async fn start() -> Result<(), JsValue> {
     console_log::init().unwrap();
     console_error_panic_hook::set_once();
-    run().await;
+    run().await.map_err(|e| JsError::new(&e.to_string()))?;
     Ok(())
 }

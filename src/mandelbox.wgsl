@@ -437,21 +437,21 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
              // hit surface, do material calculations
             let material = GetMaterial(newPos);
             rayColor += reflectionColor * material.emissive; // ~bling~!
-            let cosTheta = -dot(ray.dir, material.normal);
             if Random_Next(rand) < material.gloss {
                 newDir = ray.dir;
                  // specular
                 if dot(ray.dir, material.normal) < 0.0 {
-                    newDir += 2.0f * cosTheta * material.normal;
+                    newDir -= 2.0f * dot(ray.dir, material.normal) * material.normal;
                 }
                  // material.color = vec3(1.0, 1.0, 1.0);
             } else {
                  // diffuse
                 newDir = Random_Lambertian(rand, material.normal);
                 quality = data.quality_rest_ray;
+                let incident_angle_weakening = dot(material.normal, newDir);
+                reflectionColor *= incident_angle_weakening;
             }
-            let incident_angle_weakening = dot(material.normal, newDir);
-            reflectionColor *= incident_angle_weakening * material.color;
+            reflectionColor *= material.color;
         }
 
         ray = Ray(newPos, newDir);

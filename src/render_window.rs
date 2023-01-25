@@ -1,5 +1,4 @@
 use log::{error, info, warn};
-use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
@@ -11,8 +10,9 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-fn find_font() -> Result<&'static Path, &'static str> {
-    let locations: [&'static Path; 7] = [
+#[cfg(not(target_arch = "wasm32"))]
+fn find_font() -> Result<&'static std::path::Path, &'static str> {
+    let locations: [&'static std::path::Path; 7] = [
         "C:\\Windows\\Fonts\\arial.ttf".as_ref(),
         "/usr/share/fonts/TTF/DejaVuSansMono.ttf".as_ref(),
         "/usr/share/fonts/TTF/FiraMono-Regular.ttf".as_ref(),
@@ -21,7 +21,7 @@ fn find_font() -> Result<&'static Path, &'static str> {
         "/Library/Fonts/Andale Mono.ttf".as_ref(),
         "/Library/Fonts/Arial Unicode.ttf".as_ref(),
     ];
-    for &location in &locations {
+    for location in locations {
         if location.exists() {
             return Ok(location);
         }

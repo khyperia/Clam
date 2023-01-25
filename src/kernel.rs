@@ -2,7 +2,6 @@ use crate::{
     buffer_blit::BufferBlit, cast_slice, kernel_uniforms::KernelUniforms, settings::Settings,
     CpuTexture,
 };
-use std::fs::File;
 use wgpu::util::DeviceExt;
 
 struct KernelImage {
@@ -38,7 +37,7 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
     #[cfg(target_arch = "wasm32")]
     let file = include_bytes!("../HDR_029_Sky_Cloudy_Env.hdr") as &[u8];
     #[cfg(not(target_arch = "wasm32"))]
-    let file = File::open("HDR_029_Sky_Cloudy_Env.hdr").unwrap();
+    let file = std::fs::File::open("HDR_029_Sky_Cloudy_Env.hdr").unwrap();
     let image = hdrldr::load(file).unwrap();
     let image_rgba: Vec<(f32, f32, f32, f32)> = image
         .data

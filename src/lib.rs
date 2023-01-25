@@ -386,7 +386,6 @@ fn pngseq_cmd(args: &[String]) -> Result<(), Error> {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn run() -> Result<(), Error> {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && &arguments[0] == "--render" {
@@ -396,7 +395,9 @@ pub async fn run() -> Result<(), Error> {
     } else if arguments.len() == 2 && &arguments[0] == "--pngseq" {
         pngseq_cmd(&arguments[1..])?
     } else if arguments.is_empty() {
-        render_window::RenderWindow::new().await.unwrap().run();
+        if let Ok(window) = render_window::RenderWindow::new().await {
+            window.run()
+        }
     } else {
         info!("Usage:");
         info!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
@@ -405,12 +406,4 @@ pub async fn run() -> Result<(), Error> {
         info!("clam5");
     }
     Ok(())
-}
-
-#[cfg(target_arch = "wasm32")]
-pub async fn run() {
-    match render_window::RenderWindow::new().await {
-        Ok(window) => window.run(),
-        Err(()) => (),
-    }
 }
