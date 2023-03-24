@@ -33,11 +33,11 @@ pub struct RenderWindow {
     event_loop: Option<EventLoop<()>>,
     window: Window,
     surface: wgpu::Surface,
-    surface_config: wgpu::SurfaceConfiguration,
+    swapchain_format: wgpu::TextureFormat,
     device: wgpu::Device,
     queue: wgpu::Queue,
     staging_belt: wgpu::util::StagingBelt,
-    glyph: wgpu_glyph::GlyphBrush<()>,
+    glyph: wgpu_text::TextBrush,
     size: winit::dpi::PhysicalSize<u32>,
     buffer_blit: BufferBlit,
     fps_counter: FpsCounter,
@@ -45,7 +45,10 @@ pub struct RenderWindow {
 }
 
 pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        dx12_shader_compiler: Default::default(),
+    });
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -97,8 +100,11 @@ impl RenderWindow {
             };
         }
 
-        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-        let surface = unsafe { instance.create_surface(&window) };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            dx12_shader_compiler: Default::default(),
+        });
+        let surface = unsafe { instance.create_surface(&window) }.unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -122,25 +128,25 @@ impl RenderWindow {
             .await
             .unwrap();
 
-        let supported_formats = surface.get_supported_formats(&adapter);
-        let swapchain_format = supported_formats[0];
+        let capabilities = surface.get_capabilities(&adapter);
+        let swapchain_format = capabilities.formats[0];
         info!(
-            "Supported formats: {:?}. Using {:?}.",
-            supported_formats, swapchain_format
+            "Capabilities: {:?}. Using {:?}.",
+            capabilities, swapchain_format
         );
 
         let size = window.inner_size();
 
-        let surface_config = wgpu::SurfaceConfiguration {
+        let surface_configuration = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![swapchain_format.add_srgb_suffix()],
         };
-
-        surface.configure(&device, &surface_config);
+        surface.configure(&device, &surface_configuration);
 
         let staging_belt = wgpu::util::StagingBelt::new(1024);
 
@@ -148,31 +154,34 @@ impl RenderWindow {
 
         let buffer_blit = BufferBlit::new(
             &device,
-            swapchain_format,
+            swapchain_format.add_srgb_suffix(),
             interactive.texture(),
             interactive.texture_size(),
             // "lol", I said, "lmao"
-            !format!("{:?}", swapchain_format).contains("Srgb"),
+            !format!("{:?}", swapchain_format.add_srgb_suffix()).contains("Srgb"),
         );
 
         #[cfg(target_arch = "wasm32")]
-        let font = wgpu_glyph::ab_glyph::FontArc::try_from_slice(include_bytes!(
+        let font = wgpu_text::font::FontArc::try_from_slice(include_bytes!(
             "C:\\Windows\\Fonts\\arial.ttf"
         ))
-        .expect("load font");
+        .unwrap();
         #[cfg(not(target_arch = "wasm32"))]
-        let font = wgpu_glyph::ab_glyph::FontArc::try_from_vec(
-            std::fs::read(find_font().unwrap()).unwrap(),
-        )
-        .expect("load font");
-        let glyph =
-            wgpu_glyph::GlyphBrushBuilder::using_font(font).build(&device, swapchain_format);
+        let font =
+            wgpu_text::font::FontArc::try_from_vec(std::fs::read(find_font().unwrap()).unwrap())
+                .unwrap();
+        let glyph = wgpu_text::BrushBuilder::using_font(font).build_custom(
+            &device,
+            size.width,
+            size.height,
+            swapchain_format.add_srgb_suffix(),
+        );
 
         Ok(Self {
             event_loop: Some(event_loop),
             window,
             surface,
-            surface_config,
+            swapchain_format,
             device,
             queue,
             staging_belt,
@@ -186,9 +195,20 @@ impl RenderWindow {
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
-        self.surface_config.width = new_size.width;
-        self.surface_config.height = new_size.height;
-        self.surface.configure(&self.device, &self.surface_config);
+        self.surface.configure(
+            &self.device,
+            &wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: self.swapchain_format,
+                width: new_size.width,
+                height: new_size.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![self.swapchain_format.add_srgb_suffix()],
+            },
+        );
+        self.glyph
+            .resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
         self.interactive
             .resize(&self.device, self.size.width, self.size.height);
     }
@@ -216,9 +236,16 @@ impl RenderWindow {
         if frame.suboptimal {
             warn!("suboptimal");
         }
-        let frame_view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let frame_view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+            label: None,
+            format: Some(self.swapchain_format.add_srgb_suffix()),
+            dimension: None,
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
 
         let mut encoder = self
             .device
@@ -241,25 +268,18 @@ impl RenderWindow {
             self.fps_counter.value(),
             self.interactive.status()
         );
-        let section = wgpu_glyph::Section {
-            screen_position: (10.0, 10.0),
-            text: vec![wgpu_glyph::Text::new(&display_text)],
-            ..Default::default()
-        };
+        let finished_encoder = encoder.finish();
+
+        let section = wgpu_text::section::Section::default()
+            .add_text(wgpu_text::section::Text::new(&display_text));
         self.glyph.queue(section);
         self.glyph
-            .draw_queued(
-                &self.device,
-                &mut self.staging_belt,
-                &mut encoder,
-                &frame_view,
-                self.size.width,
-                self.size.height,
-            )
+            .process_queued(&self.device, &self.queue)
             .unwrap();
+        let textbuf = self.glyph.draw(&self.device, &frame_view);
 
         self.staging_belt.finish();
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit([finished_encoder, textbuf]);
         frame.present();
 
         self.staging_belt.recall();

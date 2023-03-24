@@ -58,6 +58,7 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba32Float,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
     });
 
     let mut encoder =
@@ -399,6 +400,7 @@ impl Kernel {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
         });
         let mut texture_blit = BufferBlit::new(device, format, src, size, false);
         texture_blit.blit(device, encoder, &dst.create_view(&Default::default()));
