@@ -74,8 +74,8 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
             buffer: &image_buf,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(image.width as u32 * 16),
-                rows_per_image: std::num::NonZeroU32::new(image.height as u32),
+                bytes_per_row: Some(image.width as u32 * 16),
+                rows_per_image: Some(image.height as u32),
             },
         },
         wgpu::ImageCopyTexture {
@@ -430,8 +430,8 @@ impl Kernel {
                 buffer: &dst,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: std::num::NonZeroU32::new(size.0 * 4),
-                    rows_per_image: std::num::NonZeroU32::new(size.1),
+                    bytes_per_row: Some(size.0 * 4),
+                    rows_per_image: Some(size.1),
                 },
             },
             wgpu::Extent3d {
