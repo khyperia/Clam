@@ -162,15 +162,16 @@ impl RenderWindow {
         );
 
         #[cfg(target_arch = "wasm32")]
-        let font = wgpu_text::font::FontArc::try_from_slice(include_bytes!(
+        let font = wgpu_text::glyph_brush::ab_glyph::FontArc::try_from_slice(include_bytes!(
             "C:\\Windows\\Fonts\\arial.ttf"
         ))
         .unwrap();
         #[cfg(not(target_arch = "wasm32"))]
-        let font =
-            wgpu_text::font::FontArc::try_from_vec(std::fs::read(find_font().unwrap()).unwrap())
-                .unwrap();
-        let glyph = wgpu_text::BrushBuilder::using_font(font).build_custom(
+        let font = wgpu_text::glyph_brush::ab_glyph::FontArc::try_from_vec(
+            std::fs::read(find_font().unwrap()).unwrap(),
+        )
+        .unwrap();
+        let glyph = wgpu_text::BrushBuilder::using_font(font).build(
             &device,
             size.width,
             size.height,
@@ -268,18 +269,32 @@ impl RenderWindow {
             self.fps_counter.value(),
             self.interactive.status()
         );
+
+        let section = wgpu_text::glyph_brush::Section::default()
+            .add_text(wgpu_text::glyph_brush::Text::new(&display_text));
+        self.glyph
+            .queue(&self.device, &self.queue, vec![section])
+            .unwrap();
+        {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+            self.glyph.draw(&mut rpass);
+        }
+
         let finished_encoder = encoder.finish();
 
-        let section = wgpu_text::section::Section::default()
-            .add_text(wgpu_text::section::Text::new(&display_text));
-        self.glyph.queue(section);
-        self.glyph
-            .process_queued(&self.device, &self.queue)
-            .unwrap();
-        let textbuf = self.glyph.draw(&self.device, &frame_view);
-
         self.staging_belt.finish();
-        self.queue.submit([finished_encoder, textbuf]);
+        self.queue.submit([finished_encoder]);
         frame.present();
 
         self.staging_belt.recall();
