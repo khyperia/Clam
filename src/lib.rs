@@ -29,7 +29,7 @@ use std::{
     sync::mpsc,
 };
 
-use winit::event::VirtualKeyCode as Key;
+use winit::keyboard::KeyCode as Key;
 
 pub type Error = Box<dyn std::error::Error>;
 

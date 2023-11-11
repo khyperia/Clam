@@ -87,37 +87,37 @@ impl Input {
         keyframes: &mut KeyframeList,
     ) -> Result<(), Error> {
         match key {
-            Key::H => {
+            Key::KeyH => {
                 Self::help();
             }
-            Key::P => {
+            Key::KeyP => {
                 *settings = Settings::load("settings.clam5", settings)?;
                 info!("Settings loaded");
             }
-            Key::Y => {
+            Key::KeyY => {
                 settings.save("settings.clam5", default_settings)?;
                 info!("Settings saved");
             }
-            Key::V => {
+            Key::KeyV => {
                 keyframes.push(settings.clone());
                 keyframes.save("keyframes.clam5", default_settings)?;
                 info!("Keyframe saved");
             }
-            Key::G => {
+            Key::KeyG => {
                 self.cur_video_secs = 0.0;
                 self.video_len_secs = keyframes.len() as f64 * (10.0 / 6.0);
                 info!("Playing video")
             }
-            Key::Up => self.settings_input.up_one(settings),
-            Key::Down => self.settings_input.down_one(settings),
-            Key::Left => self.settings_input.left_one(settings),
-            Key::Right => self.settings_input.right_one(settings),
-            Key::T => self.settings_input.toggle(settings),
-            Key::X => {
+            Key::ArrowUp => self.settings_input.up_one(settings),
+            Key::ArrowDown => self.settings_input.down_one(settings),
+            Key::ArrowLeft => self.settings_input.left_one(settings),
+            Key::ArrowRight => self.settings_input.right_one(settings),
+            Key::KeyT => self.settings_input.toggle(settings),
+            Key::KeyX => {
                 let pos = settings.find("pos").value().clone();
                 settings.find_mut("light_pos_1").set_value(pos);
             }
-            Key::Grave => {
+            Key::Backquote => {
                 if self.spaceship.is_none() {
                     self.spaceship = Some((Vector3::zero(), Vector3::zero(), Instant::now()));
                 } else {
@@ -142,10 +142,10 @@ impl Input {
             now,
             "focal_distance",
             settings.find("fov").unwrap_float(),
-            Key::R,
-            Key::F,
+            Key::KeyR,
+            Key::KeyF,
         );
-        self.exp_setting(settings, now, "fov", 1.0, Key::N, Key::M);
+        self.exp_setting(settings, now, "fov", 1.0, Key::KeyN, Key::KeyM);
         self.manual_control(settings, now);
         for value in self.pressed_keys.values_mut() {
             *value = now;
@@ -173,40 +173,40 @@ impl Input {
         let mut up = settings.find("up").unwrap_vec3();
         let old = (pos, look, up);
         let right = Vector3::cross(look, up);
-        if let Some(dt) = self.is_pressed(now, Key::W) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyW) {
             pos += look * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::S) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyS) {
             pos -= look * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::D) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyD) {
             pos += right * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::A) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyA) {
             pos -= right * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::Space) {
             pos += up * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::Z) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyZ) {
             pos -= up * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::I) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyI) {
             look = Quaternion::from_axis_angle(right, Rad(turn_speed * dt)) * look;
         }
-        if let Some(dt) = self.is_pressed(now, Key::K) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyK) {
             look = Quaternion::from_axis_angle(right, Rad(-turn_speed * dt)) * look;
         }
-        if let Some(dt) = self.is_pressed(now, Key::L) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyL) {
             look = Quaternion::from_axis_angle(up, Rad(-turn_speed * dt)) * look;
         }
-        if let Some(dt) = self.is_pressed(now, Key::J) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyJ) {
             look = Quaternion::from_axis_angle(up, Rad(turn_speed * dt)) * look;
         }
-        if let Some(dt) = self.is_pressed(now, Key::O) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyO) {
             up = Quaternion::from_axis_angle(look, Rad(roll_speed * dt)) * up;
         }
-        if let Some(dt) = self.is_pressed(now, Key::U) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyU) {
             up = Quaternion::from_axis_angle(look, Rad(-roll_speed * dt)) * up;
         }
         if old != (pos, look, up) {
@@ -236,10 +236,10 @@ impl Input {
     }
 
     fn manual_control(&mut self, settings: &mut Settings, now: Instant) {
-        if let Some(dt) = self.is_pressed(now, Key::Right) {
+        if let Some(dt) = self.is_pressed(now, Key::ArrowRight) {
             self.settings_input.right_hold(settings, dt)
         }
-        if let Some(dt) = self.is_pressed(now, Key::Left) {
+        if let Some(dt) = self.is_pressed(now, Key::ArrowLeft) {
             self.settings_input.left_hold(settings, dt)
         }
     }
@@ -253,40 +253,40 @@ impl Input {
         let right = Vector3::cross(look, up);
         let mut thrust = Vector3::zero();
         let mut angular_thrust = Vector3::zero();
-        if let Some(dt) = self.is_pressed(now, Key::W) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyW) {
             thrust += look * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::S) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyS) {
             thrust -= look * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::D) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyD) {
             thrust += right * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::A) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyA) {
             thrust -= right * (move_speed * dt);
         }
         if let Some(dt) = self.is_pressed(now, Key::Space) {
             thrust += up * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::Z) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyZ) {
             thrust -= up * (move_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::I) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyI) {
             angular_thrust += right * (turn_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::K) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyK) {
             angular_thrust += right * (-turn_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::L) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyL) {
             angular_thrust += up * (-turn_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::J) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyJ) {
             angular_thrust += up * (turn_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::O) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyO) {
             angular_thrust += look * (roll_speed * dt);
         }
-        if let Some(dt) = self.is_pressed(now, Key::U) {
+        if let Some(dt) = self.is_pressed(now, Key::KeyU) {
             angular_thrust += look * (-roll_speed * dt);
         }
 

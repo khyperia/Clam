@@ -6,7 +6,8 @@ use winit::platform::web::WindowExtWebSys;
 use crate::{buffer_blit::BufferBlit, fps_counter::FpsCounter, interactive::SyncInteractiveKernel};
 use winit::{
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
+    keyboard::{self, KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
 
@@ -47,7 +48,9 @@ pub struct RenderWindow {
 pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
+        flags: wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS,
         dx12_shader_compiler: Default::default(),
+        gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
     });
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -73,7 +76,7 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 
 impl RenderWindow {
     pub async fn new() -> Result<Self, ()> {
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoop::new().unwrap();
         let window = WindowBuilder::new().build(&event_loop).unwrap();
 
         #[cfg(target_arch = "wasm32")]
@@ -102,7 +105,9 @@ impl RenderWindow {
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
+            flags: wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS,
             dx12_shader_compiler: Default::default(),
+            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
         });
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
         let adapter = instance
@@ -216,10 +221,10 @@ impl RenderWindow {
 
     fn input(&mut self, event: &WindowEvent) {
         if let WindowEvent::KeyboardInput {
-            input:
-                KeyboardInput {
+            event:
+                KeyEvent {
                     state,
-                    virtual_keycode: Some(key),
+                    physical_key: keyboard::PhysicalKey::Code(key),
                     ..
                 },
             ..
@@ -283,10 +288,12 @@ impl RenderWindow {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             self.glyph.draw(&mut rpass);
         }
@@ -302,9 +309,9 @@ impl RenderWindow {
         Ok(())
     }
 
-    pub fn run(mut self) -> ! {
+    pub fn run(mut self) {
         let event_loop = self.event_loop.take().unwrap();
-        event_loop.run(move |event, _, control_flow| match event {
+        let res = event_loop.run(move |event, control_flow| match event {
             Event::WindowEvent {
                 ref event,
                 window_id,
@@ -312,31 +319,31 @@ impl RenderWindow {
                 self.input(event);
                 match event {
                     WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::Escape),
                                 ..
                             },
                         ..
-                    } => *control_flow = ControlFlow::Exit,
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    } => control_flow.exit(),
+                    WindowEvent::CloseRequested => control_flow.exit(),
                     WindowEvent::Resized(physical_size) => {
                         self.resize(*physical_size);
                     }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        self.resize(**new_inner_size);
-                    }
+                    // WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    //     self.resize(**new_inner_size);
+                    // }
+                    WindowEvent::RedrawRequested => match self.render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
+                        Err(wgpu::SurfaceError::OutOfMemory) => control_flow.exit(),
+                        Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
+                        Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
+                    },
                     _ => {}
                 }
             }
-            Event::RedrawRequested(_) => match self.render() {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
-                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
-                Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
-            },
-            Event::MainEventsCleared => {
+            Event::AboutToWait => {
                 #[cfg(target_arch = "wasm32")]
                 {
                     // resize to fullscreen
@@ -358,5 +365,6 @@ impl RenderWindow {
             }
             _ => {}
         });
+        res.unwrap();
     }
 }

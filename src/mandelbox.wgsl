@@ -8,12 +8,6 @@ var samp: sampler;
 @group(0) @binding(4) 
 var sky: texture_2d<f32>;
 
-
-
-// const TAU: u32 = 6.28318530718;
-// const FLT_MAX = 1E+37;
-// const UINT_MAX = 0xFFFFFFFFU;
-
 struct Data {
     pos: vec4<f32>,
     look: vec4<f32>,

@@ -349,7 +349,10 @@ impl Kernel {
         // queue.write_buffer(&self.data.uniforms, 0, uniforms_u8);
         self.old_settings = settings.clone();
 
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
         pass.set_pipeline(&self.kernel);
         pass.set_bind_group(0, &self.data.bind_group, &[]);
         let (width, height) = self.data.size();
