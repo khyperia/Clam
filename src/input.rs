@@ -115,7 +115,7 @@ impl Input {
             Key::KeyT => self.settings_input.toggle(settings),
             Key::KeyX => {
                 let pos = settings.find("pos").value().clone();
-                settings.find_mut("light_pos_1").set_value(pos);
+                settings.find_mut("light_pos").set_value(pos);
             }
             Key::Backquote => {
                 if self.spaceship.is_none() {

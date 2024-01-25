@@ -23,13 +23,15 @@ struct Data {
     bloom_size: f32,
     fog_distance: f32,
     fog_brightness: f32,
-    exposure: f32,
+    sky_brightness: f32,
     surface_color_variance: f32,
     surface_color_shift: f32,
     surface_color_saturation: f32,
     surface_color_value: f32,
     surface_color_gloss: f32,
     plane: vec4<f32>,
+    light_pos: vec4<f32>,
+    light_color: vec4<f32>,
     rotation: f32,
     bailout: f32,
     bailout_normal: f32,
@@ -53,6 +55,10 @@ struct Data {
 
 @group(0) @binding(2) 
 var<uniform> data: Data;
+
+fn is_zero(v: vec3<f32>) -> bool {
+    return v.x == 0.0 || v.y == 0.0 || v.z == 0.0;
+}
 
 fn HueToRGB(huep: f32, saturationp: f32, value: f32) -> vec3<f32> {
     var hue = huep;
@@ -82,10 +88,13 @@ fn SampleSphericalMap(v: vec3<f32>) -> vec2<f32> {
 }
 
 fn SampleSky(dir: vec3<f32>) -> vec3<f32> {
+    if data.sky_brightness <= 0.0 {
+        return vec3<f32>(0.0, 0.0, 0.0);
+    }
     let coords = SampleSphericalMap(dir);
     let dim = textureDimensions(sky);
     let icoords = vec2<i32>(i32(coords.x * f32(dim.x)), i32(coords.y * f32(dim.y)));
-    return textureLoad(sky, icoords, 0).rgb;
+    return textureLoad(sky, icoords, 0).rgb * data.sky_brightness;
 }
 
 struct Random {
@@ -109,8 +118,8 @@ fn Random_Next(this_: ptr<function, Random>) -> f32 {
     return f32(result) / f32(0xFFFFFFFFu);
 }
 
-fn Random_Init(this_: ptr<function, Random>, gl_GlobalInvocationID: u32) {
-    (*this_).seed += gl_GlobalInvocationID + 10u;
+fn Random_Init(this_: ptr<function, Random>, invocation_id: u32) {
+    (*this_).seed += invocation_id + 10u;
     for (var i = 0; i < 8; i++) {
         Random_Next(this_);
     }
@@ -423,14 +432,20 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         let newPos = Ray_At(ray, min(distance, fog_dist));
         var newDir: vec3<f32>;
 
+        let to_light = data.light_pos.xyz - newPos;
+        let distance_to_light = length(to_light);
+        let lit = select(vec3<f32>(0.0, 0.0, 0.0), data.light_color.xyz, !is_zero(data.light_color.xyz) && Cast(Ray(newPos, normalize(to_light)), quality, distance_to_light) >= distance_to_light);
+
         if distance >= fog_dist {
              // hit fog, do fog calculations
             newDir = Random_Sphere(rand);
             reflectionColor *= data.fog_brightness;
+            rayColor += reflectionColor * lit;
         } else {
              // hit surface, do material calculations
             let material = GetMaterial(newPos);
             rayColor += reflectionColor * material.emissive; // ~bling~!
+            rayColor += reflectionColor * max(dot(material.normal, to_light), 0.0) * lit;
             if Random_Next(rand) < material.gloss {
                 newDir = ray.dir;
                  // specular
@@ -454,7 +469,7 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
              break;
         }
     }
-    return rayColor * data.exposure;
+    return rayColor;
 }
 
 fn PreviewTrace(ray: Ray, width: u32, height: u32) -> vec3<f32> {
@@ -493,10 +508,10 @@ fn SetImg(x: u32, y: u32, value: vec3<f32>) {
     img[y * data.width + x] = vec4<f32>(value, 0.0);
 }
 
-fn GetRand(x: u32, y: u32, gl_GlobalInvocationID: u32) -> Random {
+fn GetRand(x: u32, y: u32, invocation_id: u32) -> Random {
     let value = randbuf[y * data.width + x];
     var rand = Random(value);
-    Random_Init(&rand, gl_GlobalInvocationID);
+    Random_Init(&rand, invocation_id);
     return rand;
 }
 
@@ -505,8 +520,10 @@ fn SetRand(x: u32, y: u32, value: Random) {
 }
 
 @compute @workgroup_size(64, 1, 1) 
-fn main(@builtin(global_invocation_id) gl_GlobalInvocationID: vec3<u32>) {
-    let idx = gl_GlobalInvocationID.x;
+fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+    let workgroup_size = vec3(64u, 1u, 1u);
+    let global_size = num_workgroups * workgroup_size;
+    let idx = global_invocation_id.x + global_invocation_id.y * global_size.x + global_invocation_id.z * global_size.x * global_size.y;
     let size = data.width * data.height;
     if idx >= size {
         return;

@@ -356,7 +356,14 @@ impl Kernel {
         pass.set_pipeline(&self.kernel);
         pass.set_bind_group(0, &self.data.bind_group, &[]);
         let (width, height) = self.data.size();
-        pass.dispatch_workgroups((width * height + 63) / 64, 1, 1); // TODO: Workgroups??
+        let mut num_workgroups_x = (width * height + 63) / 64;
+        let mut num_workgroups_y = 1;
+        // TODO: hardcoded 2^16
+        while num_workgroups_x > (1 << 16) {
+            num_workgroups_x = (num_workgroups_x + 1) / 2;
+            num_workgroups_y *= 2;
+        }
+        pass.dispatch_workgroups(num_workgroups_x, num_workgroups_y, 1);
         self.frame += 1;
     }
 

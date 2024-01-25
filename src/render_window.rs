@@ -1,4 +1,5 @@
 use log::{error, info, warn};
+use std::sync::Arc;
 
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
@@ -32,8 +33,8 @@ fn find_font() -> Result<&'static std::path::Path, &'static str> {
 
 pub struct RenderWindow {
     event_loop: Option<EventLoop<()>>,
-    window: Window,
-    surface: wgpu::Surface,
+    window: Arc<Window>,
+    surface: wgpu::Surface<'static>,
     swapchain_format: wgpu::TextureFormat,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -64,9 +65,9 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                     | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
-                limits: wgpu::Limits::default(),
+                required_limits: wgpu::Limits::default(),
             },
             None, // Trace path
         )
@@ -109,7 +110,9 @@ impl RenderWindow {
             dx12_shader_compiler: Default::default(),
             gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
         });
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let size: winit::dpi::PhysicalSize<u32> = window.inner_size();
+        let window = Arc::new(window);
+        let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -125,8 +128,8 @@ impl RenderWindow {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                    limits: wgpu::Limits::default(),
+                    required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                    required_limits: wgpu::Limits::default(),
                 },
                 None,
             )
@@ -140,14 +143,13 @@ impl RenderWindow {
             capabilities, swapchain_format
         );
 
-        let size = window.inner_size();
-
         let surface_configuration = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            desired_maximum_frame_latency: 2,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![swapchain_format.add_srgb_suffix()],
         };
@@ -209,6 +211,7 @@ impl RenderWindow {
                 width: new_size.width,
                 height: new_size.height,
                 present_mode: wgpu::PresentMode::Fifo,
+                desired_maximum_frame_latency: 2,
                 alpha_mode: wgpu::CompositeAlphaMode::Auto,
                 view_formats: vec![self.swapchain_format.add_srgb_suffix()],
             },
