@@ -497,6 +497,7 @@ fn GammaTest(x: u32, y: u32, width: u32, height: u32) -> vec3<f32> {
     } else {
         result = centerValue - offset;
     }
+    result = pow(result, data.gamma);
     return vec3(result, result, result);
 }
 

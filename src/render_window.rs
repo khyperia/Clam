@@ -9,7 +9,7 @@ use winit::{
     event::*,
     event_loop::EventLoop,
     keyboard::{self, KeyCode, PhysicalKey},
-    window::{Window, WindowBuilder},
+    window::Window,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -68,6 +68,7 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
                 required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                     | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
                 required_limits: wgpu::Limits::default(),
+                memory_hints: wgpu::MemoryHints::Performance,
             },
             None, // Trace path
         )
@@ -78,7 +79,7 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 impl RenderWindow {
     pub async fn new() -> Result<Self, ()> {
         let event_loop = EventLoop::new().unwrap();
-        let window = WindowBuilder::new().build(&event_loop).unwrap();
+        let window = event_loop.create_window(Default::default()).unwrap();
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -130,6 +131,7 @@ impl RenderWindow {
                     label: None,
                     required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     required_limits: wgpu::Limits::default(),
+                    memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )

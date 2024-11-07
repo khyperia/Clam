@@ -294,6 +294,8 @@ impl Kernel {
             layout: Some(&pipeline_layout),
             module: &module,
             entry_point: "main",
+            compilation_options: Default::default(),
+            cache: None,
         });
 
         Self {
