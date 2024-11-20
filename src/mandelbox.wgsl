@@ -421,7 +421,6 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         let max_dist = min(data.max_ray_dist, fog_dist);
         let distance = min(Cast(ray, quality, max_dist), fog_dist);
 
-
         if distance >= data.max_ray_dist || (photonIndex + 1u == data.num_ray_bounces && distance >= fog_dist) {
              // went out-of-bounds, or last fog ray didn't hit anything
             let color = SampleSky(ray.dir);
@@ -434,7 +433,8 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
 
         let to_light = data.light_pos.xyz - newPos;
         let distance_to_light = length(to_light);
-        let lit = select(vec3<f32>(0.0, 0.0, 0.0), data.light_color.xyz, !is_zero(data.light_color.xyz) && Cast(Ray(newPos, normalize(to_light)), quality, distance_to_light) >= distance_to_light);
+        let light_color = HueToRGB(data.light_color.x, data.light_color.y, data.light_color.z);
+        let lit = select(vec3<f32>(0.0, 0.0, 0.0), light_color, !is_zero(light_color) && Cast(Ray(newPos, normalize(to_light)), quality, distance_to_light) >= distance_to_light);
 
         if distance >= fog_dist {
              // hit fog, do fog calculations
@@ -470,19 +470,6 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         }
     }
     return rayColor;
-}
-
-fn PreviewTrace(ray: Ray, width: u32, height: u32) -> vec3<f32> {
-    let quality = data.quality_first_ray * (f32(width + height) / (2.0 * data.fov));
-    let max_dist = min(data.max_ray_dist, data.focal_distance * 10.0);
-    let distance = Cast(ray, quality, max_dist);
-// #ifdef PREVIEW_NORMAL
-//     vec3 org = Ray_At(ray, distance);
-//     return abs(GetMaterial(org).normal);
-// #else
-    let value = distance / max_dist;
-    return vec3(value);
-// #endif
 }
 
 fn GammaTest(x: u32, y: u32, width: u32, height: u32) -> vec3<f32> {
@@ -545,9 +532,6 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>, @builtin
 
         var rand = GetRand(x, y, idx);
         let ray = Camera(x, y, data.width, data.height, &rand);
-        // #ifdef PREVIEW
-        //     vec3 colorComponents = PreviewTrace(ray, width, height);
-        // #else
         let colorComponents = Trace(ray, data.width, data.height, &rand);
         newColor = (colorComponents + oldColor * f32(data.frame)) / vec3<f32>(f32(data.frame + 1u));
         SetRand(x, y, rand);

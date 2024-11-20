@@ -98,7 +98,7 @@ const UNIFORM_METADATA: &[Meta] = &[
     Meta::Vec3("light_pos", Vector3::new(3.0, 3.5, 2.5), 0.25, |s| {
         &mut s.light_pos
     }),
-    Meta::Vec3("light_color", Vector3::new(1.0, 1.0, 1.0), -0.5, |s| {
+    Meta::Vec3("light_color", Vector3::new(0.0, 0.0, 1.0), 0.125, |s| {
         &mut s.light_color
     }),
     Meta::Float("rotation", 0.0, 0.125, |s| &mut s.rotation),
