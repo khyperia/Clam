@@ -6,6 +6,7 @@ use winit::platform::web::WindowExtWebSys;
 
 use crate::{buffer_blit::BufferBlit, fps_counter::FpsCounter, interactive::SyncInteractiveKernel};
 use winit::{
+    application::ApplicationHandler,
     event::*,
     event_loop::EventLoop,
     keyboard::{self, KeyCode, PhysicalKey},
@@ -308,61 +309,68 @@ impl RenderWindow {
 
     pub fn run(mut self) {
         let event_loop = self.event_loop.take().unwrap();
-        let res = event_loop.run(move |event, control_flow| match event {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == self.window.id() => {
-                self.input(event);
-                match event {
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => control_flow.exit(),
-                    WindowEvent::CloseRequested => control_flow.exit(),
-                    WindowEvent::Resized(physical_size) => {
-                        self.resize(*physical_size);
-                    }
-                    // WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    //     self.resize(**new_inner_size);
-                    // }
-                    WindowEvent::RedrawRequested => match self.render() {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
-                        Err(wgpu::SurfaceError::OutOfMemory) => control_flow.exit(),
-                        Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
-                        Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
-                        Err(wgpu::SurfaceError::Other) => error!("Error: Other"),
-                    },
-                    _ => {}
-                }
-            }
-            Event::AboutToWait => {
-                #[cfg(target_arch = "wasm32")]
-                {
-                    // resize to fullscreen
-                    use winit::dpi::PhysicalSize;
-                    let window = web_sys::window().unwrap();
-                    let width = window.inner_width().unwrap().as_f64().unwrap() as u32;
-                    let height = window.inner_height().unwrap().as_f64().unwrap() as u32;
-                    let inner_size = self.window.inner_size();
-                    let new_size = PhysicalSize::new(width, height);
-                    if inner_size != new_size {
-                        info!("resize from {:?} to {:?}", inner_size, new_size);
-                        self.window.set_inner_size(new_size);
-                    }
-                }
+        event_loop.run_app(&mut self).unwrap();
+    }
+}
 
-                // RedrawRequested will only trigger once, unless we manually
-                // request it.
-                self.window.request_redraw();
+impl ApplicationHandler<()> for RenderWindow {
+    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        if window_id == self.window.id() {
+            self.input(&event);
+            match event {
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => event_loop.exit(),
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::Resized(physical_size) => {
+                    self.resize(physical_size);
+                }
+                // WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                //     self.resize(**new_inner_size);
+                // }
+                WindowEvent::RedrawRequested => match self.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
+                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                    Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
+                    Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
+                    Err(wgpu::SurfaceError::Other) => error!("Error: Other"),
+                },
+                _ => {}
             }
-            _ => {}
-        });
-        res.unwrap();
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // resize to fullscreen
+            use winit::dpi::PhysicalSize;
+            let window = web_sys::window().unwrap();
+            let width = window.inner_width().unwrap().as_f64().unwrap() as u32;
+            let height = window.inner_height().unwrap().as_f64().unwrap() as u32;
+            let inner_size = self.window.inner_size();
+            let new_size = PhysicalSize::new(width, height);
+            if inner_size != new_size {
+                info!("resize from {:?} to {:?}", inner_size, new_size);
+                self.window.set_inner_size(new_size);
+            }
+        }
+
+        // RedrawRequested will only trigger once, unless we manually request it.
+        self.window.request_redraw();
     }
 }

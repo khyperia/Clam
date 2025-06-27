@@ -432,7 +432,10 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         var newDir: vec3<f32>;
 
         let to_light = data.light_pos.xyz - newPos;
-        let distance_to_light = length(to_light);
+        var distance_to_light = length(to_light);
+        if distance >= fog_dist {
+            distance_to_light += fog_dist;
+        }
         let light_color = HueToRGB(data.light_color.x, data.light_color.y, data.light_color.z) / (distance_to_light * distance_to_light);
         let lit = select(vec3<f32>(0.0, 0.0, 0.0), light_color, !is_zero(light_color) && Cast(Ray(newPos, normalize(to_light)), quality, distance_to_light) >= distance_to_light);
 
