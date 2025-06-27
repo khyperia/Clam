@@ -26,7 +26,7 @@ impl Progress {
         let minutes = (seconds / 60.0) as u32;
         seconds -= f64::from(minutes * 60);
         if minutes == 0 {
-            format!("{:05.2}", seconds)
+            format!("{seconds:05.2}")
         } else {
             format!("{:02}:{:02}", minutes, seconds as u32)
         }

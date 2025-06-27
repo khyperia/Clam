@@ -70,15 +70,15 @@ fn load_sky(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
         usage: wgpu::BufferUsages::COPY_SRC,
     });
     encoder.copy_buffer_to_texture(
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer: &image_buf,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(image.width as u32 * 16),
                 rows_per_image: Some(image.height as u32),
             },
         },
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             texture: &texture,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
@@ -293,7 +293,7 @@ impl Kernel {
             label: None,
             layout: Some(&pipeline_layout),
             module: &module,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -358,11 +358,11 @@ impl Kernel {
         pass.set_pipeline(&self.kernel);
         pass.set_bind_group(0, &self.data.bind_group, &[]);
         let (width, height) = self.data.size();
-        let mut num_workgroups_x = (width * height + 63) / 64;
+        let mut num_workgroups_x = (width * height).div_ceil(64);
         let mut num_workgroups_y = 1;
         // TODO: hardcoded 2^16
         while num_workgroups_x > (1 << 16) {
-            num_workgroups_x = (num_workgroups_x + 1) / 2;
+            num_workgroups_x = num_workgroups_x.div_ceil(2);
             num_workgroups_y *= 2;
         }
         pass.dispatch_workgroups(num_workgroups_x, num_workgroups_y, 1);
@@ -432,15 +432,15 @@ impl Kernel {
             mapped_at_creation: false,
         });
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: src,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &dst,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(size.0 * 4),
                     rows_per_image: Some(size.1),
@@ -464,7 +464,7 @@ impl Kernel {
         wgpu::util::DownloadBuffer::read_buffer(device, queue, &buffer.slice(..), move |dl| {
             tx.send(dl.unwrap().to_vec()).unwrap()
         });
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait).unwrap();
         rx.recv().unwrap()
     }
 }

@@ -21,10 +21,10 @@ impl SettingsInput {
             let key = value.key();
             match value.value() {
                 SettingValueEnum::Int(v) => {
-                    writeln!(&mut builder, "{} {} = {}", selected, key, v).unwrap()
+                    writeln!(&mut builder, "{selected} {key} = {v}").unwrap()
                 }
                 SettingValueEnum::Float(v, _) => {
-                    writeln!(&mut builder, "{} {} = {}", selected, key, v).unwrap()
+                    writeln!(&mut builder, "{selected} {key} = {v}").unwrap()
                 }
                 SettingValueEnum::Vec3(v, _) => {
                     let selected = if ind == self.index {

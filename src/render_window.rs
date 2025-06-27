@@ -47,11 +47,10 @@ pub struct RenderWindow {
 }
 
 pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
         flags: wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS,
-        dx12_shader_compiler: Default::default(),
-        gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+        backend_options: Default::default(),
     });
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -62,16 +61,14 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
         .await
         .unwrap();
     adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                    | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None, // Trace path
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
+            required_limits: wgpu::Limits::default(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .unwrap()
 }
@@ -105,11 +102,10 @@ impl RenderWindow {
             };
         }
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             flags: wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS,
-            dx12_shader_compiler: Default::default(),
-            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+            backend_options: Default::default(),
         });
         let size: winit::dpi::PhysicalSize<u32> = window.inner_size();
         let window = Arc::new(window);
@@ -126,24 +122,19 @@ impl RenderWindow {
         info!("Using adapter: {:?}", adapter.get_info());
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                required_limits: wgpu::Limits::default(),
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            })
             .await
             .unwrap();
 
         let capabilities = surface.get_capabilities(&adapter);
         let swapchain_format = capabilities.formats[0];
-        info!(
-            "Capabilities: {:?}. Using {:?}.",
-            capabilities, swapchain_format
-        );
+        info!("Capabilities: {capabilities:?}. Using {swapchain_format:?}.");
 
         let surface_configuration = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -251,6 +242,7 @@ impl RenderWindow {
             label: None,
             format: Some(self.swapchain_format.add_srgb_suffix()),
             dimension: None,
+            usage: None,
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
@@ -344,6 +336,7 @@ impl RenderWindow {
                         Err(wgpu::SurfaceError::OutOfMemory) => control_flow.exit(),
                         Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
                         Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
+                        Err(wgpu::SurfaceError::Other) => error!("Error: Other"),
                     },
                     _ => {}
                 }

@@ -78,7 +78,7 @@ fn save_image(image: &CpuTexture, path: &str) -> Result<(), Error> {
 
 fn write_image(image: &CpuTexture, w: impl Write) -> Result<(), Error> {
     let mut encoder = Encoder::new(w, image.size.0, image.size.1);
-    encoder.set_color(ColorType::RGB);
+    encoder.set_color(ColorType::Rgb);
     encoder.set_depth(BitDepth::Eight);
     let mut writer = encoder.write_header()?;
     writer.write_image_data(&image.data)?;
@@ -114,14 +114,14 @@ fn image(
             queue.submit(std::iter::once(encoder.finish()));
             encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            device.poll(wgpu::Maintain::Wait);
+            device.poll(wgpu::PollType::Wait)?;
             let value = ray as f64 / rpp as f64;
             info!("{}", progress.time_str(value));
         }
         kernel.run(device, &mut encoder, &loaded_settings);
     }
     queue.submit(std::iter::once(encoder.finish()));
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::PollType::Wait)?;
     info!("render done, downloading");
     let image = kernel.download(device, queue);
     info!("saving, final time: {}", progress.time_str(1.0));
@@ -172,7 +172,7 @@ fn video_one(
             queue.submit(std::iter::once(encoder.finish()));
             encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            device.poll(wgpu::Maintain::Wait);
+            device.poll(wgpu::PollType::Wait)?;
         }
         kernel.run(device, &mut encoder, settings);
     }
@@ -217,16 +217,17 @@ fn pngseq_write(stream: &mpsc::Receiver<CpuTexture>, gifize: bool) -> Result<(),
     if gifize {
         for item in std::fs::read_dir(".")? {
             let item = item?;
-            let is_num = item.path().file_stem().map_or(false, |x| {
-                x.to_str().map_or(false, |x| x.parse::<u64>().is_ok())
-            });
+            let is_num = item
+                .path()
+                .file_stem()
+                .is_some_and(|x| x.to_str().is_some_and(|x| x.parse::<u64>().is_ok()));
             if is_num {
                 std::fs::remove_file(item.path())?;
             }
         }
     }
     while let Ok(img) = stream.recv() {
-        save_image(&img, &format!("{:04}.png", i))?;
+        save_image(&img, &format!("{i:04}.png"))?;
         i += 1;
     }
     if gifize {
@@ -275,7 +276,7 @@ fn video_write(stream: &mpsc::Receiver<CpuTexture>, twitter: bool) -> Result<(),
     if res.success() {
         Ok(())
     } else {
-        Err(format!("ffmpeg exited with error code: {}", res).into())
+        Err(format!("ffmpeg exited with error code: {res}").into())
     }
 }
 

@@ -62,7 +62,7 @@ impl Input {
         }
         match self.run_down(key, settings, default_settings, keyframes) {
             Ok(()) => (),
-            Err(err) => info!("Error handling key down event: {}", err),
+            Err(err) => info!("Error handling key down event: {err}"),
         }
     }
 

@@ -41,14 +41,14 @@ impl Settings {
     pub fn find(&self, key: &str) -> &SettingValue {
         match self.get(key) {
             Some(v) => v,
-            None => panic!("Key not found: {}", key),
+            None => panic!("Key not found: {key}"),
         }
     }
 
     pub fn find_mut(&mut self, key: &str) -> &mut SettingValue {
         match self.get_mut(key) {
             Some(v) => v,
-            None => panic!("Key not found: {}", key),
+            None => panic!("Key not found: {key}"),
         }
     }
 
@@ -98,7 +98,7 @@ impl Settings {
             }
             let split = line.rsplitn(2, '=').collect::<Vec<_>>();
             if split.len() != 2 {
-                return Err(format!("Invalid format in settings file: {}", line).into());
+                return Err(format!("Invalid format in settings file: {line}").into());
             }
             let key = split[1].trim();
             let new_value = split[0].trim();

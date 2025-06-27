@@ -76,7 +76,7 @@ impl BufferBlit {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &module,
-                entry_point: "vert",
+                entry_point: Some("vert"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
@@ -93,7 +93,7 @@ impl BufferBlit {
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &module,
-                entry_point: "frag",
+                entry_point: Some("frag"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
