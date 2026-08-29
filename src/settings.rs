@@ -1,10 +1,10 @@
 use crate::{
+    Error,
     kernel_uniforms::KernelUniforms,
     parse_vector3,
     setting_value::{SettingValue, SettingValueEnum},
-    Error,
 };
-use cgmath::{prelude::*, Vector3};
+use cgmath::{Vector3, prelude::*};
 use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter, Lines, Write},
@@ -61,10 +61,10 @@ impl Settings {
             if value.key() == "render_scale" {
                 continue;
             }
-            if let Some(reference) = reference.get(value.key()) {
-                if value.value() == reference.value() {
-                    continue;
-                }
+            if let Some(reference) = reference.get(value.key())
+                && value.value() == reference.value()
+            {
+                continue;
             }
             match value.value() {
                 SettingValueEnum::Int(v) => writeln!(writer, "{} = {}", value.key(), v)?,
@@ -140,10 +140,10 @@ impl Settings {
 
     pub fn apply(&mut self, other: &Settings) {
         for value in &mut self.values {
-            if let Some(other) = other.get(value.key()) {
-                if value.value().kinds_match(other.value()) {
-                    *value = other.clone();
-                }
+            if let Some(other) = other.get(value.key())
+                && value.value().kinds_match(other.value())
+            {
+                *value = other.clone();
             }
         }
     }

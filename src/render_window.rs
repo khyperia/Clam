@@ -48,25 +48,25 @@ pub struct RenderWindow {
 }
 
 pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::PRIMARY,
-        flags: wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS,
-        backend_options: Default::default(),
-    });
+    let mut options = wgpu::InstanceDescriptor::new_without_display_handle();
+    options.backends = wgpu::Backends::PRIMARY;
+    options.flags = wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS;
+    let instance = wgpu::Instance::new(options);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
             compatible_surface: None,
+            apply_limit_buckets: false,
         })
         .await
         .unwrap();
     adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
-            required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | wgpu::Features::SPIRV_SHADER_PASSTHROUGH,
+            required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             required_limits: wgpu::Limits::default(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: wgpu::Trace::Off,
         })
@@ -78,6 +78,7 @@ impl RenderWindow {
     pub async fn new() -> Result<Self, ()> {
         let event_loop = EventLoop::new().unwrap();
         let window = event_loop.create_window(Default::default()).unwrap();
+        let window = Arc::new(window);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -103,19 +104,19 @@ impl RenderWindow {
             };
         }
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            flags: wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS,
-            backend_options: Default::default(),
-        });
+        let mut options =
+            wgpu::InstanceDescriptor::new_with_display_handle(Box::new(window.clone()));
+        options.backends = wgpu::Backends::PRIMARY;
+        options.flags = wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DISCARD_HAL_LABELS;
+        let instance = wgpu::Instance::new(options);
         let size: winit::dpi::PhysicalSize<u32> = window.inner_size();
-        let window = Arc::new(window);
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
+                apply_limit_buckets: false,
             })
             .await
             .unwrap();
@@ -127,6 +128,7 @@ impl RenderWindow {
                 label: None,
                 required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                 required_limits: wgpu::Limits::default(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,
             })
@@ -140,6 +142,7 @@ impl RenderWindow {
         let surface_configuration = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -149,7 +152,7 @@ impl RenderWindow {
         };
         surface.configure(&device, &surface_configuration);
 
-        let staging_belt = wgpu::util::StagingBelt::new(1024);
+        let staging_belt = wgpu::util::StagingBelt::new(device.clone(), 1024);
 
         let interactive = SyncInteractiveKernel::create(&device, &queue, size.width, size.height);
 
@@ -202,6 +205,7 @@ impl RenderWindow {
             &wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: self.swapchain_format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
                 width: new_size.width,
                 height: new_size.height,
                 present_mode: wgpu::PresentMode::Fifo,
@@ -234,11 +238,7 @@ impl RenderWindow {
         }
     }
 
-    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let frame = self.surface.get_current_texture()?;
-        if frame.suboptimal {
-            warn!("suboptimal");
-        }
+    fn render(&mut self, frame: wgpu::SurfaceTexture) {
         let frame_view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
             format: Some(self.swapchain_format.add_srgb_suffix()),
@@ -283,6 +283,7 @@ impl RenderWindow {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &frame_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -292,6 +293,7 @@ impl RenderWindow {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             self.glyph.draw(&mut rpass);
         }
@@ -300,11 +302,9 @@ impl RenderWindow {
 
         self.staging_belt.finish();
         self.queue.submit([finished_encoder]);
-        frame.present();
+        self.queue.present(frame);
 
         self.staging_belt.recall();
-
-        Ok(())
     }
 
     pub fn run(mut self) {
@@ -314,8 +314,7 @@ impl RenderWindow {
 }
 
 impl ApplicationHandler<()> for RenderWindow {
-    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-    }
+    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
 
     fn window_event(
         &mut self,
@@ -341,13 +340,19 @@ impl ApplicationHandler<()> for RenderWindow {
                 // WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 //     self.resize(**new_inner_size);
                 // }
-                WindowEvent::RedrawRequested => match self.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost) => self.resize(self.size),
-                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-                    Err(wgpu::SurfaceError::Timeout) => error!("Error: Timeout"),
-                    Err(wgpu::SurfaceError::Outdated) => error!("Error: Outdated"),
-                    Err(wgpu::SurfaceError::Other) => error!("Error: Other"),
+                WindowEvent::RedrawRequested => match self.surface.get_current_texture() {
+                    wgpu::CurrentSurfaceTexture::Success(surface_texture) => {
+                        self.render(surface_texture)
+                    }
+                    wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+                        warn!("suboptimal");
+                        self.render(surface_texture)
+                    }
+                    wgpu::CurrentSurfaceTexture::Timeout => error!("Error: Timeout"),
+                    wgpu::CurrentSurfaceTexture::Occluded => error!("Error: Occluded"),
+                    wgpu::CurrentSurfaceTexture::Outdated => error!("Error: Outdated"),
+                    wgpu::CurrentSurfaceTexture::Lost => error!("Error: Lost"),
+                    wgpu::CurrentSurfaceTexture::Validation => error!("Error: Validation"),
                 },
                 _ => {}
             }

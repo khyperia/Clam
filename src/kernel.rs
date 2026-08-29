@@ -1,6 +1,6 @@
 use crate::{
-    buffer_blit::BufferBlit, cast_slice, kernel_uniforms::KernelUniforms, settings::Settings,
-    CpuTexture,
+    CpuTexture, buffer_blit::BufferBlit, cast_slice, kernel_uniforms::KernelUniforms,
+    settings::Settings,
 };
 use wgpu::util::DeviceExt;
 
@@ -286,8 +286,8 @@ impl Kernel {
         let data = KernelImage::new(device, queue, width, height);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&data.bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&data.bind_group_layout)],
+            immediate_size: 0,
         });
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -464,7 +464,12 @@ impl Kernel {
         wgpu::util::DownloadBuffer::read_buffer(device, queue, &buffer.slice(..), move |dl| {
             tx.send(dl.unwrap().to_vec()).unwrap()
         });
-        device.poll(wgpu::PollType::Wait).unwrap();
+        device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            })
+            .unwrap();
         rx.recv().unwrap()
     }
 }

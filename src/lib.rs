@@ -87,7 +87,7 @@ fn write_image(image: &CpuTexture, w: impl Write) -> Result<(), Error> {
 
 #[cfg(not(windows))]
 fn progress_count(rpp: usize) -> usize {
-    (rpp / 20).min(4).max(16)
+    (rpp / 20).clamp(4, 16)
 }
 
 // Special windows handling for TDR
@@ -111,17 +111,24 @@ fn image(
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     for ray in 0..rpp {
         if ray > 0 && ray % progress_count == 0 {
-            queue.submit(std::iter::once(encoder.finish()));
+            let submit = queue.submit(std::iter::once(encoder.finish()));
             encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            device.poll(wgpu::PollType::Wait)?;
+            // TODO: wait a few submits behind :3
+            device.poll(wgpu::PollType::Wait {
+                submission_index: Some(submit),
+                timeout: None,
+            })?;
             let value = ray as f64 / rpp as f64;
             info!("{}", progress.time_str(value));
         }
         kernel.run(device, &mut encoder, &loaded_settings);
     }
-    queue.submit(std::iter::once(encoder.finish()));
-    device.poll(wgpu::PollType::Wait)?;
+    let submit = queue.submit(std::iter::once(encoder.finish()));
+    device.poll(wgpu::PollType::Wait {
+        submission_index: Some(submit),
+        timeout: None,
+    })?;
     info!("render done, downloading");
     let image = kernel.download(device, queue);
     info!("saving, final time: {}", progress.time_str(1.0));
@@ -169,10 +176,14 @@ fn video_one(
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     for i in 0..rpp {
         if cfg!(windows) && i % 64 == 0 {
-            queue.submit(std::iter::once(encoder.finish()));
+            let submit = queue.submit(std::iter::once(encoder.finish()));
             encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            device.poll(wgpu::PollType::Wait)?;
+            // TODO: wait a few submits behind :3
+            device.poll(wgpu::PollType::Wait {
+                submission_index: Some(submit),
+                timeout: None,
+            })?;
         }
         kernel.run(device, &mut encoder, settings);
     }
@@ -402,7 +413,9 @@ pub async fn run() -> Result<(), Error> {
     } else {
         info!("Usage:");
         info!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
-        info!("clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]");
+        info!(
+            "clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]"
+        );
         info!("clam5 --pngseq [format:mp4|twitter|gif]");
         info!("clam5");
     }
