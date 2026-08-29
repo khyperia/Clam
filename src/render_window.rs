@@ -1,14 +1,17 @@
 use log::{error, info, warn};
-use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
 
-use crate::{buffer_blit::BufferBlit, fps_counter::FpsCounter, interactive::SyncInteractiveKernel};
+use crate::{
+    SpawnLocal, buffer_blit::BufferBlit, fps_counter::FpsCounter,
+    interactive::SyncInteractiveKernel,
+};
 use winit::{
     application::ApplicationHandler,
     event::*,
-    event_loop::EventLoop,
+    event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{self, KeyCode, PhysicalKey},
     window::Window,
 };
@@ -33,7 +36,6 @@ fn find_font() -> Result<&'static std::path::Path, &'static str> {
 }
 
 pub struct RenderWindow {
-    event_loop: Option<EventLoop<()>>,
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
     swapchain_format: wgpu::TextureFormat,
@@ -75,9 +77,7 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 }
 
 impl RenderWindow {
-    pub async fn new() -> Result<Self, ()> {
-        let event_loop = EventLoop::new().unwrap();
-        let window = event_loop.create_window(Default::default()).unwrap();
+    pub async fn new(window: Window) -> Self {
         let window = Arc::new(window);
 
         #[cfg(target_arch = "wasm32")]
@@ -182,8 +182,7 @@ impl RenderWindow {
             swapchain_format.add_srgb_suffix(),
         );
 
-        Ok(Self {
-            event_loop: Some(event_loop),
+        Self {
             window,
             surface,
             swapchain_format,
@@ -195,7 +194,7 @@ impl RenderWindow {
             buffer_blit,
             fps_counter: FpsCounter::new(1.0),
             interactive,
-        })
+        }
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -307,15 +306,6 @@ impl RenderWindow {
         self.staging_belt.recall();
     }
 
-    pub fn run(mut self) {
-        let event_loop = self.event_loop.take().unwrap();
-        event_loop.run_app(&mut self).unwrap();
-    }
-}
-
-impl ApplicationHandler<()> for RenderWindow {
-    fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {}
-
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -358,6 +348,45 @@ impl ApplicationHandler<()> for RenderWindow {
             }
         }
     }
+}
+
+pub fn run(spawn_local: SpawnLocal) {
+    EventLoop::new()
+        .unwrap()
+        .run_app(&mut AppHandler {
+            spawn_local,
+            render_window: Rc::new(RefCell::new(None)),
+        })
+        .unwrap();
+}
+
+struct AppHandler {
+    spawn_local: SpawnLocal,
+    render_window: Rc<RefCell<Option<RenderWindow>>>,
+}
+
+impl ApplicationHandler<()> for AppHandler {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.render_window.borrow().is_none() {
+            let window = event_loop.create_window(Default::default()).unwrap();
+            let render_window = RenderWindow::new(window);
+            let r = self.render_window.clone();
+            (self.spawn_local)(Box::pin(async move {
+                *r.borrow_mut() = Some(render_window.await);
+            }));
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        if let Some(render_window) = &mut *self.render_window.borrow_mut() {
+            render_window.window_event(event_loop, window_id, event);
+        }
+    }
 
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
         #[cfg(target_arch = "wasm32")]
@@ -376,6 +405,8 @@ impl ApplicationHandler<()> for RenderWindow {
         }
 
         // RedrawRequested will only trigger once, unless we manually request it.
-        self.window.request_redraw();
+        if let Some(render_window) = &mut *self.render_window.borrow_mut() {
+            render_window.window.request_redraw();
+        }
     }
 }

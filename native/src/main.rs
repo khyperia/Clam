@@ -1,9 +1,9 @@
 use clam5::*;
 
-pub fn main() -> Result<(), Error> {
+pub fn main() {
     env_logger::builder()
         .filter(Some("clam5"), log::LevelFilter::Trace)
         .init();
 
-    pollster::block_on(run())
+    run(Box::new(pollster::block_on));
 }

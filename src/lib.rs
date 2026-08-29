@@ -24,6 +24,7 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     mem::drop,
+    pin::Pin,
     process::{Command, Stdio},
     str,
     sync::mpsc,
@@ -32,6 +33,7 @@ use std::{
 use winit::keyboard::KeyCode as Key;
 
 pub type Error = Box<dyn std::error::Error>;
+type SpawnLocal = Box<dyn Fn(Pin<Box<dyn Future<Output = ()>>>)>;
 
 pub struct CpuTexture {
     data: Vec<u8>,
@@ -398,18 +400,20 @@ fn pngseq_cmd(args: &[String]) -> Result<(), Error> {
     }
 }
 
-pub async fn run() -> Result<(), Error> {
+pub fn run(spawn_local: SpawnLocal) {
     let arguments = args().skip(1).collect::<Vec<_>>();
     if arguments.len() > 2 && &arguments[0] == "--render" {
-        render(&arguments[1..]).await?
+        spawn_local(Box::pin(
+            async move { render(&arguments[1..]).await.unwrap() },
+        ));
     } else if arguments.len() > 2 && &arguments[0] == "--video" {
-        video_cmd(&arguments[1..]).await?
+        spawn_local(Box::pin(async move {
+            video_cmd(&arguments[1..]).await.unwrap()
+        }));
     } else if arguments.len() == 2 && &arguments[0] == "--pngseq" {
-        pngseq_cmd(&arguments[1..])?
+        pngseq_cmd(&arguments[1..]).unwrap()
     } else if arguments.is_empty() {
-        if let Ok(window) = render_window::RenderWindow::new().await {
-            window.run()
-        }
+        render_window::run(spawn_local);
     } else {
         info!("Usage:");
         info!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
@@ -419,5 +423,4 @@ pub async fn run() -> Result<(), Error> {
         info!("clam5 --pngseq [format:mp4|twitter|gif]");
         info!("clam5");
     }
-    Ok(())
 }
