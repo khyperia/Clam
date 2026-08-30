@@ -77,31 +77,34 @@ pub async fn run_headless() -> (wgpu::Device, wgpu::Queue) {
 }
 
 impl RenderWindow {
-    pub async fn new(window: Window) -> Self {
+    pub async fn new(window: Window) -> Option<Self> {
         let window = Arc::new(window);
 
         #[cfg(target_arch = "wasm32")]
         {
-            if matches!(window.canvas().get_context("webgpu"), Ok(Some(_))) {
-                let append = || {
-                    web_sys::window()?
-                        .document()?
-                        .body()?
-                        .append_child(&web_sys::Element::from(window.canvas()))
-                        .ok()
-                };
-                append().expect("couldn't append to document body");
-            } else {
-                let append = || {
-                    web_sys::window()?
-                        .document()?
-                        .body()?
-                        .set_inner_text("canvas.getContext('webgpu') returned null. Maybe your browser doesn't support webgpu, or you don't have it enabled?");
-                    Some(())
-                };
-                append().expect("couldn't append to document body");
-                return Err(());
+            let err = |s| {
+                web_sys::window()?.document()?.body()?.set_inner_text(s);
+                Some(())
             };
+            let err = |s| err(s).expect("couldn't set document body");
+            let Some(canvas) = window.canvas() else {
+                err("winit window.canvas() returned null");
+                return None;
+            };
+            let Ok(Some(_)) = canvas.get_context("webgpu") else {
+                err(
+                    "canvas.getContext('webgpu') returned null. Maybe your browser doesn't support webgpu, or you don't have it enabled?",
+                );
+                return None;
+            };
+            let append = || {
+                web_sys::window()?
+                    .document()?
+                    .body()?
+                    .append_child(&canvas.into())
+                    .ok()
+            };
+            append().expect("couldn't append to document body");
         }
 
         let mut options =
@@ -167,7 +170,7 @@ impl RenderWindow {
 
         #[cfg(target_arch = "wasm32")]
         let font = wgpu_text::glyph_brush::ab_glyph::FontArc::try_from_slice(include_bytes!(
-            "C:\\Windows\\Fonts\\arial.ttf"
+            "/usr/share/fonts/TTF/FiraMono-Regular.ttf"
         ))
         .unwrap();
         #[cfg(not(target_arch = "wasm32"))]
@@ -182,7 +185,7 @@ impl RenderWindow {
             swapchain_format.add_srgb_suffix(),
         );
 
-        Self {
+        Some(Self {
             window,
             surface,
             swapchain_format,
@@ -194,7 +197,7 @@ impl RenderWindow {
             buffer_blit,
             fps_counter: FpsCounter::new(1.0),
             interactive,
-        }
+        })
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -372,7 +375,7 @@ impl ApplicationHandler<()> for AppHandler {
             let render_window = RenderWindow::new(window);
             let r = self.render_window.clone();
             (self.spawn_local)(Box::pin(async move {
-                *r.borrow_mut() = Some(render_window.await);
+                *r.borrow_mut() = render_window.await;
             }));
         }
     }
@@ -389,23 +392,26 @@ impl ApplicationHandler<()> for AppHandler {
     }
 
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            // resize to fullscreen
-            use winit::dpi::PhysicalSize;
-            let window = web_sys::window().unwrap();
-            let width = window.inner_width().unwrap().as_f64().unwrap() as u32;
-            let height = window.inner_height().unwrap().as_f64().unwrap() as u32;
-            let inner_size = self.window.inner_size();
-            let new_size = PhysicalSize::new(width, height);
-            if inner_size != new_size {
-                info!("resize from {:?} to {:?}", inner_size, new_size);
-                self.window.set_inner_size(new_size);
-            }
-        }
-
-        // RedrawRequested will only trigger once, unless we manually request it.
         if let Some(render_window) = &mut *self.render_window.borrow_mut() {
+            #[cfg(target_arch = "wasm32")]
+            {
+                // resize to fullscreen
+                use winit::dpi::PhysicalSize;
+                let window = web_sys::window().unwrap();
+                let width = window.inner_width().unwrap().as_f64().unwrap() as u32;
+                let height = window.inner_height().unwrap().as_f64().unwrap() as u32;
+                let inner_size = render_window.window.inner_size();
+                let new_size = PhysicalSize::new(width, height);
+                if inner_size != new_size {
+                    info!("resize from {:?} to {:?}", inner_size, new_size);
+                    match render_window.window.request_inner_size(new_size) {
+                        None => (),
+                        Some(physical_size) => render_window.resize(physical_size),
+                    }
+                }
+            }
+
+            // RedrawRequested will only trigger once, unless we manually request it.
             render_window.window.request_redraw();
         }
     }
