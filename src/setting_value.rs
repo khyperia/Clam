@@ -1,10 +1,11 @@
 use cgmath::Vector3;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SettingValue {
     key: String,
     value: SettingValueEnum,
     default_value: SettingValueEnum,
+    pub compiletime: bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -12,14 +13,16 @@ pub enum SettingValueEnum {
     Int(u64),
     Float(f64, f64),
     Vec3(Vector3<f64>, f64),
+    Bool(bool),
 }
 
 impl SettingValue {
-    pub fn new(key: String, value: SettingValueEnum) -> Self {
+    pub fn new(key: String, value: SettingValueEnum, compiletime: bool) -> Self {
         Self {
             key,
             value: value.clone(),
             default_value: value,
+            compiletime,
         }
     }
 
@@ -36,16 +39,17 @@ impl SettingValue {
     }
 
     pub fn change_one(&mut self, increase: bool) {
-        match self.value {
+        match &mut self.value {
             SettingValueEnum::Float(_, _) => (),
             SettingValueEnum::Vec3(_, _) => (),
-            SettingValueEnum::Int(ref mut value) => {
+            SettingValueEnum::Int(value) => {
                 if increase {
                     *value += 1;
                 } else if *value != 0 {
                     *value -= 1;
                 }
             }
+            SettingValueEnum::Bool(v) => *v = !*v,
         }
     }
 
@@ -73,15 +77,17 @@ impl SettingValue {
                 }
             }
             SettingValueEnum::Int(_) => (),
+            SettingValueEnum::Bool(_) => (),
         }
     }
 
     pub fn toggle(&mut self) {
         if self.value == self.default_value {
-            match self.value {
-                SettingValueEnum::Int(ref mut v) => *v = 0,
-                SettingValueEnum::Float(ref mut v, _) => *v = 0.0,
-                SettingValueEnum::Vec3(ref mut v, _) => *v = Vector3::new(0.0, 0.0, 0.0),
+            match &mut self.value {
+                SettingValueEnum::Int(v) => *v = 0,
+                SettingValueEnum::Float(v, _) => *v = 0.0,
+                SettingValueEnum::Vec3(v, _) => *v = Vector3::new(0.0, 0.0, 0.0),
+                SettingValueEnum::Bool(v) => *v = false,
             }
         } else {
             self.value = self.default_value.clone();
@@ -124,6 +130,7 @@ impl SettingValueEnum {
             (SettingValueEnum::Int(_), SettingValueEnum::Int(_))
                 | (SettingValueEnum::Float(_, _), SettingValueEnum::Float(_, _))
                 | (SettingValueEnum::Vec3(_, _), SettingValueEnum::Vec3(_, _))
+                | (SettingValueEnum::Bool(_), SettingValueEnum::Bool(_))
         )
     }
 }

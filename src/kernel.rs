@@ -1,6 +1,6 @@
 use crate::{
     CpuTexture, buffer_blit::BufferBlit, cast_slice, kernel_uniforms::KernelUniforms,
-    settings::Settings,
+    setting_value::SettingValueEnum, settings::Settings,
 };
 use wgpu::util::DeviceExt;
 
@@ -273,14 +273,23 @@ impl KernelImage {
 }
 
 pub struct Kernel {
+    module: wgpu::ShaderModule,
+    pipeline_layout: wgpu::PipelineLayout,
     kernel: wgpu::ComputePipeline,
     data: KernelImage,
-    old_settings: Settings,
+    runtime_settings: Settings,
+    compiletime_settings: Settings,
     frame: u32,
 }
 
 impl Kernel {
-    pub fn create(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
+    pub fn create(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        settings: &Settings,
+    ) -> Self {
         let module = device.create_shader_module(wgpu::include_wgsl!("mandelbox.wgsl"));
 
         let data = KernelImage::new(device, queue, width, height);
@@ -289,19 +298,16 @@ impl Kernel {
             bind_group_layouts: &[Some(&data.bind_group_layout)],
             immediate_size: 0,
         });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
+
+        let kernel = Self::create_pipeline(device, &module, &pipeline_layout, settings);
 
         Self {
-            kernel: pipeline,
+            module,
+            pipeline_layout,
+            kernel,
             data,
-            old_settings: Settings::new(),
+            runtime_settings: settings.runtime(),
+            compiletime_settings: settings.compiletime(),
             frame: 0,
         }
     }
@@ -317,14 +323,24 @@ impl Kernel {
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         settings: &Settings,
+        allow_recompile: bool,
     ) {
+        let provided_runtime = settings.runtime();
+        let provided_compiletime = settings.compiletime();
+        let recompile = allow_recompile && self.compiletime_settings != provided_compiletime;
         if self.data.resize(
             device,
             self.data.width,
             self.data.height,
             settings.find("render_scale").unwrap_u32() as u32,
-        ) || &self.old_settings != settings
+        ) || recompile
+            || self.runtime_settings != provided_runtime
         {
+            if recompile {
+                self.kernel =
+                    Self::create_pipeline(device, &self.module, &self.pipeline_layout, settings);
+                self.compiletime_settings = provided_compiletime;
+            }
             self.frame = 0;
         }
         let mut uniforms = KernelUniforms::from_settings(settings);
@@ -349,7 +365,7 @@ impl Kernel {
         );
 
         // queue.write_buffer(&self.data.uniforms, 0, uniforms_u8);
-        self.old_settings = settings.clone();
+        self.runtime_settings = provided_runtime;
 
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
@@ -375,6 +391,10 @@ impl Kernel {
 
     pub fn texture_size(&self) -> (u32, u32) {
         self.data.size()
+    }
+
+    pub fn active_compiletime_settings(&self) -> &Settings {
+        &self.compiletime_settings
     }
 
     pub fn download(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> CpuTexture {
@@ -471,5 +491,46 @@ impl Kernel {
             })
             .unwrap();
         rx.recv().unwrap()
+    }
+
+    fn create_pipeline(
+        device: &wgpu::Device,
+        module: &wgpu::ShaderModule,
+        pipeline_layout: &wgpu::PipelineLayout,
+        settings: &Settings,
+    ) -> wgpu::ComputePipeline {
+        let constants = settings
+            .values
+            .iter()
+            .filter(|s| s.compiletime)
+            .map(|s| {
+                (
+                    s.key(),
+                    match *s.value() {
+                        SettingValueEnum::Int(i) => i as f64,
+                        SettingValueEnum::Float(f, _) => f,
+                        SettingValueEnum::Vec3(_, _) => todo!(),
+                        SettingValueEnum::Bool(v) => {
+                            if v {
+                                1.0
+                            } else {
+                                0.0
+                            }
+                        }
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(pipeline_layout),
+            module,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &constants,
+                zero_initialize_workgroup_memory: false,
+            },
+            cache: None,
+        })
     }
 }

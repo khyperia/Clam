@@ -5,6 +5,7 @@ use crate::{
     setting_value::{SettingValue, SettingValueEnum},
 };
 use cgmath::{Vector3, prelude::*};
+use log::error;
 use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter, Lines, Write},
@@ -26,7 +27,16 @@ impl Settings {
         default_settings.values.push(SettingValue::new(
             "render_scale".to_string(),
             SettingValueEnum::Int(1),
+            false,
         ));
+        for v in &default_settings.values {
+            let ct = default_settings
+                .values
+                .iter()
+                .filter(|s| s.key() == v.key())
+                .count();
+            assert_eq!(ct, 1);
+        }
         default_settings
     }
 
@@ -72,6 +82,7 @@ impl Settings {
                 SettingValueEnum::Vec3(v, _) => {
                     writeln!(writer, "{} = {} {} {}", value.key(), v.x, v.y, v.z)?
                 }
+                SettingValueEnum::Bool(v) => writeln!(writer, "{} = {}", value.key(), v)?,
             }
         }
         Ok(())
@@ -112,10 +123,14 @@ impl Settings {
                     parse_vector3(new_value).ok_or("invalid vector3 in save file")?,
                     change,
                 ),
+                SettingValueEnum::Bool(_) => SettingValueEnum::Bool(new_value.parse()?),
             };
-            result
-                .values
-                .push(SettingValue::new(key.to_string(), val_enum));
+            println!("{key}, {val_enum:?}");
+            result.values.push(SettingValue::new(
+                key.to_string(),
+                val_enum,
+                reference.compiletime,
+            ));
         }
         Ok((result, read_any))
     }
@@ -139,12 +154,38 @@ impl Settings {
     }
 
     pub fn apply(&mut self, other: &Settings) {
-        for value in &mut self.values {
-            if let Some(other) = other.get(value.key())
-                && value.value().kinds_match(other.value())
-            {
-                *value = other.clone();
+        for other in &other.values {
+            if let Some(value) = self.get_mut(other.key()) {
+                if value.value().kinds_match(other.value()) {
+                    *value = other.clone();
+                } else {
+                    error!("bad setting in file, kind mismatch: {value:?} != {other:?}");
+                }
+            } else {
+                error!("bad setting in file, not present: {}", other.key());
             }
+        }
+    }
+
+    pub fn compiletime(&self) -> Self {
+        Self {
+            values: self
+                .values
+                .iter()
+                .filter(|v| v.compiletime)
+                .cloned()
+                .collect(),
+        }
+    }
+
+    pub fn runtime(&self) -> Self {
+        Self {
+            values: self
+                .values
+                .iter()
+                .filter(|v| !v.compiletime)
+                .cloned()
+                .collect(),
         }
     }
 }

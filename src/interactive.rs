@@ -1,4 +1,5 @@
-use crate::{input::Input, kernel::Kernel, keyframe_list::KeyframeList, settings::Settings, Key};
+use crate::{Key, input::Input, kernel::Kernel, keyframe_list::KeyframeList, settings::Settings};
+use std::mem::take;
 
 pub struct SyncInteractiveKernel {
     pub kernel: Kernel,
@@ -13,8 +14,13 @@ impl SyncInteractiveKernel {
         let default_settings = Settings::get_default();
         let keyframes = KeyframeList::load("keyframes.clam5", default_settings.clone())
             .unwrap_or_else(|_| KeyframeList::new());
+        let creation_settings = if keyframes.len() == 0 {
+            &default_settings
+        } else {
+            &keyframes.interpolate(0.0, false)
+        };
         let input = Input::new();
-        let kernel = Kernel::create(device, queue, width, height);
+        let kernel = Kernel::create(device, queue, width, height, creation_settings);
         Self {
             kernel,
             settings: default_settings.clone(),
@@ -43,7 +49,8 @@ impl SyncInteractiveKernel {
 
     pub fn run(&mut self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder) {
         self.input.integrate(&mut self.settings, &self.keyframes);
-        self.kernel.run(device, encoder, &self.settings);
+        let recompile = take(&mut self.input.recompile_compiletimes);
+        self.kernel.run(device, encoder, &self.settings, recompile);
     }
 
     pub fn texture(&self) -> &wgpu::Buffer {
@@ -55,6 +62,8 @@ impl SyncInteractiveKernel {
     }
 
     pub fn status(&self) -> String {
-        self.input.settings_input.status(&self.settings)
+        self.input
+            .settings_input
+            .status(&self.settings, self.kernel.active_compiletime_settings())
     }
 }

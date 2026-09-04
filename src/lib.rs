@@ -29,7 +29,6 @@ use std::{
     str,
     sync::mpsc,
 };
-
 use winit::keyboard::KeyCode as Key;
 
 pub type Error = Box<dyn std::error::Error>;
@@ -106,7 +105,7 @@ fn image(
     rpp: usize,
 ) -> Result<(), Error> {
     let loaded_settings = Settings::load("settings.clam5", &Settings::get_default())?;
-    let mut kernel = Kernel::create(device, queue, width, height);
+    let mut kernel = Kernel::create(device, queue, width, height, &loaded_settings);
     let progress = Progress::new();
     let progress_count = progress_count(rpp);
     let mut encoder =
@@ -124,7 +123,7 @@ fn image(
             let value = ray as f64 / rpp as f64;
             info!("{}", progress.time_str(value));
         }
-        kernel.run(device, &mut encoder, &loaded_settings);
+        kernel.run(device, &mut encoder, &loaded_settings, true);
     }
     let submit = queue.submit(std::iter::once(encoder.finish()));
     device.poll(wgpu::PollType::Wait {
@@ -187,7 +186,7 @@ fn video_one(
                 timeout: None,
             })?;
         }
-        kernel.run(device, &mut encoder, settings);
+        kernel.run(device, &mut encoder, settings, true);
     }
     queue.submit(std::iter::once(encoder.finish()));
     let image = kernel.download(device, queue);
@@ -305,7 +304,13 @@ fn video(
     format: VideoFormat,
 ) -> Result<(), Error> {
     let keyframes = KeyframeList::load("keyframes.clam5", Settings::get_default())?;
-    let mut kernel = Kernel::create(device, queue, width, height);
+    let mut kernel = Kernel::create(
+        device,
+        queue,
+        width,
+        height,
+        &keyframes.interpolate(0.0, wrap),
+    );
     let progress = Progress::new();
 
     let (send, recv) = mpsc::sync_channel(5);
@@ -379,7 +384,11 @@ async fn video_cmd(args: &[String]) -> Result<(), Error> {
         let (device, queue) = render_window::run_headless().await;
         video(&device, &queue, width, height, rpp, frames, wrap, format)
     } else {
-        Err("--video needs four args: [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]".into())
+        Err(
+            "--video needs four args: [width-height|0.25k..32k|twitter] [rpp] [frames] \
+             [wrap:true|false] [format:mp4|twitter|pngseq|gif]"
+                .into(),
+        )
     }
 }
 
@@ -418,7 +427,8 @@ pub fn run(spawn_local: SpawnLocal) {
         info!("Usage:");
         info!("clam5 --render [width-height|0.25k..32k|twitter] [rpp]");
         info!(
-            "clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] [format:mp4|twitter|pngseq|gif]"
+            "clam5 --video [width-height|0.25k..32k|twitter] [rpp] [frames] [wrap:true|false] \
+             [format:mp4|twitter|pngseq|gif]"
         );
         info!("clam5 --pngseq [format:mp4|twitter|gif]");
         info!("clam5");

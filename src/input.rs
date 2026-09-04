@@ -1,10 +1,10 @@
 use crate::{
-    keyframe_list::KeyframeList, settings::Settings, settings_input::SettingsInput, Error, Key,
+    Error, Key, keyframe_list::KeyframeList, settings::Settings, settings_input::SettingsInput,
 };
-use cgmath::{prelude::*, Quaternion, Rad, Vector3};
+use cgmath::{Quaternion, Rad, Vector3, prelude::*};
 use instant::Instant;
 use log::info;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 pub struct Input {
     pressed_keys: HashMap<Key, Instant>,
@@ -13,6 +13,7 @@ pub struct Input {
     video_len_secs: f64,
     last_update: Instant,
     pub settings_input: SettingsInput,
+    pub recompile_compiletimes: bool,
 }
 
 impl Input {
@@ -24,6 +25,7 @@ impl Input {
             video_len_secs: 0.0,
             last_update: Instant::now(),
             settings_input: SettingsInput::new(),
+            recompile_compiletimes: false,
         }
     }
 
@@ -32,12 +34,13 @@ impl Input {
         // free:
         // QE
         //
-        // CB
+        // C
         info!("WASD, [space]Z, IJKL, OU: move camera");
         info!("RF: focal distance/move speed");
         info!("NM: field of view");
         info!("Y: Write settings to disk. P: Read settings. V: Write keyframe. G: Play keyframes.");
         info!("up/down/left/right: Adjust settings. T: Toggle zero setting.");
+        info!("C: rebuild compiletime settings");
         info!("X: Copy position to lightsource position");
         info!("`: Spaceship!");
         info!("H: Print this message");
@@ -92,6 +95,7 @@ impl Input {
             }
             Key::KeyP => {
                 *settings = Settings::load("settings.clam5", settings)?;
+                self.recompile_compiletimes = true;
                 info!("Settings loaded");
             }
             Key::KeyY => {
@@ -113,6 +117,7 @@ impl Input {
             Key::ArrowLeft => self.settings_input.left_one(settings),
             Key::ArrowRight => self.settings_input.right_one(settings),
             Key::KeyT => self.settings_input.toggle(settings),
+            Key::KeyB => self.recompile_compiletimes = true,
             Key::KeyX => {
                 let pos = settings.find("pos").value().clone();
                 settings.find_mut("light_pos").set_value(pos);
@@ -152,6 +157,7 @@ impl Input {
         }
         if self.cur_video_secs < self.video_len_secs {
             *settings = keyframes.interpolate(self.cur_video_secs / self.video_len_secs, false);
+            self.recompile_compiletimes = true;
             self.cur_video_secs += dt;
         }
     }

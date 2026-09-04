@@ -28,9 +28,9 @@ pub struct KernelUniforms {
     surface_color_saturation: f32,
     surface_color_value: f32,
     surface_color_gloss: f32,
-    plane: Vec4,
     light_pos: Vec4,
     light_color: Vec4,
+    plane: Vec4,
     rotation: f32,
     bailout: f32,
     bailout_normal: f32,
@@ -39,14 +39,9 @@ pub struct KernelUniforms {
     quality_first_ray: f32,
     quality_rest_ray: f32,
     gamma: f32,
-    fov_left: f32,
-    fov_right: f32,
-    fov_top: f32,
-    fov_bottom: f32,
     max_iters: u32,
     max_ray_steps: u32,
     num_ray_bounces: u32,
-    gamma_test: u32,
     pub width: u32,
     pub height: u32,
     pub frame: u32,
@@ -94,13 +89,13 @@ const UNIFORM_METADATA: &[Meta] = &[
     Meta::Float("surface_color_gloss", 0.0, 0.25, |s| {
         &mut s.surface_color_gloss
     }),
-    Meta::Vec3("plane", Vector3::new(3.0, 3.5, 2.5), 1.0, |s| &mut s.plane),
     Meta::Vec3("light_pos", Vector3::new(3.0, 3.5, 2.5), 0.25, |s| {
         &mut s.light_pos
     }),
     Meta::Vec3("light_color", Vector3::new(0.0, 0.0, 1.0), 0.125, |s| {
         &mut s.light_color
     }),
+    Meta::Vec3("plane", Vector3::new(3.0, 3.5, 2.5), 1.0, |s| &mut s.plane),
     Meta::Float("rotation", 0.0, 0.125, |s| &mut s.rotation),
     Meta::Float("bailout", 64.0, -0.25, |s| &mut s.bailout),
     Meta::Float("bailout_normal", 1024.0, -1.0, |s| &mut s.bailout_normal),
@@ -109,14 +104,24 @@ const UNIFORM_METADATA: &[Meta] = &[
     Meta::Float("quality_first_ray", 2.0, -0.5, |s| &mut s.quality_first_ray),
     Meta::Float("quality_rest_ray", 64.0, -0.5, |s| &mut s.quality_rest_ray),
     Meta::Float("gamma", 1.0, -0.125, |s| &mut s.gamma),
-    Meta::Float("fov_left", -1.0, 1.0, |s| &mut s.fov_left),
-    Meta::Float("fov_right", 1.0, 1.0, |s| &mut s.fov_right),
-    Meta::Float("fov_top", 1.0, 1.0, |s| &mut s.fov_top),
-    Meta::Float("fov_bottom", -1.0, 1.0, |s| &mut s.fov_bottom),
     Meta::Int("max_iters", 20, |s| &mut s.max_iters),
     Meta::Int("max_ray_steps", 256, |s| &mut s.max_ray_steps),
     Meta::Int("num_ray_bounces", 4, |s| &mut s.num_ray_bounces),
-    Meta::Int("gamma_test", 0, |s| &mut s.gamma_test),
+];
+
+enum CtMeta {
+    Int(&'static str, u64),
+    Float(&'static str, f64, f64),
+    Bool(&'static str, bool),
+}
+
+const COMPILETIME_METADATA: &[CtMeta] = &[
+    CtMeta::Bool("mandelbulb", false),
+    CtMeta::Bool("cut", false),
+    CtMeta::Bool("rotate", false),
+    CtMeta::Bool("no_anti_alias", false),
+    CtMeta::Bool("cube_normal", false),
+    CtMeta::Bool("gamma_test", false),
 ];
 
 impl KernelUniforms {
@@ -141,26 +146,24 @@ impl KernelUniforms {
 
     pub fn fill_defaults(settings: &mut Settings) {
         for m in UNIFORM_METADATA {
-            match *m {
-                Meta::Int(name, default, _) => {
-                    let setting = SettingValueEnum::Int(default);
-                    settings
-                        .values
-                        .push(SettingValue::new(name.to_string(), setting));
-                }
-                Meta::Float(name, default, change, _) => {
-                    let setting = SettingValueEnum::Float(default, change);
-                    settings
-                        .values
-                        .push(SettingValue::new(name.to_string(), setting));
-                }
-                Meta::Vec3(name, default, change, _) => {
-                    let setting = SettingValueEnum::Vec3(default, change);
-                    settings
-                        .values
-                        .push(SettingValue::new(name.to_string(), setting));
-                }
-            }
+            let (name, setting) = match *m {
+                Meta::Int(n, default, _) => (n, SettingValueEnum::Int(default)),
+                Meta::Float(n, default, change, _) => (n, SettingValueEnum::Float(default, change)),
+                Meta::Vec3(n, default, change, _) => (n, SettingValueEnum::Vec3(default, change)),
+            };
+            settings
+                .values
+                .push(SettingValue::new(name.to_string(), setting, false));
+        }
+        for m in COMPILETIME_METADATA {
+            let (name, setting) = match *m {
+                CtMeta::Int(n, default) => (n, SettingValueEnum::Int(default)),
+                CtMeta::Float(n, default, change) => (n, SettingValueEnum::Float(default, change)),
+                CtMeta::Bool(n, default) => (n, SettingValueEnum::Bool(default)),
+            };
+            settings
+                .values
+                .push(SettingValue::new(name.to_string(), setting, true));
         }
     }
 }

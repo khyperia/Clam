@@ -1,6 +1,5 @@
-use wgpu::util::DeviceExt;
-
 use crate::cast_slice;
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Default, Clone, Copy, PartialEq, Eq)]

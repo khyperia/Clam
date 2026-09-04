@@ -1,4 +1,5 @@
 use crate::{setting_value::SettingValueEnum, settings::Settings};
+use cgmath::Vector3;
 use std::fmt::Write;
 
 pub struct SettingsInput {
@@ -14,19 +15,30 @@ impl SettingsInput {
         }
     }
 
-    pub fn status(&self, settings: &Settings) -> String {
+    pub fn status(&self, settings: &Settings, active_compiletime: &Settings) -> String {
         let mut builder = String::new();
         for (ind, value) in settings.values.iter().enumerate() {
             let selected = if ind == self.index { "*" } else { " " };
+            let ct = if value.compiletime {
+                if let Some(active) = active_compiletime.get(value.key())
+                    && active.value() != value.value()
+                {
+                    "#"
+                } else {
+                    "@"
+                }
+            } else {
+                " "
+            };
             let key = value.key();
             match value.value() {
                 SettingValueEnum::Int(v) => {
-                    writeln!(&mut builder, "{selected} {key} = {v}").unwrap()
+                    writeln!(&mut builder, "{selected}{ct}{key} = {v}").unwrap()
                 }
                 SettingValueEnum::Float(v, _) => {
-                    writeln!(&mut builder, "{selected} {key} = {v}").unwrap()
+                    writeln!(&mut builder, "{selected}{ct}{key} = {v}").unwrap()
                 }
-                SettingValueEnum::Vec3(v, _) => {
+                SettingValueEnum::Vec3(Vector3 { x, y, z }, _) => {
                     let selected = if ind == self.index {
                         match self.component {
                             0 => "x",
@@ -37,12 +49,10 @@ impl SettingsInput {
                     } else {
                         " "
                     };
-                    writeln!(
-                        &mut builder,
-                        "{} {} = {} {} {}",
-                        selected, key, v.x, v.y, v.z
-                    )
-                    .unwrap()
+                    writeln!(&mut builder, "{selected}{ct}{key} = {x} {y} {z}").unwrap()
+                }
+                SettingValueEnum::Bool(v) => {
+                    writeln!(&mut builder, "{selected}{ct}{key} = {v}").unwrap()
                 }
             }
         }

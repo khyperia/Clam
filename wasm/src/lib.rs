@@ -1,6 +1,5 @@
 #[cfg(target_arch = "wasm32")]
 use clam5::*;
-
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 

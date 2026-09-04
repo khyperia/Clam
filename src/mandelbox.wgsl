@@ -29,9 +29,9 @@ struct Data {
     surface_color_saturation: f32,
     surface_color_value: f32,
     surface_color_gloss: f32,
-    plane: vec4<f32>,
     light_pos: vec4<f32>,
     light_color: vec4<f32>,
+    plane: vec4<f32>,
     rotation: f32,
     bailout: f32,
     bailout_normal: f32,
@@ -40,14 +40,9 @@ struct Data {
     quality_first_ray: f32,
     quality_rest_ray: f32,
     gamma: f32,
-    fov_left: f32,
-    fov_right: f32,
-    fov_top: f32,
-    fov_bottom: f32,
     max_iters: u32,
     max_ray_steps: u32,
     num_ray_bounces: u32,
-    gamma_test: u32,
     width: u32,
     height: u32,
     frame: u32,
@@ -55,6 +50,13 @@ struct Data {
 
 @group(0) @binding(2) 
 var<uniform> data: Data;
+
+override mandelbulb: bool = false;
+override cut: bool = false;
+override rotate: bool = false;
+override no_anti_alias: bool = false;
+override cube_normal: bool = false;
+override gamma_test: bool = false;
 
 fn is_zero(v: vec3<f32>) -> bool {
     return v.x == 0.0 || v.y == 0.0 || v.z == 0.0;
@@ -190,11 +192,12 @@ fn Ray_Dof(this_: ptr<function, Ray>, focalPlane: f32, rand: ptr<function, Rando
 }
 
 fn Camera(x: u32, y: u32, width: u32, height: u32, rand: ptr<function, Random>) -> Ray {
-// #ifdef NOANTIALIAS
-//     vec2 antialias = vec2(0, 0);
-// #else
-    let antialias = vec2<f32>(Random_Next(rand), Random_Next(rand)) - vec2<f32>(0.5, 0.5);
-// #endif
+    var antialias: vec2<f32>;
+    if no_anti_alias {
+        antialias = vec2(0, 0);
+    } else {
+        antialias = vec2<f32>(Random_Next(rand), Random_Next(rand)) - vec2<f32>(0.5, 0.5);
+    }
     let screenCoords = vec2<f32>(f32(x) - f32(width) / 2.0, f32(y) - f32(height) / 2.0) + antialias;
     let calcFov = data.fov * 2.0 / f32(width + height);
     let direction = RayDir(data.look.xyz, data.up.xyz, screenCoords, calcFov);
@@ -239,10 +242,12 @@ fn TOffset(z: ptr<function, vec3<f32>>, dz: ptr<function, f32>, offset: vec3<f32
     *z += offset;
 }
 
-fn Rotate(z: vec3<f32>) -> vec3<f32> {
+fn DoRotate(z: ptr<function, vec3<f32>>) {
     let axis = normalize(data.plane.xyz);
     let angle = data.rotation;
-    return cos(angle) * z + sin(angle) * cross(z, axis) + (1.0 - cos(angle)) * dot(axis, vec3<f32>(angle)) * axis;
+    let p = *z;
+    let result = cos(angle) * p + sin(angle) * cross(p, axis) + (1.0 - cos(angle)) * dot(axis, vec3<f32>(angle)) * axis;
+    *z = result;
 }
 
 fn Mandelbox(z: ptr<function, vec3<f32>>, dz: ptr<function, f32>, offset: vec3<f32>, color: ptr<function, u32>) {
@@ -252,9 +257,9 @@ fn Mandelbox(z: ptr<function, vec3<f32>>, dz: ptr<function, f32>, offset: vec3<f
     } else if dot(*z, *z) < data.fixed_radius_2 {
         (*color)++;
     }
-// #ifdef ROTATE
-//     z = Rotate(z);
-// #endif
+    if rotate {
+        DoRotate(z);
+    }
     Spherefold(z, dz);
     TScale(z, dz);
     TOffset(z, dz, offset);
@@ -266,9 +271,9 @@ fn Mandelbulb2(z: ptr<function, vec3<f32>>, dz: ptr<function, f32>, offset: vec3
         *color = 1u << 30u;
     };
     *color = min(*color, u32(dot(*z, *z) * 1000.0));
-// #ifdef ROTATE
-//     z = Rotate(z);
-// #endif
+    if rotate {
+        DoRotate(z);
+    }
     *z += offset;
 }
 
@@ -315,26 +320,26 @@ fn DeMandelbulb(offset: vec3<f32>, color: ptr<function, u32>) -> f32 {
 }
 
 fn DeFractal(offset: vec3<f32>, isNormal: bool, color: ptr<function, u32>) -> f32 {
-// #ifdef MANDELBULB
-//         return DeMandelbulb(offset, color);
-// #else
-    return DeMandelbox(offset, isNormal, color);
-// #endif
+    if mandelbulb {
+        return DeMandelbulb(offset, color);
+    } else {
+        return DeMandelbox(offset, isNormal, color);
+    }
 }
 
-fn Plane(org: vec3<f32>, planedef: vec3<f32>) -> f32 {
+fn Cut(org: vec3<f32>, planedef: vec3<f32>) -> f32 {
     return dot(org, normalize(planedef)) - length(planedef);
 }
 
 fn De(offset: vec3<f32>, isNormal: bool) -> f32 {
     var color: u32 = 0u;
     let mbox = DeFractal(offset, isNormal, &color);
-// #ifdef PLANE
-//     float cut = Plane(offset, plane);
-//     return max(mbox, cut);
-// #else
-    return mbox;
-// #endif
+    if cut {
+        let cut = Cut(offset, data.plane.xyz);
+        return max(mbox, cut);
+    } else {
+        return mbox;
+    }
 }
 
 struct Material {
@@ -356,23 +361,23 @@ fn GetMaterial(offset: vec3<f32>) -> Material {
     result.emissive = vec3<f32>(0.0, 0.0, 0.0);
 
     let delta = max(1e-6f, de * 0.5f); // aprox. 8.3x float epsilon
-// #ifdef CUBE_NORMAL
-//     float dppp = De(offset + vec3(+delta, + delta, + delta), true);
-//     float dppn = De(offset + vec3(+delta, + delta, -delta), true);
-//     float dpnp = De(offset + vec3(+delta, -delta, + delta), true);
-//     float dpnn = De(offset + vec3(+delta, -delta, -delta), true);
-//     float dnpp = De(offset + vec3(-delta, + delta, + delta), true);
-//     float dnpn = De(offset + vec3(-delta, + delta, -delta), true);
-//     float dnnp = De(offset + vec3(-delta, -delta, + delta), true);
-//     float dnnn = De(offset + vec3(-delta, -delta, -delta), true);
-//     result.normal = vec3((dppp + dppn + dpnp + dpnn) - (dnpp + dnpn + dnnp + dnnn), (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn), (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
-// #else
-    let dnpp = De(offset + vec3<f32>(-delta, delta, delta), true);
-    let dpnp = De(offset + vec3<f32>(delta, -delta, delta), true);
-    let dppn = De(offset + vec3<f32>(delta, delta, -delta), true);
-    let dnnn = De(offset + vec3<f32>(-delta, -delta, -delta), true);
-    result.normal = vec3((dppn + dpnp) - (dnpp + dnnn), (dppn + dnpp) - (dpnp + dnnn), (dpnp + dnpp) - (dppn + dnnn));
-// #endif
+    if cube_normal {
+        let dppp = De(offset + vec3<f32>(delta, delta, delta), true);
+        let dppn = De(offset + vec3<f32>(delta, delta, -delta), true);
+        let dpnp = De(offset + vec3<f32>(delta, -delta, delta), true);
+        let dpnn = De(offset + vec3<f32>(delta, -delta, -delta), true);
+        let dnpp = De(offset + vec3<f32>(-delta, delta, delta), true);
+        let dnpn = De(offset + vec3<f32>(-delta, delta, -delta), true);
+        let dnnp = De(offset + vec3<f32>(-delta, -delta, delta), true);
+        let dnnn = De(offset + vec3<f32>(-delta, -delta, -delta), true);
+        result.normal = vec3((dppp + dppn + dpnp + dpnn) - (dnpp + dnpn + dnnp + dnnn), (dppp + dppn + dnpp + dnpn) - (dpnp + dpnn + dnnp + dnnn), (dppp + dpnp + dnpp + dnnp) - (dppn + dpnn + dnpn + dnnn));
+    } else {
+        let dnpp = De(offset + vec3<f32>(-delta, delta, delta), true);
+        let dpnp = De(offset + vec3<f32>(delta, -delta, delta), true);
+        let dppn = De(offset + vec3<f32>(delta, delta, -delta), true);
+        let dnnn = De(offset + vec3<f32>(-delta, -delta, -delta), true);
+        result.normal = vec3((dppn + dpnp) - (dnpp + dnnn), (dppn + dnpp) - (dpnp + dnnn), (dpnp + dnpp) - (dppn + dnnn));
+    }
     if dot(result.normal, result.normal) == 0.0f {
         result.normal.x += 1.0; // ensure nonzero
     }
@@ -392,7 +397,7 @@ fn Cast(ray: Ray, quality: f32, maxDist: f32) -> f32 {
         if totalDistance > maxDist || distance * quality < totalDistance || i == 0u {
             break;
         }
-    } 
+    }
 
     // correction step
     if distance * quality <= totalDistance {
@@ -422,7 +427,7 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         let distance = min(Cast(ray, quality, max_dist), fog_dist);
 
         if distance >= data.max_ray_dist || (photonIndex + 1u == data.num_ray_bounces && distance >= fog_dist) {
-             // went out-of-bounds, or last fog ray didn't hit anything
+            // went out-of-bounds, or last fog ray didn't hit anything
             let color = SampleSky(ray.dir);
             rayColor += color * reflectionColor;
             break;
@@ -440,24 +445,24 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         let lit = select(vec3<f32>(0.0, 0.0, 0.0), light_color, !is_zero(light_color) && Cast(Ray(newPos, normalize(to_light)), quality, distance_to_light) >= distance_to_light);
 
         if distance >= fog_dist {
-             // hit fog, do fog calculations
+            // hit fog, do fog calculations
             newDir = Random_Sphere(rand);
             reflectionColor *= data.fog_brightness;
             rayColor += reflectionColor * lit;
         } else {
-             // hit surface, do material calculations
+            // hit surface, do material calculations
             let material = GetMaterial(newPos);
             rayColor += reflectionColor * material.emissive; // ~bling~!
             rayColor += reflectionColor * max(dot(material.normal, to_light), 0.0) * lit;
             if Random_Next(rand) < material.gloss {
                 newDir = ray.dir;
-                 // specular
+                // specular
                 if dot(ray.dir, material.normal) < 0.0 {
                     newDir -= 2.0f * dot(ray.dir, material.normal) * material.normal;
                 }
-                 // material.color = vec3(1.0, 1.0, 1.0);
+                // material.color = vec3(1.0, 1.0, 1.0);
             } else {
-                 // diffuse
+                // diffuse
                 newDir = Random_Lambertian(rand, material.normal);
                 quality = data.quality_rest_ray;
                 let incident_angle_weakening = dot(material.normal, newDir);
@@ -469,7 +474,7 @@ fn Trace(rayp: Ray, width: u32, height: u32, rand: ptr<function, Random>) -> vec
         ray = Ray(newPos, newDir);
 
         if dot(reflectionColor, reflectionColor) == 0.0 {
-             break;
+            break;
         }
     }
     return rayColor;
@@ -523,7 +528,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>, @builtin
     let y = idx / data.width;
 
     var newColor: vec3<f32>;
-    if data.gamma_test != 0u {
+    if gamma_test {
         newColor = GammaTest(x, y, data.width, data.height);
     } else {
         var oldColor: vec3<f32>;

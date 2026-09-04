@@ -1,4 +1,4 @@
-use crate::{setting_value::SettingValueEnum, settings::Settings, Error};
+use crate::{Error, setting_value::SettingValueEnum, settings::Settings};
 use cgmath::Vector3;
 use std::{
     fs::File,

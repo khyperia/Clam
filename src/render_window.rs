@@ -1,13 +1,11 @@
-use log::{error, info, warn};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
-
-#[cfg(target_arch = "wasm32")]
-use winit::platform::web::WindowExtWebSys;
-
 use crate::{
     SpawnLocal, buffer_blit::BufferBlit, fps_counter::FpsCounter,
     interactive::SyncInteractiveKernel,
 };
+use log::{error, info, warn};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+#[cfg(target_arch = "wasm32")]
+use winit::platform::web::WindowExtWebSys;
 use winit::{
     application::ApplicationHandler,
     event::*,
@@ -93,7 +91,8 @@ impl RenderWindow {
             };
             let Ok(Some(_)) = canvas.get_context("webgpu") else {
                 err(
-                    "canvas.getContext('webgpu') returned null. Maybe your browser doesn't support webgpu, or you don't have it enabled?",
+                    "canvas.getContext('webgpu') returned null. Maybe your browser doesn't \
+                     support webgpu, or you don't have it enabled?",
                 );
                 return None;
             };
